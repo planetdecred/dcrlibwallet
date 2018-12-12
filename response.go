@@ -33,7 +33,7 @@ type Accounts struct {
 	ErrorMessage       string
 	ErrorCode          int
 	ErrorOccurred      bool
-	Acc                *[]Account
+	Acc                []*Account
 	CurrentBlockHash   []byte
 	CurrentBlockHeight int32
 }

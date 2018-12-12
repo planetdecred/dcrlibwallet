@@ -39,6 +39,8 @@ import (
 	"github.com/decred/dcrwallet/wallet/txrules"
 	walletseed "github.com/decred/dcrwallet/walletseed"
 	"github.com/decred/slog"
+	"github.com/raedahgroup/mobilewallet/address"
+	"github.com/raedahgroup/mobilewallet/tx"
 )
 
 var shutdownRequestChannel = make(chan struct{})
@@ -46,6 +48,12 @@ var shutdownSignaled = make(chan struct{})
 var signals = []os.Signal{os.Interrupt, syscall.SIGTERM}
 
 const BlockValid int = 1 << 0
+
+// as used in dcrwallet loader
+const (
+	walletDbName    = "wallet.db"
+	defaultDbDriver = "bdb"
+)
 
 type LibWallet struct {
 	dataDir       string
@@ -62,6 +70,9 @@ type LibWallet struct {
 }
 
 func NewLibWallet(homeDir string, dbDriver string, netType string) *LibWallet {
+	if dbDriver == "" {
+		dbDriver = defaultDbDriver
+	}
 
 	var activeNet *netparams.Params
 
@@ -247,12 +258,25 @@ func (lw *LibWallet) InitLoader() {
 		VotingAddress: nil,
 		TicketFee:     10e8,
 	}
-	fmt.Println("Initizing Loader: ", lw.dataDir, "Db: ", lw.dbDriver)
+	log.Info("Initializing Loader: ", lw.dataDir, "Db: ", lw.dbDriver)
 	l := NewLoader(lw.activeNet.Params, lw.dataDir, stakeOptions,
 		20, false, 10e5, wallet.DefaultAccountGapLimit)
 	l.SetDatabaseDriver(lw.dbDriver)
 	lw.loader = l
 	go shutdownListener()
+}
+
+func (lw *LibWallet) WalletExists() (bool, error) {
+	dbPath := filepath.Join(lw.dataDir, walletDbName)
+	_, err := os.Stat(dbPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		log.Error(err)
+		return false, err
+	}
+	return true, nil
 }
 
 func (lw *LibWallet) CreateWallet(passphrase string, seedMnemonic string) error {
@@ -612,6 +636,10 @@ func (lw *LibWallet) OpenWallet(pubPass []byte) error {
 	}
 	lw.wallet = w
 	return nil
+}
+
+func (lw *LibWallet) WalletOpened() bool {
+	return lw.wallet != nil
 }
 
 func (lw *LibWallet) RescanBlocks() error {
@@ -1069,45 +1097,9 @@ func (lw *LibWallet) SpendableForAccount(account int32, requiredConfirmations in
 	return int64(bals.Spendable), nil
 }
 
-type txChangeSource struct {
-	version uint16
-	script  []byte
-}
-
-func (src *txChangeSource) Script() ([]byte, uint16, error) {
-	return src.script, src.version, nil
-}
-
-func (src *txChangeSource) ScriptSize() int {
-	return len(src.script)
-}
-
-func makeTxChangeSource(destAddr string) (*txChangeSource, error) {
-	addr, err := dcrutil.DecodeAddress(destAddr)
-	if err != nil {
-		log.Error(err)
-		return nil, err
-	}
-	pkScript, err := txscript.PayToAddrScript(addr)
-	if err != nil {
-		log.Error(err)
-		return nil, err
-	}
-	changeSource := &txChangeSource{
-		script:  pkScript,
-		version: txscript.DefaultScriptVersion,
-	}
-	return changeSource, nil
-}
-
 func (lw *LibWallet) ConstructTransaction(destAddr string, amount int64, srcAccount int32, requiredConfirmations int32, sendAll bool) (*UnsignedTransaction, error) {
 	// output destination
-	addr, err := dcrutil.DecodeAddress(destAddr)
-	if err != nil {
-		log.Error(err)
-		return nil, err
-	}
-	pkScript, err := txscript.PayToAddrScript(addr)
+	pkScript, err := address.PkScript(destAddr)
 	if err != nil {
 		log.Error(err)
 		return nil, err
@@ -1127,7 +1119,7 @@ func (lw *LibWallet) ConstructTransaction(destAddr string, amount int64, srcAcco
 		}
 		outputs = append(outputs, output)
 	} else {
-		changeSource, err = makeTxChangeSource(destAddr)
+		changeSource, err = tx.MakeTxChangeSource(destAddr)
 		if err != nil {
 			log.Error(err)
 			return nil, err
@@ -1181,12 +1173,7 @@ func (lw *LibWallet) SendTransaction(privPass []byte, destAddr string, amount in
 		}
 	}()
 	// output destination
-	addr, err := dcrutil.DecodeAddress(destAddr)
-	if err != nil {
-		log.Error(err)
-		return nil, err
-	}
-	pkScript, err := txscript.PayToAddrScript(addr)
+	pkScript, err := address.PkScript(destAddr)
 	if err != nil {
 		log.Error(err)
 		return nil, err
@@ -1205,7 +1192,7 @@ func (lw *LibWallet) SendTransaction(privPass []byte, destAddr string, amount in
 		}
 		outputs = append(outputs, output)
 	} else {
-		changeSource, err = makeTxChangeSource(destAddr)
+		changeSource, err = tx.MakeTxChangeSource(destAddr)
 		if err != nil {
 			log.Error(err)
 			return nil, err
@@ -1297,45 +1284,64 @@ func (lw *LibWallet) PublishUnminedTransactions() error {
 }
 
 func (lw *LibWallet) GetAccounts(requiredConfirmations int32) (string, error) {
-	resp, err := lw.wallet.Accounts()
+	accountsResponse, err := lw.GetAccountsRaw(requiredConfirmations)
 	if err != nil {
 		return "", err
 	}
-	accounts := make([]Account, len(resp.Accounts))
+
+	result, _ := json.Marshal(accountsResponse)
+	return string(result), nil
+}
+
+func (lw *LibWallet) GetAccountsRaw(requiredConfirmations int32) (*Accounts, error) {
+	resp, err := lw.wallet.Accounts()
+	if err != nil {
+		return nil, err
+	}
+	accounts := make([]*Account, len(resp.Accounts))
 	for i := range resp.Accounts {
 		a := &resp.Accounts[i]
-		bals, err := lw.wallet.CalculateAccountBalance(a.AccountNumber, requiredConfirmations)
+
+		balance, err := lw.GetAccountBalance(a.AccountNumber, requiredConfirmations)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-		balance := Balance{
-			Total:                   int64(bals.Total),
-			Spendable:               int64(bals.Spendable),
-			ImmatureReward:          int64(bals.ImmatureCoinbaseRewards),
-			ImmatureStakeGeneration: int64(bals.ImmatureStakeGeneration),
-			LockedByTickets:         int64(bals.LockedByTickets),
-			VotingAuthority:         int64(bals.VotingAuthority),
-			UnConfirmed:             int64(bals.Unconfirmed),
-		}
-		accounts[i] = Account{
+
+		accounts[i] = &Account{
 			Number:           int32(a.AccountNumber),
 			Name:             a.AccountName,
 			TotalBalance:     int64(a.TotalBalance),
-			Balance:          &balance,
+			Balance:          balance,
 			ExternalKeyCount: int32(a.LastUsedExternalIndex + 20),
 			InternalKeyCount: int32(a.LastUsedInternalIndex + 20),
 			ImportedKeyCount: int32(a.ImportedKeyCount),
 		}
 	}
-	accountsResponse := &Accounts{
+
+	return &Accounts{
 		Count:              len(resp.Accounts),
 		CurrentBlockHash:   resp.CurrentBlockHash[:],
 		CurrentBlockHeight: resp.CurrentBlockHeight,
-		Acc:                &accounts,
+		Acc:                accounts,
 		ErrorOccurred:      false,
+	}, nil
+}
+
+func (lw *LibWallet) GetAccountBalance(accountNumber uint32, requiredConfirmations int32) (*Balance, error) {
+	bals, err := lw.wallet.CalculateAccountBalance(accountNumber, requiredConfirmations)
+	if err != nil {
+		return nil, err
 	}
-	result, _ := json.Marshal(accountsResponse)
-	return string(result), nil
+
+	return &Balance{
+		Total:                   int64(bals.Total),
+		Spendable:               int64(bals.Spendable),
+		ImmatureReward:          int64(bals.ImmatureCoinbaseRewards),
+		ImmatureStakeGeneration: int64(bals.ImmatureStakeGeneration),
+		LockedByTickets:         int64(bals.LockedByTickets),
+		VotingAuthority:         int64(bals.VotingAuthority),
+		UnConfirmed:             int64(bals.Unconfirmed),
+	}, nil
 }
 
 func (lw *LibWallet) NextAccount(accountName string, privPass []byte) error {
