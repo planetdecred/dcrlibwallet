@@ -19,9 +19,9 @@ import (
 	"time"
 
 	"github.com/decred/dcrd/addrmgr"
-	stake "github.com/decred/dcrd/blockchain/stake"
+	"github.com/decred/dcrd/blockchain/stake"
 	"github.com/decred/dcrd/chaincfg"
-	chainhash "github.com/decred/dcrd/chaincfg/chainhash"
+	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec"
 	"github.com/decred/dcrd/dcrjson"
 	"github.com/decred/dcrd/dcrutil"
@@ -37,7 +37,7 @@ import (
 	"github.com/decred/dcrwallet/wallet"
 	"github.com/decred/dcrwallet/wallet/txauthor"
 	"github.com/decred/dcrwallet/wallet/txrules"
-	walletseed "github.com/decred/dcrwallet/walletseed"
+	"github.com/decred/dcrwallet/walletseed"
 	"github.com/decred/slog"
 	"github.com/raedahgroup/mobilewallet/address"
 	"github.com/raedahgroup/mobilewallet/tx"
@@ -48,12 +48,6 @@ var shutdownSignaled = make(chan struct{})
 var signals = []os.Signal{os.Interrupt, syscall.SIGTERM}
 
 const BlockValid int = 1 << 0
-
-// as used in dcrwallet loader
-const (
-	walletDbName    = "wallet.db"
-	defaultDbDriver = "bdb"
-)
 
 type LibWallet struct {
 	dataDir       string
