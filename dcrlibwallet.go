@@ -291,6 +291,10 @@ func decodeAddress(a string, params *chaincfg.Params) (dcrutil.Address, error) {
 	return addr, nil
 }
 
+func (lw *LibWallet) WalletExists() (bool, error) {
+	return lw.loader.WalletExists()
+}
+
 func (lw *LibWallet) CreateWallet(passphrase string, seedMnemonic string) error {
 	log.Info("Creating Wallet")
 	if len(seedMnemonic) == 0 {
