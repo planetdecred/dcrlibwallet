@@ -261,16 +261,7 @@ func (lw *LibWallet) InitLoader() {
 }
 
 func (lw *LibWallet) WalletExists() (bool, error) {
-	dbPath := filepath.Join(lw.dataDir, walletDbName)
-	_, err := os.Stat(dbPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		log.Error(err)
-		return false, err
-	}
-	return true, nil
+	return lw.loader.WalletExists()
 }
 
 func (lw *LibWallet) CreateWallet(passphrase string, seedMnemonic string) error {
