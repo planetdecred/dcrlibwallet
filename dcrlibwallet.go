@@ -270,13 +270,13 @@ func shutdownListener() {
 	}
 }
 
-func contextWithShutdownCancel(ctx context.Context) context.Context {
+func contextWithShutdownCancel(ctx context.Context) (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(ctx)
 	go func() {
 		<-shutdownSignaled
 		cancel()
 	}()
-	return ctx
+	return ctx, cancel
 }
 
 func decodeAddress(a string, params *chaincfg.Params) (dcrutil.Address, error) {
@@ -450,7 +450,7 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 		}
 		wallet.SetNetworkBackend(syncer)
 		lw.loader.SetNetworkBackend(syncer)
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := contextWithShutdownCancel(context.Background())
 		lw.cancelSync = cancel
 		err := syncer.Run(ctx)
 		if err != nil {
@@ -490,7 +490,7 @@ func (lw *LibWallet) RpcSync(networkAddress string, username string, password st
 	chainClient := lw.rpcClient
 	lw.mu.Unlock()
 
-	ctx := contextWithShutdownCancel(context.Background())
+	ctx, _ := contextWithShutdownCancel(context.Background())
 	// If the rpcClient is already set, you can just use that instead of attempting a new connection.
 	if chainClient == nil {
 		networkAddress, err := NormalizeAddress(networkAddress, lw.activeNet.JSONRPCClientPort)
@@ -664,7 +664,7 @@ func (lw *LibWallet) RescanBlocks() error {
 		}()
 		lw.rescanning = true
 		progress := make(chan wallet.RescanProgress, 1)
-		ctx := contextWithShutdownCancel(context.Background())
+		ctx, _ := contextWithShutdownCancel(context.Background())
 		var totalHeight int32
 		go lw.wallet.RescanProgressFromHeight(ctx, netBackend, 0, progress)
 		for p := range progress {
@@ -992,7 +992,38 @@ func (lw *LibWallet) parseTxSummary(tx *wallet.TransactionSummary, blockHash *ch
 		Debits:    &debits}
 
 	return transaction, nil
+}
 
+func (lw *LibWallet) GetTransactions(response GetTransactionsResponse) error {
+	ctx, _ := contextWithShutdownCancel(context.Background())
+	var startBlock, endBlock *wallet.BlockIdentifier
+	transactions := make([]Transaction, 0)
+	rangeFn := func(block *wallet.Block) (bool, error) {
+		for _, transaction := range block.Transactions {
+			var inputAmounts int64
+			var outputAmounts int64
+			var amount int64
+			tempCredits := make([]TransactionCredit, len(transaction.MyOutputs))
+			for index, credit := range transaction.MyOutputs {
+				outputAmounts += int64(credit.Amount)
+				tempCredits[index] = TransactionCredit{
+					Index:    int32(credit.Index),
+					Account:  int32(credit.Account),
+					Internal: credit.Internal,
+					Amount:   int64(credit.Amount),
+					Address:  credit.Address.String()}
+			}
+			tempDebits := make([]TransactionDebit, len(transaction.MyInputs))
+			for index, debit := range transaction.MyInputs {
+				inputAmounts += int64(debit.PreviousAmount)
+				tempDebits[index] = TransactionDebit{
+					Index:           int32(debit.Index),
+					PreviousAccount: int32(debit.PreviousAccount),
+					PreviousAmount:  int64(debit.PreviousAmount),
+					AccountName:     lw.AccountName(int32(debit.PreviousAccount))}
+			}
+		}
+	}
 }
 
 func (lw *LibWallet) DecodeTransaction(txHash []byte) (string, error) {
@@ -1359,7 +1390,8 @@ func (lw *LibWallet) PublishUnminedTransactions() error {
 	if err != nil {
 		return errors.New(ErrNotConnected)
 	}
-	err = lw.wallet.PublishUnminedTransactions(contextWithShutdownCancel(context.Background()), netBackend)
+	ctx, _ := contextWithShutdownCancel(context.Background())
+	err = lw.wallet.PublishUnminedTransactions(ctx, netBackend)
 	return err
 }
 
