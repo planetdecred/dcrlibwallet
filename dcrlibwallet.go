@@ -1328,6 +1328,15 @@ func (lw *LibWallet) GetAccountBalance(accountNumber uint32, requiredConfirmatio
 }
 
 func (lw *LibWallet) NextAccount(accountName string, privPass []byte) error {
+	_, err := lw.NextAccountRaw(accountName, privPass)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	return nil
+}
+
+func (lw *LibWallet) NextAccountRaw(accountName string, privPass []byte) (uint32, error) {
 	lock := make(chan time.Time, 1)
 	defer func() {
 		for i := range privPass {
@@ -1338,15 +1347,10 @@ func (lw *LibWallet) NextAccount(accountName string, privPass []byte) error {
 	err := lw.wallet.Unlock(privPass, lock)
 	if err != nil {
 		log.Error(err)
-		return errors.New(ErrInvalidPassphrase)
+		return 0, errors.New(ErrInvalidPassphrase)
 	}
 
-	_, err = lw.wallet.NextAccount(accountName)
-	if err != nil {
-		log.Error(err)
-		return err
-	}
-	return nil
+	return lw.wallet.NextAccount(accountName)
 }
 
 func (lw *LibWallet) RenameAccount(accountNumber int32, newName string) error {
