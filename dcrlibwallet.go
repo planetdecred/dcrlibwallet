@@ -1491,6 +1491,10 @@ func (lw *LibWallet) AccountName(account int32) string {
 	return name
 }
 
+func (lw *LibWallet) AccountNumber(accountName string) (uint32, error) {
+	return lw.wallet.AccountNumber(accountName)
+}
+
 func (lw *LibWallet) AccountOfAddress(address string) string {
 	addr, err := dcrutil.DecodeAddress(address)
 	if err != nil {
