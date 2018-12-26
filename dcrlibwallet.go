@@ -994,7 +994,7 @@ func (lw *LibWallet) parseTxSummary(tx *wallet.TransactionSummary, blockHash *ch
 	return transaction, nil
 }
 
-func (lw *LibWallet) GetTransactions(response GetTransactionsResponse) error {
+func (lw *LibWallet) GetTransactionsOld(response GetTransactionsResponse) error {
 	ctx := contextWithShutdownCancel(context.Background())
 	var startBlock, endBlock *wallet.BlockIdentifier
 	transactions := make([]Transaction, 0)
