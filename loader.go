@@ -21,7 +21,7 @@ import (
 
 const (
 	walletDbName    = "wallet.db"
-	defaultDbDriver = "bdb"
+	DefaultDbDriver = "bdb"
 )
 
 // Loader implements the creating of new and opening of existing wallets, while
@@ -70,7 +70,7 @@ func NewLoader(chainParams *chaincfg.Params, dbDirPath string, stakeOptions *Sta
 	return &Loader{
 		chainParams:     chainParams,
 		dbDirPath:       dbDirPath,
-		dbDriver:        defaultDbDriver,
+		dbDriver:        DefaultDbDriver,
 		stakeOptions:    stakeOptions,
 		gapLimit:        gapLimit,
 		accountGapLimit: accountGapLimit,
