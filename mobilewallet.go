@@ -1083,6 +1083,40 @@ func transactionType(txType wallet.TransactionType) string {
 	}
 }
 
+func (lw *LibWallet) UnspentOutputs(account uint32, requiredConfirmations int32, targetAmount int64) ([]*UnspentOutput, error) {
+	policy := wallet.OutputSelectionPolicy{
+		Account:               account,
+		RequiredConfirmations: requiredConfirmations,
+	}
+	inputDetail, err := lw.wallet.SelectInputs(dcrutil.Amount(targetAmount), policy)
+	// Do not return errors to caller when there was insufficient spendable
+	// outputs available for the target amount.
+	if err != nil && !errors.Is(errors.InsufficientBalance, err) {
+		return nil, err
+	}
+
+	unspentOutputs := make([]*UnspentOutput, len(inputDetail.Inputs))
+
+	for i, input := range inputDetail.Inputs {
+		outputInfo, err := lw.wallet.OutputInfo(&input.PreviousOutPoint)
+		if err != nil {
+			return nil, err
+		}
+
+		unspentOutputs[i] = &UnspentOutput{
+			TransactionHash: input.PreviousOutPoint.Hash[:],
+			OutputIndex:     input.PreviousOutPoint.Index,
+			Tree:            int32(input.PreviousOutPoint.Tree),
+			Amount:          int64(outputInfo.Amount),
+			PkScript:        inputDetail.Scripts[i],
+			ReceiveTime:     outputInfo.Received.Unix(),
+			FromCoinbase:    outputInfo.FromCoinbase,
+		}
+	}
+
+	return unspentOutputs, nil
+}
+
 func (lw *LibWallet) SpendableForAccount(account int32, requiredConfirmations int32) (int64, error) {
 	bals, err := lw.wallet.CalculateAccountBalance(uint32(account), requiredConfirmations)
 	if err != nil {
