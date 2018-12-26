@@ -64,10 +64,6 @@ type LibWallet struct {
 }
 
 func NewLibWallet(homeDir string, dbDriver string, netType string) *LibWallet {
-	if dbDriver == "" {
-		dbDriver = defaultDbDriver
-	}
-
 	var activeNet *netparams.Params
 
 	if netType == "mainnet" {
@@ -246,6 +242,11 @@ func decodeAddress(a string, params *chaincfg.Params) (dcrutil.Address, error) {
 }
 
 func (lw *LibWallet) InitLoader() {
+	lw.InitLoaderWithoutShutdownListener()
+	go shutdownListener()
+}
+
+func (lw *LibWallet) InitLoaderWithoutShutdownListener() {
 	stakeOptions := &StakeOptions{
 		VotingEnabled: false,
 		AddressReuse:  false,
@@ -257,7 +258,6 @@ func (lw *LibWallet) InitLoader() {
 		20, false, 10e5, wallet.DefaultAccountGapLimit)
 	l.SetDatabaseDriver(lw.dbDriver)
 	lw.loader = l
-	go shutdownListener()
 }
 
 func (lw *LibWallet) WalletExists() (bool, error) {
