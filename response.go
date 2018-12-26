@@ -125,6 +125,16 @@ type DecodedOutput struct {
 	Addresses  []string
 }
 
+type UnspentOutput struct {
+	TransactionHash []byte
+	OutputIndex     uint32
+	ReceiveTime     int64
+	Amount          int64
+	FromCoinbase	bool
+	Tree			int32
+	PkScript		[]byte
+}
+
 type SpvSyncResponse interface {
 	OnPeerConnected(peerCount int32)
 	OnPeerDisconnected(peerCount int32)
