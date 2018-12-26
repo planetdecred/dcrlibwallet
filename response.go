@@ -81,7 +81,7 @@ type TransactionCredit struct {
 }
 
 type getTransactionsResponse struct {
-	Transactions  []Transaction
+	Transactions  []*Transaction
 	ErrorOccurred bool
 	ErrorMessage  string
 }

@@ -855,9 +855,19 @@ func (lw *LibWallet) GetTransaction(txHash []byte) (string, error) {
 }
 
 func (lw *LibWallet) GetTransactions(response GetTransactionsResponse) error {
+	transactions, err := lw.GetTransactionsRaw()
+	if err != nil {
+		return err
+	}
+
+	result, _ := json.Marshal(getTransactionsResponse{ErrorOccurred: false, Transactions: transactions})
+	response.OnResult(string(result))
+	return nil
+}
+
+func (lw *LibWallet) GetTransactionsRaw() (transactions []*Transaction, err error) {
 	ctx := contextWithShutdownCancel(context.Background())
-	var startBlock, endBlock *wallet.BlockIdentifier
-	transactions := make([]Transaction, 0)
+
 	rangeFn := func(block *wallet.Block) (bool, error) {
 		for _, transaction := range block.Transactions {
 			var inputAmounts int64
@@ -912,7 +922,7 @@ func (lw *LibWallet) GetTransactions(response GetTransactionsResponse) error {
 			if block.Header != nil {
 				height = int32(block.Header.Height)
 			}
-			tempTransaction := Transaction{
+			tempTransaction := &Transaction{
 				Fee:       int64(transaction.Fee),
 				Hash:      fmt.Sprintf("%02x", reverse(transaction.Hash[:])),
 				Raw:       fmt.Sprintf("%02x", transaction.Transaction[:]),
@@ -932,10 +942,10 @@ func (lw *LibWallet) GetTransactions(response GetTransactionsResponse) error {
 			return false, nil
 		}
 	}
-	err := lw.wallet.GetTransactions(rangeFn, startBlock, endBlock)
-	result, _ := json.Marshal(getTransactionsResponse{ErrorOccurred: false, Transactions: transactions})
-	response.OnResult(string(result))
-	return err
+
+	var startBlock, endBlock *wallet.BlockIdentifier
+	err = lw.wallet.GetTransactions(rangeFn, startBlock, endBlock)
+	return
 }
 
 func (lw *LibWallet) DecodeTransaction(txHash []byte) (string, error) {
