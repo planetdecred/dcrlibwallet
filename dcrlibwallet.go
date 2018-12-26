@@ -994,10 +994,20 @@ func (lw *LibWallet) parseTxSummary(tx *wallet.TransactionSummary, blockHash *ch
 	return transaction, nil
 }
 
-func (lw *LibWallet) GetTransactionsOld(response GetTransactionsResponse) error {
+func (lw *LibWallet) GetTransactions(response GetTransactionsResponse) error {
+	transactions, err := lw.GetTransactionsRaw()
+	if err != nil {
+		return err
+	}
+
+	result, _ := json.Marshal(getTransactionsResponse{ErrorOccurred: false, Transactions: transactions})
+	response.OnResult(string(result))
+	return nil
+}
+
+func (lw *LibWallet) GetTransactionsRaw() (transactions []*Transaction, err error) {
 	ctx := contextWithShutdownCancel(context.Background())
-	var startBlock, endBlock *wallet.BlockIdentifier
-	transactions := make([]Transaction, 0)
+
 	rangeFn := func(block *wallet.Block) (bool, error) {
 		for _, transaction := range block.Transactions {
 			var inputAmounts int64
@@ -1022,8 +1032,60 @@ func (lw *LibWallet) GetTransactionsOld(response GetTransactionsResponse) error 
 					PreviousAmount:  int64(debit.PreviousAmount),
 					AccountName:     lw.AccountName(int32(debit.PreviousAccount))}
 			}
+
+			var direction int32
+			if transaction.Type == wallet.TransactionTypeRegular {
+				amountDifference := outputAmounts - inputAmounts
+				if amountDifference < 0 && (float64(transaction.Fee) == math.Abs(float64(amountDifference))) {
+					//Transfered
+					direction = 2
+					amount = int64(transaction.Fee)
+				} else if amountDifference > 0 {
+					//Received
+					direction = 1
+					for _, credit := range transaction.MyOutputs {
+						amount += int64(credit.Amount)
+					}
+				} else {
+					//Sent
+					direction = 0
+					for _, debit := range transaction.MyInputs {
+						amount += int64(debit.PreviousAmount)
+					}
+					for _, credit := range transaction.MyOutputs {
+						amount -= int64(credit.Amount)
+					}
+					amount -= int64(transaction.Fee)
+				}
+			}
+			var height int32 = -1
+			if block.Header != nil {
+				height = int32(block.Header.Height)
+			}
+			tempTransaction := &Transaction{
+				Fee:       int64(transaction.Fee),
+				Hash:      fmt.Sprintf("%02x", reverse(transaction.Hash[:])),
+				Raw:       fmt.Sprintf("%02x", transaction.Transaction[:]),
+				Timestamp: transaction.Timestamp,
+				Type:      transactionType(transaction.Type),
+				Credits:   &tempCredits,
+				Amount:    amount,
+				Height:    height,
+				Direction: direction,
+				Debits:    &tempDebits}
+			transactions = append(transactions, tempTransaction)
+		}
+		select {
+		case <-ctx.Done():
+			return true, ctx.Err()
+		default:
+			return false, nil
 		}
 	}
+
+	var startBlock, endBlock *wallet.BlockIdentifier
+	err = lw.wallet.GetTransactions(rangeFn, startBlock, endBlock)
+	return
 }
 
 func (lw *LibWallet) DecodeTransaction(txHash []byte) (string, error) {
