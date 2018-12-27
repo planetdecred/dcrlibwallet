@@ -1,4 +1,4 @@
-package tx
+package txhelper
 
 import (
 	"github.com/decred/dcrd/txscript"
