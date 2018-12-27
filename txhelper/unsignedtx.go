@@ -1,4 +1,4 @@
-package tx
+package txhelper
 
 import (
 	"errors"
@@ -11,7 +11,6 @@ import (
 )
 
 func NewUnsignedTx(inputs []*wire.TxIn, amount int64, destAddress string, changeAddress string) (*wire.MsgTx, error) {
-
 	outputs, err := makeTxOutputs(amount, destAddress)
 	if err != nil {
 		return nil, err
@@ -35,6 +34,10 @@ func NewUnsignedTx(inputs []*wire.TxIn, amount int64, destAddress string, change
 		scriptSizes = append(scriptSizes, RedeemP2PKHSigScriptSize)
 	}
 
+	if totalInputAmount < amount {
+		return nil, errors.New("total amount from selected outputs not enough to cover transaction")
+	}
+
 	relayFeePerKb := txrules.DefaultRelayFeePerKb
 	maxSignedSize := EstimateSerializeSize(scriptSizes, outputs, changeScriptSize)
 	maxRequiredFee := txrules.FeeForSerializeSize(relayFeePerKb, maxSignedSize)
@@ -48,6 +51,7 @@ func NewUnsignedTx(inputs []*wire.TxIn, amount int64, destAddress string, change
 		if len(changeScript) > txscript.MaxScriptElementSize {
 			return nil, errors.New("script size exceed maximum bytes pushable to the stack")
 		}
+		// todo dcrwallet randomizes change position, should look into that as well
 		change := &wire.TxOut{
 			Value:    changeAmount,
 			Version:  changeScriptVersion,
