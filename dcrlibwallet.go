@@ -40,6 +40,8 @@ import (
 	"github.com/decred/dcrwallet/wallet/txrules"
 	"github.com/decred/dcrwallet/walletseed"
 	"github.com/decred/slog"
+	"github.com/raedahgroup/mobilewallet/address"
+	"github.com/raedahgroup/mobilewallet/txhelper"
 )
 
 var shutdownRequestChannel = make(chan struct{})
@@ -1322,7 +1324,7 @@ func (lw *LibWallet) ConstructTransaction(destAddr string, amount int64, srcAcco
 		}
 		outputs = append(outputs, output)
 	} else {
-		changeSource, err = makeTxChangeSource(destAddr)
+		changeSource, err = txhelper.MakeTxChangeSource(destAddr)
 		if err != nil {
 			log.Error(err)
 			return nil, err
@@ -1365,16 +1367,6 @@ func (lw *LibWallet) ConstructTransaction(destAddr string, amount int64, srcAcco
 }
 
 func (lw *LibWallet) SendTransaction(privPass []byte, destAddr string, amount int64, srcAccount int32, requiredConfs int32, sendAll bool) ([]byte, error) {
-	n, err := lw.wallet.NetworkBackend()
-	if err != nil {
-		log.Error(err)
-		return nil, err
-	}
-	defer func() {
-		for i := range privPass {
-			privPass[i] = 0
-		}
-	}()
 	// output destination
 	addr, err := dcrutil.DecodeAddress(destAddr)
 	if err != nil {
@@ -1399,7 +1391,7 @@ func (lw *LibWallet) SendTransaction(privPass []byte, destAddr string, amount in
 		}
 		outputs = append(outputs, output)
 	} else {
-		changeSource, err = makeTxChangeSource(destAddr)
+		changeSource, err = txhelper.MakeTxChangeSource(destAddr)
 		if err != nil {
 			log.Error(err)
 			return nil, err
@@ -1426,8 +1418,23 @@ func (lw *LibWallet) SendTransaction(privPass []byte, destAddr string, amount in
 		return nil, err
 	}
 
+	return lw.SignAndPublishTransaction(txBuf.Bytes(), privPass)
+}
+
+func (lw *LibWallet) SignAndPublishTransaction(serializedTx, privPass []byte) ([]byte, error) {
+	n, err := lw.wallet.NetworkBackend()
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+	defer func() {
+		for i := range privPass {
+			privPass[i] = 0
+		}
+	}()
+
 	var tx wire.MsgTx
-	err = tx.Deserialize(bytes.NewReader(txBuf.Bytes()))
+	err = tx.Deserialize(bytes.NewReader(serializedTx))
 	if err != nil {
 		log.Error(err)
 		//Bytes do not represent a valid raw transaction
@@ -1481,7 +1488,7 @@ func (lw *LibWallet) SendTransaction(privPass []byte, destAddr string, amount in
 	return txHash[:], nil
 }
 
-func (lw *LibWallet) PublishUnminedTransactions() error {
+	func (lw *LibWallet) PublishUnminedTransactions() error {
 	netBackend, err := lw.wallet.NetworkBackend()
 	if err != nil {
 		return errors.New(ErrNotConnected)
