@@ -69,7 +69,6 @@ type LibWallet struct {
 }
 
 func NewLibWallet(homeDir string, dbDriver string, netType string) (*LibWallet, error) {
-
 	var activeNet *netparams.Params
 
 	switch strings.ToLower(netType) {
