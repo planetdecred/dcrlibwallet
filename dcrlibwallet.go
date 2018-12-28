@@ -172,7 +172,7 @@ func (lw *LibWallet) ChangePublicPassphrase(oldPass []byte, newPass []byte) erro
 	return nil
 }
 
-func (lw *LibWallet) Shutdown() {
+func (lw *LibWallet) Shutdown(exit bool) {
 	log.Info("Shuting down mobile wallet")
 	if lw.rpcClient != nil {
 		lw.rpcClient.Stop()
@@ -191,7 +191,10 @@ func (lw *LibWallet) Shutdown() {
 	} else {
 		log.Infof("Closed wallet")
 	}
-	os.Exit(0)
+
+	if exit {
+		os.Exit(0)
+	}
 }
 
 func shutdownListener() {
