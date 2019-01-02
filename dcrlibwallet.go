@@ -1668,6 +1668,89 @@ func (lw *LibWallet) NextAddress(account int32) (string, error) {
 	return addr.EncodeAddress(), nil
 }
 
+// PurchaseTickets purchases tickets from the wallet. Returns a slice of hashes for tickets purchased
+func (lw *LibWallet) PurchaseTickets(request *PurchaseTicketsRequest) ([][]byte, error) {
+	// Unmarshall the received data and prepare it as input for the ticket purchase request.
+	spendLimit := dcrutil.Amount(request.SpendLimit)
+	if spendLimit < 0 {
+		return nil, errors.New("Negative spend limit given")
+	}
+
+	minConf := int32(request.RequiredConfirmations)
+	params := lw.wallet.ChainParams()
+
+	var ticketAddr dcrutil.Address
+	var err error
+	if request.TicketAddress != "" {
+		ticketAddr, err = decodeAddress(request.TicketAddress, params)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var poolAddr dcrutil.Address
+	if request.PoolAddress != "" {
+		poolAddr, err = decodeAddress(request.PoolAddress, params)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if request.PoolFees > 0 {
+		if !txrules.ValidPoolFeeRate(request.PoolFees) {
+			return nil, errors.New("Invalid pool fees percentage")
+		}
+	}
+
+	if request.PoolFees > 0 && poolAddr == nil {
+		return nil, errors.New("Pool fees set but no pool address given")
+	}
+
+	if request.PoolFees <= 0 && poolAddr != nil {
+		return nil, errors.New("Pool fees negative or unset but pool address given")
+	}
+
+	numTickets := int(request.NumTickets)
+	if numTickets < 1 {
+		return nil, errors.New("Zero or negative number of tickets given")
+	}
+
+	expiry := int32(request.Expiry)
+	txFee := dcrutil.Amount(request.TxFee)
+	ticketFee := lw.wallet.TicketFeeIncrement()
+
+	// Set the ticket fee if specified
+	if request.TicketFee > 0 {
+		ticketFee = dcrutil.Amount(request.TicketFee)
+	}
+
+	if txFee < 0 || ticketFee < 0 {
+		return nil, errors.New("Negative fees per KB given")
+	}
+
+	lock := make(chan time.Time, 1)
+	defer func() {
+		lock <- time.Time{} // send matters, not the value
+	}()
+	err = lw.wallet.Unlock(request.Passphrase, lock)
+	if err != nil {
+		return nil, translateError(err)
+	}
+
+	purchasedTickets, err := lw.wallet.PurchaseTickets(0, spendLimit, minConf, ticketAddr, request.Account, numTickets, poolAddr,
+		request.PoolFees, expiry, txFee, ticketFee)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to purchase tickets: %s", err.Error())
+	}
+
+	hashes := make([][]byte, len(purchasedTickets))
+	for i, hash := range purchasedTickets {
+		hashes[i] = hash[:]
+	}
+
+	return hashes, nil
+}
+
 func (lw *LibWallet) SignMessage(passphrase []byte, address string, message string) ([]byte, error) {
 	lock := make(chan time.Time, 1)
 	defer func() {
