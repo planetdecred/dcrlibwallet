@@ -1487,7 +1487,7 @@ func (lw *LibWallet) SignAndPublishTransaction(serializedTx, privPass []byte) ([
 	return txHash[:], nil
 }
 
-	func (lw *LibWallet) PublishUnminedTransactions() error {
+func (lw *LibWallet) PublishUnminedTransactions() error {
 	netBackend, err := lw.wallet.NetworkBackend()
 	if err != nil {
 		return errors.New(ErrNotConnected)
