@@ -130,9 +130,9 @@ type UnspentOutput struct {
 	OutputIndex     uint32
 	ReceiveTime     int64
 	Amount          int64
-	FromCoinbase	bool
-	Tree			int32
-	PkScript		[]byte
+	FromCoinbase    bool
+	Tree            int32
+	PkScript        []byte
 }
 
 type SpvSyncResponse interface {
