@@ -1254,8 +1254,14 @@ func (lw *LibWallet) BulkSendTransaction(privPass []byte, destinations []txhelpe
 			return nil, err
 		}
 
+		amountInAtom, err := txhelper.AmountToAtom(destination.Amount)
+		if err != nil {
+			log.Error(err)
+			return nil, err
+		}
+
 		outputs[i] = &wire.TxOut{
-			Value:    int64(destination.Amount),
+			Value:    amountInAtom,
 			Version:  txscript.DefaultScriptVersion,
 			PkScript: pkScript,
 		}
