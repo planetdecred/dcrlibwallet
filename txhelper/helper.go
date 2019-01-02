@@ -116,3 +116,21 @@ func AmountToAtom(amountInDCR float64) (int64, error) {
 	// type of amountInAtom is `dcrutil.Amount` which is an int64 alias
 	return int64(amountInAtom), nil
 }
+
+func MakeTxOutput(destination TransactionDestination) (*wire.TxOut, error) {
+	pkScript, err := address.PkScript(destination.Address)
+	if err != nil {
+		return nil, err
+	}
+
+	amountInAtom, err := AmountToAtom(destination.Amount)
+	if err != nil {
+		return nil, err
+	}
+
+	return &wire.TxOut{
+		Value:    amountInAtom,
+		Version:  txscript.DefaultScriptVersion,
+		PkScript: pkScript,
+	}, nil
+}
