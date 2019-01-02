@@ -3,7 +3,7 @@ package txhelper
 import (
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrd/wire"
-	"github.com/raedahgroup/mobilewallet/address"
+	"github.com/raedahgroup/dcrlibwallet/address"
 )
 
 // from "github.com/decred/dcrwallet/wallet/internal/txsizes"
