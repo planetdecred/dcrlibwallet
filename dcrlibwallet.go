@@ -1244,6 +1244,47 @@ func (lw *LibWallet) SendTransaction(privPass []byte, destAddr string, amount in
 	return lw.SignAndPublishTransaction(txBuf.Bytes(), privPass)
 }
 
+func (lw *LibWallet) BulkSendTransaction(privPass []byte, destinations []txhelper.TransactionDestination, srcAccount int32, requiredConfs int32) ([]byte, error) {
+	// create transaction outputs for all destination addresses and amounts
+	outputs := make([]*wire.TxOut, len(destinations))
+	for i, destination := range destinations {
+		pkScript, err := address.PkScript(destination.Address)
+		if err != nil {
+			log.Error(err)
+			return nil, err
+		}
+
+		outputs[i] = &wire.TxOut{
+			Value:    int64(destination.Amount),
+			Version:  txscript.DefaultScriptVersion,
+			PkScript: pkScript,
+		}
+	}
+
+	// create tx, use default utxo selection algorithm and nil change source so a change source to the sending account is automatically created
+	var algo wallet.OutputSelectionAlgorithm = wallet.OutputSelectionAlgorithmAll
+	unsignedTx, err := lw.wallet.NewUnsignedTransaction(outputs, txrules.DefaultRelayFeePerKb, uint32(srcAccount),
+		requiredConfs, algo, nil)
+	if err != nil {
+		log.Error(err)
+		return nil, translateError(err)
+	}
+
+	if unsignedTx.ChangeIndex >= 0 {
+		unsignedTx.RandomizeChangePosition()
+	}
+
+	var txBuf bytes.Buffer
+	txBuf.Grow(unsignedTx.Tx.SerializeSize())
+	err = unsignedTx.Tx.Serialize(&txBuf)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+
+	return lw.SignAndPublishTransaction(txBuf.Bytes(), privPass)
+}
+
 func (lw *LibWallet) SignAndPublishTransaction(serializedTx, privPass []byte) ([]byte, error) {
 	n, err := lw.wallet.NetworkBackend()
 	if err != nil {
