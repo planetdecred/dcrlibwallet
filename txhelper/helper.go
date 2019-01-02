@@ -1,6 +1,7 @@
 package txhelper
 
 import (
+	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrd/wire"
 	"github.com/raedahgroup/dcrlibwallet/address"
@@ -104,4 +105,14 @@ func MakeTxChangeSource(destAddr string) (*txChangeSource, error) {
 		version: txscript.DefaultScriptVersion,
 	}
 	return changeSource, nil
+}
+
+func AmountToAtom(amountInDCR float64) (int64, error) {
+	amountInAtom, err := dcrutil.NewAmount(amountInDCR)
+	if err != nil {
+		return 0, err
+	}
+
+	// type of amountInAtom is `dcrutil.Amount` which is an int64 alias
+	return int64(amountInAtom), nil
 }
