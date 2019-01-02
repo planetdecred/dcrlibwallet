@@ -39,8 +39,8 @@ import (
 	"github.com/decred/dcrwallet/wallet/txrules"
 	"github.com/decred/dcrwallet/walletseed"
 	"github.com/decred/slog"
-	"github.com/raedahgroup/mobilewallet/address"
-	"github.com/raedahgroup/mobilewallet/txhelper"
+	"github.com/raedahgroup/dcrlibwallet/address"
+	"github.com/raedahgroup/dcrlibwallet/txhelper"
 )
 
 var shutdownRequestChannel = make(chan struct{})

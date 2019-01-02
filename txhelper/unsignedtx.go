@@ -7,7 +7,7 @@ import (
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrwallet/wallet/txrules"
-	"github.com/raedahgroup/mobilewallet/address"
+	"github.com/raedahgroup/dcrlibwallet/address"
 )
 
 func NewUnsignedTx(inputs []*wire.TxIn, amount int64, destAddress string, changeAddress string) (*wire.MsgTx, error) {
