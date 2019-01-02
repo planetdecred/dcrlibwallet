@@ -1424,23 +1424,13 @@ func (lw *LibWallet) BulkSendTransaction(privPass []byte, destinations []txhelpe
 	// create transaction outputs for all destination addresses and amounts
 	outputs := make([]*wire.TxOut, len(destinations))
 	for i, destination := range destinations {
-		pkScript, err := address.PkScript(destination.Address)
+		output, err := txhelper.MakeTxOutput(destination)
 		if err != nil {
 			log.Error(err)
 			return nil, err
 		}
 
-		amountInAtom, err := txhelper.AmountToAtom(destination.Amount)
-		if err != nil {
-			log.Error(err)
-			return nil, err
-		}
-
-		outputs[i] = &wire.TxOut{
-			Value:    amountInAtom,
-			Version:  txscript.DefaultScriptVersion,
-			PkScript: pkScript,
-		}
+		outputs[i] = output
 	}
 
 	// create tx, use default utxo selection algorithm and nil change source so a change source to the sending account is automatically created

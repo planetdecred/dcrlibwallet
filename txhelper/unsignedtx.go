@@ -7,11 +7,10 @@ import (
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrwallet/wallet/txrules"
-	"github.com/raedahgroup/dcrlibwallet/address"
 )
 
-func NewUnsignedTx(inputs []*wire.TxIn, amount int64, destAddress string, changeAddress string) (*wire.MsgTx, error) {
-	outputs, err := makeTxOutputs(amount, destAddress)
+func NewUnsignedTx(inputs []*wire.TxIn, destinations []TransactionDestination, changeAddress string) (*wire.MsgTx, error) {
+	outputs, totalSendAmount, err := makeTxOutputs(destinations)
 	if err != nil {
 		return nil, err
 	}
@@ -34,14 +33,14 @@ func NewUnsignedTx(inputs []*wire.TxIn, amount int64, destAddress string, change
 		scriptSizes = append(scriptSizes, RedeemP2PKHSigScriptSize)
 	}
 
-	if totalInputAmount < amount {
+	if totalInputAmount < totalSendAmount {
 		return nil, errors.New("total amount from selected outputs not enough to cover transaction")
 	}
 
 	relayFeePerKb := txrules.DefaultRelayFeePerKb
 	maxSignedSize := EstimateSerializeSize(scriptSizes, outputs, changeScriptSize)
 	maxRequiredFee := txrules.FeeForSerializeSize(relayFeePerKb, maxSignedSize)
-	changeAmount := totalInputAmount - amount - int64(maxRequiredFee)
+	changeAmount := totalInputAmount - totalSendAmount - int64(maxRequiredFee)
 
 	if changeAmount < 0 {
 		return nil, errors.New("total amount from selected outputs not enough to cover transaction fee")
@@ -72,14 +71,16 @@ func NewUnsignedTx(inputs []*wire.TxIn, amount int64, destAddress string, change
 	return unsignedTransaction, nil
 }
 
-func makeTxOutputs(sendAmount int64, destinationAddress string) ([]*wire.TxOut, error) {
-	// get address public script
-	pkScript, err := address.PkScript(destinationAddress)
-	if err != nil {
-		return nil, err
-	}
+func makeTxOutputs(destinations []TransactionDestination) (outputs []*wire.TxOut, totalSendAmount int64, err error) {
+	for _, destination := range destinations {
+		var output *wire.TxOut
+		output, err = MakeTxOutput(destination)
+		if err != nil {
+			return
+		}
 
-	// create non-change output
-	output := wire.NewTxOut(sendAmount, pkScript)
-	return []*wire.TxOut{output}, nil
+		outputs = append(outputs, output)
+		totalSendAmount += output.Value
+	}
+	return
 }
