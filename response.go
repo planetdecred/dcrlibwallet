@@ -135,20 +135,6 @@ type UnspentOutput struct {
 	PkScript        []byte
 }
 
-type PurchaseTicketsRequest struct {
-	Passphrase            []byte
-	Account               uint32
-	SpendLimit            int64
-	RequiredConfirmations uint32
-	TicketAddress         string
-	NumTickets            uint32
-	PoolAddress           string
-	PoolFees              float64
-	Expiry                uint32
-	TxFee                 int64
-	TicketFee             int64
-}
-
 type SpvSyncResponse interface {
 	OnPeerConnected(peerCount int32)
 	OnPeerDisconnected(peerCount int32)
