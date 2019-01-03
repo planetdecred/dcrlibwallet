@@ -1744,6 +1744,43 @@ func (lw *LibWallet) GetTickets(req *GetTicketsRequest) (<-chan *GetTicketsRespo
 	return ch, errCh, nil
 }
 
+// TicketPrice returns the price of a ticket for the next block, also known as the stake difficulty.
+// May be incorrect if blockchain sync is ongoing or if blockchain is not up-to-date.
+func (lw *LibWallet) TicketPrice(ctx context.Context) (*TicketPriceResponse, error) {
+	sdiff, err := lw.wallet.NextStakeDifficulty()
+	if err == nil {
+		_, tipHeight := lw.wallet.MainChainTip()
+		resp := &TicketPriceResponse{
+			TicketPrice: int64(sdiff),
+			Height:      tipHeight,
+		}
+		return resp, nil
+	}
+
+	n, err := lw.wallet.NetworkBackend()
+	if err != nil {
+		return nil, err
+	}
+	chainClient, err := chain.RPCClientFromBackend(n)
+	if err != nil {
+		return nil, translateError(err)
+	}
+
+	ticketPrice, err := n.StakeDifficulty(ctx)
+	if err != nil {
+		return nil, translateError(err)
+	}
+	_, blockHeight, err := chainClient.GetBestBlock()
+	if err != nil {
+		return nil, translateError(err)
+	}
+
+	return &TicketPriceResponse{
+		TicketPrice: int64(ticketPrice),
+		Height:      int32(blockHeight),
+	}, nil
+}
+
 // PurchaseTickets purchases tickets from the wallet. Returns a slice of hashes for tickets purchased
 func (lw *LibWallet) PurchaseTickets(request *PurchaseTicketsRequest) ([]string, error) {
 	// Unmarshall the received data and prepare it as input for the ticket purchase request.

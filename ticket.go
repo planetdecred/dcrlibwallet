@@ -65,6 +65,11 @@ type GetTicketsResponse struct {
 	TicketStatus TicketStatus
 }
 
+type TicketPriceResponse struct {
+	TicketPrice int64
+	Height      int32
+}
+
 func marshalGetTicketBlockDetails(v *wire.BlockHeader) *BlockDetails {
 	if v == nil || v.Height < 0 {
 		return nil
