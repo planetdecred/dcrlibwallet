@@ -1668,6 +1668,83 @@ func (lw *LibWallet) NextAddress(account int32) (string, error) {
 	return addr.EncodeAddress(), nil
 }
 
+// StakeInfo returns information about wallet stakes, tickets and their statuses.
+func (lw *LibWallet) StakeInfo() (*wallet.StakeInfoData, error) {
+	return lw.wallet.StakeInfo()
+}
+
+func (lw *LibWallet) GetTickets(req *GetTicketsRequest) (<-chan *GetTicketsResponse, <-chan error, error) {
+
+	var startBlock, endBlock *wallet.BlockIdentifier
+	if req.StartingBlockHash != nil && req.StartingBlockHeight != 0 {
+		return nil, nil, fmt.Errorf("starting block hash and height may not be specified simultaneously")
+	} else if req.StartingBlockHash != nil {
+		startBlockHash, err := chainhash.NewHash(req.StartingBlockHash)
+		if err != nil {
+			return nil, nil, err
+		}
+		startBlock = wallet.NewBlockIdentifierFromHash(startBlockHash)
+	} else if req.StartingBlockHeight != 0 {
+		startBlock = wallet.NewBlockIdentifierFromHeight(req.StartingBlockHeight)
+	}
+
+	if req.EndingBlockHash != nil && req.EndingBlockHeight != 0 {
+		return nil, nil, fmt.Errorf("ending block hash and height may not be specified simultaneously")
+	} else if req.EndingBlockHash != nil {
+		endBlockHash, err := chainhash.NewHash(req.EndingBlockHash)
+		if err != nil {
+			return nil, nil, err
+		}
+		endBlock = wallet.NewBlockIdentifierFromHash(endBlockHash)
+	} else if req.EndingBlockHeight != 0 {
+		endBlock = wallet.NewBlockIdentifierFromHeight(req.EndingBlockHeight)
+	}
+
+	targetTicketCount := int(req.TargetTicketCount)
+	if targetTicketCount < 0 {
+		return nil, nil, fmt.Errorf("target ticket count may not be negative")
+	}
+
+	ticketCount := 0
+
+	ch := make(chan *GetTicketsResponse)
+	errCh := make(chan error)
+
+	rangeFn := func(tickets []*wallet.TicketSummary, block *wire.BlockHeader) (bool, error) {
+		resp := &GetTicketsResponse{
+			Block: marshalGetTicketBlockDetails(block),
+		}
+
+		for _, t := range tickets {
+			resp.TicketStatus = marshalTicketDetails(t)
+			resp.Ticket = t
+			ch <- resp
+		}
+		ticketCount += len(tickets)
+
+		return ((targetTicketCount > 0) && (ticketCount >= targetTicketCount)), nil
+	}
+
+	go func() {
+		var chainClient *rpcclient.Client
+		if n, err := lw.wallet.NetworkBackend(); err == nil {
+			client, err := chain.RPCClientFromBackend(n)
+			if err == nil {
+				chainClient = client
+			}
+		}
+		if chainClient != nil {
+			errCh <- lw.wallet.GetTicketsPrecise(rangeFn, chainClient, startBlock, endBlock)
+		} else {
+			errCh <- lw.wallet.GetTickets(rangeFn, startBlock, endBlock)
+		}
+		close(errCh)
+		close(ch)
+	}()
+
+	return ch, errCh, nil
+}
+
 // PurchaseTickets purchases tickets from the wallet. Returns a slice of hashes for tickets purchased
 func (lw *LibWallet) PurchaseTickets(request *PurchaseTicketsRequest) ([][]byte, error) {
 	// Unmarshall the received data and prepare it as input for the ticket purchase request.
