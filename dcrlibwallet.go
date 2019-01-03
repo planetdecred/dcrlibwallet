@@ -1674,7 +1674,6 @@ func (lw *LibWallet) StakeInfo() (*wallet.StakeInfoData, error) {
 }
 
 func (lw *LibWallet) GetTickets(req *GetTicketsRequest) (<-chan *GetTicketsResponse, <-chan error, error) {
-
 	var startBlock, endBlock *wallet.BlockIdentifier
 	if req.StartingBlockHash != nil && req.StartingBlockHeight != 0 {
 		return nil, nil, fmt.Errorf("starting block hash and height may not be specified simultaneously")

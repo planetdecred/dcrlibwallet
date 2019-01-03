@@ -28,16 +28,6 @@ var TicketStatusNames = map[TicketStatus]string{
 	TicketStatusExpired: "EXPIRED",
 	TicketStatusRevoked: "REVOKED",
 }
-var TicketStatusValues = map[string]TicketStatus{
-	"UNKNOWN":  TicketStatusUnknown,
-	"UNMINED":  TicketStatusUnmined,
-	"IMMATURE": TicketStatusImmature,
-	"LIVE":     TicketStatusLive,
-	"VOTED":    TicketStatusVoted,
-	"MISSED":   TicketStatusMissed,
-	"EXPIRED":  TicketStatusExpired,
-	"REVOKED":  TicketStatusRevoked,
-}
 
 func (status TicketStatus) String() string {
 	name, ok := TicketStatusNames[status]
