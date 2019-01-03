@@ -1745,7 +1745,7 @@ func (lw *LibWallet) GetTickets(req *GetTicketsRequest) (<-chan *GetTicketsRespo
 }
 
 // PurchaseTickets purchases tickets from the wallet. Returns a slice of hashes for tickets purchased
-func (lw *LibWallet) PurchaseTickets(request *PurchaseTicketsRequest) ([][]byte, error) {
+func (lw *LibWallet) PurchaseTickets(request *PurchaseTicketsRequest) ([]string, error) {
 	// Unmarshall the received data and prepare it as input for the ticket purchase request.
 	spendLimit := dcrutil.Amount(request.SpendLimit)
 	if spendLimit < 0 {
@@ -1819,9 +1819,9 @@ func (lw *LibWallet) PurchaseTickets(request *PurchaseTicketsRequest) ([][]byte,
 		return nil, fmt.Errorf("Unable to purchase tickets: %s", err.Error())
 	}
 
-	hashes := make([][]byte, len(purchasedTickets))
+	hashes := make([]string, len(purchasedTickets))
 	for i, hash := range purchasedTickets {
-		hashes[i] = hash[:]
+		hashes[i] = hash.String()
 	}
 
 	return hashes, nil
