@@ -806,7 +806,6 @@ func (lw *LibWallet) TransactionNotification(listener TransactionListener) {
 		for {
 			v := <-n.C
 			for _, transaction := range v.UnminedTransactions {
-
 				tempTransaction, err := lw.parseTxSummary(&transaction, nil)
 				if err != nil {
 					log.Errorf("Error ntfn parse tx: %v", err)
@@ -875,19 +874,7 @@ func (lw *LibWallet) GetTransactionRaw(txHash []byte) (*Transaction, error) {
 		return nil, err
 	}
 
-	transaction, err := lw.parseTxSummary(txSummary, blockHash)
-	if err != nil {
-		log.Error(err)
-		return "", err
-	}
-
-	result, err := json.Marshal(transaction)
-
-	if err != nil {
-		return "", err
-	}
-
-	return string(result), nil
+	return lw.parseTxSummary(txSummary, blockHash)
 }
 
 func (lw *LibWallet) GetTransactions(limit int32) (string, error) {
@@ -941,10 +928,10 @@ func (lw *LibWallet) parseTxSummary(tx *wallet.TransactionSummary, blockHash *ch
 	var outputTotal int64
 	var amount int64
 
-	credits := make([]TransactionCredit, len(tx.MyOutputs))
+	credits := make([]*TransactionCredit, len(tx.MyOutputs))
 	for index, credit := range tx.MyOutputs {
 		outputTotal += int64(credit.Amount)
-		credits[index] = TransactionCredit{
+		credits[index] = &TransactionCredit{
 			Index:    int32(credit.Index),
 			Account:  int32(credit.Account),
 			Internal: credit.Internal,
@@ -952,10 +939,10 @@ func (lw *LibWallet) parseTxSummary(tx *wallet.TransactionSummary, blockHash *ch
 			Address:  credit.Address.String()}
 	}
 
-	debits := make([]TransactionDebit, len(tx.MyInputs))
+	debits := make([]*TransactionDebit, len(tx.MyInputs))
 	for index, debit := range tx.MyInputs {
 		inputTotal += int64(debit.PreviousAmount)
-		debits[index] = TransactionDebit{
+		debits[index] = &TransactionDebit{
 			Index:           int32(debit.Index),
 			PreviousAccount: int32(debit.PreviousAccount),
 			PreviousAmount:  int64(debit.PreviousAmount),
@@ -1000,24 +987,13 @@ func (lw *LibWallet) parseTxSummary(tx *wallet.TransactionSummary, blockHash *ch
 		Raw:       fmt.Sprintf("%02x", tx.Transaction[:]),
 		Timestamp: tx.Timestamp,
 		Type:      transactionType(tx.Type),
-		Credits:   &credits,
+		Credits:   credits,
 		Amount:    amount,
 		Height:    height,
 		Direction: direction,
-		Debits:    &debits}
+		Debits:    debits}
 
 	return transaction, nil
-}
-
-func (lw *LibWallet) GetTransactions(response GetTransactionsResponse) error {
-	transactions, err := lw.GetTransactionsRaw()
-	if err != nil {
-		return err
-	}
-
-	result, _ := json.Marshal(getTransactionsResponse{ErrorOccurred: false, Transactions: transactions})
-	response.OnResult(string(result))
-	return nil
 }
 
 func (lw *LibWallet) GetTransactionsRaw() (transactions []*Transaction, err error) {
@@ -1028,20 +1004,20 @@ func (lw *LibWallet) GetTransactionsRaw() (transactions []*Transaction, err erro
 			var inputAmounts int64
 			var outputAmounts int64
 			var amount int64
-			tempCredits := make([]TransactionCredit, len(transaction.MyOutputs))
+			tempCredits := make([]*TransactionCredit, len(transaction.MyOutputs))
 			for index, credit := range transaction.MyOutputs {
 				outputAmounts += int64(credit.Amount)
-				tempCredits[index] = TransactionCredit{
+				tempCredits[index] = &TransactionCredit{
 					Index:    int32(credit.Index),
 					Account:  int32(credit.Account),
 					Internal: credit.Internal,
 					Amount:   int64(credit.Amount),
 					Address:  credit.Address.String()}
 			}
-			tempDebits := make([]TransactionDebit, len(transaction.MyInputs))
+			tempDebits := make([]*TransactionDebit, len(transaction.MyInputs))
 			for index, debit := range transaction.MyInputs {
 				inputAmounts += int64(debit.PreviousAmount)
-				tempDebits[index] = TransactionDebit{
+				tempDebits[index] = &TransactionDebit{
 					Index:           int32(debit.Index),
 					PreviousAccount: int32(debit.PreviousAccount),
 					PreviousAmount:  int64(debit.PreviousAmount),
@@ -1083,11 +1059,11 @@ func (lw *LibWallet) GetTransactionsRaw() (transactions []*Transaction, err erro
 				Raw:       fmt.Sprintf("%02x", transaction.Transaction[:]),
 				Timestamp: transaction.Timestamp,
 				Type:      transactionType(transaction.Type),
-				Credits:   &tempCredits,
+				Credits:   tempCredits,
 				Amount:    amount,
 				Height:    height,
 				Direction: direction,
-				Debits:    &tempDebits}
+				Debits:    tempDebits}
 			transactions = append(transactions, tempTransaction)
 		}
 		select {

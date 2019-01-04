@@ -60,8 +60,8 @@ type Transaction struct {
 	Status    string
 	Height    int32
 	Direction int32
-	Debits    *[]TransactionDebit
-	Credits   *[]TransactionCredit
+	Debits      []*TransactionDebit
+	Credits     []*TransactionCredit
 }
 
 type TransactionDebit struct {
