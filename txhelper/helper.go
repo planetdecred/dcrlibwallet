@@ -4,6 +4,7 @@ import (
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrd/wire"
+	"github.com/decred/dcrwallet/wallet"
 	"github.com/raedahgroup/dcrlibwallet/address"
 )
 
@@ -133,4 +134,19 @@ func MakeTxOutput(destination TransactionDestination) (*wire.TxOut, error) {
 		Version:  txscript.DefaultScriptVersion,
 		PkScript: pkScript,
 	}, nil
+}
+
+func TransactionType(txType wallet.TransactionType) string {
+	switch txType {
+	case wallet.TransactionTypeCoinbase:
+		return "COINBASE"
+	case wallet.TransactionTypeTicketPurchase:
+		return "TICKET_PURCHASE"
+	case wallet.TransactionTypeVote:
+		return "VOTE"
+	case wallet.TransactionTypeRevocation:
+		return "REVOCATION"
+	default:
+		return "REGULAR"
+	}
 }

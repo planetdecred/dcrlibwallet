@@ -32,3 +32,32 @@ type TransactionDestination struct {
 	Address string
 	Amount float64
 }
+
+type DecodedTransaction struct {
+	Hash     string
+	Type     string
+	Version  int32
+	LockTime int32
+	Expiry   int32
+	Inputs   []DecodedInput
+	Outputs  []DecodedOutput
+
+	//Vote Info
+	VoteVersion    int32
+	LastBlockValid bool
+	VoteBits       string
+}
+
+type DecodedInput struct {
+	PreviousTransactionHash  string
+	PreviousTransactionIndex int32
+	AmountIn                 int64
+}
+
+type DecodedOutput struct {
+	Index      int32
+	Value      int64
+	Version    int32
+	ScriptType string
+	Addresses  []string
+}
