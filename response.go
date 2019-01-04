@@ -1,6 +1,8 @@
 package dcrlibwallet
 
-import "github.com/raedahgroup/dcrlibwallet/txhelper"
+import (
+	"github.com/raedahgroup/dcrlibwallet/txhelper"
+)
 
 type UnsignedTransaction struct {
 	UnsignedTransaction       []byte
@@ -55,12 +57,13 @@ Direction
 type Transaction struct {
 	Hash      string `storm:"id,unique"`
 	Raw       string
+	Confirmations int32
 	Fee       int64
 	Timestamp int64
 	Type      string
 	Amount    int64
 	Status    string
-	Height    int32
+	BlockHeight   int32
 	Direction   txhelper.TransactionDirection
 	Debits      []*TransactionDebit
 	Credits     []*TransactionCredit

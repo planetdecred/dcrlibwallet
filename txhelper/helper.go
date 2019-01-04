@@ -1,9 +1,11 @@
 package txhelper
 
 import (
+	"bytes"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrd/wire"
+	"github.com/decred/dcrdata/txhelpers"
 	"github.com/decred/dcrwallet/wallet"
 	"github.com/raedahgroup/dcrlibwallet/address"
 )
@@ -134,6 +136,17 @@ func MakeTxOutput(destination TransactionDestination) (*wire.TxOut, error) {
 		Version:  txscript.DefaultScriptVersion,
 		PkScript: pkScript,
 	}, nil
+}
+
+func MsgTxFeeSizeRate(serializedTx []byte) (msgTx wire.MsgTx, fee dcrutil.Amount, size int, feeRate dcrutil.Amount, err error) {
+	err = msgTx.Deserialize(bytes.NewReader(serializedTx))
+	if err != nil {
+		return
+	}
+
+	size = msgTx.SerializeSize()
+	fee, feeRate = txhelpers.TxFeeRate(&msgTx)
+	return
 }
 
 func TransactionType(txType wallet.TransactionType) string {

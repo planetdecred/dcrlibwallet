@@ -1,7 +1,5 @@
 package txhelper
 
-import "github.com/decred/dcrd/dcrutil"
-
 var (
 	transactionDirectionNames = []string{"Sent", "Received", "Transferred", "Unclear"}
 )
@@ -41,8 +39,11 @@ type DecodedTransaction struct {
 	Version  int32
 	LockTime int32
 	Expiry   int32
-	Inputs   []DecodedInput
-	Outputs  []DecodedOutput
+	Fee      int64
+	FeeRate  int64
+	Size     int
+	Inputs   []*DecodedInput
+	Outputs  []*DecodedOutput
 
 	//Vote Info
 	VoteVersion    int32
@@ -54,14 +55,15 @@ type DecodedInput struct {
 	PreviousTransactionHash  string
 	PreviousTransactionIndex int32
 	PreviousOutpoint         string
-	AmountIn                 dcrutil.Amount
+	AmountIn                 int64
 }
 
 type DecodedOutput struct {
 	Index      int32
-	Value      dcrutil.Amount
+	Value      int64
 	Internal   bool
 	Version    int32
 	ScriptType string
-	Addresses  []string
+	Address    string
+	Account    string
 }

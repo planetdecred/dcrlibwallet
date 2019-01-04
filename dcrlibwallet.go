@@ -864,13 +864,20 @@ func (lw *LibWallet) GetTransactionRaw(txHash []byte) (*Transaction, error) {
 		return nil, err
 	}
 
-	txSummary, _, blockHash, err := lw.wallet.TransactionSummary(hash)
+	txSummary, confirmations, blockHash, err := lw.wallet.TransactionSummary(hash)
 	if err != nil {
 		log.Error(err)
 		return nil, err
 	}
 
-	return lw.parseTxSummary(txSummary, blockHash)
+	tx, err := lw.parseTxSummary(txSummary, blockHash)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+
+	tx.Confirmations = confirmations
+	return tx, nil
 }
 
 func (lw *LibWallet) GetTransactions(limit int32) (string, error) {
@@ -985,7 +992,7 @@ func (lw *LibWallet) parseTxSummary(txSummary *wallet.TransactionSummary, blockH
 		Type:      txhelper.TransactionType(txSummary.Type),
 		Credits:   credits,
 		Amount:    amount,
-		Height:    height,
+		BlockHeight:    height,
 		Direction: direction,
 		Debits:    debits}, nil
 }
@@ -1048,16 +1055,16 @@ func (lw *LibWallet) GetTransactionsRaw() (transactions []*Transaction, err erro
 				height = int32(block.Header.Height)
 			}
 			tempTransaction := &Transaction{
-				Fee:       int64(transaction.Fee),
-				Hash:      transaction.Hash.String(),
-				Raw:       fmt.Sprintf("%02x", transaction.Transaction[:]),
-				Timestamp: transaction.Timestamp,
-				Type:      txhelper.TransactionType(transaction.Type),
-				Credits:   tempCredits,
-				Amount:    amount,
-				Height:    height,
-				Direction: direction,
-				Debits:    tempDebits}
+				Fee:         int64(transaction.Fee),
+				Hash:        transaction.Hash.String(),
+				Raw:         fmt.Sprintf("%02x", transaction.Transaction[:]),
+				Timestamp:   transaction.Timestamp,
+				Type:        txhelper.TransactionType(transaction.Type),
+				Credits:     tempCredits,
+				Amount:      amount,
+				BlockHeight: height,
+				Direction:   direction,
+				Debits:      tempDebits}
 			transactions = append(transactions, tempTransaction)
 		}
 		select {

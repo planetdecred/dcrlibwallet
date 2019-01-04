@@ -16,6 +16,7 @@ require (
 	github.com/decred/dcrd/rpcclient v1.1.0
 	github.com/decred/dcrd/txscript v1.0.2
 	github.com/decred/dcrd/wire v1.2.0
+	github.com/decred/dcrdata v2.1.3+incompatible
 	github.com/decred/dcrwallet v1.2.2
 	github.com/decred/dcrwallet/chain v1.1.1
 	github.com/decred/dcrwallet/errors v1.0.1

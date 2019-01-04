@@ -1,7 +1,6 @@
 package txhelper
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 
@@ -17,8 +16,7 @@ import (
 const BlockValid int = 1 << 0
 
 func DecodeTransaction(hash *chainhash.Hash, serializedTx []byte, netParams *chaincfg.Params) (tx *DecodedTransaction, err error) {
-	var mtx wire.MsgTx
-	err = mtx.Deserialize(bytes.NewReader(serializedTx))
+	mtx, txFee, txSize, txFeeRate, err := MsgTxFeeSizeRate(serializedTx)
 	if err != nil {
 		return
 	}
@@ -38,6 +36,9 @@ func DecodeTransaction(hash *chainhash.Hash, serializedTx []byte, netParams *cha
 		Version:        int32(mtx.Version),
 		LockTime:       int32(mtx.LockTime),
 		Expiry:         int32(mtx.Expiry),
+		Size:           txSize,
+		FeeRate:        int64(txFeeRate),
+		Fee:            int64(txFee),
 		Inputs:         decodeTxInputs(&mtx),
 		Outputs:        decodeTxOutputs(&mtx, netParams),
 		VoteVersion:    int32(ssGenVersion),
@@ -47,20 +48,20 @@ func DecodeTransaction(hash *chainhash.Hash, serializedTx []byte, netParams *cha
 	return
 }
 
-func decodeTxInputs(mtx *wire.MsgTx) []DecodedInput {
-	inputs := make([]DecodedInput, len(mtx.TxIn))
+func decodeTxInputs(mtx *wire.MsgTx) []*DecodedInput {
+	inputs := make([]*DecodedInput, len(mtx.TxIn))
 	for i, txIn := range mtx.TxIn {
-		inputs[i] = DecodedInput{
+		inputs[i] = &DecodedInput{
 			PreviousTransactionHash:  txIn.PreviousOutPoint.Hash.String(),
 			PreviousTransactionIndex: int32(txIn.PreviousOutPoint.Index),
-			AmountIn:                 dcrutil.Amount(txIn.ValueIn),
+			AmountIn:                 txIn.ValueIn,
 		}
 	}
 	return inputs
 }
 
-func decodeTxOutputs(mtx *wire.MsgTx, chainParams *chaincfg.Params) []DecodedOutput {
-	outputs := make([]DecodedOutput, len(mtx.TxOut))
+func decodeTxOutputs(mtx *wire.MsgTx, chainParams *chaincfg.Params) []*DecodedOutput {
+	outputs := make([]*DecodedOutput, len(mtx.TxOut))
 	txType := stake.DetermineTxType(mtx)
 
 	for i, v := range mtx.TxOut {
@@ -91,11 +92,11 @@ func decodeTxOutputs(mtx *wire.MsgTx, chainParams *chaincfg.Params) []DecodedOut
 			}
 		}
 
-		outputs[i] = DecodedOutput{
+		outputs[i] = &DecodedOutput{
 			Index:      int32(i),
-			Value:      dcrutil.Amount(v.Value),
+			Value:      v.Value,
 			Version:    int32(v.Version),
-			Addresses:  encodedAddrs,
+			Address:    encodedAddrs[0],
 			ScriptType: scriptClass.String(),
 		}
 	}
