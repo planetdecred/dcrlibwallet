@@ -849,16 +849,30 @@ func (lw *LibWallet) TransactionNotification(listener TransactionListener) {
 }
 
 func (lw *LibWallet) GetTransaction(txHash []byte) (string, error) {
+	transaction, err := lw.GetTransactionsRaw()
+	if err != nil {
+		return "", err
+	}
+
+	result, err := json.Marshal(transaction)
+	if err != nil {
+		return "", err
+	}
+
+	return string(result), nil
+}
+
+func (lw *LibWallet) GetTransactionRaw(txHash []byte) (*Transaction, error) {
 	hash, err := chainhash.NewHash(txHash)
 	if err != nil {
 		log.Error(err)
-		return "", err
+		return nil, err
 	}
 
 	txSummary, _, blockHash, err := lw.wallet.TransactionSummary(hash)
 	if err != nil {
 		log.Error(err)
-		return "", err
+		return nil, err
 	}
 
 	transaction, err := lw.parseTxSummary(txSummary, blockHash)
