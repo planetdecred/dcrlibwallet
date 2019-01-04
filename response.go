@@ -1,5 +1,7 @@
 package dcrlibwallet
 
+import "github.com/raedahgroup/dcrlibwallet/txhelper"
+
 type UnsignedTransaction struct {
 	UnsignedTransaction       []byte
 	EstimatedSignedSize       int
@@ -59,7 +61,7 @@ type Transaction struct {
 	Amount    int64
 	Status    string
 	Height    int32
-	Direction int32
+	Direction   txhelper.TransactionDirection
 	Debits      []*TransactionDebit
 	Credits     []*TransactionCredit
 }

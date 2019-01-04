@@ -848,7 +848,7 @@ func (lw *LibWallet) TransactionNotification(listener TransactionListener) {
 }
 
 func (lw *LibWallet) GetTransaction(txHash []byte) (string, error) {
-	transaction, err := lw.GetTransactionsRaw()
+	transaction, err := lw.GetTransactionRaw(txHash)
 	if err != nil {
 		return "", err
 	}
@@ -949,20 +949,20 @@ func (lw *LibWallet) parseTxSummary(tx *wallet.TransactionSummary, blockHash *ch
 			AccountName:     lw.AccountName(int32(debit.PreviousAccount))}
 	}
 
-	var direction int32 = -1
+	var direction txhelper.TransactionDirection
 	if tx.Type == wallet.TransactionTypeRegular {
 		amountDifference := outputTotal - inputTotal
 		if amountDifference < 0 && (float64(tx.Fee) == math.Abs(float64(amountDifference))) {
 			//Transfered
-			direction = 2
+			direction = txhelper.TransactionDirectionTransferred
 			amount = int64(tx.Fee)
 		} else if amountDifference > 0 {
 			//Received
-			direction = 1
+			direction = txhelper.TransactionDirectionReceived
 			amount = outputTotal
 		} else {
 			//Sent
-			direction = 0
+			direction = txhelper.TransactionDirectionSent
 			amount = inputTotal
 			amount -= outputTotal
 
@@ -1024,22 +1024,22 @@ func (lw *LibWallet) GetTransactionsRaw() (transactions []*Transaction, err erro
 					AccountName:     lw.AccountName(int32(debit.PreviousAccount))}
 			}
 
-			var direction int32
+			var direction txhelper.TransactionDirection
 			if transaction.Type == wallet.TransactionTypeRegular {
 				amountDifference := outputAmounts - inputAmounts
 				if amountDifference < 0 && (float64(transaction.Fee) == math.Abs(float64(amountDifference))) {
 					//Transfered
-					direction = 2
+					direction = txhelper.TransactionDirectionTransferred
 					amount = int64(transaction.Fee)
 				} else if amountDifference > 0 {
 					//Received
-					direction = 1
+					direction = txhelper.TransactionDirectionReceived
 					for _, credit := range transaction.MyOutputs {
 						amount += int64(credit.Amount)
 					}
 				} else {
 					//Sent
-					direction = 0
+					direction = txhelper.TransactionDirectionSent
 					for _, debit := range transaction.MyInputs {
 						amount += int64(debit.PreviousAmount)
 					}
