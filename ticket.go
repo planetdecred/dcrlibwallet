@@ -19,14 +19,14 @@ const (
 )
 
 var TicketStatusNames = map[TicketStatus]string{
-	TicketStatusUnknown: "UNKNOWN",
-	TicketStatusUnmined: "UNMINED",
+	TicketStatusUnknown:  "UNKNOWN",
+	TicketStatusUnmined:  "UNMINED",
 	TicketStatusImmature: "IMMATURE",
-	TicketStatusLive: "LIVE",
-	TicketStatusVoted: "VOTED",
-	TicketStatusMissed: "MISSED",
-	TicketStatusExpired: "EXPIRED",
-	TicketStatusRevoked: "REVOKED",
+	TicketStatusLive:     "LIVE",
+	TicketStatusVoted:    "VOTED",
+	TicketStatusMissed:   "MISSED",
+	TicketStatusExpired:  "EXPIRED",
+	TicketStatusRevoked:  "REVOKED",
 }
 
 func (status TicketStatus) String() string {

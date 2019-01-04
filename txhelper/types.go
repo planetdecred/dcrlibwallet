@@ -1,5 +1,7 @@
 package txhelper
 
+import "github.com/decred/dcrd/dcrutil"
+
 var (
 	transactionDirectionNames = []string{"Sent", "Received", "Transferred", "Unclear"}
 )
@@ -30,7 +32,7 @@ func (direction TransactionDirection) String() string {
 
 type TransactionDestination struct {
 	Address string
-	Amount float64
+	Amount  float64
 }
 
 type DecodedTransaction struct {
@@ -51,12 +53,14 @@ type DecodedTransaction struct {
 type DecodedInput struct {
 	PreviousTransactionHash  string
 	PreviousTransactionIndex int32
-	AmountIn                 int64
+	PreviousOutpoint         string
+	AmountIn                 dcrutil.Amount
 }
 
 type DecodedOutput struct {
 	Index      int32
-	Value      int64
+	Value      dcrutil.Amount
+	Internal   bool
 	Version    int32
 	ScriptType string
 	Addresses  []string
