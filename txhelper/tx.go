@@ -15,7 +15,7 @@ import (
 
 const BlockValid int = 1 << 0
 
-func DecodeTransaction(hash *chainhash.Hash, serializedTx []byte, netParams *chaincfg.Params) (tx *DecodedTransaction, err error) {
+func DecodeTransaction(hash *chainhash.Hash, serializedTx []byte, netParams *chaincfg.Params, addressInfoFn func(string) *AddressInfo) (tx *DecodedTransaction, err error) {
 	mtx, txFee, txSize, txFeeRate, err := MsgTxFeeSizeRate(serializedTx)
 	if err != nil {
 		return
@@ -40,7 +40,7 @@ func DecodeTransaction(hash *chainhash.Hash, serializedTx []byte, netParams *cha
 		FeeRate:        int64(txFeeRate),
 		Fee:            int64(txFee),
 		Inputs:         decodeTxInputs(&mtx),
-		Outputs:        decodeTxOutputs(&mtx, netParams),
+		Outputs:        decodeTxOutputs(&mtx, netParams, addressInfoFn),
 		VoteVersion:    int32(ssGenVersion),
 		LastBlockValid: lastBlockValid,
 		VoteBits:       votebits,
@@ -60,35 +60,36 @@ func decodeTxInputs(mtx *wire.MsgTx) []*DecodedInput {
 	return inputs
 }
 
-func decodeTxOutputs(mtx *wire.MsgTx, chainParams *chaincfg.Params) []*DecodedOutput {
+func decodeTxOutputs(mtx *wire.MsgTx, chainParams *chaincfg.Params, addressInfoFn func(string) *AddressInfo) []*DecodedOutput {
 	outputs := make([]*DecodedOutput, len(mtx.TxOut))
 	txType := stake.DetermineTxType(mtx)
 
 	for i, v := range mtx.TxOut {
 		var addrs []dcrutil.Address
-		var encodedAddrs []string
+		var addresses []*AddressInfo
 		var scriptClass txscript.ScriptClass
+
 		if (txType == stake.TxTypeSStx) && (stake.IsStakeSubmissionTxOut(i)) {
 			scriptClass = txscript.StakeSubmissionTy
-			addr, err := stake.AddrFromSStxPkScrCommitment(v.PkScript,
-				chainParams)
+			addr, err := stake.AddrFromSStxPkScrCommitment(v.PkScript, chainParams)
 			if err != nil {
-				encodedAddrs = []string{fmt.Sprintf(
-					"[error] failed to decode ticket "+
-						"commitment addr output for tx hash "+
-						"%v, output idx %v", mtx.TxHash(), i)}
+				addresses = []*AddressInfo{{
+					Address: fmt.Sprintf("[error] failed to decode ticket commitment addr output for tx hash %v, output idx %v",
+						mtx.TxHash(), i),
+				}}
 			} else {
-				encodedAddrs = []string{addr.EncodeAddress()}
+				addresses = []*AddressInfo{
+					addressInfoFn(addr.EncodeAddress()),
+				}
 			}
 		} else {
 			// Ignore the error here since an error means the script
 			// couldn't parse and there is no additional information
 			// about it anyways.
-			scriptClass, addrs, _, _ = txscript.ExtractPkScriptAddrs(
-				v.Version, v.PkScript, chainParams)
-			encodedAddrs = make([]string, len(addrs))
+			scriptClass, addrs, _, _ = txscript.ExtractPkScriptAddrs(v.Version, v.PkScript, chainParams)
+			addresses = make([]*AddressInfo, len(addrs))
 			for j, addr := range addrs {
-				encodedAddrs[j] = addr.EncodeAddress()
+				addresses[j] = addressInfoFn(addr.EncodeAddress())
 			}
 		}
 
@@ -96,7 +97,7 @@ func decodeTxOutputs(mtx *wire.MsgTx, chainParams *chaincfg.Params) []*DecodedOu
 			Index:      int32(i),
 			Value:      v.Value,
 			Version:    int32(v.Version),
-			Address:    encodedAddrs[0],
+			Addresses:    addresses,
 			ScriptType: scriptClass.String(),
 		}
 	}
