@@ -1796,18 +1796,22 @@ func (lw *LibWallet) TicketPrice(ctx context.Context) (*TicketPriceResponse, err
 }
 
 // PurchaseTickets purchases tickets from the wallet. Returns a slice of hashes for tickets purchased
-func (lw *LibWallet) PurchaseTickets(request *PurchaseTicketsRequest) ([]string, error) {
+func (lw *LibWallet) PurchaseTickets(ctx context.Context, request *PurchaseTicketsRequest) ([]string, error) {
+	var err error
+
 	// Unmarshall the received data and prepare it as input for the ticket purchase request.
-	spendLimit := dcrutil.Amount(request.SpendLimit)
-	if spendLimit < 0 {
-		return nil, errors.New("Negative spend limit given")
+	ticketPriceResponse, err := lw.TicketPrice(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("could not determine ticket price, %s", err.Error())
 	}
+
+	// Use current ticket price as spend limit
+	spendLimit := dcrutil.Amount(ticketPriceResponse.TicketPrice)
 
 	minConf := int32(request.RequiredConfirmations)
 	params := lw.wallet.ChainParams()
 
 	var ticketAddr dcrutil.Address
-	var err error
 	if request.TicketAddress != "" {
 		ticketAddr, err = decodeAddress(request.TicketAddress, params)
 		if err != nil {

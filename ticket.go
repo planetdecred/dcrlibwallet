@@ -40,7 +40,6 @@ func (status TicketStatus) String() string {
 type PurchaseTicketsRequest struct {
 	Passphrase            []byte
 	Account               uint32
-	SpendLimit            int64
 	RequiredConfirmations uint32
 	TicketAddress         string
 	NumTickets            uint32
