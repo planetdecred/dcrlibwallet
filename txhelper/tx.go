@@ -15,7 +15,7 @@ import (
 
 const BlockValid int = 1 << 0
 
-func DecodeTransaction(hash *chainhash.Hash, serializedTx []byte, netParams *chaincfg.Params, addressInfoFn func(string) (*AddressInfo, interface{})) (tx *DecodedTransaction, err error) {
+func DecodeTransaction(hash *chainhash.Hash, serializedTx []byte, netParams *chaincfg.Params, addressInfoFn func(string) (*AddressInfo, error)) (tx *DecodedTransaction, err error) {
 	msgTx, txFee, txSize, txFeeRate, err := MsgTxFeeSizeRate(serializedTx)
 	if err != nil {
 		return
@@ -32,8 +32,8 @@ func DecodeTransaction(hash *chainhash.Hash, serializedTx []byte, netParams *cha
 
 	// wrapper for main address info function to absolve errors and always return an address info
 	getAddressInfo := func(address string) *AddressInfo {
-		addressInfo, _ := addressInfoFn(address)
-		if addressInfo == nil {
+		addressInfo, err := addressInfoFn(address)
+		if err != nil {
 			addressInfo = &AddressInfo{Address:address}
 		}
 		return addressInfo
