@@ -16,7 +16,7 @@ import (
 const BlockValid int = 1 << 0
 
 func DecodeTransaction(hash *chainhash.Hash, serializedTx []byte, netParams *chaincfg.Params, addressInfoFn func(string) *AddressInfo) (tx *DecodedTransaction, err error) {
-	mtx, txFee, txSize, txFeeRate, err := MsgTxFeeSizeRate(serializedTx)
+	msgTx, txFee, txSize, txFeeRate, err := MsgTxFeeSizeRate(serializedTx)
 	if err != nil {
 		return
 	}
@@ -24,23 +24,23 @@ func DecodeTransaction(hash *chainhash.Hash, serializedTx []byte, netParams *cha
 	var ssGenVersion uint32
 	var lastBlockValid bool
 	var votebits string
-	if stake.IsSSGen(&mtx) {
-		ssGenVersion = voteVersion(&mtx)
-		lastBlockValid = voteBits(&mtx)&uint16(BlockValid) != 0
-		votebits = fmt.Sprintf("%#04x", voteBits(&mtx))
+	if stake.IsSSGen(msgTx) {
+		ssGenVersion = voteVersion(msgTx)
+		lastBlockValid = voteBits(msgTx)&uint16(BlockValid) != 0
+		votebits = fmt.Sprintf("%#04x", voteBits(msgTx))
 	}
 
 	tx = &DecodedTransaction{
 		Hash:           hash.String(),
-		Type:           TransactionType(wallet.TxTransactionType(&mtx)),
-		Version:        int32(mtx.Version),
-		LockTime:       int32(mtx.LockTime),
-		Expiry:         int32(mtx.Expiry),
+		Type:           TransactionType(wallet.TxTransactionType(msgTx)),
+		Version:        int32(msgTx.Version),
+		LockTime:       int32(msgTx.LockTime),
+		Expiry:         int32(msgTx.Expiry),
 		Size:           txSize,
 		FeeRate:        int64(txFeeRate),
 		Fee:            int64(txFee),
-		Inputs:         decodeTxInputs(&mtx),
-		Outputs:        decodeTxOutputs(&mtx, netParams, addressInfoFn),
+		Inputs:         decodeTxInputs(msgTx),
+		Outputs:        decodeTxOutputs(msgTx, netParams, addressInfoFn),
 		VoteVersion:    int32(ssGenVersion),
 		LastBlockValid: lastBlockValid,
 		VoteBits:       votebits,

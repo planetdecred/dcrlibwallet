@@ -138,7 +138,7 @@ func MakeTxOutput(destination TransactionDestination) (*wire.TxOut, error) {
 	}, nil
 }
 
-func MsgTxFeeSizeRate(serializedTx []byte) (msgTx wire.MsgTx, fee dcrutil.Amount, size int, feeRate dcrutil.Amount, err error) {
+func MsgTxFeeSizeRate(serializedTx []byte) (msgTx *wire.MsgTx, fee dcrutil.Amount, size int, feeRate dcrutil.Amount, err error) {
 	err = msgTx.Deserialize(bytes.NewReader(serializedTx))
 	if err != nil {
 		return
