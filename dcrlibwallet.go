@@ -39,6 +39,7 @@ import (
 	"github.com/decred/slog"
 	"github.com/raedahgroup/dcrlibwallet/addresshelper"
 	"github.com/raedahgroup/dcrlibwallet/txhelper"
+	"github.com/decred/dcrd/chaincfg"
 )
 
 var shutdownRequestChannel = make(chan struct{})
@@ -949,7 +950,7 @@ func (lw *LibWallet) parseTxSummary(txSummary *wallet.TransactionSummary, blockH
 			Index:           int32(debit.Index),
 			PreviousAccount: int32(debit.PreviousAccount),
 			PreviousAmount:  int64(debit.PreviousAmount),
-			AccountName:     lw.AccountName(int32(debit.PreviousAccount))}
+			AccountName:     lw.AccountName(debit.PreviousAccount)}
 	}
 
 	var direction txhelper.TransactionDirection
@@ -1022,7 +1023,7 @@ func (lw *LibWallet) GetTransactionsRaw() (transactions []*Transaction, err erro
 					Index:           int32(debit.Index),
 					PreviousAccount: int32(debit.PreviousAccount),
 					PreviousAmount:  int64(debit.PreviousAmount),
-					AccountName:     lw.AccountName(int32(debit.PreviousAccount))}
+					AccountName:     lw.AccountName(debit.PreviousAccount)}
 			}
 
 			var direction txhelper.TransactionDirection
@@ -1505,13 +1506,17 @@ func (lw *LibWallet) IsAddressValid(address string) bool {
 	return err == nil
 }
 
-func (lw *LibWallet) AccountName(account int32) string {
-	name, err := lw.wallet.AccountName(uint32(account))
+func (lw *LibWallet) AccountName(accountNumber uint32) string {
+	name, err := lw.AccountNameRaw(accountNumber)
 	if err != nil {
 		log.Error(err)
 		return "Account not found"
 	}
 	return name
+}
+
+func (lw *LibWallet) AccountNameRaw(accountNumber uint32) (string, error) {
+	return lw.wallet.AccountName(accountNumber)
 }
 
 func (lw *LibWallet) AccountNumber(accountName string) (uint32, error) {
@@ -1524,7 +1529,7 @@ func (lw *LibWallet) AccountOfAddress(address string) string {
 		return err.Error()
 	}
 	info, _ := lw.wallet.AddressInfo(addr)
-	return lw.AccountName(int32(info.Account()))
+	return lw.AccountName(info.Account())
 }
 
 func (lw *LibWallet) AddressInfo(address string) (*txhelper.AddressInfo, string) {
@@ -1541,10 +1546,8 @@ func (lw *LibWallet) AddressInfo(address string) (*txhelper.AddressInfo, string)
 	info, _ := lw.wallet.AddressInfo(addr)
 	if info != nil {
 		addressInfo.IsMine = true
-
-		accountNumber := int32(info.Account())
-		addressInfo.AccountNumber = accountNumber
-		addressInfo.AccountName = lw.AccountName(accountNumber)
+		addressInfo.AccountNumber = info.Account()
+		addressInfo.AccountName = lw.AccountName(info.Account())
 	}
 
 	return addressInfo, ""

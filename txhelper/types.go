@@ -72,6 +72,6 @@ type DecodedOutput struct {
 type AddressInfo struct {
 	Address string
 	IsMine bool
-	AccountNumber int32
+	AccountNumber uint32
 	AccountName string
 }
