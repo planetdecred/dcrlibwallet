@@ -1,7 +1,7 @@
 package txhelper
 
 import (
-	"bytes"
+	"fmt"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrd/wire"
@@ -139,13 +139,14 @@ func MakeTxOutput(destination TransactionDestination) (*wire.TxOut, error) {
 }
 
 func MsgTxFeeSizeRate(serializedTx []byte) (msgTx *wire.MsgTx, fee dcrutil.Amount, size int, feeRate dcrutil.Amount, err error) {
-	err = msgTx.Deserialize(bytes.NewReader(serializedTx))
+	transactionHex := fmt.Sprintf("%x", serializedTx)
+	msgTx, err = txhelpers.MsgTxFromHex(transactionHex)
 	if err != nil {
 		return
 	}
 
 	size = msgTx.SerializeSize()
-	fee, feeRate = txhelpers.TxFeeRate(&msgTx)
+	fee, feeRate = txhelpers.TxFeeRate(msgTx)
 	return
 }
 
