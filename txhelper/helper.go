@@ -7,7 +7,7 @@ import (
 	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrdata/txhelpers"
 	"github.com/decred/dcrwallet/wallet"
-	"github.com/raedahgroup/dcrlibwallet/address"
+	"github.com/raedahgroup/dcrlibwallet/addresshelper"
 )
 
 // from "github.com/decred/dcrwallet/wallet/internal/txsizes"
@@ -99,7 +99,7 @@ func (src *txChangeSource) ScriptSize() int {
 }
 
 func MakeTxChangeSource(destAddr string) (*txChangeSource, error) {
-	pkScript, err := address.PkScript(destAddr)
+	pkScript, err := addresshelper.PkScript(destAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +121,7 @@ func AmountToAtom(amountInDCR float64) (int64, error) {
 }
 
 func MakeTxOutput(destination TransactionDestination) (*wire.TxOut, error) {
-	pkScript, err := address.PkScript(destination.Address)
+	pkScript, err := addresshelper.PkScript(destination.Address)
 	if err != nil {
 		return nil, err
 	}
