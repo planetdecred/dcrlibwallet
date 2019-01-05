@@ -15,7 +15,7 @@ import (
 
 const BlockValid int = 1 << 0
 
-func DecodeTransaction(hash *chainhash.Hash, serializedTx []byte, netParams *chaincfg.Params, addressInfoFn func(string) *AddressInfo) (tx *DecodedTransaction, err error) {
+func DecodeTransaction(hash *chainhash.Hash, serializedTx []byte, netParams *chaincfg.Params, addressInfoFn func(string) (*AddressInfo, interface{})) (tx *DecodedTransaction, err error) {
 	msgTx, txFee, txSize, txFeeRate, err := MsgTxFeeSizeRate(serializedTx)
 	if err != nil {
 		return
@@ -30,6 +30,15 @@ func DecodeTransaction(hash *chainhash.Hash, serializedTx []byte, netParams *cha
 		votebits = fmt.Sprintf("%#04x", voteBits(msgTx))
 	}
 
+	// wrapper for main address info function to absolve errors and always return an address info
+	getAddressInfo := func(address string) *AddressInfo {
+		addressInfo, _ := addressInfoFn(address)
+		if addressInfo == nil {
+			addressInfo = &AddressInfo{Address:address}
+		}
+		return addressInfo
+	}
+
 	tx = &DecodedTransaction{
 		Hash:           hash.String(),
 		Type:           TransactionType(wallet.TxTransactionType(msgTx)),
@@ -40,7 +49,7 @@ func DecodeTransaction(hash *chainhash.Hash, serializedTx []byte, netParams *cha
 		FeeRate:        int64(txFeeRate),
 		Fee:            int64(txFee),
 		Inputs:         decodeTxInputs(msgTx),
-		Outputs:        decodeTxOutputs(msgTx, netParams, addressInfoFn),
+		Outputs:        decodeTxOutputs(msgTx, netParams, getAddressInfo),
 		VoteVersion:    int32(ssGenVersion),
 		LastBlockValid: lastBlockValid,
 		VoteBits:       votebits,
@@ -61,7 +70,7 @@ func decodeTxInputs(mtx *wire.MsgTx) []*DecodedInput {
 	return inputs
 }
 
-func decodeTxOutputs(mtx *wire.MsgTx, chainParams *chaincfg.Params, addressInfoFn func(string) *AddressInfo) []*DecodedOutput {
+func decodeTxOutputs(mtx *wire.MsgTx, chainParams *chaincfg.Params, getAddressInfo func(string) *AddressInfo) []*DecodedOutput {
 	outputs := make([]*DecodedOutput, len(mtx.TxOut))
 	txType := stake.DetermineTxType(mtx)
 
@@ -80,7 +89,7 @@ func decodeTxOutputs(mtx *wire.MsgTx, chainParams *chaincfg.Params, addressInfoF
 				}}
 			} else {
 				addresses = []*AddressInfo{
-					addressInfoFn(addr.EncodeAddress()),
+					getAddressInfo(addr.EncodeAddress()),
 				}
 			}
 		} else {
@@ -90,7 +99,7 @@ func decodeTxOutputs(mtx *wire.MsgTx, chainParams *chaincfg.Params, addressInfoF
 			scriptClass, addrs, _, _ = txscript.ExtractPkScriptAddrs(v.Version, v.PkScript, chainParams)
 			addresses = make([]*AddressInfo, len(addrs))
 			for j, addr := range addrs {
-				addresses[j] = addressInfoFn(addr.EncodeAddress())
+				addresses[j] = getAddressInfo(addr.EncodeAddress())
 			}
 		}
 
