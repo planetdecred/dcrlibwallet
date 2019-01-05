@@ -1058,6 +1058,7 @@ func (lw *LibWallet) GetTransactionsRaw() (transactions []*Transaction, err erro
 			tempTransaction := &Transaction{
 				Fee:         int64(transaction.Fee),
 				Hash:        transaction.Hash.String(),
+				Transaction: transaction.Transaction,
 				Raw:         fmt.Sprintf("%02x", transaction.Transaction[:]),
 				Timestamp:   transaction.Timestamp,
 				Type:        txhelper.TransactionType(transaction.Type),

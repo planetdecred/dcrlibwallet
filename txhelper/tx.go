@@ -55,6 +55,7 @@ func decodeTxInputs(mtx *wire.MsgTx) []*DecodedInput {
 			PreviousTransactionHash:  txIn.PreviousOutPoint.Hash.String(),
 			PreviousTransactionIndex: int32(txIn.PreviousOutPoint.Index),
 			AmountIn:                 txIn.ValueIn,
+			PreviousOutpoint:         txIn.PreviousOutPoint.String(),
 		}
 	}
 	return inputs
@@ -97,7 +98,7 @@ func decodeTxOutputs(mtx *wire.MsgTx, chainParams *chaincfg.Params, addressInfoF
 			Index:      int32(i),
 			Value:      v.Value,
 			Version:    int32(v.Version),
-			Addresses:    addresses,
+			Addresses:  addresses,
 			ScriptType: scriptClass.String(),
 		}
 	}

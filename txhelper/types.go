@@ -70,8 +70,8 @@ type DecodedOutput struct {
 // AddressInfo holds information about an address
 // If the address belongs to the querying wallet, IsMine will be true and the AccountNumber and AccountName values will be populated
 type AddressInfo struct {
-	Address string
-	IsMine bool
+	Address       string
+	IsMine        bool
 	AccountNumber uint32
-	AccountName string
+	AccountName   string
 }
