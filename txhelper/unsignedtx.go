@@ -15,11 +15,6 @@ func NewUnsignedTx(inputs []*wire.TxIn, destinations []TransactionDestination, c
 		return nil, err
 	}
 
-	changeSources, totalChangeScriptSize, err := makeChangeSources(changeDestinations)
-	if err != nil {
-		return nil, err
-	}
-
 	var totalInputAmount int64
 	scriptSizes := make([]int, 0, len(inputs))
 	for _, txIn := range inputs {
@@ -31,16 +26,20 @@ func NewUnsignedTx(inputs []*wire.TxIn, destinations []TransactionDestination, c
 		return nil, errors.New("total amount from selected outputs not enough to cover transaction")
 	}
 
-	relayFeePerKb := txrules.DefaultRelayFeePerKb
+	totalChangeScriptSize, err := calculateChangeScriptSize(changeDestinations)
+	if err != nil {
+		return nil, err
+	}
+
 	maxSignedSize := EstimateSerializeSize(scriptSizes, outputs, totalChangeScriptSize)
-	maxRequiredFee := txrules.FeeForSerializeSize(relayFeePerKb, maxSignedSize)
+	maxRequiredFee := txrules.FeeForSerializeSize(txrules.DefaultRelayFeePerKb, maxSignedSize)
 	changeAmount := totalInputAmount - totalSendAmount - int64(maxRequiredFee)
 
 	if changeAmount < 0 {
 		return nil, errors.New("total amount from selected outputs not enough to cover transaction fee")
 	}
 
-	if changeAmount != 0 && !txrules.IsDustAmount(dcrutil.Amount(changeAmount), totalChangeScriptSize, relayFeePerKb) {
+	if changeAmount != 0 && !txrules.IsDustAmount(dcrutil.Amount(changeAmount), totalChangeScriptSize, txrules.DefaultRelayFeePerKb) {
 		maxAcceptableChangeScriptSize := len(changeDestinations) * txscript.MaxScriptElementSize
 		if totalChangeScriptSize > maxAcceptableChangeScriptSize {
 			return nil, errors.New("script size exceed maximum bytes pushable to the stack")
@@ -71,17 +70,16 @@ func NewUnsignedTx(inputs []*wire.TxIn, destinations []TransactionDestination, c
 	return unsignedTransaction, nil
 }
 
-func makeChangeSources(changeDestinations []TransactionDestination) (changeSources map[string]*txChangeSource, totalChangeScriptSize int, err error) {
-	var changeSource *txChangeSource
+func calculateChangeScriptSize(changeDestinations []TransactionDestination) (int, error) {
+	var totalChangeScriptSize int
 	for _, changeDestination := range changeDestinations {
-		changeSource, err = MakeTxChangeSource(changeDestination.Address)
+		changeSource, err := MakeTxChangeSource(changeDestination.Address)
 		if err != nil {
-			return
+			return 0, err
 		}
 		totalChangeScriptSize += changeSource.ScriptSize()
-		changeSources[changeDestination.Address] = changeSource
 	}
-	return
+	return totalChangeScriptSize, nil
 }
 
 func EstimateChange(numberOfInputs int, totalInputAmount int64, destinations []TransactionDestination, changeAddresses []string) (int64, error) {
