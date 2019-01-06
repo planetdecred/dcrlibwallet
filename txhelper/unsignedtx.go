@@ -2,25 +2,20 @@ package txhelper
 
 import (
 	"errors"
+	"fmt"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrwallet/wallet/txrules"
 )
 
-func NewUnsignedTx(inputs []*wire.TxIn, destinations []TransactionDestination, changeAddress string) (*wire.MsgTx, error) {
+func NewUnsignedTx(inputs []*wire.TxIn, destinations []TransactionDestination, changeDestinations []TransactionDestination) (*wire.MsgTx, error) {
 	outputs, totalSendAmount, err := makeTxOutputs(destinations)
 	if err != nil {
 		return nil, err
 	}
 
-	changeSource, err := MakeTxChangeSource(changeAddress)
-	if err != nil {
-		return nil, err
-	}
-	changeScriptSize := changeSource.ScriptSize()
-
-	changeScript, changeScriptVersion, err := changeSource.Script()
+	changeSources, totalChangeScriptSize, err := makeChangeSources(changeDestinations)
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +32,7 @@ func NewUnsignedTx(inputs []*wire.TxIn, destinations []TransactionDestination, c
 	}
 
 	relayFeePerKb := txrules.DefaultRelayFeePerKb
-	maxSignedSize := EstimateSerializeSize(scriptSizes, outputs, changeScriptSize)
+	maxSignedSize := EstimateSerializeSize(scriptSizes, outputs, totalChangeScriptSize)
 	maxRequiredFee := txrules.FeeForSerializeSize(relayFeePerKb, maxSignedSize)
 	changeAmount := totalInputAmount - totalSendAmount - int64(maxRequiredFee)
 
@@ -45,22 +40,28 @@ func NewUnsignedTx(inputs []*wire.TxIn, destinations []TransactionDestination, c
 		return nil, errors.New("total amount from selected outputs not enough to cover transaction fee")
 	}
 
-	if changeAmount != 0 && !txrules.IsDustAmount(dcrutil.Amount(changeAmount), changeScriptSize, relayFeePerKb) {
-		if changeScriptSize > txscript.MaxScriptElementSize {
+	if changeAmount != 0 && !txrules.IsDustAmount(dcrutil.Amount(changeAmount), totalChangeScriptSize, relayFeePerKb) {
+		maxAcceptableChangeScriptSize := len(changeDestinations) * txscript.MaxScriptElementSize
+		if totalChangeScriptSize > maxAcceptableChangeScriptSize {
 			return nil, errors.New("script size exceed maximum bytes pushable to the stack")
 		}
-		// todo dcrwallet randomizes change position, should look into that as well
-		change := &wire.TxOut{
-			Value:    changeAmount,
-			Version:  changeScriptVersion,
-			PkScript: changeScript,
+
+		changeOutputs, totalChangeAmount, err := makeTxOutputs(changeDestinations)
+		if err != nil {
+			return nil, fmt.Errorf("error creating change outputs: %s", err.Error())
 		}
-		outputs = append(outputs, change)
+
+		if totalChangeAmount > changeAmount {
+			return nil, errors.New("total amount assigned to specified change addresses is higher than actual change amount for transaction")
+		}
+
+		// todo dcrwallet randomizes change position, should look into that as well
+		outputs = append(outputs, changeOutputs...)
 	}
 
 	unsignedTransaction := &wire.MsgTx{
 		SerType:  wire.TxSerializeFull,
-		Version:  wire.TxVersion, // dcrwallet uses a custom private var txauthor.generatedTxVersion
+		Version:  wire.TxVersion,
 		TxIn:     inputs,
 		TxOut:    outputs,
 		LockTime: 0,
@@ -68,6 +69,19 @@ func NewUnsignedTx(inputs []*wire.TxIn, destinations []TransactionDestination, c
 	}
 
 	return unsignedTransaction, nil
+}
+
+func makeChangeSources(changeDestinations []TransactionDestination) (changeSources map[string]*txChangeSource, totalChangeScriptSize int, err error) {
+	var changeSource *txChangeSource
+	for _, changeDestination := range changeDestinations {
+		changeSource, err = MakeTxChangeSource(changeDestination.Address)
+		if err != nil {
+			return
+		}
+		totalChangeScriptSize += changeSource.ScriptSize()
+		changeSources[changeDestination.Address] = changeSource
+	}
+	return
 }
 
 func EstimateChange(numberOfInputs int, totalInputAmount int64, destinations []TransactionDestination, changeAddresses []string) (int64, error) {

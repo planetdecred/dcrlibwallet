@@ -34,7 +34,7 @@ func DecodeTransaction(hash *chainhash.Hash, serializedTx []byte, netParams *cha
 	getAddressInfo := func(address string) *AddressInfo {
 		addressInfo, err := addressInfoFn(address)
 		if err != nil {
-			addressInfo = &AddressInfo{Address:address}
+			addressInfo = &AddressInfo{Address: address}
 		}
 		return addressInfo
 	}
