@@ -1567,6 +1567,13 @@ func (lw *LibWallet) NextAddress(account int32) (string, error) {
 
 // StakeInfo returns information about wallet stakes, tickets and their statuses.
 func (lw *LibWallet) StakeInfo() (*wallet.StakeInfoData, error) {
+	if n, err := lw.wallet.NetworkBackend(); err == nil {
+		chainClient, _ := chain.RPCClientFromBackend(n)
+		if chainClient != nil {
+			return lw.wallet.StakeInfoPrecise(chainClient)
+		}
+	}
+
 	return lw.wallet.StakeInfo()
 }
 
