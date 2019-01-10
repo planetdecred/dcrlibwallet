@@ -19,9 +19,9 @@ import (
 	"time"
 
 	"github.com/decred/dcrd/addrmgr"
-	stake "github.com/decred/dcrd/blockchain/stake"
+	"github.com/decred/dcrd/blockchain/stake"
 	"github.com/decred/dcrd/chaincfg"
-	chainhash "github.com/decred/dcrd/chaincfg/chainhash"
+	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec"
 	"github.com/decred/dcrd/dcrjson"
 	"github.com/decred/dcrd/dcrutil"
@@ -37,7 +37,7 @@ import (
 	"github.com/decred/dcrwallet/wallet"
 	"github.com/decred/dcrwallet/wallet/txauthor"
 	"github.com/decred/dcrwallet/wallet/txrules"
-	walletseed "github.com/decred/dcrwallet/walletseed"
+	"github.com/decred/dcrwallet/walletseed"
 	"github.com/decred/slog"
 )
 
@@ -612,6 +612,10 @@ func (lw *LibWallet) OpenWallet(pubPass []byte) error {
 	}
 	lw.wallet = w
 	return nil
+}
+
+func (lw *LibWallet) WalletOpened() bool {
+	return lw.wallet != nil
 }
 
 func (lw *LibWallet) RescanBlocks() error {
