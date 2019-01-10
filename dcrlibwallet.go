@@ -61,14 +61,16 @@ type LibWallet struct {
 	rescannning   bool
 }
 
-func NewLibWallet(homeDir string, dbDriver string, netType string) *LibWallet {
-
+func NewLibWallet(homeDir string, dbDriver string, netType string) (*LibWallet, error) {
 	var activeNet *netparams.Params
 
-	if netType == "mainnet" {
+	switch strings.ToLower(netType) {
+	case strings.ToLower(netparams.MainNetParams.Name):
 		activeNet = &netparams.MainNetParams
-	} else {
+	case strings.ToLower(netparams.TestNet3Params.Name):
 		activeNet = &netparams.TestNet3Params
+	default:
+		return nil, fmt.Errorf("Unsupported network type: %s", netType)
 	}
 
 	lw := &LibWallet{
@@ -76,9 +78,11 @@ func NewLibWallet(homeDir string, dbDriver string, netType string) *LibWallet {
 		dbDriver:  dbDriver,
 		activeNet: activeNet,
 	}
+
 	errors.Separator = ":: "
-	initLogRotator(filepath.Join(homeDir, "/logs/"+netType+"/dcrwallet.log"))
-	return lw
+	initLogRotator(filepath.Join(homeDir, "/logs/"+netType+"/dcrlibwallet.log"))
+
+	return lw, nil
 }
 
 func (lw *LibWallet) SetLogLevel(loglevel string) {
