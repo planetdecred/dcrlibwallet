@@ -74,7 +74,7 @@ func NewLibWallet(homeDir string, dbDriver string, netType string) (*LibWallet, 
 	}
 
 	lw := &LibWallet{
-		dataDir:   filepath.Join(homeDir, netType),
+		dataDir:   filepath.Join(homeDir, activeNet.Name),
 		dbDriver:  dbDriver,
 		activeNet: activeNet,
 	}
