@@ -3,6 +3,7 @@ package txhelper
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/decred/dcrwallet/netparams"
 
 	"github.com/decred/dcrd/blockchain/stake"
 	"github.com/decred/dcrd/chaincfg"
@@ -70,7 +71,7 @@ func decodeTxInputs(mtx *wire.MsgTx) []*DecodedInput {
 	return inputs
 }
 
-func decodeTxOutputs(mtx *wire.MsgTx, chainParams *chaincfg.Params, getAddressInfo func(string) *AddressInfo) []*DecodedOutput {
+func decodeTxOutputs(mtx *wire.MsgTx, netParams *netparams.Params, getAddressInfo func(string) *AddressInfo) []*DecodedOutput {
 	outputs := make([]*DecodedOutput, len(mtx.TxOut))
 	txType := stake.DetermineTxType(mtx)
 
@@ -81,7 +82,7 @@ func decodeTxOutputs(mtx *wire.MsgTx, chainParams *chaincfg.Params, getAddressIn
 
 		if (txType == stake.TxTypeSStx) && (stake.IsStakeSubmissionTxOut(i)) {
 			scriptClass = txscript.StakeSubmissionTy
-			addr, err := stake.AddrFromSStxPkScrCommitment(v.PkScript, chainParams)
+			addr, err := stake.AddrFromSStxPkScrCommitment(v.PkScript, netParams.Params)
 			if err != nil {
 				addresses = []*AddressInfo{{
 					Address: fmt.Sprintf("[error] failed to decode ticket commitment addr output for tx hash %v, output idx %v",
@@ -96,7 +97,7 @@ func decodeTxOutputs(mtx *wire.MsgTx, chainParams *chaincfg.Params, getAddressIn
 			// Ignore the error here since an error means the script
 			// couldn't parse and there is no additional information
 			// about it anyways.
-			scriptClass, addrs, _, _ = txscript.ExtractPkScriptAddrs(v.Version, v.PkScript, chainParams)
+			scriptClass, addrs, _, _ = txscript.ExtractPkScriptAddrs(v.Version, v.PkScript, netParams.Params)
 			addresses = make([]*AddressInfo, len(addrs))
 			for j, addr := range addrs {
 				addresses[j] = getAddressInfo(addr.EncodeAddress())
