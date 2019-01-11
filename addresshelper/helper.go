@@ -29,8 +29,8 @@ func DecodeForNetwork(address string, params *chaincfg.Params) (dcrutil.Address,
 	return addr, nil
 }
 
-func AddressFromPkScript(activeNet *chaincfg.Params, pkScript []byte) (address string, err error) {
-	_, addresses, _, err := txscript.ExtractPkScriptAddrs(txscript.DefaultScriptVersion, pkScript, activeNet)
+func AddressFromPkScript(params *chaincfg.Params, pkScript []byte) (address string, err error) {
+	_, addresses, _, err := txscript.ExtractPkScriptAddrs(txscript.DefaultScriptVersion, pkScript, params)
 	if err != nil {
 		return
 	}
