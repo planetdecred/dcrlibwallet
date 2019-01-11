@@ -3,20 +3,19 @@ package txhelper
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/decred/dcrwallet/netparams"
 
 	"github.com/decred/dcrd/blockchain/stake"
-	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrd/wire"
+	"github.com/decred/dcrwallet/netparams"
 	"github.com/decred/dcrwallet/wallet"
 )
 
 const BlockValid int = 1 << 0
 
-func DecodeTransaction(hash *chainhash.Hash, serializedTx []byte, netParams *chaincfg.Params, addressInfoFn func(string) (*AddressInfo, error)) (tx *DecodedTransaction, err error) {
+func DecodeTransaction(hash *chainhash.Hash, serializedTx []byte, netParams *netparams.Params, addressInfoFn func(string) (*AddressInfo, error)) (tx *DecodedTransaction, err error) {
 	msgTx, txFee, txSize, txFeeRate, err := MsgTxFeeSizeRate(serializedTx)
 	if err != nil {
 		return
