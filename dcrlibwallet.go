@@ -19,6 +19,7 @@ import (
 
 	"github.com/asdine/storm"
 	"github.com/decred/dcrd/addrmgr"
+	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec"
 	"github.com/decred/dcrd/dcrjson"
@@ -39,7 +40,7 @@ import (
 	"github.com/decred/slog"
 	"github.com/raedahgroup/dcrlibwallet/addresshelper"
 	"github.com/raedahgroup/dcrlibwallet/txhelper"
-	"github.com/decred/dcrd/chaincfg"
+	"github.com/raedahgroup/dcrlibwallet/util"
 )
 
 var shutdownRequestChannel = make(chan struct{})
@@ -67,15 +68,9 @@ type LibWallet struct {
 }
 
 func NewLibWallet(homeDir string, dbDriver string, netType string) (*LibWallet, error) {
-	var activeNet *netparams.Params
-
-	switch strings.ToLower(netType) {
-	case strings.ToLower(netparams.MainNetParams.Name):
-		activeNet = &netparams.MainNetParams
-	case strings.ToLower(netparams.TestNet3Params.Name):
-		activeNet = &netparams.TestNet3Params
-	default:
-		return nil, fmt.Errorf("unsupported network type: %s", netType)
+	activeNet := util.NetParams(netType)
+	if activeNet == nil {
+		return nil, fmt.Errorf("Unsupported network type: %s", netType)
 	}
 
 	errors.Separator = ":: "
@@ -1058,7 +1053,6 @@ func (lw *LibWallet) GetTransactionsRaw() (transactions []*Transaction, err erro
 			tempTransaction := &Transaction{
 				Fee:         int64(transaction.Fee),
 				Hash:        transaction.Hash.String(),
-				Transaction: transaction.Transaction,
 				Raw:         fmt.Sprintf("%02x", transaction.Transaction[:]),
 				Timestamp:   transaction.Timestamp,
 				Type:        txhelper.TransactionType(transaction.Type),
@@ -1493,7 +1487,7 @@ func (lw *LibWallet) HaveAddress(address string) bool {
 }
 
 func (lw *LibWallet) IsAddressValid(address string) bool {
-	_, err := decodeAddress(address, lw.wallet.ChainParams())
+	_, err := addresshelper.DecodeForNetwork(address, lw.wallet.ChainParams())
 	return err == nil
 }
 
