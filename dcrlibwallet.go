@@ -596,6 +596,9 @@ func (lw *LibWallet) DropSpvConnection() {
 	if lw.cancelSync != nil {
 		lw.cancelSync()
 	}
+	for _, syncResponse := range lw.syncResponses {
+		syncResponse.OnSynced(false)
+	}
 }
 
 func done(ctx context.Context) bool {
