@@ -601,15 +601,6 @@ func (lw *LibWallet) DropSpvConnection() {
 	}
 }
 
-func done(ctx context.Context) bool {
-	select {
-	case <-ctx.Done():
-		return true
-	default:
-		return false
-	}
-}
-
 func (lw *LibWallet) OpenWallet(pubPass []byte) error {
 
 	w, err := lw.loader.OpenExistingWallet(pubPass)
