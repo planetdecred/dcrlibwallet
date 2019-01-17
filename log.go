@@ -131,6 +131,6 @@ func setLogLevels(logLevel string) {
 	}
 }
 
-func Log(m string){
+func Log(m string) {
 	log.Info(m)
 }
