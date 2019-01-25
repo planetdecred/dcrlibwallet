@@ -11,9 +11,6 @@ const (
 	// Maximum length of a key, in bytes.
 	maxKeySize = 65378
 
-	// Maximum length of a prefix, in bytes
-	maxPrefixSize = 50
-
 	// Holds an identifier for a bucket
 	metaBucket = 5
 )
@@ -62,24 +59,6 @@ func newBucket(tx *badger.Txn, badgerKey []byte, dbTx *transaction) (*Bucket, er
 		errors.E(errors.Invalid, "key is not associated with a bucket")
 	}
 	return &Bucket{txn: tx, prefix: prefix, dbTransaction: dbTx}, nil
-}
-
-func trimByte(b []byte) []byte {
-	for i := 0; i < len(b); i++ {
-		if b[i] != 0 {
-			return b[i:]
-		}
-	}
-	return []byte{}
-}
-
-func createPrefix(prefix []byte) ([]byte, error) {
-	prefix = trimByte(prefix)
-	if len(prefix) > maxPrefixSize {
-		return nil, errors.E(errors.Invalid, "prefix too long")
-	}
-
-	return prefix, nil
 }
 
 func insertPrefixLength(val []byte, length int) []byte {
