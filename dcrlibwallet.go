@@ -1087,7 +1087,6 @@ func (src *txChangeSource) ScriptSize() int {
 func makeTxChangeSource(destAddr string) (*txChangeSource, error) {
 	addr, err := dcrutil.DecodeAddress(destAddr)
 	if err != nil {
-		log.Error(err)
 		return nil, err
 	}
 	pkScript, err := txscript.PayToAddrScript(addr)
@@ -1106,7 +1105,6 @@ func (lw *LibWallet) ConstructTransaction(destAddr string, amount int64, srcAcco
 	// output destination
 	addr, err := dcrutil.DecodeAddress(destAddr)
 	if err != nil {
-		log.Error(err)
 		return nil, err
 	}
 	pkScript, err := txscript.PayToAddrScript(addr)
@@ -1185,7 +1183,6 @@ func (lw *LibWallet) SendTransaction(privPass []byte, destAddr string, amount in
 	// output destination
 	addr, err := dcrutil.DecodeAddress(destAddr)
 	if err != nil {
-		log.Error(err)
 		return nil, err
 	}
 	pkScript, err := txscript.PayToAddrScript(addr)
@@ -1370,7 +1367,6 @@ func (lw *LibWallet) RenameAccount(accountNumber int32, newName string) error {
 func (lw *LibWallet) HaveAddress(address string) bool {
 	addr, err := decodeAddress(address, lw.wallet.ChainParams())
 	if err != nil {
-		log.Error(err)
 		return false
 	}
 	have, err := lw.wallet.HaveAddress(addr)
@@ -1384,7 +1380,6 @@ func (lw *LibWallet) HaveAddress(address string) bool {
 func (lw *LibWallet) IsAddressValid(address string) bool {
 	_, err := decodeAddress(address, lw.wallet.ChainParams())
 	if err != nil {
-		log.Error(err)
 		return false
 	}
 	return true
@@ -1402,8 +1397,7 @@ func (lw *LibWallet) AccountName(account int32) string {
 func (lw *LibWallet) AccountOfAddress(address string) string {
 	addr, err := dcrutil.DecodeAddress(address)
 	if err != nil {
-		log.Error(err)
-		return "Address decode error"
+		return err.Error()
 	}
 	info, _ := lw.wallet.AddressInfo(addr)
 	return lw.AccountName(int32(info.Account()))
