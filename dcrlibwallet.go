@@ -52,7 +52,6 @@ type LibWallet struct {
 	dbDriver      string
 	wallet        *wallet.Wallet
 	rpcClient     *chain.RPCClient
-	spvSyncer     *spv.Syncer
 	cancelSync    context.CancelFunc
 	loader        *Loader
 	mu            sync.Mutex
@@ -70,7 +69,7 @@ func NewLibWallet(homeDir string, dbDriver string, netType string) (*LibWallet, 
 	case strings.ToLower(netparams.TestNet3Params.Name):
 		activeNet = &netparams.TestNet3Params
 	default:
-		return nil, fmt.Errorf("Unsupported network type: %s", netType)
+		return nil, fmt.Errorf("unsupported network type: %s", netType)
 	}
 
 	lw := &LibWallet{
@@ -113,7 +112,7 @@ func (lw *LibWallet) UnlockWallet(privPass []byte) error {
 
 	wallet, ok := lw.loader.LoadedWallet()
 	if !ok {
-		return fmt.Errorf("Wallet has not been loaded")
+		return fmt.Errorf("wallet has not been loaded")
 	}
 
 	defer func() {
@@ -1379,10 +1378,7 @@ func (lw *LibWallet) HaveAddress(address string) bool {
 
 func (lw *LibWallet) IsAddressValid(address string) bool {
 	_, err := decodeAddress(address, lw.wallet.ChainParams())
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 func (lw *LibWallet) AccountName(account int32) string {

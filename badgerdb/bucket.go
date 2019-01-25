@@ -23,7 +23,6 @@ const (
 type Bucket struct {
 	prefix        []byte
 	buckets       []*Bucket
-	cursor        *Cursor
 	txn           *badger.Txn
 	dbTransaction *transaction
 }
@@ -79,9 +78,6 @@ func createPrefix(prefix []byte) ([]byte, error) {
 	if len(prefix) > maxPrefixSize {
 		return nil, errors.E(errors.Invalid, "prefix too long")
 	}
-
-	finalPrefix := make([]byte, maxPrefixSize)
-	finalPrefix = append(finalPrefix[len(prefix):maxPrefixSize], prefix...)
 
 	return prefix, nil
 }
@@ -162,37 +158,6 @@ func (b *Bucket) bucket(key []byte, errorIfExists bool) (*Bucket, error) {
 	}
 
 	return nil, errors.E(errors.Invalid, "key is not associated with a bucket")
-}
-
-// RetrieveBucket retrieves a bucket with the give key
-// returns nil if the bucket does not exist or given key
-// does not point to a bucket.
-func (b *Bucket) retrieveBucket(key []byte) *Bucket {
-	if len(key) == 0 {
-		return nil
-	}
-
-	k, err := addPrefix(b.prefix, key)
-	if err != nil {
-		return nil
-	}
-	copiedKey := make([]byte, len(k))
-	copy(copiedKey, k)
-	item, err := b.txn.Get(copiedKey)
-	if err != nil {
-		//Bucket Not Found
-		return nil
-	}
-
-	if item.UserMeta() == metaBucket {
-		//Retrieve bucket
-		bucket := &Bucket{txn: b.txn, prefix: copiedKey, dbTransaction: b.dbTransaction}
-		b.buckets = append(b.buckets, bucket)
-		return bucket
-	}
-
-	//Key is not associated with a bucket
-	return nil
 }
 
 // DropBucket deletes a bucket and all it's data
