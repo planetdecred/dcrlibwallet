@@ -1460,7 +1460,7 @@ func (lw *LibWallet) RenameAccount(accountNumber int32, newName string) error {
 }
 
 func (lw *LibWallet) HaveAddress(address string) bool {
-	addr, err := addresshelper.DecodeForNetwork(address, lw.activeNet)
+	addr, err := addresshelper.DecodeForNetwork(address, lw.activeNet.Params)
 	if err != nil {
 		return false
 	}
@@ -1473,7 +1473,7 @@ func (lw *LibWallet) HaveAddress(address string) bool {
 }
 
 func (lw *LibWallet) IsAddressValid(address string) bool {
-	_, err := addresshelper.DecodeForNetwork(address, lw.activeNet)
+	_, err := addresshelper.DecodeForNetwork(address, lw.activeNet.Params)
 	return err == nil
 }
 
@@ -1679,7 +1679,7 @@ func (lw *LibWallet) PurchaseTickets(ctx context.Context, request *PurchaseTicke
 	spendLimit := dcrutil.Amount(ticketPriceResponse.TicketPrice)
 
 	minConf := int32(request.RequiredConfirmations)
-	params := lw.activeNet
+	params := lw.activeNet.Params
 
 	var ticketAddr dcrutil.Address
 	if request.TicketAddress != "" {
@@ -1762,7 +1762,7 @@ func (lw *LibWallet) SignMessage(passphrase []byte, address string, message stri
 		return nil, translateError(err)
 	}
 
-	addr, err := addresshelper.DecodeForNetwork(address, lw.activeNet)
+	addr, err := addresshelper.DecodeForNetwork(address, lw.activeNet.Params)
 	if err != nil {
 		return nil, translateError(err)
 	}

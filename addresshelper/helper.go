@@ -2,9 +2,9 @@ package addresshelper
 
 import (
 	"fmt"
+	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/txscript"
-	"github.com/decred/dcrwallet/netparams"
 )
 
 func PkScript(address string) ([]byte, error) {
@@ -16,19 +16,19 @@ func PkScript(address string) ([]byte, error) {
 	return txscript.PayToAddrScript(addr)
 }
 
-func DecodeForNetwork(address string, params *netparams.Params) (dcrutil.Address, error) {
+func DecodeForNetwork(address string, params *chaincfg.Params) (dcrutil.Address, error) {
 	addr, err := dcrutil.DecodeAddress(address)
 	if err != nil {
 		return nil, err
 	}
-	if !addr.IsForNet(params.Params) {
+	if !addr.IsForNet(params) {
 		return nil, fmt.Errorf("address %s is not intended for use on %s", address, params.Name)
 	}
 	return addr, nil
 }
 
-func PkScriptAddresses(params *netparams.Params, pkScript []byte) ([]string, error) {
-	_, addresses, _, err := txscript.ExtractPkScriptAddrs(txscript.DefaultScriptVersion, pkScript, params.Params)
+func PkScriptAddresses(params *chaincfg.Params, pkScript []byte) ([]string, error) {
+	_, addresses, _, err := txscript.ExtractPkScriptAddrs(txscript.DefaultScriptVersion, pkScript, params)
 	if err != nil {
 		return nil, err
 	}
