@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -1088,7 +1087,7 @@ func (lw *LibWallet) DecodeTransaction(txHash []byte) (string, error) {
 		return "", err
 	}
 
-	tx, err := txhelper.DecodeTransaction(hash, txSummary.Transaction, lw.activeNet, lw.AddressInfo)
+	tx, err := txhelper.DecodeTransaction(hash, txSummary.Transaction, lw.activeNet.Params, lw.AddressInfo)
 	if err != nil {
 		log.Error(err)
 		return "", err
@@ -1139,36 +1138,6 @@ func (lw *LibWallet) SpendableForAccount(account int32, requiredConfirmations in
 		return 0, err
 	}
 	return int64(bals.Spendable), nil
-}
-
-type txChangeSource struct {
-	version uint16
-	script  []byte
-}
-
-func (src *txChangeSource) Script() ([]byte, uint16, error) {
-	return src.script, src.version, nil
-}
-
-func (src *txChangeSource) ScriptSize() int {
-	return len(src.script)
-}
-
-func makeTxChangeSource(destAddr string) (*txChangeSource, error) {
-	addr, err := dcrutil.DecodeAddress(destAddr)
-	if err != nil {
-		return nil, err
-	}
-	pkScript, err := txscript.PayToAddrScript(addr)
-	if err != nil {
-		log.Error(err)
-		return nil, err
-	}
-	changeSource := &txChangeSource{
-		script:  pkScript,
-		version: txscript.DefaultScriptVersion,
-	}
-	return changeSource, nil
 }
 
 func (lw *LibWallet) ConstructTransaction(destAddr string, amount int64, srcAccount int32, requiredConfirmations int32, sendAll bool) (*UnsignedTransaction, error) {
@@ -1401,45 +1370,62 @@ func (lw *LibWallet) PublishUnminedTransactions() error {
 }
 
 func (lw *LibWallet) GetAccounts(requiredConfirmations int32) (string, error) {
+	accountsResponse, err := lw.GetAccountsRaw(requiredConfirmations)
+	if err != nil {
+		return "", nil
+	}
+
+	result, _ := json.Marshal(accountsResponse)
+	return string(result), nil
+}
+
+func (lw *LibWallet) GetAccountsRaw(requiredConfirmations int32) (*Accounts, error) {
 	resp, err := lw.wallet.Accounts()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	accounts := make([]Account, len(resp.Accounts))
-	for i := range resp.Accounts {
-		a := &resp.Accounts[i]
-		bals, err := lw.wallet.CalculateAccountBalance(a.AccountNumber, requiredConfirmations)
+	accounts := make([]*Account, len(resp.Accounts))
+	for i, account := range resp.Accounts {
+		balance, err := lw.GetAccountBalance(account.AccountNumber, requiredConfirmations)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-		balance := Balance{
-			Total:                   int64(bals.Total),
-			Spendable:               int64(bals.Spendable),
-			ImmatureReward:          int64(bals.ImmatureCoinbaseRewards),
-			ImmatureStakeGeneration: int64(bals.ImmatureStakeGeneration),
-			LockedByTickets:         int64(bals.LockedByTickets),
-			VotingAuthority:         int64(bals.VotingAuthority),
-			UnConfirmed:             int64(bals.Unconfirmed),
-		}
-		accounts[i] = Account{
-			Number:           int32(a.AccountNumber),
-			Name:             a.AccountName,
-			TotalBalance:     int64(a.TotalBalance),
-			Balance:          &balance,
-			ExternalKeyCount: int32(a.LastUsedExternalIndex + 20),
-			InternalKeyCount: int32(a.LastUsedInternalIndex + 20),
-			ImportedKeyCount: int32(a.ImportedKeyCount),
+
+		accounts[i] = &Account{
+			Number:           int32(account.AccountNumber),
+			Name:             account.AccountName,
+			TotalBalance:     int64(account.TotalBalance),
+			Balance:          balance,
+			ExternalKeyCount: int32(account.LastUsedExternalIndex + 20),
+			InternalKeyCount: int32(account.LastUsedInternalIndex + 20),
+			ImportedKeyCount: int32(account.ImportedKeyCount),
 		}
 	}
-	accountsResponse := &Accounts{
+
+	return &Accounts{
 		Count:              len(resp.Accounts),
 		CurrentBlockHash:   resp.CurrentBlockHash[:],
 		CurrentBlockHeight: resp.CurrentBlockHeight,
-		Acc:                &accounts,
+		Acc:                accounts,
 		ErrorOccurred:      false,
+	}, nil
+}
+
+func (lw *LibWallet) GetAccountBalance(accountNumber uint32, requiredConfirmations int32) (*Balance, error) {
+	balance, err := lw.wallet.CalculateAccountBalance(accountNumber, requiredConfirmations)
+	if err != nil {
+		return nil, err
 	}
-	result, _ := json.Marshal(accountsResponse)
-	return string(result), nil
+
+	return &Balance{
+		Total:                   int64(balance.Total),
+		Spendable:               int64(balance.Spendable),
+		ImmatureReward:          int64(balance.ImmatureCoinbaseRewards),
+		ImmatureStakeGeneration: int64(balance.ImmatureStakeGeneration),
+		LockedByTickets:         int64(balance.LockedByTickets),
+		VotingAuthority:         int64(balance.VotingAuthority),
+		UnConfirmed:             int64(balance.Unconfirmed),
+	}, nil
 }
 
 func (lw *LibWallet) NextAccount(accountName string, privPass []byte) error {
@@ -1905,19 +1891,6 @@ func (lw *LibWallet) CallJSONRPC(method string, args string, address string, use
 	return "", nil
 }
 
-func AmountCoin(amount int64) float64 {
-	return dcrutil.Amount(amount).ToCoin()
-}
-
-func AmountAtom(f float64) int64 {
-	amount, err := dcrutil.NewAmount(f)
-	if err != nil {
-		log.Error(err)
-		return -1
-	}
-	return int64(amount)
-}
-
 func translateError(err error) error {
 	if err, ok := err.(*errors.Error); ok {
 		switch err.Kind {
@@ -1932,14 +1905,6 @@ func translateError(err error) error {
 		}
 	}
 	return err
-}
-
-func EncodeHex(hexBytes []byte) string {
-	return hex.EncodeToString(hexBytes)
-}
-
-func EncodeBase64(text []byte) string {
-	return base64.StdEncoding.EncodeToString(text)
 }
 
 func DecodeBase64(base64Text string) ([]byte, error) {

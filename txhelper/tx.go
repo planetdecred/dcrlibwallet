@@ -5,17 +5,17 @@ import (
 	"fmt"
 
 	"github.com/decred/dcrd/blockchain/stake"
+	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrd/wire"
-	"github.com/decred/dcrwallet/netparams"
 	"github.com/decred/dcrwallet/wallet"
 )
 
 const BlockValid int = 1 << 0
 
-func DecodeTransaction(hash *chainhash.Hash, serializedTx []byte, netParams *netparams.Params, addressInfoFn func(string) (*AddressInfo, error)) (tx *DecodedTransaction, err error) {
+func DecodeTransaction(hash *chainhash.Hash, serializedTx []byte, netParams *chaincfg.Params, addressInfoFn func(string) (*AddressInfo, error)) (tx *DecodedTransaction, err error) {
 	msgTx, txFee, txSize, txFeeRate, err := MsgTxFeeSizeRate(serializedTx)
 	if err != nil {
 		return
@@ -70,7 +70,7 @@ func decodeTxInputs(mtx *wire.MsgTx) []*DecodedInput {
 	return inputs
 }
 
-func decodeTxOutputs(mtx *wire.MsgTx, netParams *netparams.Params, getAddressInfo func(string) *AddressInfo) []*DecodedOutput {
+func decodeTxOutputs(mtx *wire.MsgTx, netParams *chaincfg.Params, getAddressInfo func(string) *AddressInfo) []*DecodedOutput {
 	outputs := make([]*DecodedOutput, len(mtx.TxOut))
 	txType := stake.DetermineTxType(mtx)
 
@@ -81,7 +81,7 @@ func decodeTxOutputs(mtx *wire.MsgTx, netParams *netparams.Params, getAddressInf
 
 		if (txType == stake.TxTypeSStx) && (stake.IsStakeSubmissionTxOut(i)) {
 			scriptClass = txscript.StakeSubmissionTy
-			addr, err := stake.AddrFromSStxPkScrCommitment(v.PkScript, netParams.Params)
+			addr, err := stake.AddrFromSStxPkScrCommitment(v.PkScript, netParams)
 			if err != nil {
 				addresses = []*AddressInfo{{
 					Address: fmt.Sprintf("[error] failed to decode ticket commitment addr output for tx hash %v, output idx %v",
@@ -96,7 +96,7 @@ func decodeTxOutputs(mtx *wire.MsgTx, netParams *netparams.Params, getAddressInf
 			// Ignore the error here since an error means the script
 			// couldn't parse and there is no additional information
 			// about it anyways.
-			scriptClass, addrs, _, _ = txscript.ExtractPkScriptAddrs(v.Version, v.PkScript, netParams.Params)
+			scriptClass, addrs, _, _ = txscript.ExtractPkScriptAddrs(v.Version, v.PkScript, netParams)
 			addresses = make([]*AddressInfo, len(addrs))
 			for j, addr := range addrs {
 				addresses[j] = getAddressInfo(addr.EncodeAddress())
