@@ -69,7 +69,7 @@ type LibWallet struct {
 func NewLibWallet(homeDir string, dbDriver string, netType string) (*LibWallet, error) {
 	activeNet := util.NetParams(netType)
 	if activeNet == nil {
-		return nil, fmt.Errorf("Unsupported network type: %s", netType)
+		return nil, fmt.Errorf("unsupported network type: %s", netType)
 	}
 
 	errors.Separator = ":: "
@@ -1741,7 +1741,7 @@ func (lw *LibWallet) PurchaseTickets(ctx context.Context, request *PurchaseTicke
 	purchasedTickets, err := lw.wallet.PurchaseTickets(0, spendLimit, minConf, ticketAddr, request.Account, numTickets, poolAddr,
 		request.PoolFees, expiry, txFee, ticketFee)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to purchase tickets: %s", err.Error())
+		return nil, fmt.Errorf("unable to purchase tickets: %s", err.Error())
 	}
 
 	hashes := make([]string, len(purchasedTickets))

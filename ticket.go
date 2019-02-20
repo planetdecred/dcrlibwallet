@@ -70,7 +70,7 @@ type TicketPriceResponse struct {
 }
 
 func marshalGetTicketBlockDetails(v *wire.BlockHeader) *BlockDetails {
-	if v == nil || v.Height < 0 {
+	if v == nil {
 		return nil
 	}
 
