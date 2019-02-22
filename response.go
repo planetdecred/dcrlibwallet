@@ -79,16 +79,6 @@ type TransactionCredit struct {
 	Address  string
 }
 
-type getTransactionsResponse struct {
-	Transactions  []Transaction
-	ErrorOccurred bool
-	ErrorMessage  string
-}
-
-type GetTransactionsResponse interface {
-	OnResult(json string)
-}
-
 type TransactionListener interface {
 	OnTransaction(transaction string)
 	OnTransactionConfirmed(hash string, height int32)
