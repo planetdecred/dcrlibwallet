@@ -47,9 +47,10 @@ var shutdownSignaled = make(chan struct{})
 var signals = []os.Signal{os.Interrupt, syscall.SIGTERM}
 
 const (
-	BlockValid   int = 1 << 0
-	BucketTxInfo     = "TxIndexInfo"
-	KeyEndBlock      = "EndBlock"
+	BlockValid     int = 1 << 0
+	BucketTxInfo       = "TxIndexInfo"
+	KeyEndBlock        = "EndBlock"
+	MaxReOrgBlocks     = 6
 )
 
 type LibWallet struct {
@@ -531,9 +532,7 @@ func (lw *LibWallet) RpcSync(networkAddress string, username string, password st
 
 	ntfns := &chain.Notifications{
 		Synced: func(sync bool) {
-			for _, syncResponse := range lw.syncResponses {
-				syncResponse.OnSynced(sync)
-			}
+			lw.IndexTransactions(-1, -1)
 		},
 		FetchMissingCFiltersStarted: func() {
 			for _, syncResponse := range lw.syncResponses {
@@ -787,6 +786,11 @@ func (lw *LibWallet) IndexTransactions(beginHeight int32, endHeight int32) error
 
 		if previousEndBlock != 0 {
 			beginHeight = previousEndBlock
+			beginHeight -= MaxReOrgBlocks
+
+			if beginHeight < 0 {
+				beginHeight = 0
+			}
 		} else {
 			beginHeight = 0
 		}
