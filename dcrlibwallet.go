@@ -944,7 +944,7 @@ func (lw *LibWallet) parseTxSummary(tx *wallet.TransactionSummary, blockHash *ch
 			AccountName:     lw.AccountName(int32(debit.PreviousAccount))}
 	}
 
-	var direction int32
+	var direction int32 = -1
 	if tx.Type == wallet.TransactionTypeRegular {
 		amountDifference := outputTotal - inputTotal
 		if amountDifference < 0 && (float64(tx.Fee) == math.Abs(float64(amountDifference))) {
