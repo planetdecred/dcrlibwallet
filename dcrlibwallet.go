@@ -55,7 +55,6 @@ const (
 
 type LibWallet struct {
 	dataDir       string
-	dbDriver      string
 	db            *storm.DB
 	wallet        *wallet.Wallet
 	rpcClient     *chain.RPCClient
@@ -64,13 +63,10 @@ type LibWallet struct {
 	mu            sync.Mutex
 	activeNet     *netparams.Params
 	syncResponses []SpvSyncResponse
-	rescannning   bool
+	rescanning    bool
 }
 
 func NewLibWallet(homeDir string, dbDriver string, netType string) (*LibWallet, error) {
-
-	errors.Separator = ":: "
-	initLogRotator(filepath.Join(homeDir, "/logs/"+netType+"/dcrlibwallet.log"))
 
 	var activeNet *netparams.Params
 
@@ -82,6 +78,9 @@ func NewLibWallet(homeDir string, dbDriver string, netType string) (*LibWallet, 
 	default:
 		return nil, fmt.Errorf("unsupported network type: %s", netType)
 	}
+
+	errors.Separator = ":: "
+	initLogRotator(filepath.Join(homeDir, "/logs/"+netType+"/dcrlibwallet.log"))
 
 	// init database
 	stormDB, err := storm.Open(filepath.Join(homeDir, "dcrlibwallet.db"))
@@ -107,13 +106,9 @@ func NewLibWallet(homeDir string, dbDriver string, netType string) (*LibWallet, 
 	lw := &LibWallet{
 		dataDir:   filepath.Join(homeDir, activeNet.Name),
 		db:        stormDB,
-		dbDriver:  dbDriver,
 		activeNet: activeNet,
 		loader:    l,
 	}
-
-	errors.Separator = ":: "
-	initLogRotator(filepath.Join(homeDir, "/logs/"+netType+"/dcrlibwallet.log"))
 
 	return lw, nil
 }
@@ -209,7 +204,7 @@ func (lw *LibWallet) ChangePublicPassphrase(oldPass []byte, newPass []byte) erro
 }
 
 func (lw *LibWallet) Shutdown(exit bool) {
-	log.Info("Shuting down mobile wallet")
+	log.Info("Shutting down mobile wallet")
 
 	if lw.rpcClient != nil {
 		lw.rpcClient.Stop()
@@ -656,15 +651,15 @@ func (lw *LibWallet) RescanBlocks() error {
 		return errors.E(ErrNotConnected)
 	}
 
-	if lw.rescannning {
+	if lw.rescanning {
 		return errors.E(ErrInvalid)
 	}
 
 	go func() {
 		defer func() {
-			lw.rescannning = false
+			lw.rescanning = false
 		}()
-		lw.rescannning = true
+		lw.rescanning = true
 		progress := make(chan wallet.RescanProgress, 1)
 		ctx := contextWithShutdownCancel(context.Background())
 		var totalHeight int32
@@ -731,24 +726,9 @@ func (lw *LibWallet) IndexTransactions(beginHeight int32, endHeight int32) error
 				return false, err
 			}
 
-			var oldTx Transaction
-			err = lw.db.One("Hash", tx.Hash, &oldTx)
+			err = lw.replaceTxIfExist(tx)
 			if err != nil {
-				if err != storm.ErrNotFound {
-					log.Errorf("Find old tx error: %v", err)
-					return false, err
-				}
-			} else {
-				err = lw.db.DeleteStruct(&oldTx)
-				if err != nil {
-					log.Errorf("Delete old tx error: %v", err)
-					return false, err
-				}
-			}
-
-			err = lw.db.Save(tx)
-			if err != nil {
-				log.Errorf("Save transaction error :%v", err)
+				log.Errorf("Index tx replace tx err :%v", err)
 				return false, err
 			}
 
@@ -761,7 +741,7 @@ func (lw *LibWallet) IndexTransactions(beginHeight int32, endHeight int32) error
 		if block.Header != nil {
 			err := lw.db.Set(BucketTxInfo, KeyEndBlock, &endHeight)
 			if err != nil {
-				log.Info("Set Error: ", err)
+				log.Errorf("Set tx index end block height error: ", err)
 				return false, err
 			}
 
@@ -784,14 +764,10 @@ func (lw *LibWallet) IndexTransactions(beginHeight int32, endHeight int32) error
 			return err
 		}
 
-		if previousEndBlock != 0 {
-			beginHeight = previousEndBlock
-			beginHeight -= MaxReOrgBlocks
+		beginHeight = previousEndBlock
+		beginHeight -= MaxReOrgBlocks
 
-			if beginHeight < 0 {
-				beginHeight = 0
-			}
-		} else {
+		if beginHeight < 0 {
 			beginHeight = 0
 		}
 	}
@@ -833,25 +809,9 @@ func (lw *LibWallet) TransactionNotification(listener TransactionListener) {
 					return
 				}
 
-				var oldTx Transaction
-				err = lw.db.One("Hash", tempTransaction.Hash, &oldTx)
+				err = lw.replaceTxIfExist(tempTransaction)
 				if err != nil {
-					if err != storm.ErrNotFound {
-						log.Errorf("Find old tx error: %v", err)
-						return
-					}
-				} else {
-					err = lw.db.DeleteStruct(&oldTx)
-					if err != nil {
-						log.Errorf("Delete old tx error: %v", err)
-						return
-					}
-				}
-
-				err = lw.db.Save(tempTransaction)
-				if err != nil {
-					log.Errorf("Save transaction error :%v", err)
-					return
+					log.Errorf("Tx ntfn replace tx err: %v", err)
 				}
 
 				fmt.Println("New Transaction")
@@ -872,24 +832,9 @@ func (lw *LibWallet) TransactionNotification(listener TransactionListener) {
 						return
 					}
 
-					var oldTx Transaction
-					err = lw.db.One("Hash", tempTransaction.Hash, &oldTx)
+					err = lw.replaceTxIfExist(tempTransaction)
 					if err != nil {
-						if err != storm.ErrNotFound {
-							log.Errorf("Find old tx error: %v", err)
-							return
-						}
-					} else {
-						err = lw.db.DeleteStruct(&oldTx)
-						if err != nil {
-							log.Errorf("Delete old tx error: %v", err)
-							return
-						}
-					}
-
-					err = lw.db.Save(tempTransaction)
-					if err != nil {
-						log.Errorf("Save transaction error :%v", err)
+						log.Errorf("Incoming block replace tx error :%v", err)
 						return
 					}
 					listener.OnTransactionConfirmed(fmt.Sprintf("%02x", reverse(transaction.Hash[:])), int32(block.Header.Height))
@@ -946,6 +891,31 @@ func (lw *LibWallet) GetTransactions(limit int32) (string, error) {
 	}
 
 	return string(jsonEncodedTransactions), nil
+}
+
+func (lw *LibWallet) replaceTxIfExist(tx *Transaction) error {
+	var oldTx Transaction
+	err := lw.db.One("Hash", tx.Hash, &oldTx)
+	if err != nil {
+		if err != storm.ErrNotFound {
+			log.Errorf("Find old tx error: %v", err)
+			return err
+		}
+	} else {
+		err = lw.db.DeleteStruct(&oldTx)
+		if err != nil {
+			log.Errorf("Delete old tx error: %v", err)
+			return err
+		}
+	}
+
+	err = lw.db.Save(tx)
+	if err != nil {
+		log.Errorf("Save transaction error :%v", err)
+		return err
+	}
+
+	return nil
 }
 
 func (lw *LibWallet) parseTxSummary(tx *wallet.TransactionSummary, blockHash *chainhash.Hash) (*Transaction, error) {
