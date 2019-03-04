@@ -106,6 +106,17 @@ func NewLibWallet(homeDir string, dbDriver string, netType string) (*LibWallet, 
 	return lw, nil
 }
 
+func LibWalletFromDb(homeDir string, dbPath string, activeNet *netparams.Params) *LibWallet {
+	errors.Separator = ":: "
+	initLogRotator(filepath.Join(homeDir, "/logs/"+activeNet.Name+"/dcrlibwallet.log"))
+
+	return &LibWallet{
+		dataDir:   dbPath,
+		dbDriver:  DefaultDbDriver,
+		activeNet: activeNet,
+	}
+}
+
 func (lw *LibWallet) SetLogLevel(loglevel string) {
 	_, ok := slog.LevelFromString(loglevel)
 	if ok {
@@ -277,6 +288,7 @@ func decodeAddress(a string, params *chaincfg.Params) (dcrutil.Address, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if !addr.IsForNet(params) {
 		return nil, fmt.Errorf("address %v is not intended for use on %v",
 			a, params.Name)
