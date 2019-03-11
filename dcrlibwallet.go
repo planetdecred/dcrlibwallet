@@ -112,7 +112,7 @@ func LibWalletFromDb(homeDir string, dbPath string, activeNet *netparams.Params)
 
 	return &LibWallet{
 		dataDir:   dbPath,
-		dbDriver:  DefaultDbDriver,
+		dbDriver:  DefaultDbDriver, // todo fix
 		activeNet: activeNet,
 	}
 }
