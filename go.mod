@@ -16,13 +16,17 @@ require (
 	github.com/decred/dcrd/txscript v1.0.2
 	github.com/decred/dcrd/wire v1.2.0
 	github.com/decred/dcrwallet v1.2.2
-	github.com/decred/dcrwallet/chain v1.0.1-0.20181109211527-ca582da21c08
+	github.com/decred/dcrwallet/chain v1.1.1
 	github.com/decred/dcrwallet/errors v1.0.1
 	github.com/decred/dcrwallet/p2p v1.0.1
 	github.com/decred/dcrwallet/spv v1.1.1
 	github.com/decred/dcrwallet/ticketbuyer v1.0.2
 	github.com/decred/dcrwallet/ticketbuyer/v2 v2.0.1
 	github.com/decred/dcrwallet/wallet v1.3.0
+	github.com/decred/dcrwallet/spv v1.1.0
+	github.com/decred/dcrwallet/ticketbuyer v1.0.2
+	github.com/decred/dcrwallet/ticketbuyer/v2 v2.0.1
+	github.com/decred/dcrwallet/wallet v1.2.0
 	github.com/decred/dcrwallet/walletseed v1.0.1
 	github.com/decred/slog v1.0.0
 	github.com/dgraph-io/badger v1.5.4
