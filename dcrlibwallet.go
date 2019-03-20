@@ -1004,8 +1004,8 @@ func (lw *LibWallet) parseTxSummary(txSummary *wallet.TransactionSummary, blockH
 		Debits:    debits}, nil
 }
 
-func (lw *LibWallet) GetTransactionsRaw() (transactions []*Transaction, err error) {
-	ctx := contextWithShutdownCancel(context.Background())
+func (lw *LibWallet) GetTransactionsInBlockRange(ctx context.Context, startBlock, endBlock *wallet.BlockIdentifier) (
+	transactions []*Transaction, err error) {
 
 	rangeFn := func(block *wallet.Block) (bool, error) {
 		for _, transaction := range block.Transactions {
@@ -1082,7 +1082,6 @@ func (lw *LibWallet) GetTransactionsRaw() (transactions []*Transaction, err erro
 		}
 	}
 
-	var startBlock, endBlock *wallet.BlockIdentifier
 	err = lw.wallet.GetTransactions(rangeFn, startBlock, endBlock)
 	return
 }
