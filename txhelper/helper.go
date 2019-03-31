@@ -153,14 +153,14 @@ func MsgTxFeeSizeRate(serializedTx []byte) (msgTx *wire.MsgTx, fee dcrutil.Amoun
 func TransactionType(txType wallet.TransactionType) string {
 	switch txType {
 	case wallet.TransactionTypeCoinbase:
-		return "COINBASE"
+		return "Coinbase"
 	case wallet.TransactionTypeTicketPurchase:
-		return "TICKET_PURCHASE"
+		return "Ticket"
 	case wallet.TransactionTypeVote:
-		return "VOTE"
+		return "Vote"
 	case wallet.TransactionTypeRevocation:
-		return "REVOCATION"
+		return "Revocation"
 	default:
-		return "REGULAR"
+		return "Regular"
 	}
 }
