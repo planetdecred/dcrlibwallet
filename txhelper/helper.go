@@ -6,6 +6,7 @@ import (
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrdata/txhelpers"
+	"github.com/decred/dcrwallet/rpc/walletrpc"
 	"github.com/decred/dcrwallet/wallet"
 	"github.com/raedahgroup/dcrlibwallet/addresshelper"
 )
@@ -159,6 +160,21 @@ func TransactionType(txType wallet.TransactionType) string {
 	case wallet.TransactionTypeVote:
 		return "Vote"
 	case wallet.TransactionTypeRevocation:
+		return "Revocation"
+	default:
+		return "Regular"
+	}
+}
+
+func RPCTransactionType(txType walletrpc.TransactionDetails_TransactionType) string {
+	switch txType {
+	case walletrpc.TransactionDetails_COINBASE:
+		return "Coinbase"
+	case walletrpc.TransactionDetails_TICKET_PURCHASE:
+		return "Ticket"
+	case walletrpc.TransactionDetails_VOTE:
+		return "Vote"
+	case walletrpc.TransactionDetails_REVOCATION:
 		return "Revocation"
 	default:
 		return "Regular"
