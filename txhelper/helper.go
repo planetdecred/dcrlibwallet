@@ -9,6 +9,7 @@ import (
 	"github.com/decred/dcrwallet/rpc/walletrpc"
 	"github.com/decred/dcrwallet/wallet"
 	"github.com/raedahgroup/dcrlibwallet/addresshelper"
+	"math"
 )
 
 // from "github.com/decred/dcrwallet/wallet/internal/txsizes"
@@ -180,3 +181,25 @@ func RPCTransactionType(txType walletrpc.TransactionDetails_TransactionType) str
 		return "Regular"
 	}
 }
+
+
+func TransactionAmountAndDirection(inputTotal, outputTotal, fee int64) (amount int64, direction TransactionDirection) {
+	amountDifference := outputTotal - inputTotal
+
+	if amountDifference < 0 && float64(fee) == math.Abs(float64(amountDifference)) {
+		// transferred internally, the only real amount spent was transaction fee
+		direction = TransactionDirectionTransferred
+		amount = fee
+	} else if amountDifference > 0 {
+		// received
+		direction = TransactionDirectionReceived
+		amount = outputTotal
+	} else {
+		// sent
+		direction = TransactionDirectionSent
+		amount = inputTotal - outputTotal - fee
+	}
+
+	return
+}
+

@@ -936,7 +936,6 @@ func (lw *LibWallet) replaceTxIfExist(tx *Transaction) error {
 func (lw *LibWallet) parseTxSummary(txSummary *wallet.TransactionSummary, blockHash *chainhash.Hash) (*Transaction, error) {
 	var inputTotal int64
 	var outputTotal int64
-	var amount int64
 
 	credits := make([]*TransactionCredit, len(txSummary.MyOutputs))
 	for index, credit := range txSummary.MyOutputs {
@@ -959,26 +958,7 @@ func (lw *LibWallet) parseTxSummary(txSummary *wallet.TransactionSummary, blockH
 			AccountName:     lw.AccountName(debit.PreviousAccount)}
 	}
 
-	var direction txhelper.TransactionDirection
-	if txSummary.Type == wallet.TransactionTypeRegular {
-		amountDifference := outputTotal - inputTotal
-		if amountDifference < 0 && (float64(txSummary.Fee) == math.Abs(float64(amountDifference))) {
-			//Transfered
-			direction = txhelper.TransactionDirectionTransferred
-			amount = int64(txSummary.Fee)
-		} else if amountDifference > 0 {
-			//Received
-			direction = txhelper.TransactionDirectionReceived
-			amount = outputTotal
-		} else {
-			//Sent
-			direction = txhelper.TransactionDirectionSent
-			amount = inputTotal
-			amount -= outputTotal
-
-			amount -= int64(txSummary.Fee)
-		}
-	}
+	amount, direction := txhelper.TransactionAmountAndDirection(inputTotal, outputTotal, int64(txSummary.Fee))
 
 	var height int32 = -1
 	if txSummary != nil {
