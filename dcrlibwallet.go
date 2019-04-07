@@ -1326,6 +1326,7 @@ func (lw *LibWallet) SendFromCustomInputs(sourceAccount uint32, requiredConfirma
 
 	// loop through unspentOutputs to find user selected utxos
 	inputs := make([]*wire.TxIn, 0, len(utxoKeys))
+	var totalInputAmount int64
 	for _, utxo := range unspentOutputs {
 		useUtxo := false
 		for _, key := range utxoKeys {
@@ -1344,6 +1345,7 @@ func (lw *LibWallet) SendFromCustomInputs(sourceAccount uint32, requiredConfirma
 		outpoint := wire.NewOutPoint(txHash, utxo.OutputIndex, int8(utxo.Tree))
 		input := wire.NewTxIn(outpoint, int64(utxo.Amount), nil)
 		inputs = append(inputs, input)
+		totalInputAmount += input.ValueIn
 
 		if len(inputs) == len(utxoKeys) {
 			break
@@ -1364,6 +1366,7 @@ func (lw *LibWallet) SendFromCustomInputs(sourceAccount uint32, requiredConfirma
 
 	// create transaction outputs for all destination addresses and amounts, excluding destination for send max
 	outputs := make([]*wire.TxOut, nOutputs)
+	var totalSendAmount int64
 	for i, destination := range txDestinations {
 		if !destination.SendMax {
 			output, err := txhelper.MakeTxOutput(destination)
@@ -1373,12 +1376,24 @@ func (lw *LibWallet) SendFromCustomInputs(sourceAccount uint32, requiredConfirma
 			}
 
 			outputs[i] = output
+			totalSendAmount += output.Value
 		}
 	}
 
 	if maxAmountRecipientAddress != "" {
 		// use as change address
-		txhelper.MakeTxChangeSource()
+		changeAddresses := []string{maxAmountRecipientAddress}
+		changeAmount, err := txhelper.EstimateChangeWithOutputs(len(inputs), totalInputAmount, outputs, totalSendAmount, changeAddresses)
+		if err != nil {
+			return "", err
+		}
+
+		changeDestinations = []txhelper.TransactionDestination{
+			{
+				Address: maxAmountRecipientAddress,
+				Amount: dcrutil.Amount(changeAmount).ToCoin(),
+			},
+		}
 	}
 
 	unsignedTx, err := txhelper.NewUnsignedTx(inputs, outputs, changeDestinations)

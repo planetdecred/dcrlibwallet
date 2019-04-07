@@ -122,7 +122,7 @@ func EstimateMaxSendAmount(numberOfInputs int, totalInputAmount int64, destinati
 	}
 
 	// use max recipient address as change address to get max amount
-	return estimateChange(numberOfInputs, totalInputAmount, outputs, totalSendAmount, []string{maxAmountRecipientAddress})
+	return EstimateChangeWithOutputs(numberOfInputs, totalInputAmount, outputs, totalSendAmount, []string{maxAmountRecipientAddress})
 }
 
 func EstimateChange(numberOfInputs int, totalInputAmount int64, destinations []TransactionDestination, changeAddresses []string) (int64, error) {
@@ -131,10 +131,10 @@ func EstimateChange(numberOfInputs int, totalInputAmount int64, destinations []T
 		return 0, err
 	}
 
-	return estimateChange(numberOfInputs, totalInputAmount, outputs, totalSendAmount, changeAddresses)
+	return EstimateChangeWithOutputs(numberOfInputs, totalInputAmount, outputs, totalSendAmount, changeAddresses)
 }
 
-func estimateChange(numberOfInputs int, totalInputAmount int64, outputs []*wire.TxOut, totalSendAmount int64, changeAddresses []string) (int64, error) {
+func EstimateChangeWithOutputs(numberOfInputs int, totalInputAmount int64, outputs []*wire.TxOut, totalSendAmount int64, changeAddresses []string) (int64, error) {
 	if totalSendAmount >= totalInputAmount {
 		return 0, fmt.Errorf("total send amount (%s) is higher than the total input amount (%s)",
 			dcrutil.Amount(totalSendAmount).String(), dcrutil.Amount(totalInputAmount).String())
