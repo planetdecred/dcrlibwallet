@@ -93,6 +93,7 @@ type TransactionListener interface {
 type UnspentOutput struct {
 	TransactionHash []byte
 	OutputIndex     uint32
+	OutputKey       string
 	ReceiveTime     int64
 	Amount          int64
 	FromCoinbase    bool

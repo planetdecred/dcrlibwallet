@@ -481,7 +481,6 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 }
 
 func (lw *LibWallet) RpcSync(networkAddress string, username string, password string, cert []byte) error {
-
 	// Error if the wallet is already syncing with the network.
 	wallet, walletLoaded := lw.loader.LoadedWallet()
 	if walletLoaded {
@@ -1108,9 +1107,13 @@ func (lw *LibWallet) UnspentOutputs(account uint32, requiredConfirmations int32,
 			return nil, err
 		}
 
+		// unique key to identify utxo
+		outputKey := fmt.Sprintf("%s:%d", input.PreviousOutPoint.Hash, input.PreviousOutPoint.Index)
+
 		unspentOutputs[i] = &UnspentOutput{
 			TransactionHash: input.PreviousOutPoint.Hash[:],
 			OutputIndex:     input.PreviousOutPoint.Index,
+			OutputKey:    	 outputKey,
 			Tree:            int32(input.PreviousOutPoint.Tree),
 			Amount:          int64(outputInfo.Amount),
 			PkScript:        inputDetail.Scripts[i],
@@ -1247,22 +1250,50 @@ func (lw *LibWallet) SendTransaction(privPass []byte, destAddr string, amount in
 }
 
 func (lw *LibWallet) BulkSendTransaction(privPass []byte, destinations []txhelper.TransactionDestination, srcAccount int32, requiredConfs int32) ([]byte, error) {
-	// create transaction outputs for all destination addresses and amounts
-	outputs := make([]*wire.TxOut, len(destinations))
+	nOutputs := len(destinations)
+	var maxAmountRecipientAddress string
+	for _, destination := range destinations {
+		if destination.SendMax && maxAmountRecipientAddress != "" {
+			return nil, fmt.Errorf("cannot send max amount to multiple recipients")
+		} else {
+			maxAmountRecipientAddress = destination.Address
+			nOutputs--
+		}
+	}
+
+	// create transaction outputs for all destination addresses and amounts, excluding destination for send max
+	outputs := make([]*wire.TxOut, nOutputs)
 	for i, destination := range destinations {
-		output, err := txhelper.MakeTxOutput(destination)
+		if !destination.SendMax {
+			output, err := txhelper.MakeTxOutput(destination)
+			if err != nil {
+				log.Error(err)
+				return nil, err
+			}
+
+			outputs[i] = output
+		}
+	}
+
+	var algo wallet.OutputSelectionAlgorithm
+	var changeSource txauthor.ChangeSource
+	var err error
+
+	// if no max amount recipient, use default utxo selection algorithm and nil change source
+	// so that a change source to the sending account is automatically created
+	// otherwise, create a change source for the max amount recipient so that the remaining change from the tx is sent to the max amount recipient
+	if maxAmountRecipientAddress != "" {
+		algo = wallet.OutputSelectionAlgorithmAll
+		changeSource, err = txhelper.MakeTxChangeSource(maxAmountRecipientAddress)
 		if err != nil {
 			log.Error(err)
 			return nil, err
 		}
-
-		outputs[i] = output
+	} else {
+		algo = wallet.OutputSelectionAlgorithmDefault
 	}
 
-	// create tx, use default utxo selection algorithm and nil change source so a change source to the sending account is automatically created
-	var algo wallet.OutputSelectionAlgorithm = wallet.OutputSelectionAlgorithmAll
-	unsignedTx, err := lw.wallet.NewUnsignedTransaction(outputs, txrules.DefaultRelayFeePerKb, uint32(srcAccount),
-		requiredConfs, algo, nil)
+	unsignedTx, err := lw.wallet.NewUnsignedTransaction(outputs, txrules.DefaultRelayFeePerKb, uint32(srcAccount), requiredConfs, algo, changeSource)
 	if err != nil {
 		log.Error(err)
 		return nil, translateError(err)
@@ -1281,6 +1312,92 @@ func (lw *LibWallet) BulkSendTransaction(privPass []byte, destinations []txhelpe
 	}
 
 	return lw.SignAndPublishTransaction(txBuf.Bytes(), privPass)
+}
+
+func (lw *LibWallet) SendFromCustomInputs(sourceAccount uint32, requiredConfirmations int32, utxoKeys []string, txDestinations []txhelper.TransactionDestination, changeDestinations []txhelper.TransactionDestination, passphrase string) (string, error) {
+	// fetch all utxos in account to extract details for the utxos selected by user
+	// use targetAmount = 0 to fetch ALL utxos in account
+	unspentOutputs, err := lw.UnspentOutputs(sourceAccount, requiredConfirmations, 0)
+	if err != nil {
+		return "", err
+	}
+
+	// loop through unspentOutputs to find user selected utxos
+	inputs := make([]*wire.TxIn, 0, len(utxoKeys))
+	for _, utxo := range unspentOutputs {
+		useUtxo := false
+		for _, key := range utxoKeys {
+			if utxo.OutputKey == key {
+				useUtxo = true
+			}
+		}
+		if !useUtxo {
+			continue
+		}
+
+		// this is a reverse conversion and should not throw an error
+		// this []byte was originally converted from chainhash.Hash using chainhash.Hash[:]
+		txHash, _ := chainhash.NewHash(utxo.TransactionHash)
+
+		outpoint := wire.NewOutPoint(txHash, utxo.OutputIndex, int8(utxo.Tree))
+		input := wire.NewTxIn(outpoint, int64(utxo.Amount), nil)
+		inputs = append(inputs, input)
+
+		if len(inputs) == len(utxoKeys) {
+			break
+		}
+	}
+
+	// check if there's a max amount recipient, and not more than 1 such recipient
+	nOutputs := len(txDestinations)
+	var maxAmountRecipientAddress string
+	for _, destination := range txDestinations {
+		if destination.SendMax && maxAmountRecipientAddress != "" {
+			return "", fmt.Errorf("cannot send max amount to multiple recipients")
+		} else {
+			maxAmountRecipientAddress = destination.Address
+			nOutputs--
+		}
+	}
+
+	// create transaction outputs for all destination addresses and amounts, excluding destination for send max
+	outputs := make([]*wire.TxOut, nOutputs)
+	for i, destination := range txDestinations {
+		if !destination.SendMax {
+			output, err := txhelper.MakeTxOutput(destination)
+			if err != nil {
+				log.Error(err)
+				return "", err
+			}
+
+			outputs[i] = output
+		}
+	}
+
+	unsignedTx, err := txhelper.NewUnsignedTx(inputs, outputs, changeDestinations, maxAmountRecipientAddress)
+	if err != nil {
+		return "", err
+	}
+
+	// serialize unsigned tx
+	var txBuf bytes.Buffer
+	txBuf.Grow(unsignedTx.SerializeSize())
+	err = unsignedTx.Serialize(&txBuf)
+	if err != nil {
+		return "", fmt.Errorf("error serializing transaction: %s", err.Error())
+	}
+
+	txHash, err := lw.SignAndPublishTransaction(txBuf.Bytes(), []byte(passphrase))
+	if err != nil {
+		return "", err
+	}
+
+	transactionHash, err := chainhash.NewHash(txHash)
+	if err != nil {
+		return "", fmt.Errorf("error parsing successful transaction hash: %s", err.Error())
+	}
+
+	return transactionHash.String(), nil
 }
 
 func (lw *LibWallet) SignAndPublishTransaction(serializedTx, privPass []byte) ([]byte, error) {

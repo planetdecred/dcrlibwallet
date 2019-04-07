@@ -142,6 +142,7 @@ github.com/decred/dcrwallet/p2p v1.0.1 h1:UTsD5I8YtWVf2SEg0mSd5+hIlp7Ihj3rS2PZ9P
 github.com/decred/dcrwallet/p2p v1.0.1/go.mod h1:FsoAR0cBOLW3VKMg+Tdx+wdSezR7g8NGOdz4fx6gtpM=
 github.com/decred/dcrwallet/pgpwordlist v1.0.0 h1:H7Y3+yRZq7PXMPfpKLMnY5TKTjTWhc0oJmyN7v8tC/M=
 github.com/decred/dcrwallet/pgpwordlist v1.0.0/go.mod h1:Fek3uYn+9DnEFIreA/8PnTIXUl2lBO64JpEBkL9BXtk=
+github.com/decred/dcrwallet/rpc/walletrpc v0.1.0 h1:lz6Gisglb6Gn+wbeyv+NRPYAdUjw29LdL7X+X00TRRo=
 github.com/decred/dcrwallet/rpc/walletrpc v0.1.0/go.mod h1:Zp1ZFTCUo7S6MJvUyS5tYfaDUxGAMHkZ+vbsLgAdd4A=
 github.com/decred/dcrwallet/spv v1.0.0/go.mod h1:lz39nz9P/HVoxYa4XAT6ithyR3WgdF0oVu4jtFwnCxE=
 github.com/decred/dcrwallet/spv v1.1.1 h1:G5yXkoiO4LOh3Ba+qvyUIjF2dChOXpiuRCPpjYzzhZw=
@@ -231,8 +232,11 @@ golang.org/x/sys v0.0.0-20180816055513-1c9583448a9c/go.mod h1:STP8DvDyc/dI5b8T5h
 golang.org/x/sys v0.0.0-20181206074257-70b957f3b65e/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
 golang.org/x/sys v0.0.0-20181212120007-b05ddf57801d h1:G59MrP9Qg6bymPjN3yGmqnmuCEH1h0eFP8zpRpl1RiU=
 golang.org/x/sys v0.0.0-20181212120007-b05ddf57801d/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
+golang.org/x/text v0.3.0 h1:g61tztE5qeGQ89tm6NTjjM9VPIm088od1l6aSorWRWg=
 golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
+google.golang.org/genproto v0.0.0-20180808183934-383e8b2c3b9e h1:8mImbC+7codRhTIUj7Js3/j98gpxyF7C4RlC0OdGh64=
 google.golang.org/genproto v0.0.0-20180808183934-383e8b2c3b9e/go.mod h1:JiN7NxoALGmiZfu7CAH4rXhgtRTLTxftemlI0sWmxmc=
+google.golang.org/grpc v1.14.0 h1:ArxJuB1NWfPY6r9Gp9gqwplT0Ge7nqv9msgu03lHLmo=
 google.golang.org/grpc v1.14.0/go.mod h1:yo6s7OP7yaDglbqo1J04qKzAhqBH6lvTonzMVmEdcZw=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=

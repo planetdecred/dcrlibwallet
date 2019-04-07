@@ -21,6 +21,7 @@ require (
 	github.com/decred/dcrwallet/chain v1.1.1
 	github.com/decred/dcrwallet/errors v1.0.1
 	github.com/decred/dcrwallet/p2p v1.0.1
+	github.com/decred/dcrwallet/rpc/walletrpc v0.1.0
 	github.com/decred/dcrwallet/spv v1.1.1
 	github.com/decred/dcrwallet/ticketbuyer v1.0.2
 	github.com/decred/dcrwallet/ticketbuyer/v2 v2.0.1

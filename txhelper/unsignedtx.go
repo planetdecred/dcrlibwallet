@@ -9,10 +9,10 @@ import (
 	"github.com/decred/dcrwallet/wallet/txrules"
 )
 
-func NewUnsignedTx(inputs []*wire.TxIn, destinations []TransactionDestination, changeDestinations []TransactionDestination) (*wire.MsgTx, error) {
-	outputs, totalSendAmount, err := makeTxOutputs(destinations)
-	if err != nil {
-		return nil, err
+func NewUnsignedTx(inputs []*wire.TxIn, outputs []*wire.TxOut, changeDestinations []TransactionDestination, maxAmountRecipientAddress string) (*wire.MsgTx, error) {
+	var totalSendAmount int64
+	for _, output := range outputs {
+		totalSendAmount += output.Value
 	}
 
 	var totalInputAmount int64

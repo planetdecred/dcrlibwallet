@@ -31,6 +31,7 @@ func (direction TransactionDirection) String() string {
 type TransactionDestination struct {
 	Address string
 	Amount  float64
+	SendMax bool
 }
 
 type DecodedTransaction struct {
