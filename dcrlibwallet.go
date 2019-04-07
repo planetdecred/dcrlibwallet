@@ -1376,7 +1376,12 @@ func (lw *LibWallet) SendFromCustomInputs(sourceAccount uint32, requiredConfirma
 		}
 	}
 
-	unsignedTx, err := txhelper.NewUnsignedTx(inputs, outputs, changeDestinations, maxAmountRecipientAddress)
+	if maxAmountRecipientAddress != "" {
+		// use as change address
+		txhelper.MakeTxChangeSource()
+	}
+
+	unsignedTx, err := txhelper.NewUnsignedTx(inputs, outputs, changeDestinations)
 	if err != nil {
 		return "", err
 	}

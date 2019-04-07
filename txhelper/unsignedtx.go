@@ -3,13 +3,14 @@ package txhelper
 import (
 	"errors"
 	"fmt"
+
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrwallet/wallet/txrules"
 )
 
-func NewUnsignedTx(inputs []*wire.TxIn, outputs []*wire.TxOut, changeDestinations []TransactionDestination, maxAmountRecipientAddress string) (*wire.MsgTx, error) {
+func NewUnsignedTx(inputs []*wire.TxIn, outputs []*wire.TxOut, changeDestinations []TransactionDestination) (*wire.MsgTx, error) {
 	var totalSendAmount int64
 	for _, output := range outputs {
 		totalSendAmount += output.Value
@@ -22,11 +23,16 @@ func NewUnsignedTx(inputs []*wire.TxIn, outputs []*wire.TxOut, changeDestination
 		scriptSizes = append(scriptSizes, RedeemP2PKHSigScriptSize)
 	}
 
-	if totalInputAmount < totalSendAmount {
-		return nil, errors.New("total amount from selected outputs not enough to cover transaction")
+	if totalSendAmount > totalInputAmount {
+		return nil, fmt.Errorf("total send amount (%s) is higher than the total input amount (%s)",
+			dcrutil.Amount(totalSendAmount).String(), dcrutil.Amount(totalInputAmount).String())
 	}
 
-	totalChangeScriptSize, err := calculateChangeScriptSize(changeDestinations)
+	changeAddresses := make([]string, len(changeDestinations))
+	for i, changeDestination := range changeDestinations {
+		changeAddresses[i] = changeDestination.Address
+	}
+	totalChangeScriptSize, err := calculateChangeScriptSize(changeAddresses)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +42,9 @@ func NewUnsignedTx(inputs []*wire.TxIn, outputs []*wire.TxOut, changeDestination
 	changeAmount := totalInputAmount - totalSendAmount - int64(maxRequiredFee)
 
 	if changeAmount < 0 {
-		return nil, errors.New("total amount from selected outputs not enough to cover transaction fee")
+		excessSpending := 0 - changeAmount // equivalent to math.Abs()
+		return nil, fmt.Errorf("total send amount plus tx fee is higher than the total input amount by %s",
+			dcrutil.Amount(excessSpending).String())
 	}
 
 	if changeAmount != 0 && !txrules.IsDustAmount(dcrutil.Amount(changeAmount), totalChangeScriptSize, txrules.DefaultRelayFeePerKb) {
@@ -51,7 +59,8 @@ func NewUnsignedTx(inputs []*wire.TxIn, outputs []*wire.TxOut, changeDestination
 		}
 
 		if totalChangeAmount > changeAmount {
-			return nil, errors.New("total amount assigned to specified change addresses is higher than actual change amount for transaction")
+			return nil, fmt.Errorf("total amount allocated to change addresses (%s) is higher than actual change amount for transaction (%s)",
+				dcrutil.Amount(totalChangeAmount).String(), dcrutil.Amount(changeAmount).String())
 		}
 
 		// todo dcrwallet randomizes change position, should look into that as well
@@ -70,10 +79,10 @@ func NewUnsignedTx(inputs []*wire.TxIn, outputs []*wire.TxOut, changeDestination
 	return unsignedTransaction, nil
 }
 
-func calculateChangeScriptSize(changeDestinations []TransactionDestination) (int, error) {
+func calculateChangeScriptSize(changeAddresses []string) (int, error) {
 	var totalChangeScriptSize int
-	for _, changeDestination := range changeDestinations {
-		changeSource, err := MakeTxChangeSource(changeDestination.Address)
+	for _, changeAddress := range changeAddresses {
+		changeSource, err := MakeTxChangeSource(changeAddress)
 		if err != nil {
 			return 0, err
 		}
@@ -127,16 +136,13 @@ func EstimateChange(numberOfInputs int, totalInputAmount int64, destinations []T
 
 func estimateChange(numberOfInputs int, totalInputAmount int64, outputs []*wire.TxOut, totalSendAmount int64, changeAddresses []string) (int64, error) {
 	if totalSendAmount >= totalInputAmount {
-		return 0, errors.New("total send amount should be less than available/spendable balance")
+		return 0, fmt.Errorf("total send amount (%s) is higher than the total input amount (%s)",
+			dcrutil.Amount(totalSendAmount).String(), dcrutil.Amount(totalInputAmount).String())
 	}
 
-	var totalChangeScriptSize int
-	for _, changeAddress := range changeAddresses {
-		changeSource, err := MakeTxChangeSource(changeAddress)
-		if err != nil {
-			return 0, err
-		}
-		totalChangeScriptSize += changeSource.ScriptSize()
+	totalChangeScriptSize, err := calculateChangeScriptSize(changeAddresses)
+	if err != nil {
+		return 0, err
 	}
 
 	scriptSizes := make([]int, numberOfInputs)
@@ -150,7 +156,9 @@ func estimateChange(numberOfInputs int, totalInputAmount int64, outputs []*wire.
 	changeAmount := totalInputAmount - totalSendAmount - int64(maxRequiredFee)
 
 	if changeAmount < 0 {
-		return 0, errors.New("total input amount not enough to cover transaction fee")
+		excessSpending := 0 - changeAmount // equivalent to math.Abs()
+		return 0, fmt.Errorf("total send amount plus tx fee is higher than the total input amount by %s",
+			dcrutil.Amount(excessSpending).String())
 	}
 
 	if changeAmount != 0 && !txrules.IsDustAmount(dcrutil.Amount(changeAmount), totalChangeScriptSize, relayFeePerKb) {
