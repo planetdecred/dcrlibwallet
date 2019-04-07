@@ -88,7 +88,7 @@ func EstimateMaxSendAmount(numberOfInputs int, totalInputAmount int64, destinati
 	for _, destination := range destinations {
 		if destination.SendMax && maxAmountRecipientAddress != "" {
 			return 0, fmt.Errorf("cannot send max amount to multiple recipients")
-		} else {
+		} else if destination.SendMax {
 			maxAmountRecipientAddress = destination.Address
 		}
 	}
