@@ -108,15 +108,15 @@ func EstimateMaxSendAmount(numberOfInputs int, totalInputAmount int64, destinati
 
 	// create transaction outputs for all destination addresses and amounts, excluding destination for send max
 	var totalSendAmount int64
-	outputs := make([]*wire.TxOut, len(destinations)-1)
-	for i, destination := range destinations {
+	outputs := make([]*wire.TxOut, 0, len(destinations)-1)
+	for _, destination := range destinations {
 		if !destination.SendMax {
 			output, err := MakeTxOutput(destination)
 			if err != nil {
 				return 0, err
 			}
 
-			outputs[i] = output
+			outputs = append(outputs, output)
 			totalSendAmount += output.Value
 		}
 	}
