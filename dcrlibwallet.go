@@ -1255,7 +1255,7 @@ func (lw *LibWallet) BulkSendTransaction(privPass []byte, destinations []txhelpe
 	for _, destination := range destinations {
 		if destination.SendMax && maxAmountRecipientAddress != "" {
 			return nil, fmt.Errorf("cannot send max amount to multiple recipients")
-		} else {
+		} else if destination.SendMax {
 			maxAmountRecipientAddress = destination.Address
 			nOutputs--
 		}
