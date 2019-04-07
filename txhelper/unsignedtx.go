@@ -126,8 +126,8 @@ func EstimateChange(numberOfInputs int, totalInputAmount int64, destinations []T
 }
 
 func estimateChange(numberOfInputs int, totalInputAmount int64, outputs []*wire.TxOut, totalSendAmount int64, changeAddresses []string) (int64, error) {
-	if totalInputAmount < totalSendAmount {
-		return 0, errors.New("total input amount not enough to cover transaction")
+	if totalSendAmount >= totalInputAmount {
+		return 0, errors.New("total send amount should be less than available/spendable balance")
 	}
 
 	var totalChangeScriptSize int
