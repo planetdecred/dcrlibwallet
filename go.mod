@@ -2,10 +2,11 @@ module github.com/raedahgroup/dcrlibwallet
 
 require (
 	github.com/AndreasBriese/bbloom v0.0.0-20190306092124-e2d15f34fcf9 // indirect
+	github.com/DataDog/zstd v1.3.5 // indirect
 	github.com/asdine/storm v0.0.0-20190216191021-fe89819f6282
 	github.com/decred/dcrd/addrmgr v1.0.2
 	github.com/decred/dcrd/blockchain/stake v1.1.0
-	github.com/decred/dcrd/chaincfg v1.2.0
+	github.com/decred/dcrd/chaincfg v1.3.0
 	github.com/decred/dcrd/chaincfg/chainhash v1.0.1
 	github.com/decred/dcrd/connmgr v1.0.2
 	github.com/decred/dcrd/dcrec v0.0.0-20190311054417-9a5161ce9e68
@@ -23,10 +24,6 @@ require (
 	github.com/decred/dcrwallet/ticketbuyer v1.0.2
 	github.com/decred/dcrwallet/ticketbuyer/v2 v2.0.1
 	github.com/decred/dcrwallet/wallet v1.3.0
-	github.com/decred/dcrwallet/spv v1.1.0
-	github.com/decred/dcrwallet/ticketbuyer v1.0.2
-	github.com/decred/dcrwallet/ticketbuyer/v2 v2.0.1
-	github.com/decred/dcrwallet/wallet v1.2.0
 	github.com/decred/dcrwallet/walletseed v1.0.1
 	github.com/decred/slog v1.0.0
 	github.com/dgraph-io/badger v1.5.4
