@@ -82,12 +82,50 @@ func calculateChangeScriptSize(changeDestinations []TransactionDestination) (int
 	return totalChangeScriptSize, nil
 }
 
+func EstimateMaxSendAmount(numberOfInputs int, totalInputAmount int64, destinations []TransactionDestination) (int64, error) {
+	// check if there's a max amount recipient, and not more than 1 such recipient
+	var maxAmountRecipientAddress string
+	for _, destination := range destinations {
+		if destination.SendMax && maxAmountRecipientAddress != "" {
+			return 0, fmt.Errorf("cannot send max amount to multiple recipients")
+		} else {
+			maxAmountRecipientAddress = destination.Address
+		}
+	}
+
+	if maxAmountRecipientAddress == "" {
+		return 0, fmt.Errorf("provide the destination address for which to estimate max send amount")
+	}
+
+	// create transaction outputs for all destination addresses and amounts, excluding destination for send max
+	var totalSendAmount int64
+	outputs := make([]*wire.TxOut, len(destinations)-1)
+	for i, destination := range destinations {
+		if !destination.SendMax {
+			output, err := MakeTxOutput(destination)
+			if err != nil {
+				return 0, err
+			}
+
+			outputs[i] = output
+			totalSendAmount += output.Value
+		}
+	}
+
+	// use max recipient address as change address to get max amount
+	return estimateChange(numberOfInputs, totalInputAmount, outputs, totalSendAmount, []string{maxAmountRecipientAddress})
+}
+
 func EstimateChange(numberOfInputs int, totalInputAmount int64, destinations []TransactionDestination, changeAddresses []string) (int64, error) {
 	outputs, totalSendAmount, err := makeTxOutputs(destinations)
 	if err != nil {
 		return 0, err
 	}
 
+	return estimateChange(numberOfInputs, totalInputAmount, outputs, totalSendAmount, changeAddresses)
+}
+
+func estimateChange(numberOfInputs int, totalInputAmount int64, outputs []*wire.TxOut, totalSendAmount int64, changeAddresses []string) (int64, error) {
 	if totalInputAmount < totalSendAmount {
 		return 0, errors.New("total input amount not enough to cover transaction")
 	}
