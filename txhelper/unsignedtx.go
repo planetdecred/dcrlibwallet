@@ -157,7 +157,9 @@ func EstimateChangeWithOutputs(numberOfInputs int, totalInputAmount int64, outpu
 
 	if changeAmount < 0 {
 		excessSpending := 0 - changeAmount // equivalent to math.Abs()
-		return 0, fmt.Errorf("total send amount plus tx fee is higher than the total input amount by %s",
+		// return negative change amount so that the caller can decide if to use a different error message
+		// todo error codes should be used instead
+		return changeAmount, fmt.Errorf("total send amount plus tx fee is higher than the total input amount by %s",
 			dcrutil.Amount(excessSpending).String())
 	}
 
