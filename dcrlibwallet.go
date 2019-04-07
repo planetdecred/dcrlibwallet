@@ -1314,7 +1314,9 @@ func (lw *LibWallet) BulkSendTransaction(privPass []byte, destinations []txhelpe
 	return lw.SignAndPublishTransaction(txBuf.Bytes(), privPass)
 }
 
-func (lw *LibWallet) SendFromCustomInputs(sourceAccount uint32, requiredConfirmations int32, utxoKeys []string, txDestinations []txhelper.TransactionDestination, changeDestinations []txhelper.TransactionDestination, passphrase string) (string, error) {
+func (lw *LibWallet) SendFromCustomInputs(sourceAccount uint32, requiredConfirmations int32, utxoKeys []string,
+	txDestinations []txhelper.TransactionDestination, changeDestinations []txhelper.TransactionDestination, privPass []byte) (string, error) {
+
 	// fetch all utxos in account to extract details for the utxos selected by user
 	// use targetAmount = 0 to fetch ALL utxos in account
 	unspentOutputs, err := lw.UnspentOutputs(sourceAccount, requiredConfirmations, 0)
@@ -1387,7 +1389,7 @@ func (lw *LibWallet) SendFromCustomInputs(sourceAccount uint32, requiredConfirma
 		return "", fmt.Errorf("error serializing transaction: %s", err.Error())
 	}
 
-	txHash, err := lw.SignAndPublishTransaction(txBuf.Bytes(), []byte(passphrase))
+	txHash, err := lw.SignAndPublishTransaction(txBuf.Bytes(), privPass)
 	if err != nil {
 		return "", err
 	}
