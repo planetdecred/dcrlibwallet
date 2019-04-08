@@ -182,7 +182,6 @@ func RPCTransactionType(txType walletrpc.TransactionDetails_TransactionType) str
 	}
 }
 
-
 func TransactionAmountAndDirection(inputTotal, outputTotal, fee int64) (amount int64, direction TransactionDirection) {
 	amountDifference := outputTotal - inputTotal
 
@@ -202,4 +201,3 @@ func TransactionAmountAndDirection(inputTotal, outputTotal, fee int64) (amount i
 
 	return
 }
-

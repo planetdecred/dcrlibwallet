@@ -1113,7 +1113,7 @@ func (lw *LibWallet) UnspentOutputs(account uint32, requiredConfirmations int32,
 		unspentOutputs[i] = &UnspentOutput{
 			TransactionHash: input.PreviousOutPoint.Hash[:],
 			OutputIndex:     input.PreviousOutPoint.Index,
-			OutputKey:    	 outputKey,
+			OutputKey:       outputKey,
 			Tree:            int32(input.PreviousOutPoint.Tree),
 			Amount:          int64(outputInfo.Amount),
 			PkScript:        inputDetail.Scripts[i],
@@ -1391,7 +1391,7 @@ func (lw *LibWallet) SendFromCustomInputs(sourceAccount uint32, requiredConfirma
 		changeDestinations = []txhelper.TransactionDestination{
 			{
 				Address: maxAmountRecipientAddress,
-				Amount: dcrutil.Amount(changeAmount).ToCoin(),
+				Amount:  dcrutil.Amount(changeAmount).ToCoin(),
 			},
 		}
 	}
