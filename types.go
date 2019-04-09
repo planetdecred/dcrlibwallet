@@ -62,7 +62,6 @@ type Transaction struct {
 	Timestamp     int64
 	Type          string
 	Amount        int64
-	Status        string
 	BlockHeight   int32
 	Direction     txhelper.TransactionDirection
 	Debits        []*TransactionDebit

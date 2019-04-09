@@ -182,7 +182,7 @@ func (lw *LibWallet) getLoadedWalletForSyncing() (*wallet.Wallet, error) {
 	return loadedWallet, nil
 }
 
-func (lw *LibWallet) DropSpvConnection() {
+func (lw *LibWallet) CancelSync() {
 	if lw.cancelSync != nil {
 		lw.cancelSync()
 	}

@@ -65,7 +65,11 @@ func (lw *LibWallet) generalSyncNotificationCallbacks(loadedWallet *wallet.Walle
 		Synced: func(sync bool) {
 			// begin indexing transactions after sync is completed,
 			// syncProgressListeners.OnSynced() will be invoked after transactions are indexed
-			lw.IndexTransactions(-1, -1)
+			lw.IndexTransactions(-1, -1, func() {
+				for _, syncResponse := range lw.syncProgressListeners {
+					syncResponse.OnSynced(sync)
+				}
+			})
 		},
 		FetchMissingCFiltersStarted: func() {
 			for _, syncProgressListener := range lw.syncProgressListeners {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 
 	"github.com/asdine/storm"
 	"github.com/decred/dcrd/chaincfg/chainhash"
@@ -18,7 +17,7 @@ type TransactionListener interface {
 	OnBlockAttached(height int32, timestamp int64)
 }
 
-func (lw *LibWallet) IndexTransactions(beginHeight int32, endHeight int32) error {
+func (lw *LibWallet) IndexTransactions(startBlockHeight int32, endBlockHeight int32, afterIndexing func()) error {
 	ctx, _ := contextWithShutdownCancel(context.Background())
 
 	var totalIndex int32
@@ -38,9 +37,9 @@ func (lw *LibWallet) IndexTransactions(beginHeight int32, endHeight int32) error
 				return false, err
 			}
 
-			err = lw.replaceTxIfExist(tx)
+			err = lw.saveOrUpdateTx(tx)
 			if err != nil {
-				log.Errorf("Index tx replace tx err :%v", err)
+				log.Errorf("Save or update tx error :%v", err)
 				return false, err
 			}
 
@@ -51,13 +50,13 @@ func (lw *LibWallet) IndexTransactions(beginHeight int32, endHeight int32) error
 		}
 
 		if block.Header != nil {
-			err := lw.txDB.Set(BucketTxInfo, KeyEndBlock, &endHeight)
+			err := lw.txDB.Set(BucketTxInfo, KeyEndBlock, &endBlockHeight)
 			if err != nil {
-				log.Errorf("Set tx index end block height error: ", err)
+				log.Errorf("Error setting block height for last indexed tx: ", err)
 				return false, err
 			}
 
-			log.Infof("Transaction index caught up to %d", endHeight)
+			log.Infof("Transaction index caught up to %d", endBlockHeight)
 		}
 
 		select {
@@ -68,42 +67,40 @@ func (lw *LibWallet) IndexTransactions(beginHeight int32, endHeight int32) error
 		}
 	}
 
-	if beginHeight == -1 {
+	if startBlockHeight == -1 {
 		var previousEndBlock int32
 		err := lw.txDB.Get(BucketTxInfo, KeyEndBlock, &previousEndBlock)
 		if err != nil && err != storm.ErrNotFound {
-			log.Errorf("Get not found :%v", err)
+			log.Errorf("Error reading block height for last indexed tx :%v", err)
 			return err
 		}
 
-		beginHeight = previousEndBlock
-		beginHeight -= MaxReOrgBlocks
+		startBlockHeight = previousEndBlock
+		startBlockHeight -= MaxReOrgBlocks
 
-		if beginHeight < 0 {
-			beginHeight = 0
+		if startBlockHeight < 0 {
+			startBlockHeight = 0
 		}
 	}
 
-	if beginHeight > endHeight {
-		endHeight = lw.GetBestBlock()
+	if startBlockHeight > endBlockHeight {
+		endBlockHeight = lw.GetBestBlock()
 	}
 
-	startBlock := wallet.NewBlockIdentifierFromHeight(beginHeight)
-	endBlock := wallet.NewBlockIdentifierFromHeight(endHeight)
+	startBlock := wallet.NewBlockIdentifierFromHeight(startBlockHeight)
+	endBlock := wallet.NewBlockIdentifierFromHeight(endBlockHeight)
 
 	defer func() {
-		for _, syncResponse := range lw.syncProgressListeners {
-			syncResponse.OnSynced(true)
-		}
+		afterIndexing()
 		count, err := lw.txDB.Count(&Transaction{})
 		if err != nil {
-			log.Errorf("Count Error :%v", err)
+			log.Errorf("Count tx error :%v", err)
 			return
 		}
-		log.Infof("Transaction index finished at %d, %d transaction(s) indexed in total", endHeight, count)
+		log.Infof("Transaction index finished at %d, %d transaction(s) indexed in total", endBlockHeight, count)
 	}()
 
-	log.Infof("Indexing transactions start height: %d, end height: %d", beginHeight, endHeight)
+	log.Infof("Indexing transactions start height: %d, end height: %d", startBlockHeight, endBlockHeight)
 	return lw.wallet.GetTransactions(rangeFn, startBlock, endBlock)
 }
 
@@ -120,12 +117,12 @@ func (lw *LibWallet) TransactionNotification(listener TransactionListener) {
 					return
 				}
 
-				err = lw.replaceTxIfExist(tempTransaction)
+				err = lw.saveOrUpdateTx(tempTransaction)
 				if err != nil {
 					log.Errorf("Tx ntfn replace tx err: %v", err)
 				}
 
-				fmt.Println("New Transaction")
+				log.Info("New Transaction")
 				result, err := json.Marshal(tempTransaction)
 				if err != nil {
 					log.Error(err)
@@ -142,7 +139,7 @@ func (lw *LibWallet) TransactionNotification(listener TransactionListener) {
 						return
 					}
 
-					err = lw.replaceTxIfExist(tempTransaction)
+					err = lw.saveOrUpdateTx(tempTransaction)
 					if err != nil {
 						log.Errorf("Incoming block replace tx error :%v", err)
 						return
@@ -212,29 +209,27 @@ func (lw *LibWallet) GetTransactions(limit int32) (string, error) {
 	return string(jsonEncodedTransactions), nil
 }
 
-func (lw *LibWallet) replaceTxIfExist(tx *Transaction) error {
-	var oldTx Transaction
-	err := lw.txDB.One("Hash", tx.Hash, &oldTx)
+func (lw *LibWallet) DecodeTransaction(txHash []byte) (string, error) {
+	hash, err := chainhash.NewHash(txHash)
 	if err != nil {
-		if err != storm.ErrNotFound {
-			log.Errorf("Find old tx error: %v", err)
-			return err
-		}
-	} else {
-		err = lw.txDB.DeleteStruct(&oldTx)
-		if err != nil {
-			log.Errorf("Delete old tx error: %v", err)
-			return err
-		}
+		log.Error(err)
+		return "", err
 	}
 
-	err = lw.txDB.Save(tx)
+	txSummary, _, _, err := lw.wallet.TransactionSummary(hash)
 	if err != nil {
-		log.Errorf("Save transaction error :%v", err)
-		return err
+		log.Error(err)
+		return "", err
 	}
 
-	return nil
+	tx, err := txhelper.DecodeTransaction(hash, txSummary.Transaction, lw.activeNet.Params, lw.AddressInfo)
+	if err != nil {
+		log.Error(err)
+		return "", err
+	}
+
+	result, _ := json.Marshal(tx)
+	return string(result), nil
 }
 
 func (lw *LibWallet) parseTxSummary(txSummary *wallet.TransactionSummary, blockHash *chainhash.Hash) (*Transaction, error) {
@@ -288,106 +283,27 @@ func (lw *LibWallet) parseTxSummary(txSummary *wallet.TransactionSummary, blockH
 		Debits:      debits}, nil
 }
 
-func (lw *LibWallet) GetTransactionsInBlockRange(ctx context.Context, startBlock, endBlock *wallet.BlockIdentifier) (
-	transactions []*Transaction, err error) {
-
-	rangeFn := func(block *wallet.Block) (bool, error) {
-		for _, transaction := range block.Transactions {
-			var inputAmounts int64
-			var outputAmounts int64
-			var amount int64
-			tempCredits := make([]*TransactionCredit, len(transaction.MyOutputs))
-			for index, credit := range transaction.MyOutputs {
-				outputAmounts += int64(credit.Amount)
-				tempCredits[index] = &TransactionCredit{
-					Index:    int32(credit.Index),
-					Account:  int32(credit.Account),
-					Internal: credit.Internal,
-					Amount:   int64(credit.Amount),
-					Address:  credit.Address.String()}
-			}
-			tempDebits := make([]*TransactionDebit, len(transaction.MyInputs))
-			for index, debit := range transaction.MyInputs {
-				inputAmounts += int64(debit.PreviousAmount)
-				tempDebits[index] = &TransactionDebit{
-					Index:           int32(debit.Index),
-					PreviousAccount: int32(debit.PreviousAccount),
-					PreviousAmount:  int64(debit.PreviousAmount),
-					AccountName:     lw.AccountName(debit.PreviousAccount)}
-			}
-
-			var direction txhelper.TransactionDirection
-			if transaction.Type == wallet.TransactionTypeRegular {
-				amountDifference := outputAmounts - inputAmounts
-				if amountDifference < 0 && (float64(transaction.Fee) == math.Abs(float64(amountDifference))) {
-					//Transfered
-					direction = txhelper.TransactionDirectionTransferred
-					amount = int64(transaction.Fee)
-				} else if amountDifference > 0 {
-					//Received
-					direction = txhelper.TransactionDirectionReceived
-					for _, credit := range transaction.MyOutputs {
-						amount += int64(credit.Amount)
-					}
-				} else {
-					//Sent
-					direction = txhelper.TransactionDirectionSent
-					for _, debit := range transaction.MyInputs {
-						amount += int64(debit.PreviousAmount)
-					}
-					for _, credit := range transaction.MyOutputs {
-						amount -= int64(credit.Amount)
-					}
-					amount -= int64(transaction.Fee)
-				}
-			}
-			var height int32 = -1
-			if block.Header != nil {
-				height = int32(block.Header.Height)
-			}
-			tempTransaction := &Transaction{
-				Fee:         int64(transaction.Fee),
-				Hash:        transaction.Hash.String(),
-				Raw:         fmt.Sprintf("%02x", transaction.Transaction[:]),
-				Timestamp:   transaction.Timestamp,
-				Type:        txhelper.TransactionType(transaction.Type),
-				Credits:     tempCredits,
-				Amount:      amount,
-				BlockHeight: height,
-				Direction:   direction,
-				Debits:      tempDebits}
-			transactions = append(transactions, tempTransaction)
+func (lw *LibWallet) saveOrUpdateTx(tx *Transaction) error {
+	var oldTx Transaction
+	err := lw.txDB.One("Hash", tx.Hash, &oldTx)
+	if err != nil {
+		if err != storm.ErrNotFound {
+			log.Errorf("Find old tx error: %v", err)
+			return err
 		}
-		select {
-		case <-ctx.Done():
-			return true, ctx.Err()
-		default:
-			return false, nil
+	} else {
+		err = lw.txDB.DeleteStruct(&oldTx)
+		if err != nil {
+			log.Errorf("Delete old tx error: %v", err)
+			return err
 		}
 	}
 
-	err = lw.wallet.GetTransactions(rangeFn, startBlock, endBlock)
-	return
-}
-
-func (lw *LibWallet) DecodeTransaction(txHash []byte) (string, error) {
-	hash, err := chainhash.NewHash(txHash)
+	err = lw.txDB.Save(tx)
 	if err != nil {
-		log.Error(err)
-		return "", err
-	}
-	txSummary, _, _, err := lw.wallet.TransactionSummary(hash)
-	if err != nil {
-		log.Error(err)
-		return "", err
+		log.Errorf("Save transaction error :%v", err)
+		return err
 	}
 
-	tx, err := txhelper.DecodeTransaction(hash, txSummary.Transaction, lw.activeNet.Params, lw.AddressInfo)
-	if err != nil {
-		log.Error(err)
-		return "", err
-	}
-
-	result, _ := json.Marshal(tx)
-	return string(result), nil
+	return nil
 }
