@@ -112,6 +112,13 @@ func initLogRotator(logFile string) {
 	logRotator = r
 }
 
+func SetLogLevel(loglevel string) {
+	_, ok := slog.LevelFromString(loglevel)
+	if ok {
+		setLogLevels(loglevel)
+	}
+}
+
 // setLogLevel sets the logging level for provided subsystem.  Invalid
 // subsystems are ignored.  Uninitialized subsystems are dynamically created as
 // needed.

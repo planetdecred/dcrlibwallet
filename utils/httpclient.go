@@ -1,4 +1,4 @@
-package dcrlibwallet
+package utils
 
 import (
 	"bytes"
@@ -13,9 +13,9 @@ import (
 	"github.com/decred/dcrd/dcrjson"
 )
 
-// newHTTPClient returns a new HTTP client that is configured according to the
+// NewHTTPClient returns a new HTTP client that is configured according to the
 //  TLS settings in the associated connection configuration.
-func newHTTPClient(cert string) (*http.Client, error) {
+func NewHTTPClient(cert string) (*http.Client, error) {
 	var dial func(network, addr string) (net.Conn, error)
 	// Configure TLS
 	var tlsConfig *tls.Config
@@ -39,11 +39,11 @@ func newHTTPClient(cert string) (*http.Client, error) {
 	return &client, nil
 }
 
-// sendPostRequest sends the marshalled JSON-RPC command using HTTP-POST mode
+// SendPostRequest sends the marshalled JSON-RPC command using HTTP-POST mode
 // to the server described in the passed config struct.  It also attempts to
 // unmarshal the response as a JSON-RPC response and returns either the result
 // field or the error field depending on whether or not there is an error.
-func sendPostRequest(marshalledJSON []byte, rpcServer string, username string, password string, cert string) ([]byte, error) {
+func SendPostRequest(marshalledJSON []byte, rpcServer string, username string, password string, cert string) ([]byte, error) {
 	// Generate a request to the configured RPC server.
 	protocol := "https"
 	url := protocol + "://" + rpcServer
@@ -60,7 +60,7 @@ func sendPostRequest(marshalledJSON []byte, rpcServer string, username string, p
 
 	// Create the new HTTP client that is configured according to the user-
 	// specified options and submit the request.
-	httpClient, err := newHTTPClient(cert)
+	httpClient, err := NewHTTPClient(cert)
 	if err != nil {
 		return nil, err
 	}

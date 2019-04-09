@@ -24,14 +24,14 @@ const (
 	DefaultDbDriver = "bdb"
 )
 
-// Loader implements the creating of new and opening of existing wallets, while
+// WalletLoader implements the creating of new and opening of existing wallets, while
 // providing a callback system for other subsystems to handle the loading of a
 // wallet.  This is primarely intended for use by the RPC servers, to enable
 // methods and services which require the wallet when the wallet is loaded by
 // another subsystem.
 //
-// Loader is safe for concurrent access.
-type Loader struct {
+// WalletLoader is safe for concurrent access.
+type WalletLoader struct {
 	callbacks   []func(*wallet.Wallet)
 	backend     wallet.NetworkBackend
 	chainParams *chaincfg.Params
@@ -63,11 +63,11 @@ type StakeOptions struct {
 	StakePoolColdExtKey string
 }
 
-// NewLoader constructs a Loader.
+// NewLoader constructs a WalletLoader.
 func NewLoader(chainParams *chaincfg.Params, dbDirPath string, stakeOptions *StakeOptions, gapLimit int,
-	allowHighFees bool, relayFee float64, accountGapLimit int) *Loader {
+	allowHighFees bool, relayFee float64, accountGapLimit int) *WalletLoader {
 
-	return &Loader{
+	return &WalletLoader{
 		chainParams:     chainParams,
 		dbDirPath:       dbDirPath,
 		dbDriver:        DefaultDbDriver,
@@ -80,13 +80,13 @@ func NewLoader(chainParams *chaincfg.Params, dbDirPath string, stakeOptions *Sta
 }
 
 // SetDatabaseDriver specifies the database to be used by walletdb
-func (l *Loader) SetDatabaseDriver(driver string) {
+func (l *WalletLoader) SetDatabaseDriver(driver string) {
 	l.dbDriver = driver
 }
 
-// onLoaded executes each added callback and prevents loader from loading any
+// onLoaded executes each added callback and prevents walletLoader from loading any
 // additional wallets.  Requires mutex to be locked.
-func (l *Loader) onLoaded(w *wallet.Wallet, db wallet.DB) {
+func (l *WalletLoader) onLoaded(w *wallet.Wallet, db wallet.DB) {
 	for _, fn := range l.callbacks {
 		fn(w)
 	}
@@ -96,10 +96,10 @@ func (l *Loader) onLoaded(w *wallet.Wallet, db wallet.DB) {
 	l.callbacks = nil // not needed anymore
 }
 
-// RunAfterLoad adds a function to be executed when the loader creates or opens
+// RunAfterLoad adds a function to be executed when the walletLoader creates or opens
 // a wallet.  Functions are executed in a single goroutine in the order they are
 // added.
-func (l *Loader) RunAfterLoad(fn func(*wallet.Wallet)) {
+func (l *WalletLoader) RunAfterLoad(fn func(*wallet.Wallet)) {
 	l.mu.Lock()
 	if l.wallet != nil {
 		w := l.wallet
@@ -113,8 +113,8 @@ func (l *Loader) RunAfterLoad(fn func(*wallet.Wallet)) {
 
 // CreateWatchingOnlyWallet creates a new watch-only wallet using the provided
 // extended public key and public passphrase.
-func (l *Loader) CreateWatchingOnlyWallet(extendedPubKey string, pubPass []byte) (w *wallet.Wallet, err error) {
-	const op errors.Op = "loader.CreateWatchingOnlyWallet"
+func (l *WalletLoader) CreateWatchingOnlyWallet(extendedPubKey string, pubPass []byte) (w *wallet.Wallet, err error) {
+	const op errors.Op = "walletLoader.CreateWatchingOnlyWallet"
 
 	defer l.mu.Unlock()
 	l.mu.Lock()
@@ -204,8 +204,8 @@ func (l *Loader) CreateWatchingOnlyWallet(extendedPubKey string, pubPass []byte)
 // CreateNewWallet creates a new wallet using the provided public and private
 // passphrases.  The seed is optional.  If non-nil, addresses are derived from
 // this seed.  If nil, a secure random seed is generated.
-func (l *Loader) CreateNewWallet(pubPassphrase, privPassphrase, seed []byte) (w *wallet.Wallet, err error) {
-	const op errors.Op = "loader.CreateNewWallet"
+func (l *WalletLoader) CreateNewWallet(pubPassphrase, privPassphrase, seed []byte) (w *wallet.Wallet, err error) {
+	const op errors.Op = "walletLoader.CreateNewWallet"
 
 	defer l.mu.Unlock()
 	l.mu.Lock()
@@ -292,12 +292,12 @@ func (l *Loader) CreateNewWallet(pubPassphrase, privPassphrase, seed []byte) (w 
 	return w, nil
 }
 
-// OpenExistingWallet opens the wallet from the loader's wallet database path
-// and the public passphrase.  If the loader is being called by a context where
+// OpenExistingWallet opens the wallet from the walletLoader's wallet database path
+// and the public passphrase.  If the walletLoader is being called by a context where
 // standard input prompts may be used during wallet upgrades, setting
 // canConsolePrompt will enable these prompts.
-func (l *Loader) OpenExistingWallet(pubPassphrase []byte) (w *wallet.Wallet, rerr error) {
-	const op errors.Op = "loader.OpenExistingWallet"
+func (l *WalletLoader) OpenExistingWallet(pubPassphrase []byte) (w *wallet.Wallet, rerr error) {
+	const op errors.Op = "walletLoader.OpenExistingWallet"
 
 	defer l.mu.Unlock()
 	l.mu.Lock()
@@ -353,15 +353,15 @@ func (l *Loader) OpenExistingWallet(pubPassphrase []byte) (w *wallet.Wallet, rer
 	return w, nil
 }
 
-// DbDirPath returns the Loader's database directory path
-func (l *Loader) DbDirPath() string {
+// DbDirPath returns the WalletLoader's database directory path
+func (l *WalletLoader) DbDirPath() string {
 	return l.dbDirPath
 }
 
-// WalletExists returns whether a file exists at the loader's database path.
+// WalletExists returns whether a file exists at the walletLoader's database path.
 // This may return an error for unexpected I/O failures.
-func (l *Loader) WalletExists() (bool, error) {
-	const op errors.Op = "loader.WalletExists"
+func (l *WalletLoader) WalletExists() (bool, error) {
+	const op errors.Op = "walletLoader.WalletExists"
 	dbPath := filepath.Join(l.dbDirPath, walletDbName)
 	exists, err := fileExists(dbPath)
 	if err != nil {
@@ -373,7 +373,7 @@ func (l *Loader) WalletExists() (bool, error) {
 // LoadedWallet returns the loaded wallet, if any, and a bool for whether the
 // wallet has been loaded or not.  If true, the wallet pointer should be safe to
 // dereference.
-func (l *Loader) LoadedWallet() (*wallet.Wallet, bool) {
+func (l *WalletLoader) LoadedWallet() (*wallet.Wallet, bool) {
 	l.mu.Lock()
 	w := l.wallet
 	l.mu.Unlock()
@@ -382,10 +382,10 @@ func (l *Loader) LoadedWallet() (*wallet.Wallet, bool) {
 
 // UnloadWallet stops the loaded wallet, if any, and closes the wallet database.
 // Returns with errors.Invalid if the wallet has not been loaded with
-// CreateNewWallet or LoadExistingWallet.  The Loader may be reused if this
+// CreateNewWallet or LoadExistingWallet.  The WalletLoader may be reused if this
 // function returns without error.
-func (l *Loader) UnloadWallet() error {
-	const op errors.Op = "loader.UnloadWallet"
+func (l *WalletLoader) UnloadWallet() error {
+	const op errors.Op = "walletLoader.UnloadWallet"
 
 	defer l.mu.Unlock()
 	l.mu.Lock()
@@ -408,8 +408,8 @@ func (l *Loader) UnloadWallet() error {
 	return nil
 }
 
-// SetNetworkBackend associates the loader with a wallet network backend.
-func (l *Loader) SetNetworkBackend(n wallet.NetworkBackend) {
+// SetNetworkBackend associates the walletLoader with a wallet network backend.
+func (l *WalletLoader) SetNetworkBackend(n wallet.NetworkBackend) {
 	l.mu.Lock()
 	l.backend = n
 	l.mu.Unlock()
@@ -417,7 +417,7 @@ func (l *Loader) SetNetworkBackend(n wallet.NetworkBackend) {
 
 // NetworkBackend returns the associated wallet network backend, if any, and a
 // bool describing whether a non-nil network backend was set.
-func (l *Loader) NetworkBackend() (n wallet.NetworkBackend, ok bool) {
+func (l *WalletLoader) NetworkBackend() (n wallet.NetworkBackend, ok bool) {
 	l.mu.Lock()
 	n = l.backend
 	l.mu.Unlock()
@@ -425,8 +425,8 @@ func (l *Loader) NetworkBackend() (n wallet.NetworkBackend, ok bool) {
 }
 
 // StartTicketPurchase launches the ticketbuyer to start purchasing tickets.
-func (l *Loader) StartTicketPurchase(passphrase []byte, ticketbuyerCfg *ticketbuyer.Config) error {
-	const op errors.Op = "loader.StartTicketPurchase"
+func (l *WalletLoader) StartTicketPurchase(passphrase []byte, ticketbuyerCfg *ticketbuyer.Config) error {
+	const op errors.Op = "walletLoader.StartTicketPurchase"
 
 	defer l.mu.Unlock()
 	l.mu.Lock()
@@ -461,7 +461,7 @@ func (l *Loader) StartTicketPurchase(passphrase []byte, ticketbuyerCfg *ticketbu
 // stopTicketPurchase stops the ticket purchaser, waiting until it has finished.
 // Returns false if the ticket purchaser was not running. It must be called with
 // the mutex lock held.
-func (l *Loader) stopTicketPurchase() bool {
+func (l *WalletLoader) stopTicketPurchase() bool {
 	if l.purchaseManager == nil {
 		return false
 	}
@@ -474,8 +474,8 @@ func (l *Loader) stopTicketPurchase() bool {
 }
 
 // StopTicketPurchase stops the ticket purchaser, waiting until it has finished.
-func (l *Loader) StopTicketPurchase() error {
-	const op errors.Op = "loader.StopTicketPurchase"
+func (l *WalletLoader) StopTicketPurchase() error {
+	const op errors.Op = "walletLoader.StopTicketPurchase"
 	defer l.mu.Unlock()
 	l.mu.Lock()
 	if !l.stopTicketPurchase() {
@@ -486,7 +486,7 @@ func (l *Loader) StopTicketPurchase() error {
 
 // PurchaseManager returns the ticket purchaser instance. If ticket purchasing
 // has been disabled, it returns nil.
-func (l *Loader) PurchaseManager() *ticketbuyer.PurchaseManager {
+func (l *WalletLoader) PurchaseManager() *ticketbuyer.PurchaseManager {
 	l.mu.Lock()
 	pm := l.purchaseManager
 	l.mu.Unlock()
