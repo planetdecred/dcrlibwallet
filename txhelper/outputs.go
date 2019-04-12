@@ -85,7 +85,7 @@ func TxOutputsExtractMaxDestinationAddress(txDestinations []TransactionDestinati
 // Returns the outputs for the tx excluding the max amount recipient,
 // and also returns the change object for the max amount recipient address if there is a max recipient address.
 func TxOutputsExtractMaxChangeDestination(nInputs int, totalInputAmount int64, txDestinations []TransactionDestination) (
-	outputs []*wire.TxOut, maxChangeDestinations []TransactionDestination, err error) {
+	outputs []*wire.TxOut, totalSendAmount int64, maxChangeDestinations []TransactionDestination, err error) {
 
 	outputs, totalSendAmount, maxAmountRecipientAddress, err := TxOutputsExtractMaxDestinationAddress(txDestinations)
 	if err != nil {
@@ -97,14 +97,14 @@ func TxOutputsExtractMaxChangeDestination(nInputs int, totalInputAmount int64, t
 		changeAddresses := []string{maxAmountRecipientAddress}
 		changeAmount, err := EstimateChangeWithOutputs(nInputs, totalInputAmount, outputs, totalSendAmount, changeAddresses)
 		if err != nil {
-			return nil, nil, err
+			return nil, 0,nil, err
 		}
 
 		if changeAmount < 0 {
 			excessSpending := 0 - changeAmount // equivalent to math.Abs()
 			err = fmt.Errorf("total send amount plus tx fee is higher than the total input amount by %s",
 				dcrutil.Amount(excessSpending).String())
-			return nil, nil, err
+			return nil,  0,nil, err
 		}
 
 		maxChangeDestinations = []TransactionDestination{
