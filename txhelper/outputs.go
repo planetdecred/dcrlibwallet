@@ -2,8 +2,8 @@ package txhelper
 
 import (
 	"fmt"
-	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrd/dcrutil"
+	"github.com/decred/dcrd/wire"
 )
 
 func PrepareTxOutputs(nInputs int, totalInputAmount int64, txDestinations []TransactionDestination) (outputs []*wire.TxOut, maxChangeDestinations []TransactionDestination, err error) {
