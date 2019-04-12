@@ -23,7 +23,18 @@ func EstimateChange(numberOfInputs int, totalInputAmount int64, destinations []T
 		return 0, err
 	}
 
-	return EstimateChangeWithOutputs(numberOfInputs, totalInputAmount, outputs, totalSendAmount, changeAddresses)
+	changeAmount, err := EstimateChangeWithOutputs(numberOfInputs, totalInputAmount, outputs, totalSendAmount, changeAddresses)
+	if err != nil {
+		return 0, err
+	}
+
+	if changeAmount < 0 {
+		excessSpending := 0 - changeAmount // equivalent to math.Abs()
+		return 0, fmt.Errorf("total send amount plus tx fee is higher than the total input amount by %s",
+			dcrutil.Amount(excessSpending).String())
+	}
+
+	return changeAmount, nil
 }
 
 func EstimateMaxSendAmount(numberOfInputs int, totalInputAmount int64, destinations []TransactionDestination) (int64, error) {
@@ -57,7 +68,18 @@ func EstimateMaxSendAmount(numberOfInputs int, totalInputAmount int64, destinati
 	}
 
 	// use max recipient address as change address to get max amount
-	return EstimateChangeWithOutputs(numberOfInputs, totalInputAmount, outputs, totalSendAmount, []string{maxAmountRecipientAddress})
+	changeAmount, err := EstimateChangeWithOutputs(numberOfInputs, totalInputAmount, outputs, totalSendAmount, []string{maxAmountRecipientAddress})
+	if err != nil {
+		return 0, err
+	}
+
+	if changeAmount < 0 {
+		excessSpending := 0 - changeAmount // equivalent to math.Abs()
+		return 0, fmt.Errorf("total send amount plus tx fee will be higher than the total input amount by %s",
+			dcrutil.Amount(excessSpending).String())
+	}
+
+	return changeAmount, nil
 }
 
 func EstimateChangeWithOutputs(numberOfInputs int, totalInputAmount int64, outputs []*wire.TxOut, totalSendAmount int64, changeAddresses []string) (int64, error) {
@@ -81,15 +103,8 @@ func EstimateChangeWithOutputs(numberOfInputs int, totalInputAmount int64, outpu
 	maxRequiredFee := txrules.FeeForSerializeSize(relayFeePerKb, maxSignedSize)
 	changeAmount := totalInputAmount - totalSendAmount - int64(maxRequiredFee)
 
-	if changeAmount < 0 {
-		excessSpending := 0 - changeAmount // equivalent to math.Abs()
-		// return negative change amount so that the caller can decide if to use a different error message
-		// todo error codes should be used instead
-		return changeAmount, fmt.Errorf("total send amount plus tx fee is higher than the total input amount by %s",
-			dcrutil.Amount(excessSpending).String())
-	}
-
-	if changeAmount != 0 && !txrules.IsDustAmount(dcrutil.Amount(changeAmount), totalChangeScriptSize, relayFeePerKb) {
+	// if change amount is valid, check if the script size exceeds maximum script size
+	if changeAmount > 0 && !txrules.IsDustAmount(dcrutil.Amount(changeAmount), totalChangeScriptSize, relayFeePerKb) {
 		maxChangeScriptSize := len(changeAddresses) * txscript.MaxScriptElementSize
 		if totalChangeScriptSize > maxChangeScriptSize {
 			return 0, errors.New("script size exceed maximum bytes pushable to the stack")

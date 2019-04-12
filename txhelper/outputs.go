@@ -100,6 +100,13 @@ func TxOutputsExtractMaxChangeDestination(nInputs int, totalInputAmount int64, t
 			return nil, nil, err
 		}
 
+		if changeAmount < 0 {
+			excessSpending := 0 - changeAmount // equivalent to math.Abs()
+			err = fmt.Errorf("total send amount plus tx fee is higher than the total input amount by %s",
+				dcrutil.Amount(excessSpending).String())
+			return nil, nil, err
+		}
+
 		maxChangeDestinations = []TransactionDestination{
 			{
 				Address: maxAmountRecipientAddress,
