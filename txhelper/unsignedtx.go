@@ -1,7 +1,6 @@
 package txhelper
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/decred/dcrd/dcrutil"
@@ -10,11 +9,14 @@ import (
 	"github.com/decred/dcrwallet/wallet/txrules"
 )
 
-func NewUnsignedTx(inputs []*wire.TxIn, outputs []*wire.TxOut, changeDestinations []TransactionDestination) (*wire.MsgTx, error) {
-	var totalSendAmount int64
-	for _, output := range outputs {
-		totalSendAmount += output.Value
-	}
+type GenerateAddressFunc func() (address string, err error)
+
+// NewUnsignedTx uses the inputs to prepare a tx with outputs for the provided send destinations and change destinations.
+// If any of the send destinations is set to receive max amount, that destination address is used as single change destination.
+// If no change destinations are provided and no recipient is set to receive max amount,
+// a single change destination is created for an address gotten by calling `generateAccountAddress()`.
+func NewUnsignedTx(inputs []*wire.TxIn, sendDestinations, changeDestinations []TransactionDestination,
+	generateAccountAddress GenerateAddressFunc) (*wire.MsgTx, error) {
 
 	var totalInputAmount int64
 	scriptSizes := make([]int, 0, len(inputs))
@@ -23,9 +25,38 @@ func NewUnsignedTx(inputs []*wire.TxIn, outputs []*wire.TxOut, changeDestination
 		scriptSizes = append(scriptSizes, RedeemP2PKHSigScriptSize)
 	}
 
+	outputs, totalSendAmount, maxChangeDestinations, err := TxOutputsExtractMaxChangeDestination(len(inputs), totalInputAmount, sendDestinations)
+	if err != nil {
+		return nil, err
+	}
+
 	if totalSendAmount > totalInputAmount {
 		return nil, fmt.Errorf("total send amount (%s) is higher than the total input amount (%s)",
 			dcrutil.Amount(totalSendAmount).String(), dcrutil.Amount(totalInputAmount).String())
+	}
+
+	// if a max change destination is returned, use it as the only change destination
+	if len(maxChangeDestinations) == 1 {
+		changeDestinations = maxChangeDestinations
+	}
+
+	// create a default change destination if none is specified and there is a change amount from this tx
+	if len(changeDestinations) == 0 {
+		changeAddress, err := generateAccountAddress()
+		if err != nil {
+			return nil, fmt.Errorf("error generating change address for tx: %s", err.Error())
+		}
+
+		changeAmount, err := EstimateChangeWithOutputs(len(inputs), totalInputAmount, outputs, totalSendAmount, []string{changeAddress})
+		if err != nil {
+			return nil, fmt.Errorf("error in getting change amount: %s", err.Error())
+		}
+		if changeAmount > 0 {
+			changeDestinations = append(changeDestinations, TransactionDestination{
+				Address: changeAddress,
+				Amount:  dcrutil.Amount(changeAmount).ToCoin(),
+			})
+		}
 	}
 
 	changeAddresses := make([]string, len(changeDestinations))
@@ -34,7 +65,7 @@ func NewUnsignedTx(inputs []*wire.TxIn, outputs []*wire.TxOut, changeDestination
 	}
 	totalChangeScriptSize, err := calculateChangeScriptSize(changeAddresses)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error processing change outputs: %s", err.Error())
 	}
 
 	maxSignedSize := EstimateSerializeSize(scriptSizes, outputs, totalChangeScriptSize)
@@ -50,7 +81,7 @@ func NewUnsignedTx(inputs []*wire.TxIn, outputs []*wire.TxOut, changeDestination
 	if changeAmount != 0 && !txrules.IsDustAmount(dcrutil.Amount(changeAmount), totalChangeScriptSize, txrules.DefaultRelayFeePerKb) {
 		maxAcceptableChangeScriptSize := len(changeDestinations) * txscript.MaxScriptElementSize
 		if totalChangeScriptSize > maxAcceptableChangeScriptSize {
-			return nil, errors.New("script size exceed maximum bytes pushable to the stack")
+			return nil, fmt.Errorf("script size exceed maximum bytes pushable to the stack")
 		}
 
 		changeOutputs, totalChangeAmount, err := makeTxOutputs(changeDestinations)

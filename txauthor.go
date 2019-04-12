@@ -235,19 +235,9 @@ func (lw *LibWallet) SendFromCustomInputs(sourceAccount uint32, requiredConfirma
 		}
 	}
 
-	outputs, maxChangeDestinations, err := txhelper.TxOutputsExtractMaxChangeDestination(len(inputs), totalInputAmount, txDestinations)
-	if err != nil {
-		return "", err
-	}
-	// if a max change destination is returned, use it as the only change destination
-	if len(maxChangeDestinations) == 1 {
-		changeDestinations = maxChangeDestinations
-	}
-
-	unsignedTx, err := txhelper.NewUnsignedTx(inputs, outputs, changeDestinations)
-	if err != nil {
-		return "", err
-	}
+	unsignedTx, err := txhelper.NewUnsignedTx(inputs, txDestinations, changeDestinations, func() (address string, err error) {
+		return lw.NextAddress(int32(sourceAccount))
+	})
 
 	// serialize unsigned tx
 	var txBuf bytes.Buffer
