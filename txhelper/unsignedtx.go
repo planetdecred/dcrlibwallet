@@ -136,7 +136,7 @@ func EstimateChange(numberOfInputs int, totalInputAmount int64, destinations []T
 
 func EstimateChangeWithOutputs(numberOfInputs int, totalInputAmount int64, outputs []*wire.TxOut, totalSendAmount int64, changeAddresses []string) (int64, error) {
 	if totalSendAmount >= totalInputAmount {
-		return 0, fmt.Errorf("total send amount (%s) is higher than the total input amount (%s)",
+		return 0, fmt.Errorf("total send amount (%s) is higher than or equal to the total input amount (%s)",
 			dcrutil.Amount(totalSendAmount).String(), dcrutil.Amount(totalInputAmount).String())
 	}
 

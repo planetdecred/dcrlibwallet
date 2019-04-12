@@ -13,7 +13,7 @@ func PrepareTxOutputs(nInputs int, totalInputAmount int64, txDestinations []Tran
 	for _, destination := range txDestinations {
 		if destination.SendMax && maxAmountRecipientAddress != "" {
 			return nil, nil, fmt.Errorf("cannot send max amount to multiple recipients")
-		} else {
+		} else if destination.SendMax {
 			maxAmountRecipientAddress = destination.Address
 			nOutputs--
 		}
