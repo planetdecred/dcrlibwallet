@@ -1,7 +1,8 @@
 package txhelper
 
 import (
-	"fmt"
+	"math"
+
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrd/wire"
@@ -9,7 +10,6 @@ import (
 	"github.com/decred/dcrwallet/rpc/walletrpc"
 	"github.com/decred/dcrwallet/wallet"
 	"github.com/raedahgroup/dcrlibwallet/addresshelper"
-	"math"
 )
 
 // from "github.com/decred/dcrwallet/wallet/internal/txsizes"
