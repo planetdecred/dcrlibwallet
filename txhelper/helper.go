@@ -140,8 +140,7 @@ func MakeTxOutput(destination TransactionDestination) (*wire.TxOut, error) {
 	}, nil
 }
 
-func MsgTxFeeSizeRate(serializedTx []byte) (msgTx *wire.MsgTx, fee dcrutil.Amount, size int, feeRate dcrutil.Amount, err error) {
-	transactionHex := fmt.Sprintf("%x", serializedTx)
+func MsgTxFeeSizeRate(transactionHex string) (msgTx *wire.MsgTx, fee dcrutil.Amount, size int, feeRate dcrutil.Amount, err error) {
 	msgTx, err = txhelpers.MsgTxFromHex(transactionHex)
 	if err != nil {
 		return

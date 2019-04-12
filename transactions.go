@@ -222,7 +222,7 @@ func (lw *LibWallet) DecodeTransaction(txHash []byte) (string, error) {
 		return "", err
 	}
 
-	tx, err := txhelper.DecodeTransaction(hash, txSummary.Transaction, lw.activeNet.Params, lw.AddressInfo)
+	tx, err := txhelper.DecodeTransaction(hash, fmt.Sprintf("%x", txSummary.Transaction), lw.activeNet.Params, lw.AddressInfo)
 	if err != nil {
 		log.Error(err)
 		return "", err
@@ -274,6 +274,7 @@ func (lw *LibWallet) parseTxSummary(txSummary *wallet.TransactionSummary, blockH
 		Fee:         int64(txSummary.Fee),
 		Hash:        txSummary.Hash.String(),
 		Raw:         fmt.Sprintf("%02x", txSummary.Transaction[:]),
+		Hex:         fmt.Sprintf("%x", txSummary.Transaction), // todo is this different from raw?
 		Timestamp:   txSummary.Timestamp,
 		Type:        txhelper.TransactionType(txSummary.Type),
 		Credits:     credits,

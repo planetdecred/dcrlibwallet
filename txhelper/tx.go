@@ -15,8 +15,8 @@ import (
 
 const BlockValid int = 1 << 0
 
-func DecodeTransaction(hash *chainhash.Hash, serializedTx []byte, netParams *chaincfg.Params, addressInfoFn func(string) (*AddressInfo, error)) (tx *DecodedTransaction, err error) {
-	msgTx, txFee, txSize, txFeeRate, err := MsgTxFeeSizeRate(serializedTx)
+func DecodeTransaction(hash *chainhash.Hash, txHex string, netParams *chaincfg.Params, addressInfoFn func(string) (*AddressInfo, error)) (tx *DecodedTransaction, err error) {
+	msgTx, txFee, txSize, txFeeRate, err := MsgTxFeeSizeRate(txHex)
 	if err != nil {
 		return
 	}
