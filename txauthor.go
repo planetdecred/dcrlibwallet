@@ -235,48 +235,13 @@ func (lw *LibWallet) SendFromCustomInputs(sourceAccount uint32, requiredConfirma
 		}
 	}
 
-	// check if there's a max amount recipient, and not more than 1 such recipient
-	nOutputs := len(txDestinations)
-	var maxAmountRecipientAddress string
-	for _, destination := range txDestinations {
-		if destination.SendMax && maxAmountRecipientAddress != "" {
-			return "", fmt.Errorf("cannot send max amount to multiple recipients")
-		} else {
-			maxAmountRecipientAddress = destination.Address
-			nOutputs--
-		}
+	outputs, maxChangeDestinations, err := txhelper.PrepareTxOutputs(len(inputs), totalInputAmount, txDestinations)
+	if err != nil {
+		return "", err
 	}
-
-	// create transaction outputs for all destination addresses and amounts, excluding destination for send max
-	outputs := make([]*wire.TxOut, nOutputs)
-	var totalSendAmount int64
-	for i, destination := range txDestinations {
-		if !destination.SendMax {
-			output, err := txhelper.MakeTxOutput(destination)
-			if err != nil {
-				log.Error(err)
-				return "", err
-			}
-
-			outputs[i] = output
-			totalSendAmount += output.Value
-		}
-	}
-
-	if maxAmountRecipientAddress != "" {
-		// use as change address
-		changeAddresses := []string{maxAmountRecipientAddress}
-		changeAmount, err := txhelper.EstimateChangeWithOutputs(len(inputs), totalInputAmount, outputs, totalSendAmount, changeAddresses)
-		if err != nil {
-			return "", err
-		}
-
-		changeDestinations = []txhelper.TransactionDestination{
-			{
-				Address: maxAmountRecipientAddress,
-				Amount:  dcrutil.Amount(changeAmount).ToCoin(),
-			},
-		}
+	// if a max change destination is returned, use it as the only change destination
+	if len(maxChangeDestinations) == 1 {
+		changeDestinations = maxChangeDestinations
 	}
 
 	unsignedTx, err := txhelper.NewUnsignedTx(inputs, outputs, changeDestinations)
