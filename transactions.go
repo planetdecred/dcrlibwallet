@@ -23,7 +23,6 @@ func (lw *LibWallet) IndexTransactions(startBlockHeight int32, endBlockHeight in
 	var totalIndex int32
 	rangeFn := func(block *wallet.Block) (bool, error) {
 		for _, transaction := range block.Transactions {
-
 			var blockHash *chainhash.Hash
 			if block.Header != nil {
 				hash := block.Header.BlockHash()
@@ -102,6 +101,38 @@ func (lw *LibWallet) IndexTransactions(startBlockHeight int32, endBlockHeight in
 
 	log.Infof("Indexing transactions start height: %d, end height: %d", startBlockHeight, endBlockHeight)
 	return lw.wallet.GetTransactions(rangeFn, startBlock, endBlock)
+}
+
+func (lw *LibWallet) GetTransactionsInBlockRange(ctx context.Context, startBlock, endBlock *wallet.BlockIdentifier) (
+	transactions []*Transaction, err error) {
+
+	rangeFn := func(block *wallet.Block) (bool, error) {
+		for _, transaction := range block.Transactions {
+			var blockHash *chainhash.Hash
+			if block.Header != nil {
+				hash := block.Header.BlockHash()
+				blockHash = &hash
+			} else {
+				blockHash = nil
+			}
+
+			tx, err := lw.parseTxSummary(&transaction, blockHash)
+			if err != nil {
+				return false, err
+			}
+
+			transactions = append(transactions, tx)
+		}
+		select {
+		case <-ctx.Done():
+			return true, ctx.Err()
+		default:
+			return false, nil
+		}
+	}
+
+	err = lw.wallet.GetTransactions(rangeFn, startBlock, endBlock)
+	return
 }
 
 func (lw *LibWallet) TransactionNotification(listener TransactionListener) {
