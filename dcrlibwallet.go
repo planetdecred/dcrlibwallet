@@ -53,14 +53,14 @@ func NewLibWallet(homeDir string, dbDriver string, netType string) (*LibWallet, 
 	}
 
 	walletDataDir := filepath.Join(homeDir, activeNet.Name)
-	return newLibWallet(walletDataDir, dbDriver, activeNet)
+	return newLibWallet(walletDataDir, dbDriver, activeNet, true)
 }
 
 func NewLibWalletWithDbPath(walletDataDir string, activeNet *netparams.Params) (*LibWallet, error) {
-	return newLibWallet(walletDataDir, DefaultDbDriver, activeNet)
+	return newLibWallet(walletDataDir, DefaultDbDriver, activeNet, false)
 }
 
-func newLibWallet(walletDataDir, walletDbDriver string, activeNet *netparams.Params) (*LibWallet, error) {
+func newLibWallet(walletDataDir, walletDbDriver string, activeNet *netparams.Params, listenForShutdown bool) (*LibWallet, error) {
 	errors.Separator = ":: "
 	initLogRotator(filepath.Join(walletDataDir, logFileName))
 
@@ -90,7 +90,9 @@ func newLibWallet(walletDataDir, walletDbDriver string, activeNet *netparams.Par
 		txrules.DefaultRelayFeePerKb.ToCoin(), wallet.DefaultAccountGapLimit)
 	walletLoader.SetDatabaseDriver(walletDbDriver)
 
-	go shutdownListener()
+	if listenForShutdown {
+		go shutdownListener()
+	}
 
 	lw := &LibWallet{
 		walletDataDir: walletDataDir,
