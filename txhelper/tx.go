@@ -3,6 +3,7 @@ package txhelper
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 
 	"github.com/decred/dcrd/blockchain/stake"
 	"github.com/decred/dcrd/chaincfg"
@@ -10,10 +11,42 @@ import (
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrd/wire"
+	"github.com/decred/dcrdata/txhelpers"
 	"github.com/decred/dcrwallet/wallet"
 )
 
 const BlockValid int = 1 << 0
+
+func MsgTxFeeSizeRate(transactionHex string) (msgTx *wire.MsgTx, fee dcrutil.Amount, size int, feeRate dcrutil.Amount, err error) {
+	msgTx, err = txhelpers.MsgTxFromHex(transactionHex)
+	if err != nil {
+		return
+	}
+
+	size = msgTx.SerializeSize()
+	fee, feeRate = txhelpers.TxFeeRate(msgTx)
+	return
+}
+
+func TransactionAmountAndDirection(inputTotal, outputTotal, fee int64) (amount int64, direction TransactionDirection) {
+	amountDifference := outputTotal - inputTotal
+
+	if amountDifference < 0 && float64(fee) == math.Abs(float64(amountDifference)) {
+		// transferred internally, the only real amount spent was transaction fee
+		direction = TransactionDirectionTransferred
+		amount = fee
+	} else if amountDifference > 0 {
+		// received
+		direction = TransactionDirectionReceived
+		amount = outputTotal
+	} else {
+		// sent
+		direction = TransactionDirectionSent
+		amount = inputTotal - outputTotal - fee
+	}
+
+	return
+}
 
 func DecodeTransaction(hash *chainhash.Hash, txHex string, netParams *chaincfg.Params, addressInfoFn func(string) (*AddressInfo, error)) (tx *DecodedTransaction, err error) {
 	msgTx, txFee, txSize, txFeeRate, err := MsgTxFeeSizeRate(txHex)

@@ -1,5 +1,10 @@
 package txhelper
 
+import (
+	"github.com/decred/dcrwallet/rpc/walletrpc"
+	"github.com/decred/dcrwallet/wallet"
+)
+
 var (
 	transactionDirectionNames = []string{"Sent", "Received", "Transferred", "Unclear"}
 )
@@ -75,4 +80,34 @@ type AddressInfo struct {
 	IsMine        bool
 	AccountNumber uint32
 	AccountName   string
+}
+
+func TransactionType(txType wallet.TransactionType) string {
+	switch txType {
+	case wallet.TransactionTypeCoinbase:
+		return "Coinbase"
+	case wallet.TransactionTypeTicketPurchase:
+		return "Ticket"
+	case wallet.TransactionTypeVote:
+		return "Vote"
+	case wallet.TransactionTypeRevocation:
+		return "Revocation"
+	default:
+		return "Regular"
+	}
+}
+
+func RPCTransactionType(txType walletrpc.TransactionDetails_TransactionType) string {
+	switch txType {
+	case walletrpc.TransactionDetails_COINBASE:
+		return "Coinbase"
+	case walletrpc.TransactionDetails_TICKET_PURCHASE:
+		return "Ticket"
+	case walletrpc.TransactionDetails_VOTE:
+		return "Vote"
+	case walletrpc.TransactionDetails_REVOCATION:
+		return "Revocation"
+	default:
+		return "Regular"
+	}
 }

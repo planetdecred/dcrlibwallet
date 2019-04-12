@@ -2,9 +2,44 @@ package txhelper
 
 import (
 	"fmt"
+
 	"github.com/decred/dcrd/dcrutil"
+	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrd/wire"
+	"github.com/raedahgroup/dcrlibwallet/addresshelper"
 )
+
+func makeTxOutputs(destinations []TransactionDestination) (outputs []*wire.TxOut, totalSendAmount int64, err error) {
+	for _, destination := range destinations {
+		var output *wire.TxOut
+		output, err = MakeTxOutput(destination)
+		if err != nil {
+			return
+		}
+
+		outputs = append(outputs, output)
+		totalSendAmount += output.Value
+	}
+	return
+}
+
+func MakeTxOutput(destination TransactionDestination) (*wire.TxOut, error) {
+	pkScript, err := addresshelper.PkScript(destination.Address)
+	if err != nil {
+		return nil, fmt.Errorf("address error: %s", err.Error())
+	}
+
+	amountInAtom, err := dcrutil.NewAmount(destination.Amount)
+	if err != nil {
+		return nil, fmt.Errorf("amount error: %s", err.Error())
+	}
+
+	return &wire.TxOut{
+		Value:    int64(amountInAtom),
+		Version:  txscript.DefaultScriptVersion,
+		PkScript: pkScript,
+	}, nil
+}
 
 // TxOutputsExtractMaxDestinationAddress checks the provided txDestinations
 // if there is 1 and not more than 1 recipient set to receive max amount.
