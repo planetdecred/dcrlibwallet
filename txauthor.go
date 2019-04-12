@@ -145,8 +145,8 @@ func (lw *LibWallet) BulkSendTransaction(privPass []byte, destinations []txhelpe
 	}
 
 	// create transaction outputs for all destination addresses and amounts, excluding destination for send max
-	outputs := make([]*wire.TxOut, nOutputs)
-	for i, destination := range destinations {
+	outputs := make([]*wire.TxOut, 0, nOutputs)
+	for _, destination := range destinations {
 		if !destination.SendMax {
 			output, err := txhelper.MakeTxOutput(destination)
 			if err != nil {
@@ -154,7 +154,7 @@ func (lw *LibWallet) BulkSendTransaction(privPass []byte, destinations []txhelpe
 				return nil, err
 			}
 
-			outputs[i] = output
+			outputs = append(outputs, output)
 		}
 	}
 
@@ -235,7 +235,7 @@ func (lw *LibWallet) SendFromCustomInputs(sourceAccount uint32, requiredConfirma
 		}
 	}
 
-	outputs, maxChangeDestinations, err := txhelper.PrepareTxOutputs(len(inputs), totalInputAmount, txDestinations)
+	outputs, maxChangeDestinations, err := txhelper.TxOutputsExtractMaxChangeDestination(len(inputs), totalInputAmount, txDestinations)
 	if err != nil {
 		return "", err
 	}
