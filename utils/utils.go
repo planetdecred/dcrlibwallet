@@ -6,6 +6,7 @@ import (
 
 	"github.com/decred/dcrd/hdkeychain"
 	"github.com/decred/dcrwallet/walletseed"
+	"time"
 )
 
 func NormalizeAddress(addr string, defaultPort string) (string, error) {
@@ -46,4 +47,15 @@ func DecodeBase64(base64Text string) ([]byte, error) {
 	}
 
 	return b, nil
+}
+
+// ExtractDateOrTime returns the date represented by the timestamp as a date string if the timestamp is over 24 hours ago.
+// Otherwise, the time alone is returned as a string.
+func ExtractDateOrTime(timestamp int64) string {
+	utcTime := time.Unix(timestamp, 0).UTC()
+	if time.Now().UTC().Sub(utcTime).Hours() > 24 {
+		return utcTime.Format("2006-01-02")
+	} else {
+		return utcTime.Format("15:04:05")
+	}
 }
