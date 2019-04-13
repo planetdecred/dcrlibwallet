@@ -238,6 +238,9 @@ func (lw *LibWallet) SendFromCustomInputs(sourceAccount uint32, requiredConfirma
 	unsignedTx, err := txhelper.NewUnsignedTx(inputs, txDestinations, changeDestinations, func() (address string, err error) {
 		return lw.NextAddress(int32(sourceAccount))
 	})
+	if err != nil {
+		return "", err
+	}
 
 	// serialize unsigned tx
 	var txBuf bytes.Buffer
