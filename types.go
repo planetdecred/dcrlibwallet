@@ -58,7 +58,6 @@ type Transaction struct {
 	Hash          string `storm:"id,unique"`
 	Raw           string
 	Hex           string
-	Confirmations int32
 	Fee           int64
 	Timestamp     int64
 	Type          string

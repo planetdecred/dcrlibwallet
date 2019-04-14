@@ -203,7 +203,7 @@ func (lw *LibWallet) GetTransactionRaw(txHash []byte) (*Transaction, error) {
 		return nil, err
 	}
 
-	txSummary, confirmations, blockHash, err := lw.wallet.TransactionSummary(hash)
+	txSummary, _, blockHash, err := lw.wallet.TransactionSummary(hash)
 	if err != nil {
 		log.Error(err)
 		return nil, err
@@ -215,7 +215,6 @@ func (lw *LibWallet) GetTransactionRaw(txHash []byte) (*Transaction, error) {
 		return nil, err
 	}
 
-	tx.Confirmations = confirmations
 	return tx, nil
 }
 
