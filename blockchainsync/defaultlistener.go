@@ -8,6 +8,12 @@ import (
 	"github.com/decred/dcrwallet/netparams"
 )
 
+const (
+	PeersCountUpdate  = "peers"
+	CurrentStepUpdate = "current step"
+	SyncDone          = "done"
+)
+
 type defaultSyncListener struct {
 	activeNet             *netparams.Params
 	getBestBlock          func() int32
@@ -16,7 +22,7 @@ type defaultSyncListener struct {
 	netType         string
 	showLog         bool
 	syncing         bool
-	syncInfoUpdated func(*PrivateSyncInfo)
+	syncInfoUpdated func(*PrivateSyncInfo, string)
 
 	privateSyncInfo *PrivateSyncInfo
 	headersData     *FetchHeadersData
@@ -27,7 +33,7 @@ type defaultSyncListener struct {
 }
 
 func DefaultSyncProgressListener(activeNet *netparams.Params, showLog bool, getBestBlock func() int32, getBestBlockHeight func() int64,
-	syncInfoUpdated func(*PrivateSyncInfo)) *defaultSyncListener {
+	syncInfoUpdated func(*PrivateSyncInfo, string)) *defaultSyncListener {
 
 	return &defaultSyncListener{
 		activeNet: activeNet,
@@ -51,7 +57,7 @@ func (syncListener *defaultSyncListener) OnPeerConnected(peerCount int32) {
 	syncListener.privateSyncInfo.Write(syncInfo, syncInfo.Status)
 
 	// notify interface of update
-	syncListener.syncInfoUpdated(syncListener.privateSyncInfo)
+	syncListener.syncInfoUpdated(syncListener.privateSyncInfo, PeersCountUpdate)
 
 	if syncListener.showLog && syncListener.syncing {
 		if peerCount == 1 {
@@ -68,7 +74,7 @@ func (syncListener *defaultSyncListener) OnPeerDisconnected(peerCount int32) {
 	syncListener.privateSyncInfo.Write(syncInfo, syncInfo.Status)
 
 	// notify interface of update
-	syncListener.syncInfoUpdated(syncListener.privateSyncInfo)
+	syncListener.syncInfoUpdated(syncListener.privateSyncInfo, PeersCountUpdate)
 
 	if syncListener.showLog && syncListener.syncing {
 		if peerCount == 1 {
@@ -143,7 +149,7 @@ func (syncListener *defaultSyncListener) OnFetchedHeaders(fetchedHeadersCount in
 	syncListener.privateSyncInfo.Write(syncInfo, StatusInProgress)
 
 	// notify ui of updated sync info
-	syncListener.syncInfoUpdated(syncListener.privateSyncInfo)
+	syncListener.syncInfoUpdated(syncListener.privateSyncInfo, CurrentStepUpdate)
 }
 
 func (syncListener *defaultSyncListener) OnDiscoveredAddresses(state string) {
@@ -218,7 +224,7 @@ func (syncListener *defaultSyncListener) OnRescan(rescannedThrough int32, state 
 	syncListener.privateSyncInfo.Write(syncInfo, StatusInProgress)
 
 	// notify ui of updated sync info
-	syncListener.syncInfoUpdated(syncListener.privateSyncInfo)
+	syncListener.syncInfoUpdated(syncListener.privateSyncInfo, CurrentStepUpdate)
 }
 
 func (syncListener *defaultSyncListener) OnIndexTransactions(totalIndex int32) {}
@@ -241,7 +247,7 @@ func (syncListener *defaultSyncListener) OnSynced(synced bool) {
 	}
 
 	// notify interface of update
-	syncListener.syncInfoUpdated(syncListener.privateSyncInfo)
+	syncListener.syncInfoUpdated(syncListener.privateSyncInfo, SyncDone)
 }
 
 // todo sync may not have ended
@@ -259,6 +265,6 @@ func (syncListener *defaultSyncListener) OnSyncError(code int, err error) {
 	syncListener.privateSyncInfo.Write(syncInfo, StatusError)
 
 	// notify interface of update
-	syncListener.syncInfoUpdated(syncListener.privateSyncInfo)
+	syncListener.syncInfoUpdated(syncListener.privateSyncInfo, SyncDone)
 }
 

@@ -56,12 +56,12 @@ func updateFetchHeadersProgress(syncInfo *info, fetchHeadersData *FetchHeadersDa
 	syncInfo.HeadersFetchProgress = int32(math.Round(headersFetchingRate * 100))
 }
 
-func updateAddressDiscoveryProgress(privateSyncInfo *PrivateSyncInfo, showLog bool, syncInfoUpdated func(*PrivateSyncInfo)) chan bool {
+func updateAddressDiscoveryProgress(privateSyncInfo *PrivateSyncInfo, showLog bool, syncInfoUpdated func(*PrivateSyncInfo, string)) chan bool {
 	updateSyncInfo := func(update func(*info)) {
 		syncInfo := privateSyncInfo.Read()
 		update(syncInfo)
 		privateSyncInfo.Write(syncInfo, StatusInProgress)
-		syncInfoUpdated(privateSyncInfo)
+		syncInfoUpdated(privateSyncInfo, CurrentStepUpdate)
 	}
 
 	// update sync info current step
