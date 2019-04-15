@@ -8,10 +8,12 @@ import (
 	"github.com/decred/dcrwallet/netparams"
 )
 
+type Op uint8
+
 const (
-	PeersCountUpdate  = "peers"
-	CurrentStepUpdate = "current step"
-	SyncDone          = "done"
+	PeersCountUpdate Op = iota
+	CurrentStepUpdate
+	SyncDone
 )
 
 type defaultSyncListener struct {
@@ -22,10 +24,10 @@ type defaultSyncListener struct {
 	netType         string
 	showLog         bool
 	syncing         bool
-	syncInfoUpdated func(*PrivateSyncInfo, string)
+	syncInfoUpdated func(*SyncInfo, Op)
 
-	privateSyncInfo *PrivateSyncInfo
-	headersData     *FetchHeadersData
+	syncInfo    *SyncInfo
+	headersData *FetchHeadersData
 
 	addressDiscoveryCompleted chan bool
 
@@ -33,7 +35,7 @@ type defaultSyncListener struct {
 }
 
 func DefaultSyncProgressListener(activeNet *netparams.Params, showLog bool, getBestBlock func() int32, getBestBlockTimestamp func() int64,
-	syncInfoUpdated func(*PrivateSyncInfo, string)) *defaultSyncListener {
+	syncInfoUpdated func(*SyncInfo, Op)) *defaultSyncListener {
 
 	return &defaultSyncListener{
 		activeNet:             activeNet,
@@ -45,7 +47,7 @@ func DefaultSyncProgressListener(activeNet *netparams.Params, showLog bool, getB
 		syncing:         true,
 		syncInfoUpdated: syncInfoUpdated,
 
-		privateSyncInfo: NewPrivateInfo(),
+		syncInfo: InitSyncInfo(),
 		headersData: &FetchHeadersData{
 			BeginFetchTimeStamp: -1,
 		},
@@ -54,12 +56,12 @@ func DefaultSyncProgressListener(activeNet *netparams.Params, showLog bool, getB
 
 // following functions are used to implement ProgressListener interface
 func (syncListener *defaultSyncListener) OnPeerConnected(peerCount int32) {
-	syncInfo := syncListener.privateSyncInfo.Read()
+	syncInfo := syncListener.syncInfo.Read()
 	syncInfo.ConnectedPeers = peerCount
-	syncListener.privateSyncInfo.Write(syncInfo, syncInfo.Status)
+	syncListener.syncInfo.Write(syncInfo, syncInfo.Status)
 
 	// notify interface of update
-	syncListener.syncInfoUpdated(syncListener.privateSyncInfo, PeersCountUpdate)
+	syncListener.syncInfoUpdated(syncListener.syncInfo, PeersCountUpdate)
 
 	if syncListener.showLog && syncListener.syncing {
 		if peerCount == 1 {
@@ -71,12 +73,12 @@ func (syncListener *defaultSyncListener) OnPeerConnected(peerCount int32) {
 }
 
 func (syncListener *defaultSyncListener) OnPeerDisconnected(peerCount int32) {
-	syncInfo := syncListener.privateSyncInfo.Read()
+	syncInfo := syncListener.syncInfo.Read()
 	syncInfo.ConnectedPeers = peerCount
-	syncListener.privateSyncInfo.Write(syncInfo, syncInfo.Status)
+	syncListener.syncInfo.Write(syncInfo, syncInfo.Status)
 
 	// notify interface of update
-	syncListener.syncInfoUpdated(syncListener.privateSyncInfo, PeersCountUpdate)
+	syncListener.syncInfoUpdated(syncListener.syncInfo, PeersCountUpdate)
 
 	if syncListener.showLog && syncListener.syncing {
 		if peerCount == 1 {
@@ -91,12 +93,12 @@ func (syncListener *defaultSyncListener) OnFetchMissingCFilters(missingCFiltersS
 }
 
 func (syncListener *defaultSyncListener) OnFetchedHeaders(fetchedHeadersCount int32, lastHeaderTime int64, state string) {
-	syncInfo := syncListener.privateSyncInfo.Read()
+	readableSyncInfo := syncListener.syncInfo.Read()
 
-	if !syncListener.syncing || syncInfo.HeadersFetchTimeTaken != -1 {
+	if !syncListener.syncing || readableSyncInfo.HeadersFetchTimeTaken != -1 {
 		// Ignore this call because this function gets called for each peer and
 		// we'd want to ignore those calls as far as the wallet is synced (i.e. !syncListener.syncing)
-		// or headers are completely fetched (i.e. syncInfo.HeadersFetchTimeTaken != -1)
+		// or headers are completely fetched (i.e. readableSyncInfo.HeadersFetchTimeTaken != -1)
 		return
 	}
 
@@ -114,11 +116,11 @@ func (syncListener *defaultSyncListener) OnFetchedHeaders(fetchedHeadersCount in
 		syncListener.headersData.StartHeaderHeight = bestBlock
 		syncListener.headersData.CurrentHeaderHeight = syncListener.headersData.StartHeaderHeight
 
-		syncInfo.TotalHeadersToFetch = int32(estimatedFinalBlockHeight) - syncListener.headersData.StartHeaderHeight
-		syncInfo.CurrentStep = 1
+		readableSyncInfo.TotalHeadersToFetch = int32(estimatedFinalBlockHeight) - syncListener.headersData.StartHeaderHeight
+		readableSyncInfo.CurrentStep = 1
 
 		if syncListener.showLog {
-			fmt.Printf("Step 1 of 3 - fetching %d block headers.\n", syncInfo.TotalHeadersToFetch)
+			fmt.Printf("Step 1 of 3 - fetching %d block headers.\n", readableSyncInfo.TotalHeadersToFetch)
 		}
 
 	case PROGRESS:
@@ -127,18 +129,18 @@ func (syncListener *defaultSyncListener) OnFetchedHeaders(fetchedHeadersCount in
 			LastHeaderTime:            lastHeaderTime,
 			EstimatedFinalBlockHeight: estimatedFinalBlockHeight,
 		}
-		updateFetchHeadersProgress(syncInfo, syncListener.headersData, headersFetchReport)
+		updateFetchHeadersProgress(readableSyncInfo, syncListener.headersData, headersFetchReport)
 
 		if syncListener.showLog {
 			fmt.Printf("Syncing %d%%, %s remaining, fetched %d of %d block headers, %s behind.\n",
-				syncInfo.TotalSyncProgress, syncInfo.TotalTimeRemaining,
-				syncInfo.FetchedHeadersCount, syncInfo.TotalHeadersToFetch,
-				syncInfo.DaysBehind)
+				readableSyncInfo.TotalSyncProgress, readableSyncInfo.TotalTimeRemaining,
+				readableSyncInfo.FetchedHeadersCount, readableSyncInfo.TotalHeadersToFetch,
+				readableSyncInfo.DaysBehind)
 		}
 
 	case FINISH:
-		syncInfo.HeadersFetchTimeTaken = time.Now().Unix() - syncListener.headersData.BeginFetchTimeStamp
-		syncInfo.TotalHeadersToFetch = -1
+		readableSyncInfo.HeadersFetchTimeTaken = time.Now().Unix() - syncListener.headersData.BeginFetchTimeStamp
+		readableSyncInfo.TotalHeadersToFetch = -1
 
 		syncListener.headersData.StartHeaderHeight = -1
 		syncListener.headersData.CurrentHeaderHeight = -1
@@ -148,10 +150,10 @@ func (syncListener *defaultSyncListener) OnFetchedHeaders(fetchedHeadersCount in
 		}
 	}
 
-	syncListener.privateSyncInfo.Write(syncInfo, StatusInProgress)
+	syncListener.syncInfo.Write(readableSyncInfo, StatusInProgress)
 
 	// notify ui of updated sync info
-	syncListener.syncInfoUpdated(syncListener.privateSyncInfo, CurrentStepUpdate)
+	syncListener.syncInfoUpdated(syncListener.syncInfo, CurrentStepUpdate)
 }
 
 func (syncListener *defaultSyncListener) OnDiscoveredAddresses(state string) {
@@ -159,7 +161,7 @@ func (syncListener *defaultSyncListener) OnDiscoveredAddresses(state string) {
 		if syncListener.showLog && syncListener.syncing {
 			fmt.Println("Step 2 of 3 - discovering used addresses.")
 		}
-		syncListener.addressDiscoveryCompleted = updateAddressDiscoveryProgress(syncListener.privateSyncInfo, syncListener.showLog,
+		syncListener.addressDiscoveryCompleted = updateAddressDiscoveryProgress(syncListener.syncInfo, syncListener.showLog,
 			syncListener.syncInfoUpdated)
 	} else {
 		close(syncListener.addressDiscoveryCompleted)
@@ -173,7 +175,7 @@ func (syncListener *defaultSyncListener) OnRescan(rescannedThrough int32, state 
 		syncListener.addressDiscoveryCompleted = nil
 	}
 
-	syncInfo := syncListener.privateSyncInfo.Read()
+	syncInfo := syncListener.syncInfo.Read()
 
 	if syncInfo.TotalHeadersToFetch == -1 {
 		syncInfo.TotalHeadersToFetch = syncListener.getBestBlock()
@@ -223,10 +225,10 @@ func (syncListener *defaultSyncListener) OnRescan(rescannedThrough int32, state 
 		}
 	}
 
-	syncListener.privateSyncInfo.Write(syncInfo, StatusInProgress)
+	syncListener.syncInfo.Write(syncInfo, StatusInProgress)
 
 	// notify ui of updated sync info
-	syncListener.syncInfoUpdated(syncListener.privateSyncInfo, CurrentStepUpdate)
+	syncListener.syncInfoUpdated(syncListener.syncInfo, CurrentStepUpdate)
 }
 
 func (syncListener *defaultSyncListener) OnIndexTransactions(totalIndex int32) {}
@@ -237,19 +239,19 @@ func (syncListener *defaultSyncListener) OnSynced(synced bool) {
 		return
 	}
 
-	syncInfo := syncListener.privateSyncInfo.Read()
+	syncInfo := syncListener.syncInfo.Read()
 	syncInfo.Done = true
 	syncListener.syncing = false
 
 	if !synced {
 		syncInfo.Error = "Sync failed or canceled"
-		syncListener.privateSyncInfo.Write(syncInfo, StatusError)
+		syncListener.syncInfo.Write(syncInfo, StatusError)
 	} else {
-		syncListener.privateSyncInfo.Write(syncInfo, StatusSuccess)
+		syncListener.syncInfo.Write(syncInfo, StatusSuccess)
 	}
 
 	// notify interface of update
-	syncListener.syncInfoUpdated(syncListener.privateSyncInfo, SyncDone)
+	syncListener.syncInfoUpdated(syncListener.syncInfo, SyncDone)
 }
 
 // todo sync may not have ended
@@ -259,13 +261,13 @@ func (syncListener *defaultSyncListener) OnSyncError(code ErrorCode, err error) 
 		return
 	}
 
-	syncInfo := syncListener.privateSyncInfo.Read()
+	syncInfo := syncListener.syncInfo.Read()
 	syncInfo.Done = true
 	syncListener.syncing = false
 
 	syncInfo.Error = fmt.Sprintf("Code: %d, Error: %s", code, err.Error())
-	syncListener.privateSyncInfo.Write(syncInfo, StatusError)
+	syncListener.syncInfo.Write(syncInfo, StatusError)
 
 	// notify interface of update
-	syncListener.syncInfoUpdated(syncListener.privateSyncInfo, SyncDone)
+	syncListener.syncInfoUpdated(syncListener.syncInfo, SyncDone)
 }

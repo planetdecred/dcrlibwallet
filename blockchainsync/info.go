@@ -2,9 +2,9 @@ package blockchainsync
 
 import "sync"
 
-// PrivateSyncInfo holds information about a sync op in private variables
+// SyncInfo holds information about a sync op in private variables
 // to prevent reading/writing the values directly during a sync op.
-type PrivateSyncInfo struct {
+type SyncInfo struct {
 	sync.RWMutex
 
 	status         Status
@@ -29,17 +29,17 @@ type PrivateSyncInfo struct {
 	currentRescanHeight int32
 }
 
-// NewPrivateInfo returns a new PrivateSyncInfo pointer with default values set
-func NewPrivateInfo() *PrivateSyncInfo {
-	return &PrivateSyncInfo{
+// InitSyncInfo returns a new SyncInfo pointer with default values set
+func InitSyncInfo() *SyncInfo {
+	return &SyncInfo{
 		headersFetchTimeTaken: -1,
 		totalDiscoveryTime:    -1,
 	}
 }
 
-// info holds information about an ongoing sync op for display on the different UIs.
-// Not to be used directly but via `PrivateSyncInfo.Read()`
-type info struct {
+// readableSyncInfo holds information about an ongoing sync op for display on the different UIs.
+// Not to be used directly but via `SyncInfo.Read()`
+type readableSyncInfo struct {
 	Status         Status
 	ConnectedPeers int32
 	Error          string
@@ -63,53 +63,53 @@ type info struct {
 }
 
 // Read returns the current sync op info from private variables after locking the mutex for reading
-func (privateInfo *PrivateSyncInfo) Read() *info {
-	privateInfo.RLock()
-	defer privateInfo.RUnlock()
+func (syncInfo *SyncInfo) Read() *readableSyncInfo {
+	syncInfo.RLock()
+	defer syncInfo.RUnlock()
 
-	return &info{
-		privateInfo.status,
-		privateInfo.connectedPeers,
-		privateInfo.error,
-		privateInfo.done,
-		privateInfo.currentStep,
-		privateInfo.totalSyncProgress,
-		privateInfo.totalTimeRemaining,
-		privateInfo.totalHeadersToFetch,
-		privateInfo.daysBehind,
-		privateInfo.fetchedHeadersCount,
-		privateInfo.headersFetchProgress,
-		privateInfo.headersFetchTimeTaken,
-		privateInfo.addressDiscoveryProgress,
-		privateInfo.totalDiscoveryTime,
-		privateInfo.rescanProgress,
-		privateInfo.currentRescanHeight,
+	return &readableSyncInfo{
+		syncInfo.status,
+		syncInfo.connectedPeers,
+		syncInfo.error,
+		syncInfo.done,
+		syncInfo.currentStep,
+		syncInfo.totalSyncProgress,
+		syncInfo.totalTimeRemaining,
+		syncInfo.totalHeadersToFetch,
+		syncInfo.daysBehind,
+		syncInfo.fetchedHeadersCount,
+		syncInfo.headersFetchProgress,
+		syncInfo.headersFetchTimeTaken,
+		syncInfo.addressDiscoveryProgress,
+		syncInfo.totalDiscoveryTime,
+		syncInfo.rescanProgress,
+		syncInfo.currentRescanHeight,
 	}
 }
 
 // Write saves info for ongoing sync op to private variables after locking mutex for writing
-func (privateInfo *PrivateSyncInfo) Write(info *info, status Status) {
-	privateInfo.Lock()
-	defer privateInfo.Unlock()
+func (syncInfo *SyncInfo) Write(info *readableSyncInfo, status Status) {
+	syncInfo.Lock()
+	defer syncInfo.Unlock()
 
-	privateInfo.status = status
-	privateInfo.connectedPeers = info.ConnectedPeers
-	privateInfo.error = info.Error
-	privateInfo.done = info.Done
+	syncInfo.status = status
+	syncInfo.connectedPeers = info.ConnectedPeers
+	syncInfo.error = info.Error
+	syncInfo.done = info.Done
 
-	privateInfo.currentStep = info.CurrentStep
-	privateInfo.totalSyncProgress = info.TotalSyncProgress
-	privateInfo.totalTimeRemaining = info.TotalTimeRemaining
+	syncInfo.currentStep = info.CurrentStep
+	syncInfo.totalSyncProgress = info.TotalSyncProgress
+	syncInfo.totalTimeRemaining = info.TotalTimeRemaining
 
-	privateInfo.totalHeadersToFetch = info.TotalHeadersToFetch
-	privateInfo.daysBehind = info.DaysBehind
-	privateInfo.fetchedHeadersCount = info.FetchedHeadersCount
-	privateInfo.headersFetchProgress = info.HeadersFetchProgress
-	privateInfo.headersFetchTimeTaken = info.HeadersFetchTimeTaken
+	syncInfo.totalHeadersToFetch = info.TotalHeadersToFetch
+	syncInfo.daysBehind = info.DaysBehind
+	syncInfo.fetchedHeadersCount = info.FetchedHeadersCount
+	syncInfo.headersFetchProgress = info.HeadersFetchProgress
+	syncInfo.headersFetchTimeTaken = info.HeadersFetchTimeTaken
 
-	privateInfo.addressDiscoveryProgress = info.AddressDiscoveryProgress
-	privateInfo.totalDiscoveryTime = info.TotalDiscoveryTime
+	syncInfo.addressDiscoveryProgress = info.AddressDiscoveryProgress
+	syncInfo.totalDiscoveryTime = info.TotalDiscoveryTime
 
-	privateInfo.rescanProgress = info.RescanProgress
-	privateInfo.currentRescanHeight = info.CurrentRescanHeight
+	syncInfo.rescanProgress = info.RescanProgress
+	syncInfo.currentRescanHeight = info.CurrentRescanHeight
 }

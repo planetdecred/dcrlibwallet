@@ -20,7 +20,7 @@ const (
 	DiscoveryPercentage = 0.8
 )
 
-func updateFetchHeadersProgress(syncInfo *info, fetchHeadersData *FetchHeadersData, report FetchHeadersProgressReport) {
+func updateFetchHeadersProgress(readableSyncInfo *readableSyncInfo, fetchHeadersData *FetchHeadersData, report FetchHeadersProgressReport) {
 	// increment current block height value
 	fetchHeadersData.CurrentHeaderHeight += report.FetchedHeadersCount
 
@@ -44,34 +44,34 @@ func updateFetchHeadersProgress(syncInfo *info, fetchHeadersData *FetchHeadersDa
 	totalSyncProgress := (float64(timeTakenSoFar) / float64(estimatedTotalSyncTime)) * 100.0
 
 	// update total progress info
-	syncInfo.TotalSyncProgress = int32(math.Round(totalSyncProgress))
-	syncInfo.TotalTimeRemaining = calculateTotalTimeRemaining(totalTimeRemaining)
+	readableSyncInfo.TotalSyncProgress = int32(math.Round(totalSyncProgress))
+	readableSyncInfo.TotalTimeRemaining = calculateTotalTimeRemaining(totalTimeRemaining)
 
 	// update headers statistics
-	syncInfo.TotalHeadersToFetch = syncEndPoint
-	syncInfo.DaysBehind = calculateDaysBehind(report.LastHeaderTime)
+	readableSyncInfo.TotalHeadersToFetch = syncEndPoint
+	readableSyncInfo.DaysBehind = calculateDaysBehind(report.LastHeaderTime)
 
-	// update headers progress info
-	syncInfo.FetchedHeadersCount = totalFetchedHeaders
-	syncInfo.HeadersFetchProgress = int32(math.Round(headersFetchingRate * 100))
+	// update headers progress sync info
+	readableSyncInfo.FetchedHeadersCount = totalFetchedHeaders
+	readableSyncInfo.HeadersFetchProgress = int32(math.Round(headersFetchingRate * 100))
 }
 
-func updateAddressDiscoveryProgress(privateSyncInfo *PrivateSyncInfo, showLog bool, syncInfoUpdated func(*PrivateSyncInfo, string)) chan bool {
-	updateSyncInfo := func(update func(*info)) {
-		syncInfo := privateSyncInfo.Read()
-		update(syncInfo)
-		privateSyncInfo.Write(syncInfo, StatusInProgress)
-		syncInfoUpdated(privateSyncInfo, CurrentStepUpdate)
+func updateAddressDiscoveryProgress(syncInfo *SyncInfo, showLog bool, syncInfoUpdated func(*SyncInfo, Op)) chan bool {
+	updateSyncInfo := func(update func(*readableSyncInfo)) {
+		readableSyncInfo := syncInfo.Read()
+		update(readableSyncInfo)
+		syncInfo.Write(readableSyncInfo, StatusInProgress)
+		syncInfoUpdated(syncInfo, CurrentStepUpdate)
 	}
 
 	// update sync info current step
-	updateSyncInfo(func(syncInfo *info) {
+	updateSyncInfo(func(syncInfo *readableSyncInfo) {
 		syncInfo.CurrentStep = 2
 	})
 
 	// these values will be used every second to calculate the total sync progress
 	addressDiscoveryStartTime := time.Now().Unix()
-	totalHeadersFetchTime := float64(privateSyncInfo.Read().HeadersFetchTimeTaken)
+	totalHeadersFetchTime := float64(syncInfo.Read().HeadersFetchTimeTaken)
 	estimatedRescanTime := totalHeadersFetchTime * RescanPercentage
 	estimatedDiscoveryTime := totalHeadersFetchTime * DiscoveryPercentage
 
@@ -109,7 +109,7 @@ func updateAddressDiscoveryProgress(privateSyncInfo *PrivateSyncInfo, showLog bo
 				totalTimeRemaining := remainingAccountDiscoveryTime + estimatedRescanTime
 
 				// update address discovery progress, total progress and total time remaining
-				updateSyncInfo(func(syncInfo *info) {
+				updateSyncInfo(func(syncInfo *readableSyncInfo) {
 					syncInfo.AddressDiscoveryProgress = int32(math.Round(discoveryProgress))
 					syncInfo.TotalSyncProgress = int32(math.Round(totalProgress))
 					syncInfo.TotalTimeRemaining = calculateTotalTimeRemaining(totalTimeRemaining)
@@ -131,7 +131,7 @@ func updateAddressDiscoveryProgress(privateSyncInfo *PrivateSyncInfo, showLog bo
 
 				// update final discovery time taken
 				addressDiscoveryFinishTime := time.Now().Unix()
-				updateSyncInfo(func(syncInfo *info) {
+				updateSyncInfo(func(syncInfo *readableSyncInfo) {
 					syncInfo.TotalDiscoveryTime = addressDiscoveryFinishTime - addressDiscoveryStartTime
 
 					if showLog && !syncInfo.Done {
