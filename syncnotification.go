@@ -1,9 +1,9 @@
 package dcrlibwallet
 
 import (
-	"github.com/decred/dcrwallet/wallet"
-	"github.com/decred/dcrwallet/spv"
 	"github.com/decred/dcrwallet/chain"
+	"github.com/decred/dcrwallet/spv"
+	"github.com/decred/dcrwallet/wallet"
 	"github.com/raedahgroup/dcrlibwallet/blockchainsync"
 )
 

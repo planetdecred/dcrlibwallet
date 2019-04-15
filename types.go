@@ -55,17 +55,17 @@ type UnsignedTransaction struct {
 }
 
 type Transaction struct {
-	Hash          string `storm:"id,unique"`
-	Raw           string
-	Hex           string
-	Fee           int64
-	Timestamp     int64
-	Type          string
-	Amount        int64
-	BlockHeight   int32
-	Direction     txhelper.TransactionDirection
-	Debits        []*TransactionDebit
-	Credits       []*TransactionCredit
+	Hash        string `storm:"id,unique"`
+	Raw         string
+	Hex         string
+	Fee         int64
+	Timestamp   int64
+	Type        string
+	Amount      int64
+	BlockHeight int32
+	Direction   txhelper.TransactionDirection
+	Debits      []*TransactionDebit
+	Credits     []*TransactionCredit
 }
 
 type TransactionDebit struct {

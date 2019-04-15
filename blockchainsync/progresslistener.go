@@ -9,12 +9,11 @@ const (
 	PROGRESS = "progress"
 
 	// Sync Error Codes
-	UnexpectedError  ErrorCode = iota
+	UnexpectedError ErrorCode = iota
 	ContextCanceled
 	DeadlineExceeded
 	InvalidPeerAddress
 )
-
 
 type ProgressListener interface {
 	OnPeerConnected(peerCount int32)

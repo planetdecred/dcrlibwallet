@@ -13,8 +13,8 @@ import (
 	"github.com/decred/dcrwallet/p2p"
 	"github.com/decred/dcrwallet/spv"
 	"github.com/decred/dcrwallet/wallet"
-	"github.com/raedahgroup/dcrlibwallet/utils"
 	"github.com/raedahgroup/dcrlibwallet/blockchainsync"
+	"github.com/raedahgroup/dcrlibwallet/utils"
 )
 
 type syncData struct {

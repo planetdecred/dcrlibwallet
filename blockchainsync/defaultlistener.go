@@ -2,8 +2,8 @@ package blockchainsync
 
 import (
 	"fmt"
-	"time"
 	"math"
+	"time"
 
 	"github.com/decred/dcrwallet/netparams"
 )
@@ -36,8 +36,8 @@ func DefaultSyncProgressListener(activeNet *netparams.Params, showLog bool, getB
 	syncInfoUpdated func(*PrivateSyncInfo, string)) *defaultSyncListener {
 
 	return &defaultSyncListener{
-		activeNet: activeNet,
-		getBestBlock: getBestBlock,
+		activeNet:             activeNet,
+		getBestBlock:          getBestBlock,
 		getBestBlockTimestamp: getBestBlockTimestamp,
 
 		netType:         activeNet.Params.Name,
@@ -269,4 +269,3 @@ func (syncListener *defaultSyncListener) OnSyncError(code ErrorCode, err error) 
 	// notify interface of update
 	syncListener.syncInfoUpdated(syncListener.privateSyncInfo, SyncDone)
 }
-
