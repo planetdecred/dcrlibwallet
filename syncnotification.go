@@ -108,7 +108,7 @@ func (lw *LibWallet) generalSyncNotificationCallbacks(loadedWallet *wallet.Walle
 	}
 }
 
-func (lw *LibWallet) notifySyncError(code int, err error) {
+func (lw *LibWallet) notifySyncError(code blockchainsync.ErrorCode, err error) {
 	for _, syncResponse := range lw.syncProgressListeners {
 		syncResponse.OnSyncError(code, err)
 	}

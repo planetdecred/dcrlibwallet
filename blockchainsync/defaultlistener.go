@@ -32,11 +32,13 @@ type defaultSyncListener struct {
 	rescanStartTime int64
 }
 
-func DefaultSyncProgressListener(activeNet *netparams.Params, showLog bool, getBestBlock func() int32, getBestBlockHeight func() int64,
+func DefaultSyncProgressListener(activeNet *netparams.Params, showLog bool, getBestBlock func() int32, getBestBlockTimestamp func() int64,
 	syncInfoUpdated func(*PrivateSyncInfo, string)) *defaultSyncListener {
 
 	return &defaultSyncListener{
 		activeNet: activeNet,
+		getBestBlock: getBestBlock,
+		getBestBlockTimestamp: getBestBlockTimestamp,
 
 		netType:         activeNet.Params.Name,
 		showLog:         showLog,
@@ -251,7 +253,7 @@ func (syncListener *defaultSyncListener) OnSynced(synced bool) {
 }
 
 // todo sync may not have ended
-func (syncListener *defaultSyncListener) OnSyncError(code int, err error) {
+func (syncListener *defaultSyncListener) OnSyncError(code ErrorCode, err error) {
 	if !syncListener.syncing {
 		// ignore subsequent updates
 		return

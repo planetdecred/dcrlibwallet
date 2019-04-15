@@ -45,7 +45,7 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 		for _, address := range addresses {
 			peerAddress, err := utils.NormalizeAddress(address, lw.activeNet.Params.DefaultPort)
 			if err != nil {
-				lw.notifySyncError(3, errors.E("SPV peer address invalid: %v", err))
+				lw.notifySyncError(blockchainsync.InvalidPeerAddress, errors.E("SPV peer address invalid: %v", err))
 			} else {
 				validPeerAddresses = append(validPeerAddresses, peerAddress)
 			}
@@ -73,11 +73,11 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 		err := syncer.Run(ctx)
 		if err != nil {
 			if err == context.Canceled {
-				lw.notifySyncError(1, errors.E("SPV synchronization canceled: %v", err))
+				lw.notifySyncError(blockchainsync.ContextCanceled, errors.E("SPV synchronization canceled: %v", err))
 			} else if err == context.DeadlineExceeded {
-				lw.notifySyncError(2, errors.E("SPV synchronization deadline exceeded: %v", err))
+				lw.notifySyncError(blockchainsync.DeadlineExceeded, errors.E("SPV synchronization deadline exceeded: %v", err))
 			} else {
-				lw.notifySyncError(-1, err)
+				lw.notifySyncError(blockchainsync.UnexpectedError, err)
 			}
 		}
 	}()
@@ -106,21 +106,21 @@ func (lw *LibWallet) RpcSync(networkAddress string, username string, password st
 	lw.walletLoader.SetNetworkBackend(networkBackend)
 	loadedWallet.SetNetworkBackend(networkBackend)
 
-	// notify blockchainsync progress listeners that connected peer count will not be reported because we're using rpc
+	// notify sync progress listeners that connected peer count will not be reported because we're using rpc
 	for _, syncProgressListener := range lw.syncProgressListeners {
 		syncProgressListener.OnPeerDisconnected(-1)
 	}
 
-	// syncer.Run uses a wait group to block the thread until blockchainsync completes or an error occurs
+	// syncer.Run uses a wait group to block the thread until sync completes or an error occurs
 	go func() {
 		err := syncer.Run(ctx, true)
 		if err != nil {
 			if err == context.Canceled {
-				lw.notifySyncError(1, errors.E("SPV synchronization canceled: %v", err))
+				lw.notifySyncError(blockchainsync.ContextCanceled, errors.E("RPC synchronization canceled: %v", err))
 			} else if err == context.DeadlineExceeded {
-				lw.notifySyncError(2, errors.E("SPV synchronization deadline exceeded: %v", err))
+				lw.notifySyncError(blockchainsync.DeadlineExceeded, errors.E("RPC synchronization deadline exceeded: %v", err))
 			} else {
-				lw.notifySyncError(-1, err)
+				lw.notifySyncError(blockchainsync.UnexpectedError, err)
 			}
 		}
 	}()
