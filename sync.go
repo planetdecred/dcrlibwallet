@@ -14,17 +14,18 @@ import (
 	"github.com/decred/dcrwallet/spv"
 	"github.com/decred/dcrwallet/wallet"
 	"github.com/raedahgroup/dcrlibwallet/utils"
+	"github.com/raedahgroup/dcrlibwallet/blockchainsync"
 )
 
 type syncData struct {
 	mu                    sync.Mutex
 	rpcClient             *chain.RPCClient
 	cancelSync            context.CancelFunc
-	syncProgressListeners []SyncProgressListener
+	syncProgressListeners []blockchainsync.ProgressListener
 	rescanning            bool
 }
 
-func (lw *LibWallet) AddSyncProgressListener(syncProgressListener SyncProgressListener) {
+func (lw *LibWallet) AddSyncProgressListener(syncProgressListener blockchainsync.ProgressListener) {
 	lw.syncProgressListeners = append(lw.syncProgressListeners, syncProgressListener)
 }
 
@@ -67,7 +68,7 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 	ctx, cancel := contextWithShutdownCancel(context.Background())
 	lw.cancelSync = cancel
 
-	// syncer.Run uses a wait group to block the thread until sync completes or an error occurs
+	// syncer.Run uses a wait group to block the thread until blockchainsync completes or an error occurs
 	go func() {
 		err := syncer.Run(ctx)
 		if err != nil {
@@ -105,12 +106,12 @@ func (lw *LibWallet) RpcSync(networkAddress string, username string, password st
 	lw.walletLoader.SetNetworkBackend(networkBackend)
 	loadedWallet.SetNetworkBackend(networkBackend)
 
-	// notify sync progress listeners that connected peer count will not be reported because we're using rpc
+	// notify blockchainsync progress listeners that connected peer count will not be reported because we're using rpc
 	for _, syncProgressListener := range lw.syncProgressListeners {
 		syncProgressListener.OnPeerDisconnected(-1)
 	}
 
-	// syncer.Run uses a wait group to block the thread until sync completes or an error occurs
+	// syncer.Run uses a wait group to block the thread until blockchainsync completes or an error occurs
 	go func() {
 		err := syncer.Run(ctx, true)
 		if err != nil {
@@ -221,18 +222,18 @@ func (lw *LibWallet) RescanBlocks() error {
 			}
 			totalHeight += p.ScannedThrough
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnRescan(p.ScannedThrough, PROGRESS)
+				syncProgressListener.OnRescan(p.ScannedThrough, blockchainsync.PROGRESS)
 			}
 		}
 
 		select {
 		case <-ctx.Done():
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnRescan(totalHeight, PROGRESS)
+				syncProgressListener.OnRescan(totalHeight, blockchainsync.PROGRESS)
 			}
 		default:
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnRescan(totalHeight, FINISH)
+				syncProgressListener.OnRescan(totalHeight, blockchainsync.FINISH)
 			}
 		}
 	}()
