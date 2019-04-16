@@ -2,6 +2,14 @@ package blockchainsync
 
 import "sync"
 
+type SyncStep uint8
+
+const (
+	FetchingBlockHeaders SyncStep = iota
+	DiscoveringUsedAddresses
+	ScanningBlockHeaders
+)
+
 // SyncInfo holds information about a sync op in private variables
 // to prevent reading/writing the values directly during a sync op.
 type SyncInfo struct {
@@ -12,7 +20,7 @@ type SyncInfo struct {
 	error          string
 	done           bool
 
-	currentStep        int
+	currentStep        SyncStep
 	totalSyncProgress  int32
 	totalTimeRemaining string
 
@@ -45,7 +53,7 @@ type readableSyncInfo struct {
 	Error          string
 	Done           bool
 
-	CurrentStep        int
+	CurrentStep        SyncStep
 	TotalSyncProgress  int32
 	TotalTimeRemaining string
 

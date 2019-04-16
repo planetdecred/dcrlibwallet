@@ -66,7 +66,7 @@ func updateAddressDiscoveryProgress(syncInfo *SyncInfo, showLog bool, syncInfoUp
 
 	// update sync info current step
 	updateSyncInfo(func(syncInfo *readableSyncInfo) {
-		syncInfo.CurrentStep = 2
+		syncInfo.CurrentStep = DiscoveringUsedAddresses
 	})
 
 	// these values will be used every second to calculate the total sync progress

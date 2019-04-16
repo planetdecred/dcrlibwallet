@@ -117,7 +117,7 @@ func (syncListener *defaultSyncListener) OnFetchedHeaders(fetchedHeadersCount in
 		syncListener.headersData.CurrentHeaderHeight = syncListener.headersData.StartHeaderHeight
 
 		readableSyncInfo.TotalHeadersToFetch = int32(estimatedFinalBlockHeight) - syncListener.headersData.StartHeaderHeight
-		readableSyncInfo.CurrentStep = 1
+		readableSyncInfo.CurrentStep = FetchingBlockHeaders
 
 		if syncListener.showLog {
 			fmt.Printf("Step 1 of 3 - fetching %d block headers.\n", readableSyncInfo.TotalHeadersToFetch)
@@ -185,10 +185,10 @@ func (syncListener *defaultSyncListener) OnRescan(rescannedThrough int32, state 
 	case START:
 		syncListener.rescanStartTime = time.Now().Unix()
 		syncInfo.TotalHeadersToFetch = syncListener.getBestBlock()
-		syncInfo.CurrentStep = 3
+		syncInfo.CurrentStep = ScanningBlockHeaders
 
 		if syncListener.showLog && syncListener.syncing {
-			fmt.Println("Step 3 of 3 - Rescanning blocks")
+			fmt.Println("Step 3 of 3 - Scanning block headers")
 		}
 
 	case PROGRESS:
