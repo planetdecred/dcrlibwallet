@@ -49,25 +49,25 @@ func InitSyncInfo() *SyncInfo {
 // Not to be used directly but via `SyncInfo.Read()`
 type readableSyncInfo struct {
 	Status         Status
-	ConnectedPeers int32
-	Error          string
-	Done           bool
+	ConnectedPeers int32  `json:"connectedPeers"`
+	Error          string `json:"error"`
+	Done           bool   `json:"done"`
 
-	CurrentStep        SyncStep
-	TotalSyncProgress  int32
-	TotalTimeRemaining string
+	CurrentStep        SyncStep `json:"currentStep"`
+	TotalSyncProgress  int32    `json:"totalSyncProgress"`
+	TotalTimeRemaining string   `json:"totalTimeRemaining"`
 
-	TotalHeadersToFetch   int32
-	DaysBehind            string
-	FetchedHeadersCount   int32
-	HeadersFetchProgress  int32
-	HeadersFetchTimeTaken int64
+	TotalHeadersToFetch   int32  `json:"totalHeadersToFetch"`
+	DaysBehind            string `json:"daysBehind"`
+	FetchedHeadersCount   int32  `json:"fetchedHeadersCount"`
+	HeadersFetchProgress  int32  `json:"headersFetchProgress"`
+	HeadersFetchTimeTaken int64  `json:"headersFetchTimeTaken"`
 
-	AddressDiscoveryProgress int32
-	TotalDiscoveryTime       int64
+	AddressDiscoveryProgress int32 `json:"addressDiscoveryProgress"`
+	TotalDiscoveryTime       int64 `json:"totalDiscoveryTime"`
 
-	RescanProgress      int32
-	CurrentRescanHeight int32
+	RescanProgress      int32 `json:"rescanProgress"`
+	CurrentRescanHeight int32 `json:"currentRescanHeight"`
 }
 
 // Read returns the current sync op info from private variables after locking the mutex for reading
