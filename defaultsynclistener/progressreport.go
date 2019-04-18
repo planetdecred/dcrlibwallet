@@ -54,7 +54,7 @@ func (report *ProgressReport) Update(status SyncStatus, updateProgressReport fun
 	report.Lock()
 
 	report.progressReport = progressReport{
-		latestReport.Status,
+		status,
 		latestReport.ConnectedPeers,
 		latestReport.Error,
 		latestReport.Done,
