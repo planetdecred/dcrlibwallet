@@ -20,6 +20,7 @@ import (
 	"github.com/decred/dcrwallet/wallet/txrules"
 	"github.com/raedahgroup/dcrlibwallet/addresshelper"
 	"github.com/raedahgroup/dcrlibwallet/utils"
+	bolt "go.etcd.io/bbolt"
 )
 
 var (
@@ -68,7 +69,11 @@ func newLibWallet(walletDataDir, walletDbDriver string, activeNet *netparams.Par
 	txDB, err := storm.Open(filepath.Join(walletDataDir, txDbName))
 	if err != nil {
 		log.Errorf("Error opening tx database for wallet: %s", err.Error())
-		return nil, err
+		if err == bolt.ErrTimeout {
+			// timeout error occurs if storm fails to acquire a lock on the database file
+			return nil, errors.E(errors.Locked, "tx index database is in use by another process")
+		}
+		return nil, fmt.Errorf("error opening tx index database: %s", err.Error())
 	}
 
 	// init database for saving/reading transaction objects
