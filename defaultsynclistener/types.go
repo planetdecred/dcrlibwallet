@@ -3,10 +3,9 @@ package defaultsynclistener
 type SyncStatus uint8
 
 const (
-	SyncStatusNotStarted SyncStatus = iota
+	SyncStatusInProgress SyncStatus = iota
 	SyncStatusSuccess
 	SyncStatusError
-	SyncStatusInProgress
 )
 
 type SyncOp uint8
