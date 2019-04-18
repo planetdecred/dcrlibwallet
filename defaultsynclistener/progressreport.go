@@ -2,7 +2,7 @@ package defaultsynclistener
 
 import "sync"
 
-// progressReport is used by `defaultSyncListener` to store relevant progress information about an ongoing sync operation.
+// progressReport is used by `DefaultSyncListener` to store relevant progress information about an ongoing sync operation.
 // Not to be used directly but via `ProgressReport.Read()`
 type progressReport struct {
 	Status         SyncStatus

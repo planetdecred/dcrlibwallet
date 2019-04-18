@@ -8,7 +8,7 @@ import (
 	"github.com/raedahgroup/dcrlibwallet"
 )
 
-func (syncListener *defaultSyncListener) OnRescan(rescannedThrough int32, state string) {
+func (syncListener *DefaultSyncListener) OnRescan(rescannedThrough int32, state string) {
 	if syncListener.addressDiscoveryCompleted != nil {
 		close(syncListener.addressDiscoveryCompleted)
 		syncListener.addressDiscoveryCompleted = nil

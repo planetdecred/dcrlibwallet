@@ -8,7 +8,7 @@ import (
 	"github.com/raedahgroup/dcrlibwallet"
 )
 
-func (syncListener *defaultSyncListener) OnDiscoveredAddresses(state string) {
+func (syncListener *DefaultSyncListener) OnDiscoveredAddresses(state string) {
 	if state == dcrlibwallet.SyncStateStart && syncListener.addressDiscoveryCompleted == nil {
 		if syncListener.showLog {
 			fmt.Println("Step 2 of 3 - discovering used addresses.")
@@ -20,7 +20,7 @@ func (syncListener *defaultSyncListener) OnDiscoveredAddresses(state string) {
 	}
 }
 
-func (syncListener *defaultSyncListener) updateAddressDiscoveryProgress() {
+func (syncListener *DefaultSyncListener) updateAddressDiscoveryProgress() {
 	// update progress report with info of current step
 	syncListener.progressReport.Update(SyncStatusInProgress, func(report *progressReport) {
 		report.CurrentStep = DiscoveringUsedAddresses

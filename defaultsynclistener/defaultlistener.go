@@ -5,7 +5,7 @@ import (
 	"github.com/raedahgroup/dcrlibwallet"
 )
 
-type defaultSyncListener struct {
+type DefaultSyncListener struct {
 	netType               string
 	getBestBlock          func() int32
 	getBestBlockTimestamp func() int64
@@ -32,9 +32,9 @@ type defaultSyncListener struct {
 // This estimated progress report is made available to the sync initiator via the `syncProgressUpdated` function.
 // If `showLog` is set to true, DefaultSyncProgressListener also prints calculated progress report to stdout.
 func DefaultSyncProgressListener(netType string, showLog bool, getBestBlock func() int32, getBestBlockTimestamp func() int64,
-	syncInfoUpdated func(*ProgressReport, SyncOp)) *defaultSyncListener {
+	syncInfoUpdated func(*ProgressReport, SyncOp)) *DefaultSyncListener {
 
-	return &defaultSyncListener{
+	return &DefaultSyncListener{
 		netType:               netType,
 		getBestBlock:          getBestBlock,
 		getBestBlockTimestamp: getBestBlockTimestamp,
@@ -53,12 +53,12 @@ func DefaultSyncProgressListener(netType string, showLog bool, getBestBlock func
 
 // Following methods are to satisfy the `dcrlibwallet.SyncProgressListener` interface.
 // Other interface methods are implemented in the different *progress.go files in this package.
-func (syncListener *defaultSyncListener) OnFetchMissingCFilters(missingCFiltersStart, missingCFiltersEnd int32, state string) {
+func (syncListener *DefaultSyncListener) OnFetchMissingCFilters(missingCFiltersStart, missingCFiltersEnd int32, state string) {
 }
 
-func (syncListener *defaultSyncListener) OnIndexTransactions(totalIndex int32) {}
+func (syncListener *DefaultSyncListener) OnIndexTransactions(totalIndex int32) {}
 
-func (syncListener *defaultSyncListener) OnSynced(synced bool) {
+func (syncListener *DefaultSyncListener) OnSynced(synced bool) {
 	if !syncListener.syncing {
 		// ignore subsequent updates
 		return
@@ -83,7 +83,7 @@ func (syncListener *defaultSyncListener) OnSynced(synced bool) {
 }
 
 // todo sync may not have ended
-func (syncListener *defaultSyncListener) OnSyncError(code dcrlibwallet.SyncErrorCode, err error) {
+func (syncListener *DefaultSyncListener) OnSyncError(code dcrlibwallet.SyncErrorCode, err error) {
 	if !syncListener.syncing {
 		// ignore subsequent updates
 		return

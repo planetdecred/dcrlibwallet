@@ -2,15 +2,15 @@ package defaultsynclistener
 
 import "fmt"
 
-func (syncListener *defaultSyncListener) OnPeerConnected(peerCount int32) {
+func (syncListener *DefaultSyncListener) OnPeerConnected(peerCount int32) {
 	syncListener.handlePeerCountUpdate(peerCount)
 }
 
-func (syncListener *defaultSyncListener) OnPeerDisconnected(peerCount int32) {
+func (syncListener *DefaultSyncListener) OnPeerDisconnected(peerCount int32) {
 	syncListener.handlePeerCountUpdate(peerCount)
 }
 
-func (syncListener *defaultSyncListener) handlePeerCountUpdate(peerCount int32) {
+func (syncListener *DefaultSyncListener) handlePeerCountUpdate(peerCount int32) {
 	// update peer count but maintain current sync status
 	currentSyncStatus := syncListener.progressReport.Read().Status
 	syncListener.progressReport.Update(currentSyncStatus, func(report *progressReport) {

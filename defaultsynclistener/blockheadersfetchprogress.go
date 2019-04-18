@@ -8,7 +8,7 @@ import (
 	"math"
 )
 
-func (syncListener *defaultSyncListener) OnFetchedHeaders(fetchedHeadersCount int32, lastHeaderTime int64, state string) {
+func (syncListener *DefaultSyncListener) OnFetchedHeaders(fetchedHeadersCount int32, lastHeaderTime int64, state string) {
 	if !syncListener.syncing || syncListener.headersFetchTimeSpent != -1 {
 		// Ignore this call because this function gets called for each peer and
 		// we'd want to ignore those calls as far as the wallet is synced (i.e. !syncListener.syncing)
