@@ -66,15 +66,17 @@ func (syncListener *defaultSyncListener) OnSynced(synced bool) {
 
 	syncListener.syncing = false
 	syncListener.showLog = false // stop showing logs after sync completes
-	syncListener.progressReport.Update(func(report *progressReport) {
-		report.Done = true
-		if !synced {
+
+	if synced {
+		syncListener.progressReport.Update(SyncStatusError, func(report *progressReport) {
+			report.Done = true
 			report.Error = "Sync failed or canceled"
-			report.Status = SyncStatusError
-		} else {
-			report.Status = SyncStatusSuccess
-		}
-	})
+		})
+	} else {
+		syncListener.progressReport.Update(SyncStatusSuccess, func(report *progressReport) {
+			report.Done = true
+		})
+	}
 
 	// notify sync initiator of update
 	syncListener.syncProgressUpdated(syncListener.progressReport, SyncDone)
@@ -89,9 +91,9 @@ func (syncListener *defaultSyncListener) OnSyncError(code dcrlibwallet.SyncError
 
 	syncListener.syncing = false
 	syncListener.showLog = false // stop showing logs after sync completes
-	syncListener.progressReport.Update(func(report *progressReport) {
+	syncListener.progressReport.Update(SyncStatusError, func(report *progressReport) {
+		report.Done = true
 		report.Error = fmt.Sprintf("Code: %d, Error: %s", code, err.Error())
-		report.Status = SyncStatusError
 	})
 
 	// notify sync initiator of update
