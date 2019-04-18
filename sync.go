@@ -13,7 +13,6 @@ import (
 	"github.com/decred/dcrwallet/p2p"
 	"github.com/decred/dcrwallet/spv"
 	"github.com/decred/dcrwallet/wallet"
-	"github.com/raedahgroup/dcrlibwallet/blockchainsync"
 	"github.com/raedahgroup/dcrlibwallet/utils"
 )
 
@@ -21,11 +20,11 @@ type syncData struct {
 	mu                    sync.Mutex
 	rpcClient             *chain.RPCClient
 	cancelSync            context.CancelFunc
-	syncProgressListeners []blockchainsync.ProgressListener
+	syncProgressListeners []SyncProgressListener
 	rescanning            bool
 }
 
-func (lw *LibWallet) AddSyncProgressListener(syncProgressListener blockchainsync.ProgressListener) {
+func (lw *LibWallet) AddSyncProgressListener(syncProgressListener SyncProgressListener) {
 	lw.syncProgressListeners = append(lw.syncProgressListeners, syncProgressListener)
 }
 
@@ -45,7 +44,7 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 		for _, address := range addresses {
 			peerAddress, err := utils.NormalizeAddress(address, lw.activeNet.Params.DefaultPort)
 			if err != nil {
-				lw.notifySyncError(blockchainsync.InvalidPeerAddress, errors.E("SPV peer address invalid: %v", err))
+				lw.notifySyncError(ErrorCodeInvalidPeerAddress, errors.E("SPV peer address invalid: %v", err))
 			} else {
 				validPeerAddresses = append(validPeerAddresses, peerAddress)
 			}
@@ -68,16 +67,16 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 	ctx, cancel := contextWithShutdownCancel(context.Background())
 	lw.cancelSync = cancel
 
-	// syncer.Run uses a wait group to block the thread until blockchainsync completes or an error occurs
+	// syncer.Run uses a wait group to block the thread until defaultsynclistener completes or an error occurs
 	go func() {
 		err := syncer.Run(ctx)
 		if err != nil {
 			if err == context.Canceled {
-				lw.notifySyncError(blockchainsync.ContextCanceled, errors.E("SPV synchronization canceled: %v", err))
+				lw.notifySyncError(ErrorCodeContextCanceled, errors.E("SPV synchronization canceled: %v", err))
 			} else if err == context.DeadlineExceeded {
-				lw.notifySyncError(blockchainsync.DeadlineExceeded, errors.E("SPV synchronization deadline exceeded: %v", err))
+				lw.notifySyncError(ErrorCodeDeadlineExceeded, errors.E("SPV synchronization deadline exceeded: %v", err))
 			} else {
-				lw.notifySyncError(blockchainsync.UnexpectedError, err)
+				lw.notifySyncError(ErrorCodeUnexpectedError, err)
 			}
 		}
 	}()
@@ -116,11 +115,11 @@ func (lw *LibWallet) RpcSync(networkAddress string, username string, password st
 		err := syncer.Run(ctx, true)
 		if err != nil {
 			if err == context.Canceled {
-				lw.notifySyncError(blockchainsync.ContextCanceled, errors.E("RPC synchronization canceled: %v", err))
+				lw.notifySyncError(ErrorCodeContextCanceled, errors.E("RPC synchronization canceled: %v", err))
 			} else if err == context.DeadlineExceeded {
-				lw.notifySyncError(blockchainsync.DeadlineExceeded, errors.E("RPC synchronization deadline exceeded: %v", err))
+				lw.notifySyncError(ErrorCodeDeadlineExceeded, errors.E("RPC synchronization deadline exceeded: %v", err))
 			} else {
-				lw.notifySyncError(blockchainsync.UnexpectedError, err)
+				lw.notifySyncError(ErrorCodeUnexpectedError, err)
 			}
 		}
 	}()
@@ -222,18 +221,18 @@ func (lw *LibWallet) RescanBlocks() error {
 			}
 			totalHeight += p.ScannedThrough
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnRescan(p.ScannedThrough, blockchainsync.PROGRESS)
+				syncProgressListener.OnRescan(p.ScannedThrough, SyncStateProgress)
 			}
 		}
 
 		select {
 		case <-ctx.Done():
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnRescan(totalHeight, blockchainsync.PROGRESS)
+				syncProgressListener.OnRescan(totalHeight, SyncStateProgress)
 			}
 		default:
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnRescan(totalHeight, blockchainsync.FINISH)
+				syncProgressListener.OnRescan(totalHeight, SyncStateFinish)
 			}
 		}
 	}()

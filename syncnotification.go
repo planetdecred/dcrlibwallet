@@ -4,7 +4,12 @@ import (
 	"github.com/decred/dcrwallet/chain"
 	"github.com/decred/dcrwallet/spv"
 	"github.com/decred/dcrwallet/wallet"
-	"github.com/raedahgroup/dcrlibwallet/blockchainsync"
+)
+
+const (
+	SyncStateStart    = "start"
+	SyncStateProgress = "progress"
+	SyncStateFinish   = "finish"
 )
 
 func (lw *LibWallet) spvSyncNotificationCallbacks(loadedWallet *wallet.Wallet) *spv.Notifications {
@@ -38,7 +43,7 @@ func (lw *LibWallet) spvSyncNotificationCallbacks(loadedWallet *wallet.Wallet) *
 func (lw *LibWallet) generalSyncNotificationCallbacks(loadedWallet *wallet.Wallet) *chain.Notifications {
 	return &chain.Notifications{
 		Synced: func(sync bool) {
-			// begin indexing transactions after blockchainsync is completed,
+			// begin indexing transactions after defaultsynclistener is completed,
 			// syncProgressListeners.OnSynced() will be invoked after transactions are indexed
 			lw.IndexTransactions(-1, -1, func() {
 				for _, syncResponse := range lw.syncProgressListeners {
@@ -48,42 +53,42 @@ func (lw *LibWallet) generalSyncNotificationCallbacks(loadedWallet *wallet.Walle
 		},
 		FetchMissingCFiltersStarted: func() {
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnFetchMissingCFilters(0, 0, blockchainsync.START)
+				syncProgressListener.OnFetchMissingCFilters(0, 0, SyncStateStart)
 			}
 		},
 		FetchMissingCFiltersProgress: func(missingCFitlersStart, missingCFitlersEnd int32) {
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnFetchMissingCFilters(missingCFitlersStart, missingCFitlersEnd, blockchainsync.PROGRESS)
+				syncProgressListener.OnFetchMissingCFilters(missingCFitlersStart, missingCFitlersEnd, SyncStateProgress)
 			}
 		},
 		FetchMissingCFiltersFinished: func() {
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnFetchMissingCFilters(0, 0, blockchainsync.FINISH)
+				syncProgressListener.OnFetchMissingCFilters(0, 0, SyncStateFinish)
 			}
 		},
 		FetchHeadersStarted: func() {
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnFetchedHeaders(0, 0, blockchainsync.START)
+				syncProgressListener.OnFetchedHeaders(0, 0, SyncStateStart)
 			}
 		},
 		FetchHeadersProgress: func(fetchedHeadersCount int32, lastHeaderTime int64) {
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnFetchedHeaders(fetchedHeadersCount, lastHeaderTime, blockchainsync.PROGRESS)
+				syncProgressListener.OnFetchedHeaders(fetchedHeadersCount, lastHeaderTime, SyncStateProgress)
 			}
 		},
 		FetchHeadersFinished: func() {
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnFetchedHeaders(0, 0, blockchainsync.FINISH)
+				syncProgressListener.OnFetchedHeaders(0, 0, SyncStateFinish)
 			}
 		},
 		DiscoverAddressesStarted: func() {
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnDiscoveredAddresses(blockchainsync.START)
+				syncProgressListener.OnDiscoveredAddresses(SyncStateStart)
 			}
 		},
 		DiscoverAddressesFinished: func() {
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnDiscoveredAddresses(blockchainsync.FINISH)
+				syncProgressListener.OnDiscoveredAddresses(SyncStateFinish)
 			}
 
 			if !loadedWallet.Locked() {
@@ -92,23 +97,23 @@ func (lw *LibWallet) generalSyncNotificationCallbacks(loadedWallet *wallet.Walle
 		},
 		RescanStarted: func() {
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnRescan(0, blockchainsync.START)
+				syncProgressListener.OnRescan(0, SyncStateStart)
 			}
 		},
 		RescanProgress: func(rescannedThrough int32) {
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnRescan(rescannedThrough, blockchainsync.PROGRESS)
+				syncProgressListener.OnRescan(rescannedThrough, SyncStateProgress)
 			}
 		},
 		RescanFinished: func() {
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnRescan(0, blockchainsync.FINISH)
+				syncProgressListener.OnRescan(0, SyncStateFinish)
 			}
 		},
 	}
 }
 
-func (lw *LibWallet) notifySyncError(code blockchainsync.ErrorCode, err error) {
+func (lw *LibWallet) notifySyncError(code SyncErrorCode, err error) {
 	for _, syncResponse := range lw.syncProgressListeners {
 		syncResponse.OnSyncError(code, err)
 	}

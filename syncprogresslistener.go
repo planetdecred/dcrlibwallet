@@ -1,21 +1,15 @@
-package blockchainsync
+package dcrlibwallet
 
-type ErrorCode uint8
+type SyncErrorCode uint8
 
 const (
-	// Sync States
-	START    = "start"
-	FINISH   = "finish"
-	PROGRESS = "progress"
-
-	// Sync Error Codes
-	UnexpectedError ErrorCode = iota
-	ContextCanceled
-	DeadlineExceeded
-	InvalidPeerAddress
+	ErrorCodeUnexpectedError SyncErrorCode = iota
+	ErrorCodeContextCanceled
+	ErrorCodeDeadlineExceeded
+	ErrorCodeInvalidPeerAddress
 )
 
-type ProgressListener interface {
+type SyncProgressListener interface {
 	OnPeerConnected(peerCount int32)
 	OnPeerDisconnected(peerCount int32)
 	OnFetchMissingCFilters(missingCFiltersStart, missingCFiltersEnd int32, state string)
@@ -24,5 +18,5 @@ type ProgressListener interface {
 	OnRescan(rescannedThrough int32, state string)
 	OnIndexTransactions(totalIndex int32)
 	OnSynced(synced bool)
-	OnSyncError(code ErrorCode, err error)
+	OnSyncError(code SyncErrorCode, err error)
 }
