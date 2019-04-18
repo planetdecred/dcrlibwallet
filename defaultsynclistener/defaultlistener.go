@@ -68,13 +68,13 @@ func (syncListener *defaultSyncListener) OnSynced(synced bool) {
 	syncListener.showLog = false // stop showing logs after sync completes
 
 	if synced {
+		syncListener.progressReport.Update(SyncStatusSuccess, func(report *progressReport) {
+			report.Done = true
+		})
+	} else {
 		syncListener.progressReport.Update(SyncStatusError, func(report *progressReport) {
 			report.Done = true
 			report.Error = "Sync failed or canceled"
-		})
-	} else {
-		syncListener.progressReport.Update(SyncStatusSuccess, func(report *progressReport) {
-			report.Done = true
 		})
 	}
 
