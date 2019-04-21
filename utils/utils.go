@@ -59,3 +59,7 @@ func ExtractDateOrTime(timestamp int64) string {
 		return utcTime.Format("15:04:05")
 	}
 }
+
+func FormatUTCTime(timestamp int64) string {
+	return time.Unix(timestamp, 0).UTC().Format("2006-01-02 15:04:05")
+}
