@@ -224,15 +224,8 @@ func (lw *LibWallet) GetTransactionRaw(txHash []byte) (*txhelper.Transaction, er
 	return tx, nil
 }
 
-func (lw *LibWallet) GetTransactions(limit int32) (string, error) {
-	var transactions []txhelper.Transaction
-
-	query := lw.txDB.Select().OrderBy("Timestamp").Reverse()
-	if limit > 0 {
-		query = query.Limit(int(limit))
-	}
-
-	err := query.Find(&transactions)
+func (lw *LibWallet) GetTransactions(offset, limit int32) (string, error) {
+	transactions, err := lw.GetTransactionsRaw(offset, limit)
 	if err != nil {
 		return "", nil
 	}
@@ -243,6 +236,19 @@ func (lw *LibWallet) GetTransactions(limit int32) (string, error) {
 	}
 
 	return string(jsonEncodedTransactions), nil
+}
+
+func (lw *LibWallet) GetTransactionsRaw(offset, limit int32) (transactions []*txhelper.Transaction, err error) {
+	query := lw.txDB.Select().OrderBy("Timestamp").Reverse()
+	if offset > 0 {
+		query = query.Skip(int(offset))
+	}
+	if limit > 0 {
+		query = query.Limit(int(limit))
+	}
+
+	err = query.Find(&transactions)
+	return
 }
 
 func (lw *LibWallet) DecodeTransaction(txHash []byte) (string, error) {
