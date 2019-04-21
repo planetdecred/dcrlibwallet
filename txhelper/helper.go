@@ -3,8 +3,8 @@ package txhelper
 import (
 	"math"
 
-	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrd/dcrutil"
+	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrdata/txhelpers"
 )
 

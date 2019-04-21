@@ -299,13 +299,13 @@ func (lw *LibWallet) parseTxSummary(txSummary *wallet.TransactionSummary, blockH
 	}
 
 	walletTx := &txhelper.WalletTx{
-		BlockHeight:   blockHeight,
-		Timestamp:     txSummary.Timestamp,
-		RawTx:         fmt.Sprintf("%x", txSummary.Transaction),
-		Confirmations: confirmations,
-		Inputs:        walletInputs,
+		BlockHeight:       blockHeight,
+		Timestamp:         txSummary.Timestamp,
+		RawTx:             fmt.Sprintf("%x", txSummary.Transaction),
+		Confirmations:     confirmations,
+		Inputs:            walletInputs,
 		TotalOutputAmount: totalOutputAmount,
-		TotalInputAmount: totalInputAmount,
+		TotalInputAmount:  totalInputAmount,
 	}
 
 	return txhelper.DecodeTransaction(walletTx, lw.activeNet.Params)
