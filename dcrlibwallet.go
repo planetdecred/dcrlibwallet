@@ -19,6 +19,7 @@ import (
 	"github.com/decred/dcrwallet/wallet"
 	"github.com/decred/dcrwallet/wallet/txrules"
 	"github.com/raedahgroup/dcrlibwallet/addresshelper"
+	"github.com/raedahgroup/dcrlibwallet/txhelper"
 	"github.com/raedahgroup/dcrlibwallet/utils"
 	"go.etcd.io/bbolt"
 )
@@ -73,7 +74,7 @@ func newLibWallet(walletDataDir, walletDbDriver string, activeNet *netparams.Par
 	}
 
 	// init database for saving/reading transaction objects
-	err = txDB.Init(&Transaction{})
+	err = txDB.Init(&txhelper.Transaction{})
 	if err != nil {
 		log.Errorf("Error initializing tx database for wallet: %s", err.Error())
 		return nil, err
