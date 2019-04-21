@@ -69,23 +69,23 @@ func DecodeTransaction(walletTx *WalletTx, netParams *chaincfg.Params) (*Transac
 	}
 
 	return &Transaction{
-		Hash:           msgTx.TxHash().String(),
-		Hex: 			walletTx.RawTx,
-		Timestamp:      walletTx.Timestamp,
-		BlockHeight:    walletTx.BlockHeight,
-		Type:           FormatTransactionType(txType),
+		Hash:        msgTx.TxHash().String(),
+		Hex:         walletTx.RawTx,
+		Timestamp:   walletTx.Timestamp,
+		BlockHeight: walletTx.BlockHeight,
+		Type:        FormatTransactionType(txType),
 
-		Version:        int32(msgTx.Version),
-		LockTime:       int32(msgTx.LockTime),
-		Expiry:         int32(msgTx.Expiry),
-		Fee:            int64(txFee),
-		FeeRate:        int64(txFeeRate),
-		Size:           txSize,
+		Version:  int32(msgTx.Version),
+		LockTime: int32(msgTx.LockTime),
+		Expiry:   int32(msgTx.Expiry),
+		Fee:      int64(txFee),
+		FeeRate:  int64(txFeeRate),
+		Size:     txSize,
 
-		Direction:      direction,
-		Amount:         amount,
-		Inputs:         inputs,
-		Outputs:        outputs,
+		Direction: direction,
+		Amount:    amount,
+		Inputs:    inputs,
+		Outputs:   outputs,
 
 		VoteVersion:    int32(ssGenVersion),
 		LastBlockValid: lastBlockValid,
@@ -125,9 +125,9 @@ func decodeTxOutputs(mtx *wire.MsgTx, netParams *chaincfg.Params) (outputs []*Tx
 
 	for i, txOut := range mtx.TxOut {
 		output := &TxOutput{
-			Index:      int32(i),
-			Amount:      txOut.Value,
-			Version:    int32(txOut.Version),
+			Index:   int32(i),
+			Amount:  txOut.Value,
+			Version: int32(txOut.Version),
 		}
 
 		if (txType == stake.TxTypeSStx) && (stake.IsStakeSubmissionTxOut(i)) {

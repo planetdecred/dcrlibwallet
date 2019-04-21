@@ -52,10 +52,10 @@ type Transaction struct {
 	FeeRate  int64
 	Size     int
 
-	Direction   TransactionDirection
-	Amount      int64
-	Inputs      []*TxInput
-	Outputs     []*TxOutput
+	Direction TransactionDirection
+	Amount    int64
+	Inputs    []*TxInput
+	Outputs   []*TxOutput
 
 	// Vote Info
 	VoteVersion    int32
@@ -72,25 +72,25 @@ type TxInput struct {
 }
 
 type WalletInput struct {
-	Index            int32
+	Index           int32
 	PreviousAccount int32
 	AccountName     string
 }
 
 type TxOutput struct {
-	Index    int32
-	Amount   int64
+	Index      int32
+	Amount     int64
 	Version    int32
 	ScriptType string
-	Address string
+	Address    string
 }
 
 type WalletTx struct {
-	RawTx     string
-	Timestamp int64
+	RawTx         string
+	Timestamp     int64
 	BlockHeight   int32
 	Confirmations int32
-	Inputs    []*WalletInput
+	Inputs        []*WalletInput
 }
 
 func FormatTransactionType(txType wallet.TransactionType) string {
