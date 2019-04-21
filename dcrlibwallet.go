@@ -30,10 +30,6 @@ var (
 )
 
 const (
-	BucketTxInfo   = "TxIndexInfo"
-	KeyEndBlock    = "EndBlock"
-	MaxReOrgBlocks = 6
-
 	logFileName = "dcrlibwallet.log"
 	txDbName    = "tx.db"
 )

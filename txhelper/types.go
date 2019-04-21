@@ -1,7 +1,6 @@
 package txhelper
 
 import (
-	"github.com/decred/dcrwallet/rpc/walletrpc"
 	"github.com/decred/dcrwallet/wallet"
 )
 
@@ -39,50 +38,62 @@ type TransactionDestination struct {
 	SendMax bool
 }
 
-type DecodedTransaction struct {
-	Hash     string
-	Type     string
+type Transaction struct {
+	Hash        string `storm:"id,unique"`
+	Hex         string
+	Timestamp   int64
+	BlockHeight int32
+	Type        string
+
 	Version  int32
 	LockTime int32
 	Expiry   int32
 	Fee      int64
 	FeeRate  int64
 	Size     int
-	Inputs   []*DecodedInput
-	Outputs  []*DecodedOutput
 
-	//Vote Info
+	Direction   TransactionDirection
+	Amount      int64
+	Inputs      []*TxInput
+	Outputs     []*TxOutput
+
+	// Vote Info
 	VoteVersion    int32
 	LastBlockValid bool
 	VoteBits       string
 }
 
-type DecodedInput struct {
+type TxInput struct {
 	PreviousTransactionHash  string
 	PreviousTransactionIndex int32
 	PreviousOutpoint         string
 	AmountIn                 int64
+	*WalletInput
 }
 
-type DecodedOutput struct {
-	Index      int32
-	Value      int64
-	Internal   bool
+type WalletInput struct {
+	Index            int32
+	PreviousAccount int32
+	AccountName     string
+}
+
+type TxOutput struct {
+	Index    int32
+	Amount   int64
 	Version    int32
 	ScriptType string
-	Addresses  []*AddressInfo
+	Address string
 }
 
-// AddressInfo holds information about an address
-// If the address belongs to the querying wallet, IsMine will be true and the AccountNumber and AccountName values will be populated
-type AddressInfo struct {
-	Address       string
-	IsMine        bool
-	AccountNumber uint32
-	AccountName   string
+type WalletTx struct {
+	RawTx     string
+	Timestamp int64
+	BlockHeight   int32
+	Confirmations int32
+	Inputs    []*WalletInput
 }
 
-func TransactionType(txType wallet.TransactionType) string {
+func FormatTransactionType(txType wallet.TransactionType) string {
 	switch txType {
 	case wallet.TransactionTypeCoinbase:
 		return "Coinbase"
@@ -91,21 +102,6 @@ func TransactionType(txType wallet.TransactionType) string {
 	case wallet.TransactionTypeVote:
 		return "Vote"
 	case wallet.TransactionTypeRevocation:
-		return "Revocation"
-	default:
-		return "Regular"
-	}
-}
-
-func RPCTransactionType(txType walletrpc.TransactionDetails_TransactionType) string {
-	switch txType {
-	case walletrpc.TransactionDetails_COINBASE:
-		return "Coinbase"
-	case walletrpc.TransactionDetails_TICKET_PURCHASE:
-		return "Ticket"
-	case walletrpc.TransactionDetails_VOTE:
-		return "Vote"
-	case walletrpc.TransactionDetails_REVOCATION:
 		return "Revocation"
 	default:
 		return "Regular"

@@ -2,7 +2,6 @@ package dcrlibwallet
 
 import (
 	"github.com/decred/dcrwallet/wallet"
-	"github.com/raedahgroup/dcrlibwallet/txhelper"
 )
 
 type Account struct {
@@ -52,35 +51,6 @@ type UnsignedTransaction struct {
 	ChangeIndex               int
 	TotalOutputAmount         int64
 	TotalPreviousOutputAmount int64
-}
-
-type Transaction struct {
-	Hash        string `storm:"id,unique"`
-	Raw         string
-	Hex         string
-	Fee         int64
-	Timestamp   int64
-	Type        string
-	Amount      int64
-	BlockHeight int32
-	Direction   txhelper.TransactionDirection
-	Debits      []*TransactionDebit
-	Credits     []*TransactionCredit
-}
-
-type TransactionDebit struct {
-	Index           int32
-	PreviousAccount int32
-	PreviousAmount  int64
-	AccountName     string
-}
-
-type TransactionCredit struct {
-	Index    int32
-	Account  int32
-	Internal bool
-	Amount   int64
-	Address  string
 }
 
 type PurchaseTicketsRequest struct {

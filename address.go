@@ -3,8 +3,16 @@ package dcrlibwallet
 import (
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/raedahgroup/dcrlibwallet/addresshelper"
-	"github.com/raedahgroup/dcrlibwallet/txhelper"
 )
+
+// AddressInfo holds information about an address
+// If the address belongs to the querying wallet, IsMine will be true and the AccountNumber and AccountName values will be populated
+type AddressInfo struct {
+	Address       string
+	IsMine        bool
+	AccountNumber uint32
+	AccountName   string
+}
 
 func (lw *LibWallet) IsAddressValid(address string) bool {
 	_, err := addresshelper.DecodeForNetwork(address, lw.activeNet.Params)
@@ -33,14 +41,14 @@ func (lw *LibWallet) AccountOfAddress(address string) string {
 	return lw.AccountName(info.Account())
 }
 
-func (lw *LibWallet) AddressInfo(address string) (*txhelper.AddressInfo, error) {
+func (lw *LibWallet) AddressInfo(address string) (*AddressInfo, error) {
 	addr, err := dcrutil.DecodeAddress(address)
 	if err != nil {
 		log.Error(err)
 		return nil, err
 	}
 
-	addressInfo := &txhelper.AddressInfo{
+	addressInfo := &AddressInfo{
 		Address: address,
 	}
 

@@ -17,6 +17,12 @@ type TransactionListener interface {
 	OnBlockAttached(height int32, timestamp int64)
 }
 
+const (
+	BucketTxInfo   = "TxIndexInfo"
+	KeyEndBlock    = "EndBlock"
+	MaxReOrgBlocks = 6
+)
+
 func (lw *LibWallet) IndexTransactions(startBlockHeight int32, endBlockHeight int32, afterIndexing func()) error {
 	ctx, _ := contextWithShutdownCancel(context.Background())
 
@@ -91,7 +97,7 @@ func (lw *LibWallet) IndexTransactions(startBlockHeight int32, endBlockHeight in
 
 	defer func() {
 		afterIndexing()
-		count, err := lw.txDB.Count(&Transaction{})
+		count, err := lw.txDB.Count(&txhelper.Transaction{})
 		if err != nil {
 			log.Errorf("Count tx error :%v", err)
 			return
@@ -104,7 +110,7 @@ func (lw *LibWallet) IndexTransactions(startBlockHeight int32, endBlockHeight in
 }
 
 func (lw *LibWallet) GetTransactionsInBlockRange(ctx context.Context, startBlock, endBlock *wallet.BlockIdentifier) (
-	transactions []*Transaction, err error) {
+	transactions []*txhelper.Transaction, err error) {
 
 	rangeFn := func(block *wallet.Block) (bool, error) {
 		for _, transaction := range block.Transactions {
@@ -196,7 +202,7 @@ func (lw *LibWallet) GetTransaction(txHash []byte) (string, error) {
 	return string(result), nil
 }
 
-func (lw *LibWallet) GetTransactionRaw(txHash []byte) (*Transaction, error) {
+func (lw *LibWallet) GetTransactionRaw(txHash []byte) (*txhelper.Transaction, error) {
 	hash, err := chainhash.NewHash(txHash)
 	if err != nil {
 		log.Error(err)
@@ -219,7 +225,7 @@ func (lw *LibWallet) GetTransactionRaw(txHash []byte) (*Transaction, error) {
 }
 
 func (lw *LibWallet) GetTransactions(limit int32) (string, error) {
-	var transactions []Transaction
+	var transactions []txhelper.Transaction
 
 	query := lw.txDB.Select().OrderBy("Timestamp").Reverse()
 	if limit > 0 {
@@ -246,13 +252,13 @@ func (lw *LibWallet) DecodeTransaction(txHash []byte) (string, error) {
 		return "", err
 	}
 
-	txSummary, _, _, err := lw.wallet.TransactionSummary(hash)
+	txSummary, _, blockHash, err := lw.wallet.TransactionSummary(hash)
 	if err != nil {
 		log.Error(err)
 		return "", err
 	}
 
-	tx, err := txhelper.DecodeTransaction(hash, fmt.Sprintf("%x", txSummary.Transaction), lw.activeNet.Params, lw.AddressInfo)
+	tx, err := lw.parseTxSummary(txSummary, blockHash)
 	if err != nil {
 		log.Error(err)
 		return "", err
@@ -262,60 +268,42 @@ func (lw *LibWallet) DecodeTransaction(txHash []byte) (string, error) {
 	return string(result), nil
 }
 
-func (lw *LibWallet) parseTxSummary(txSummary *wallet.TransactionSummary, blockHash *chainhash.Hash) (*Transaction, error) {
-	var inputTotal int64
-	var outputTotal int64
+func (lw *LibWallet) parseTxSummary(txSummary *wallet.TransactionSummary, blockHash *chainhash.Hash) (
+	*txhelper.Transaction, error) {
 
-	credits := make([]*TransactionCredit, len(txSummary.MyOutputs))
-	for index, credit := range txSummary.MyOutputs {
-		outputTotal += int64(credit.Amount)
-		credits[index] = &TransactionCredit{
-			Index:    int32(credit.Index),
-			Account:  int32(credit.Account),
-			Internal: credit.Internal,
-			Amount:   int64(credit.Amount),
-			Address:  credit.Address.String()}
-	}
-
-	debits := make([]*TransactionDebit, len(txSummary.MyInputs))
-	for index, debit := range txSummary.MyInputs {
-		inputTotal += int64(debit.PreviousAmount)
-		debits[index] = &TransactionDebit{
-			Index:           int32(debit.Index),
-			PreviousAccount: int32(debit.PreviousAccount),
-			PreviousAmount:  int64(debit.PreviousAmount),
-			AccountName:     lw.AccountName(debit.PreviousAccount)}
-	}
-
-	amount, direction := txhelper.TransactionAmountAndDirection(inputTotal, outputTotal, int64(txSummary.Fee))
-
-	var height int32 = -1
+	var blockHeight int32 = -1
 	if txSummary != nil {
 		blockIdentifier := wallet.NewBlockIdentifierFromHash(blockHash)
 		blockInfo, err := lw.wallet.BlockInfo(blockIdentifier)
 		if err != nil {
 			log.Error(err)
 		} else {
-			height = blockInfo.Height
+			blockHeight = blockInfo.Height
 		}
 	}
 
-	return &Transaction{
-		Fee:         int64(txSummary.Fee),
-		Hash:        txSummary.Hash.String(),
-		Raw:         fmt.Sprintf("%02x", txSummary.Transaction[:]),
-		Hex:         fmt.Sprintf("%x", txSummary.Transaction), // todo is this different from raw?
-		Timestamp:   txSummary.Timestamp,
-		Type:        txhelper.TransactionType(txSummary.Type),
-		Credits:     credits,
-		Amount:      amount,
-		BlockHeight: height,
-		Direction:   direction,
-		Debits:      debits}, nil
+	walletInputs := make([]*txhelper.WalletInput, len(txSummary.MyInputs))
+	for i, input := range txSummary.MyInputs {
+		walletInputs[i] = &txhelper.WalletInput{
+			Index: int32(input.Index),
+			PreviousAccount: int32(input.PreviousAccount),
+			AccountName: lw.AccountName(input.PreviousAccount),
+		}
+	}
+
+	walletTx := &txhelper.WalletTx{
+		BlockHeight: blockHeight,
+		Timestamp: txSummary.Timestamp,
+		RawTx: fmt.Sprintf("%x", txSummary.Transaction),
+		Confirmations: 0, //todo
+		Inputs: walletInputs,
+	}
+
+	return txhelper.DecodeTransaction(walletTx, lw.activeNet.Params)
 }
 
-func (lw *LibWallet) saveOrUpdateTx(tx *Transaction) error {
-	var oldTx Transaction
+func (lw *LibWallet) saveOrUpdateTx(tx *txhelper.Transaction) error {
+	var oldTx txhelper.Transaction
 	err := lw.txDB.One("Hash", tx.Hash, &oldTx)
 	if err != nil {
 		if err != storm.ErrNotFound {

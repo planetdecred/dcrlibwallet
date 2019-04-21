@@ -7,7 +7,6 @@ import (
 
 	"github.com/decred/dcrd/blockchain/stake"
 	"github.com/decred/dcrd/chaincfg"
-	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrd/wire"
@@ -15,7 +14,7 @@ import (
 	"github.com/decred/dcrwallet/wallet"
 )
 
-const BlockValid int = 1 << 0
+const BlockValid = 1 << 0
 
 func MsgTxFeeSizeRate(transactionHex string) (msgTx *wire.MsgTx, fee dcrutil.Amount, size int, feeRate dcrutil.Amount, err error) {
 	msgTx, err = txhelpers.MsgTxFromHex(transactionHex)
@@ -48,11 +47,17 @@ func TransactionAmountAndDirection(inputTotal, outputTotal, fee int64) (amount i
 	return
 }
 
-func DecodeTransaction(hash *chainhash.Hash, txHex string, netParams *chaincfg.Params, addressInfoFn func(string) (*AddressInfo, error)) (tx *DecodedTransaction, err error) {
-	msgTx, txFee, txSize, txFeeRate, err := MsgTxFeeSizeRate(txHex)
+// DecodeTransaction uses the tx hex provided to retrieve detailed information for a transaction.
+func DecodeTransaction(walletTx *WalletTx, netParams *chaincfg.Params) (*Transaction, error) {
+	msgTx, txFee, txSize, txFeeRate, err := MsgTxFeeSizeRate(walletTx.RawTx)
 	if err != nil {
-		return
+		return nil, err
 	}
+	txType := wallet.TxTransactionType(msgTx)
+
+	inputs, totalInputAmount := decodeTxInputs(msgTx, walletTx.Inputs)
+	outputs, totalOutputAmount := decodeTxOutputs(msgTx, netParams)
+	amount, direction := TransactionAmountAndDirection(totalInputAmount, totalOutputAmount, int64(txFee))
 
 	var ssGenVersion uint32
 	var lastBlockValid bool
@@ -63,89 +68,90 @@ func DecodeTransaction(hash *chainhash.Hash, txHex string, netParams *chaincfg.P
 		votebits = fmt.Sprintf("%#04x", voteBits(msgTx))
 	}
 
-	// wrapper for main address info function to absolve errors and always return an address info
-	getAddressInfo := func(address string) *AddressInfo {
-		addressInfo, err := addressInfoFn(address)
-		if err != nil {
-			addressInfo = &AddressInfo{Address: address}
-		}
-		return addressInfo
-	}
+	return &Transaction{
+		Hash:           msgTx.TxHash().String(),
+		Hex: 			walletTx.RawTx,
+		Timestamp:      walletTx.Timestamp,
+		BlockHeight:    walletTx.BlockHeight,
+		Type:           FormatTransactionType(txType),
 
-	tx = &DecodedTransaction{
-		Hash:           hash.String(),
-		Type:           TransactionType(wallet.TxTransactionType(msgTx)),
 		Version:        int32(msgTx.Version),
 		LockTime:       int32(msgTx.LockTime),
 		Expiry:         int32(msgTx.Expiry),
-		Size:           txSize,
-		FeeRate:        int64(txFeeRate),
 		Fee:            int64(txFee),
-		Inputs:         decodeTxInputs(msgTx),
-		Outputs:        decodeTxOutputs(msgTx, netParams, getAddressInfo),
+		FeeRate:        int64(txFeeRate),
+		Size:           txSize,
+
+		Direction:      direction,
+		Amount:         amount,
+		Inputs:         inputs,
+		Outputs:        outputs,
+
 		VoteVersion:    int32(ssGenVersion),
 		LastBlockValid: lastBlockValid,
 		VoteBits:       votebits,
+	}, nil
+}
+
+func decodeTxInputs(mtx *wire.MsgTx, walletInputs []*WalletInput) (inputs []*TxInput, totalInputAmount int64) {
+	inputs = make([]*TxInput, len(mtx.TxIn))
+
+	for i, txIn := range mtx.TxIn {
+		input := &TxInput{
+			PreviousTransactionHash:  txIn.PreviousOutPoint.Hash.String(),
+			PreviousTransactionIndex: int32(txIn.PreviousOutPoint.Index),
+			PreviousOutpoint:         txIn.PreviousOutPoint.String(),
+			AmountIn:                 txIn.ValueIn,
+		}
+
+		// check if this is a wallet input
+		for _, walletInput := range walletInputs {
+			if walletInput.Index == 1 {
+				input.WalletInput = walletInput
+				break
+			}
+		}
+
+		inputs[i] = input
+		totalInputAmount += txIn.ValueIn
 	}
+
 	return
 }
 
-func decodeTxInputs(mtx *wire.MsgTx) []*DecodedInput {
-	inputs := make([]*DecodedInput, len(mtx.TxIn))
-	for i, txIn := range mtx.TxIn {
-		inputs[i] = &DecodedInput{
-			PreviousTransactionHash:  txIn.PreviousOutPoint.Hash.String(),
-			PreviousTransactionIndex: int32(txIn.PreviousOutPoint.Index),
-			AmountIn:                 txIn.ValueIn,
-			PreviousOutpoint:         txIn.PreviousOutPoint.String(),
-		}
-	}
-	return inputs
-}
-
-func decodeTxOutputs(mtx *wire.MsgTx, netParams *chaincfg.Params, getAddressInfo func(string) *AddressInfo) []*DecodedOutput {
-	outputs := make([]*DecodedOutput, len(mtx.TxOut))
+func decodeTxOutputs(mtx *wire.MsgTx, netParams *chaincfg.Params) (outputs []*TxOutput, totalOutputAmount int64) {
+	outputs = make([]*TxOutput, len(mtx.TxOut))
 	txType := stake.DetermineTxType(mtx)
 
-	for i, v := range mtx.TxOut {
-		var addrs []dcrutil.Address
-		var addresses []*AddressInfo
-		var scriptClass txscript.ScriptClass
+	for i, txOut := range mtx.TxOut {
+		output := &TxOutput{
+			Index:      int32(i),
+			Amount:      txOut.Value,
+			Version:    int32(txOut.Version),
+		}
 
 		if (txType == stake.TxTypeSStx) && (stake.IsStakeSubmissionTxOut(i)) {
-			scriptClass = txscript.StakeSubmissionTy
-			addr, err := stake.AddrFromSStxPkScrCommitment(v.PkScript, netParams)
-			if err != nil {
-				addresses = []*AddressInfo{{
-					Address: fmt.Sprintf("[error] failed to decode ticket commitment addr output for tx hash %v, output idx %v",
-						mtx.TxHash(), i),
-				}}
-			} else {
-				addresses = []*AddressInfo{
-					getAddressInfo(addr.EncodeAddress()),
-				}
+			addr, err := stake.AddrFromSStxPkScrCommitment(txOut.PkScript, netParams)
+			if err == nil {
+				output.Address = addr.EncodeAddress()
 			}
+			output.ScriptType = txscript.StakeSubmissionTy.String()
 		} else {
 			// Ignore the error here since an error means the script
 			// couldn't parse and there is no additional information
 			// about it anyways.
-			scriptClass, addrs, _, _ = txscript.ExtractPkScriptAddrs(v.Version, v.PkScript, netParams)
-			addresses = make([]*AddressInfo, len(addrs))
-			for j, addr := range addrs {
-				addresses[j] = getAddressInfo(addr.EncodeAddress())
+			scriptClass, addrs, _, _ := txscript.ExtractPkScriptAddrs(txOut.Version, txOut.PkScript, netParams)
+			if len(addrs) > 0 {
+				output.Address = addrs[0].EncodeAddress()
 			}
+			output.ScriptType = scriptClass.String()
 		}
 
-		outputs[i] = &DecodedOutput{
-			Index:      int32(i),
-			Value:      v.Value,
-			Version:    int32(v.Version),
-			Addresses:  addresses,
-			ScriptType: scriptClass.String(),
-		}
+		outputs[i] = output
+		totalOutputAmount += output.Amount
 	}
 
-	return outputs
+	return
 }
 
 func voteVersion(mtx *wire.MsgTx) uint32 {
