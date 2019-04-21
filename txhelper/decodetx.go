@@ -14,8 +14,8 @@ import (
 const BlockValid = 1 << 0
 
 // DecodeTransaction uses the tx hex provided to retrieve detailed information for a transaction.
-func DecodeTransaction(walletTx *WalletTx, netParams *chaincfg.Params) (*Transaction, error) {
-	msgTx, txFee, txSize, txFeeRate, err := MsgTxFeeSizeRate(walletTx.RawTx)
+func DecodeTransaction(walletTx *TxInfoFromWallet, netParams *chaincfg.Params) (*Transaction, error) {
+	msgTx, txFee, txSize, txFeeRate, err := MsgTxFeeSizeRate(walletTx.Hex)
 	if err != nil {
 		return nil, err
 	}
@@ -30,11 +30,13 @@ func DecodeTransaction(walletTx *WalletTx, netParams *chaincfg.Params) (*Transac
 	ssGenVersion, lastBlockValid, voteBits := voteInfo(msgTx)
 
 	return &Transaction{
-		Hash:        msgTx.TxHash().String(),
-		Hex:         walletTx.RawTx,
-		Timestamp:   walletTx.Timestamp,
-		BlockHeight: walletTx.BlockHeight,
-		Type:        FormatTransactionType(txType),
+		Hash:          msgTx.TxHash().String(),
+		Type:          FormatTransactionType(txType),
+		Hex:           walletTx.Hex,
+		Timestamp:     walletTx.Timestamp,
+		Status:        TxStatus(walletTx.Confirmations),
+		BlockHeight:   walletTx.BlockHeight,
+		Confirmations: walletTx.Confirmations,
 
 		Version:  int32(msgTx.Version),
 		LockTime: int32(msgTx.LockTime),

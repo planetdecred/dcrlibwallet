@@ -39,11 +39,13 @@ type TransactionDestination struct {
 }
 
 type Transaction struct {
-	Hash        string `storm:"id,unique"`
-	Hex         string
-	Timestamp   int64
-	BlockHeight int32
-	Type        string
+	Hash          string `storm:"id,unique"`
+	Type          string
+	Hex           string
+	Timestamp     int64
+	Status        string
+	BlockHeight   int32
+	Confirmations int32
 
 	Version  int32
 	LockTime int32
@@ -71,12 +73,6 @@ type TxInput struct {
 	*WalletInput
 }
 
-type WalletInput struct {
-	Index           int32
-	PreviousAccount int32
-	AccountName     string
-}
-
 type TxOutput struct {
 	Index      int32
 	Amount     int64
@@ -85,14 +81,22 @@ type TxOutput struct {
 	Address    string
 }
 
-type WalletTx struct {
-	RawTx             string
+// TxInfoFromWallet contains tx data that relates to the querying wallet.
+// This info is used with `DecodeTransaction` to compose the entire details of a transaction.
+type TxInfoFromWallet struct {
+	Hex               string
 	Timestamp         int64
 	BlockHeight       int32
 	Confirmations     int32
 	Inputs            []*WalletInput
 	TotalInputAmount  int64
 	TotalOutputAmount int64
+}
+
+type WalletInput struct {
+	Index           int32
+	PreviousAccount int32
+	AccountName     string
 }
 
 func FormatTransactionType(txType wallet.TransactionType) string {

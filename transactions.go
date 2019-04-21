@@ -28,7 +28,7 @@ func (lw *LibWallet) IndexTransactions(startBlockHeight int32, endBlockHeight in
 
 	var totalIndex int32
 	rangeFn := func(block *wallet.Block) (bool, error) {
-		for _, transaction := range block.Transactions {
+		for _, txSummary := range block.Transactions {
 			var blockHash *chainhash.Hash
 			if block.Header != nil {
 				hash := block.Header.BlockHash()
@@ -37,7 +37,7 @@ func (lw *LibWallet) IndexTransactions(startBlockHeight int32, endBlockHeight in
 				blockHash = nil
 			}
 
-			tx, err := lw.parseTxSummary(&transaction, blockHash)
+			tx, err := lw.decodeTransactionWithTxSummary(&txSummary, blockHash)
 			if err != nil {
 				return false, err
 			}
@@ -113,7 +113,7 @@ func (lw *LibWallet) GetTransactionsInBlockRange(ctx context.Context, startBlock
 	transactions []*txhelper.Transaction, err error) {
 
 	rangeFn := func(block *wallet.Block) (bool, error) {
-		for _, transaction := range block.Transactions {
+		for _, txSummary := range block.Transactions {
 			var blockHash *chainhash.Hash
 			if block.Header != nil {
 				hash := block.Header.BlockHash()
@@ -122,7 +122,7 @@ func (lw *LibWallet) GetTransactionsInBlockRange(ctx context.Context, startBlock
 				blockHash = nil
 			}
 
-			tx, err := lw.parseTxSummary(&transaction, blockHash)
+			tx, err := lw.decodeTransactionWithTxSummary(&txSummary, blockHash)
 			if err != nil {
 				return false, err
 			}
@@ -143,45 +143,53 @@ func (lw *LibWallet) GetTransactionsInBlockRange(ctx context.Context, startBlock
 
 func (lw *LibWallet) TransactionNotification(listener TransactionListener) {
 	go func() {
-		n := lw.wallet.NtfnServer.TransactionNotifications()
-		defer n.Done()
+		txNotifications := lw.wallet.NtfnServer.TransactionNotifications()
+		defer txNotifications.Done()
+
 		for {
-			v := <-n.C
-			for _, transaction := range v.UnminedTransactions {
-				tempTransaction, err := lw.parseTxSummary(&transaction, nil)
+			txNotification := <-txNotifications.C
+
+			// process unmined tx gotten from notification
+			for _, txSummary := range txNotification.UnminedTransactions {
+				decodedTx, err := lw.decodeTransactionWithTxSummary(&txSummary, nil)
 				if err != nil {
-					log.Errorf("Error ntfn parse tx: %v", err)
+					log.Errorf("Tx ntfn decode tx err: %v", err)
 					return
 				}
 
-				err = lw.saveOrUpdateTx(tempTransaction)
+				err = lw.saveOrUpdateTx(decodedTx)
 				if err != nil {
 					log.Errorf("Tx ntfn replace tx err: %v", err)
 				}
 
 				log.Info("New Transaction")
-				result, err := json.Marshal(tempTransaction)
+				result, err := json.Marshal(decodedTx)
 				if err != nil {
 					log.Error(err)
 				} else {
 					listener.OnTransaction(string(result))
 				}
 			}
-			for _, block := range v.AttachedBlocks {
+
+			// process mined tx gotten from notification
+			for _, block := range txNotification.AttachedBlocks {
 				listener.OnBlockAttached(int32(block.Header.Height), block.Header.Timestamp.UnixNano())
-				for _, transaction := range block.Transactions {
-					tempTransaction, err := lw.parseTxSummary(&transaction, nil)
+
+				blockHash := block.Header.BlockHash()
+				for _, txSummary := range block.Transactions {
+					decodedTx, err := lw.decodeTransactionWithTxSummary(&txSummary, &blockHash)
 					if err != nil {
-						log.Errorf("Error ntfn parse tx: %v", err)
+						log.Errorf("Incoming block decode tx err: %v", err)
 						return
 					}
 
-					err = lw.saveOrUpdateTx(tempTransaction)
+					err = lw.saveOrUpdateTx(decodedTx)
 					if err != nil {
 						log.Errorf("Incoming block replace tx error :%v", err)
 						return
 					}
-					listener.OnTransactionConfirmed(transaction.Hash.String(), int32(block.Header.Height))
+
+					listener.OnTransactionConfirmed(txSummary.Hash.String(), int32(block.Header.Height))
 				}
 			}
 		}
@@ -215,7 +223,7 @@ func (lw *LibWallet) GetTransactionRaw(txHash []byte) (*txhelper.Transaction, er
 		return nil, err
 	}
 
-	tx, err := lw.parseTxSummary(txSummary, blockHash)
+	tx, err := lw.decodeTransactionWithTxSummary(txSummary, blockHash)
 	if err != nil {
 		log.Error(err)
 		return nil, err
@@ -264,7 +272,7 @@ func (lw *LibWallet) DecodeTransaction(txHash []byte) (string, error) {
 		return "", err
 	}
 
-	tx, err := lw.parseTxSummary(txSummary, blockHash)
+	tx, err := lw.decodeTransactionWithTxSummary(txSummary, blockHash)
 	if err != nil {
 		log.Error(err)
 		return "", err
@@ -274,7 +282,7 @@ func (lw *LibWallet) DecodeTransaction(txHash []byte) (string, error) {
 	return string(result), nil
 }
 
-func (lw *LibWallet) parseTxSummary(txSummary *wallet.TransactionSummary, blockHash *chainhash.Hash) (
+func (lw *LibWallet) decodeTransactionWithTxSummary(txSummary *wallet.TransactionSummary, blockHash *chainhash.Hash) (
 	*txhelper.Transaction, error) {
 
 	var blockHeight int32 = -1
@@ -287,8 +295,6 @@ func (lw *LibWallet) parseTxSummary(txSummary *wallet.TransactionSummary, blockH
 			blockHeight = blockInfo.Height
 		}
 	}
-
-	confirmations, _ := txhelper.TxStatus(blockHeight, lw.GetBestBlock())
 
 	var totalInputAmount, totalOutputAmount int64
 	walletInputs := make([]*txhelper.WalletInput, len(txSummary.MyInputs))
@@ -304,11 +310,11 @@ func (lw *LibWallet) parseTxSummary(txSummary *wallet.TransactionSummary, blockH
 		totalOutputAmount += int64(output.Amount)
 	}
 
-	walletTx := &txhelper.WalletTx{
+	walletTx := &txhelper.TxInfoFromWallet{
 		BlockHeight:       blockHeight,
 		Timestamp:         txSummary.Timestamp,
-		RawTx:             fmt.Sprintf("%x", txSummary.Transaction),
-		Confirmations:     confirmations,
+		Hex:               fmt.Sprintf("%x", txSummary.Transaction),
+		Confirmations:     txhelper.TxConfirmations(blockHeight, lw.GetBestBlock()),
 		Inputs:            walletInputs,
 		TotalOutputAmount: totalOutputAmount,
 		TotalInputAmount:  totalInputAmount,

@@ -17,15 +17,19 @@ const (
 	UnconfirmedStatus = "Pending"
 )
 
-func TxStatus(txBlockHeight, bestBlockHeight int32) (int32, string) {
+func TxConfirmations(txBlockHeight, bestBlockHeight int32) int32 {
 	var confirmations int32 = -1
 	if txBlockHeight >= 0 {
 		confirmations = bestBlockHeight - txBlockHeight + 1
 	}
+	return confirmations
+}
+
+func TxStatus(confirmations int32) string {
 	if confirmations >= DefaultRequiredConfirmations {
-		return confirmations, ConfirmedStatus
+		return ConfirmedStatus
 	} else {
-		return confirmations, UnconfirmedStatus
+		return UnconfirmedStatus
 	}
 }
 
