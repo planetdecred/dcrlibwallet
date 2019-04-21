@@ -282,6 +282,9 @@ func (lw *LibWallet) parseTxSummary(txSummary *wallet.TransactionSummary, blockH
 		}
 	}
 
+	confirmations, _ := txhelper.TxStatus(blockHeight, lw.GetBestBlock())
+
+	var totalInputAmount, totalOutputAmount int64
 	walletInputs := make([]*txhelper.WalletInput, len(txSummary.MyInputs))
 	for i, input := range txSummary.MyInputs {
 		walletInputs[i] = &txhelper.WalletInput{
@@ -289,14 +292,20 @@ func (lw *LibWallet) parseTxSummary(txSummary *wallet.TransactionSummary, blockH
 			PreviousAccount: int32(input.PreviousAccount),
 			AccountName:     lw.AccountName(input.PreviousAccount),
 		}
+		totalInputAmount += int64(input.PreviousAmount)
+	}
+	for _, output := range txSummary.MyOutputs {
+		totalOutputAmount += int64(output.Amount)
 	}
 
 	walletTx := &txhelper.WalletTx{
 		BlockHeight:   blockHeight,
 		Timestamp:     txSummary.Timestamp,
 		RawTx:         fmt.Sprintf("%x", txSummary.Transaction),
-		Confirmations: 0, //todo
+		Confirmations: confirmations,
 		Inputs:        walletInputs,
+		TotalOutputAmount: totalOutputAmount,
+		TotalInputAmount: totalInputAmount,
 	}
 
 	return txhelper.DecodeTransaction(walletTx, lw.activeNet.Params)

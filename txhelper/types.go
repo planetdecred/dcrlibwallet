@@ -91,6 +91,8 @@ type WalletTx struct {
 	BlockHeight   int32
 	Confirmations int32
 	Inputs        []*WalletInput
+	TotalInputAmount int64
+	TotalOutputAmount int64
 }
 
 func FormatTransactionType(txType wallet.TransactionType) string {
