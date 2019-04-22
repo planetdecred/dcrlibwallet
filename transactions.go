@@ -19,7 +19,7 @@ type TransactionListener interface {
 func (lw *LibWallet) IndexTransactions(startBlockHeight int32, endBlockHeight int32, afterIndexing func()) (err error) {
 	defer func() {
 		afterIndexing()
-		count, err := lw.txDB.Count(&txhelper.Transaction{})
+		count, err := lw.txIndexDB.Count(&txhelper.Transaction{})
 		if err != nil {
 			log.Errorf("Count tx error :%v", err)
 			return
@@ -28,7 +28,7 @@ func (lw *LibWallet) IndexTransactions(startBlockHeight int32, endBlockHeight in
 	}()
 
 	if startBlockHeight == -1 {
-		startBlockHeight, err = lw.txDB.ReadIndexingStartBlock()
+		startBlockHeight, err = lw.txIndexDB.ReadIndexingStartBlock()
 		if err != nil {
 			log.Errorf("Error reading block height to start tx indexing :%v", err)
 			return err
@@ -64,7 +64,7 @@ func (lw *LibWallet) parseAndIndexTransactions(block *wallet.Block) (bool, error
 			return false, err
 		}
 
-		err = lw.txDB.SaveOrUpdate(tx)
+		err = lw.txIndexDB.SaveOrUpdate(tx)
 		if err != nil {
 			log.Errorf("Save or update tx error :%v", err)
 			return false, err
@@ -77,7 +77,7 @@ func (lw *LibWallet) parseAndIndexTransactions(block *wallet.Block) (bool, error
 	}
 
 	if block.Header != nil {
-		err := lw.txDB.SaveLastIndexPoint(int32(block.Header.Height))
+		err := lw.txIndexDB.SaveLastIndexPoint(int32(block.Header.Height))
 		if err != nil {
 			log.Errorf("Error setting block height for last indexed tx: ", err)
 			return false, err
@@ -110,7 +110,7 @@ func (lw *LibWallet) TransactionNotification(listener TransactionListener) {
 					return
 				}
 
-				err = lw.txDB.SaveOrUpdate(decodedTx)
+				err = lw.txIndexDB.SaveOrUpdate(decodedTx)
 				if err != nil {
 					log.Errorf("Tx ntfn replace tx err: %v", err)
 				}
@@ -136,7 +136,7 @@ func (lw *LibWallet) TransactionNotification(listener TransactionListener) {
 						return
 					}
 
-					err = lw.txDB.SaveOrUpdate(decodedTx)
+					err = lw.txIndexDB.SaveOrUpdate(decodedTx)
 					if err != nil {
 						log.Errorf("Incoming block replace tx error :%v", err)
 						return
@@ -200,7 +200,7 @@ func (lw *LibWallet) GetTransactions(offset, limit int32) (string, error) {
 }
 
 func (lw *LibWallet) GetTransactionsRaw(offset, limit int32) (transactions []*txhelper.Transaction, err error) {
-	return lw.txDB.Read(offset, limit)
+	return lw.txIndexDB.Read(offset, limit)
 }
 
 func (lw *LibWallet) DecodeTransaction(txHash []byte) (string, error) {

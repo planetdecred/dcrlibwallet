@@ -28,17 +28,14 @@ var (
 	signals                = []os.Signal{os.Interrupt, syscall.SIGTERM}
 )
 
-const (
-	logFileName = "dcrlibwallet.log"
-	txDbName    = "tx.db"
-)
+const logFileName = "dcrlibwallet.log"
 
 type LibWallet struct {
 	walletDataDir string
 	activeNet     *netparams.Params
 	walletLoader  *WalletLoader
 	wallet        *wallet.Wallet
-	txDB          *txindex.DB
+	txIndexDB     *txindex.DB
 	*syncData
 }
 
@@ -113,8 +110,8 @@ func (lw *LibWallet) Shutdown(exit bool) {
 		}
 	}
 
-	if lw.txDB != nil {
-		err := lw.txDB.Close()
+	if lw.txIndexDB != nil {
+		err := lw.txIndexDB.Close()
 		if err != nil {
 			log.Errorf("tx db closed with error: %v", err)
 		} else {

@@ -10,6 +10,8 @@ import (
 )
 
 const (
+	DbName = "tx.db"
+
 	TxBucketName             = "TxIndexInfo"
 	KeyDbVersion             = "DbVersion"
 	KeyMatchingWalletAddress = "MatchingWalletAddress"
@@ -29,7 +31,6 @@ type GenerateAddressFn func() (string, error)
 type AddressMatchFn func(address string) (bool, error)
 
 func Initialize(dbPath string, generateWalletAddress GenerateAddressFn, addressMatchesWallet AddressMatchFn) (*DB, error) {
-
 	txDB, err := openDB(dbPath, generateWalletAddress)
 	if err != nil {
 		return nil, err

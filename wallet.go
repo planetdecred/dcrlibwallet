@@ -6,6 +6,8 @@ import (
 	"github.com/decred/dcrwallet/errors"
 	"github.com/decred/dcrwallet/wallet"
 	"github.com/decred/dcrwallet/walletseed"
+	"github.com/raedahgroup/dcrlibwallet-wip/txindex"
+	"path/filepath"
 )
 
 func (lw *LibWallet) WalletExists() (bool, error) {
@@ -43,6 +45,26 @@ func (lw *LibWallet) OpenWallet(pubPass []byte) error {
 		return translateError(err)
 	}
 	lw.wallet = w
+
+	// set database for indexing transactions for faster loading
+	// important to do it at this point before wallet operations
+	// such as sync and transaction notification are triggered
+	// because those operations will need to access the tx index db.
+	txIndexDbPath := filepath.Join(lw.walletDataDir, txindex.DbName)
+	generateWalletAddress := func() (string, error) {
+		return lw.NextAddress(0) // use default account
+	}
+	addressMatchesWallet := func(address string) (bool, error) {
+		return lw.HaveAddress(address), nil
+	}
+
+	txIndexDB, err := txindex.Initialize(txIndexDbPath, generateWalletAddress, addressMatchesWallet)
+	if err != nil {
+		log.Error("error initializing tx index database: %v", err)
+		return fmt.Errorf("tx index db initialization failed: %s", err.Error())
+	}
+	lw.txIndexDB = txIndexDB
+
 	return nil
 }
 
