@@ -40,57 +40,61 @@ func (lw *LibWallet) IndexTransactions(startBlockHeight int32, endBlockHeight in
 
 	log.Infof("Indexing transactions start height: %d, end height: %d", startBlockHeight, endBlockHeight)
 
+	ctx, _ := contextWithShutdownCancel(context.Background())
+	rangeFn := lw.parseAndIndexTransactions(ctx)
+
 	startBlock := wallet.NewBlockIdentifierFromHeight(startBlockHeight)
 	endBlock := wallet.NewBlockIdentifierFromHeight(endBlockHeight)
 
-	return lw.wallet.GetTransactions(lw.parseAndIndexTransactions, startBlock, endBlock)
+	return lw.wallet.GetTransactions(rangeFn, startBlock, endBlock)
 }
 
-func (lw *LibWallet) parseAndIndexTransactions(block *wallet.Block) (bool, error) {
-	ctx, _ := contextWithShutdownCancel(context.Background())
-	var totalIndex int32
+func (lw *LibWallet) parseAndIndexTransactions(ctx context.Context) func(block *wallet.Block) (bool, error) {
+	var totalIndexed int32
 
-	for _, txSummary := range block.Transactions {
-		var blockHash *chainhash.Hash
+	return func(block *wallet.Block) (bool, error) {
+		for _, txSummary := range block.Transactions {
+			var blockHash *chainhash.Hash
+			if block.Header != nil {
+				hash := block.Header.BlockHash()
+				blockHash = &hash
+			} else {
+				blockHash = nil
+			}
+
+			tx, err := lw.decodeTransactionWithTxSummary(&txSummary, blockHash)
+			if err != nil {
+				return false, err
+			}
+
+			err = lw.txIndexDB.SaveOrUpdate(tx)
+			if err != nil {
+				log.Errorf("Save or update tx error :%v", err)
+				return false, err
+			}
+
+			totalIndexed++
+			for _, syncResponse := range lw.syncProgressListeners {
+				syncResponse.OnIndexTransactions(totalIndexed)
+			}
+		}
+
 		if block.Header != nil {
-			hash := block.Header.BlockHash()
-			blockHash = &hash
-		} else {
-			blockHash = nil
+			err := lw.txIndexDB.SaveLastIndexPoint(int32(block.Header.Height))
+			if err != nil {
+				log.Errorf("Error setting block height for last indexed tx: ", err)
+				return false, err
+			}
+
+			log.Infof("Transaction index caught up to %d", block.Header.Height)
 		}
 
-		tx, err := lw.decodeTransactionWithTxSummary(&txSummary, blockHash)
-		if err != nil {
-			return false, err
+		select {
+		case <-ctx.Done():
+			return true, ctx.Err()
+		default:
+			return false, nil
 		}
-
-		err = lw.txIndexDB.SaveOrUpdate(tx)
-		if err != nil {
-			log.Errorf("Save or update tx error :%v", err)
-			return false, err
-		}
-
-		totalIndex++
-		for _, syncResponse := range lw.syncProgressListeners {
-			syncResponse.OnIndexTransactions(totalIndex)
-		}
-	}
-
-	if block.Header != nil {
-		err := lw.txIndexDB.SaveLastIndexPoint(int32(block.Header.Height))
-		if err != nil {
-			log.Errorf("Error setting block height for last indexed tx: ", err)
-			return false, err
-		}
-
-		log.Infof("Transaction index caught up to %d", block.Header.Height)
-	}
-
-	select {
-	case <-ctx.Done():
-		return true, ctx.Err()
-	default:
-		return false, nil
 	}
 }
 

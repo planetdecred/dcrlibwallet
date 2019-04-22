@@ -48,7 +48,6 @@ func ensureWalletDatabaseMatch(txDB *storm.DB, dbPath string, addressMatchesWall
 	}
 
 	if !txDbMatchesWalletDb {
-		fmt.Println("tx wallet db, deleting")
 		if err = os.RemoveAll(dbPath); err != nil {
 			return fmt.Errorf("error deleting outdated tx index database: %s", err.Error())
 		}

@@ -10,14 +10,14 @@ import (
 const KeyEndBlock = "EndBlock"
 
 func (db *DB) SaveOrUpdate(tx *txhelper.Transaction) error {
-	var oldTx *txhelper.Transaction
-	err := db.txDB.One("Hash", tx.Hash, oldTx)
+	var oldTx txhelper.Transaction
+	err := db.txDB.One("Hash", tx.Hash, &oldTx)
 
 	if err != nil && err != storm.ErrNotFound {
 		return fmt.Errorf("error checking if tx was already indexed: %s", err.Error())
 	}
 
-	if oldTx != nil {
+	if err != storm.ErrNotFound {
 		// delete old tx before saving new
 		err = db.txDB.DeleteStruct(&oldTx)
 		if err != nil {

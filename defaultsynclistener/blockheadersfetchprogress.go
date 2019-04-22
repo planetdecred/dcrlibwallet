@@ -92,14 +92,17 @@ func (syncListener *DefaultSyncListener) OnFetchedHeaders(fetchedHeadersCount in
 		syncListener.startHeaderHeight = -1
 		syncListener.currentHeaderHeight = -1
 
-		syncListener.progressReport.Update(SyncStatusInProgress, func(report *progressReport) {
-			report.TotalHeadersToFetch = -1
-		})
-
 		if syncListener.showLog {
 			fmt.Println("Fetch headers completed.")
 		}
 	}
 
 	syncListener.syncProgressUpdated(syncListener.progressReport, CurrentStepUpdate)
+
+	if state == dcrlibwallet.SyncStateFinish {
+		// clear total headers count to be re-set on RescanHeaders
+		syncListener.progressReport.Update(SyncStatusInProgress, func(report *progressReport) {
+			report.TotalHeadersToFetch = -1
+		})
+	}
 }

@@ -56,7 +56,11 @@ func DefaultSyncProgressListener(netType string, showLog bool, getBestBlock func
 func (syncListener *DefaultSyncListener) OnFetchMissingCFilters(missingCFiltersStart, missingCFiltersEnd int32, state string) {
 }
 
-func (syncListener *DefaultSyncListener) OnIndexTransactions(totalIndex int32) {}
+func (syncListener *DefaultSyncListener) OnIndexTransactions(totalIndexed int32) {
+	if syncListener.showLog {
+		fmt.Printf("Indexing transactions. %d done.\n", totalIndexed)
+	}
+}
 
 func (syncListener *DefaultSyncListener) OnSynced(synced bool) {
 	if !syncListener.syncing {

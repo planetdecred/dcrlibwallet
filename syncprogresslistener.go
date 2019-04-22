@@ -16,7 +16,7 @@ type SyncProgressListener interface {
 	OnFetchedHeaders(fetchedHeadersCount int32, lastHeaderTime int64, state string)
 	OnDiscoveredAddresses(state string)
 	OnRescan(rescannedThrough int32, state string)
-	OnIndexTransactions(totalIndex int32)
+	OnIndexTransactions(totalIndexed int32)
 	OnSynced(synced bool)
 	OnSyncError(code SyncErrorCode, err error)
 }

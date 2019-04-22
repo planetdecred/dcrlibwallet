@@ -17,6 +17,10 @@ func (db *DB) Read(offset, limit int32) (transactions []*txhelper.Transaction, e
 	}
 
 	err = query.Find(&transactions)
+	if err == storm.ErrNotFound {
+		err = nil
+	}
+
 	return
 }
 

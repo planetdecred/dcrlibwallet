@@ -39,46 +39,46 @@ type TransactionDestination struct {
 }
 
 type Transaction struct {
-	Hash          string `storm:"id,unique"`
-	Type          string
-	Hex           string
-	Timestamp     int64
-	Status        string
-	BlockHeight   int32
-	Confirmations int32
+	Hash          string `storm:"id,unique",json:"hash"`
+	Type          string `json:"type"`
+	Hex           string `json:"hex"`
+	Timestamp     int64  `json:"timestamp"`
+	Status        string `json:"status"`
+	BlockHeight   int32  `json:"block_height"`
+	Confirmations int32  `json:"confirmations"`
 
-	Version  int32
-	LockTime int32
-	Expiry   int32
-	Fee      int64
-	FeeRate  int64
-	Size     int
+	Version  int32 `json:"version"`
+	LockTime int32 `json:"lock_time"`
+	Expiry   int32 `json:"expiry"`
+	Fee      int64 `json:"fee"`
+	FeeRate  int64 `json:"fee_rate"`
+	Size     int   `json:"size"`
 
-	Direction TransactionDirection
-	Amount    int64
-	Inputs    []*TxInput
-	Outputs   []*TxOutput
+	Direction TransactionDirection `json:"direction"`
+	Amount    int64                `json:"amount"`
+	Inputs    []*TxInput           `json:"inputs"`
+	Outputs   []*TxOutput          `json:"outputs"`
 
 	// Vote Info
-	VoteVersion    int32
-	LastBlockValid bool
-	VoteBits       string
+	VoteVersion    int32  `json:"vote_version"`
+	LastBlockValid bool   `json:"last_block_valid"`
+	VoteBits       string `json:"vote_bits"`
 }
 
 type TxInput struct {
-	PreviousTransactionHash  string
-	PreviousTransactionIndex int32
-	PreviousOutpoint         string
-	AmountIn                 int64
+	PreviousTransactionHash  string `json:"previous_transaction_hash"`
+	PreviousTransactionIndex int32  `json:"previous_transaction_index"`
+	PreviousOutpoint         string `json:"previous_outpoint"`
+	AmountIn                 int64  `json:"amount_in"`
 	*WalletInput
 }
 
 type TxOutput struct {
-	Index      int32
-	Amount     int64
-	Version    int32
-	ScriptType string
-	Address    string
+	Index      int32  `json:"index"`
+	Amount     int64  `json:"amount"`
+	Version    int32  `json:"version"`
+	ScriptType string `json:"script_type"`
+	Address    string `json:"address"`
 }
 
 // TxInfoFromWallet contains tx data that relates to the querying wallet.
@@ -94,9 +94,9 @@ type TxInfoFromWallet struct {
 }
 
 type WalletInput struct {
-	Index           int32
-	PreviousAccount int32
-	AccountName     string
+	Index           int32  `json:"index"`
+	PreviousAccount int32  `json:"previous_account"`
+	AccountName     string `json:"account_name"`
 }
 
 func FormatTransactionType(txType wallet.TransactionType) string {
