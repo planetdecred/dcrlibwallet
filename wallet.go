@@ -2,12 +2,12 @@ package dcrlibwallet
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/decred/dcrwallet/errors"
 	"github.com/decred/dcrwallet/wallet"
 	"github.com/decred/dcrwallet/walletseed"
-	"github.com/raedahgroup/dcrlibwallet-wip/txindex"
-	"path/filepath"
+	"github.com/raedahgroup/dcrlibwallet/txindex"
 )
 
 func (lw *LibWallet) WalletExists() (bool, error) {
