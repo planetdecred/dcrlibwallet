@@ -112,7 +112,7 @@ func initLogRotator(logFile string) {
 	logRotator = r
 }
 
-func SetLogLevel(logLevel string) {
+func SetLogLevels(logLevel string) {
 	_, ok := slog.LevelFromString(logLevel)
 	if !ok {
 		return
