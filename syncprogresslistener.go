@@ -1,6 +1,6 @@
 package dcrlibwallet
 
-type SyncErrorCode uint8
+type SyncErrorCode uint16
 
 const (
 	ErrorCodeUnexpectedError SyncErrorCode = iota
@@ -18,5 +18,5 @@ type SyncProgressListener interface {
 	OnRescan(rescannedThrough int32, state string)
 	OnIndexTransactions(totalIndex int32)
 	OnSynced(synced bool)
-	OnSyncError(code SyncErrorCode, err error)
+	OnSyncError(code uint16, err error) // use int32 to allow gomobile bind
 }

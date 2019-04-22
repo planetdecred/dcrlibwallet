@@ -26,6 +26,17 @@ func NormalizeAddress(addr string, defaultPort string) (string, error) {
 	return addr, nil
 }
 
+// For use with gomobile bind,
+// doesn't support the alternative `GenerateSeed` function because it returns more than 2 types.
+func GenerateAndEncodeSeed() (string, error) {
+	seed, err := hdkeychain.GenerateSeed(hdkeychain.RecommendedSeedLen)
+	if err != nil {
+		return "", err
+	}
+
+	return walletseed.EncodeMnemonic(seed), nil
+}
+
 func GenerateSeed() ([]byte, string, error) {
 	seed, err := hdkeychain.GenerateSeed(hdkeychain.RecommendedSeedLen)
 	if err != nil {
