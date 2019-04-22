@@ -13,7 +13,6 @@ import (
 	"github.com/decred/dcrwallet/p2p"
 	"github.com/decred/dcrwallet/spv"
 	"github.com/decred/dcrwallet/wallet"
-	"github.com/raedahgroup/dcrlibwallet/utils"
 )
 
 type syncData struct {
@@ -42,7 +41,7 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 	if peerAddresses != "" {
 		addresses := strings.Split(peerAddresses, ";")
 		for _, address := range addresses {
-			peerAddress, err := utils.NormalizeAddress(address, lw.activeNet.Params.DefaultPort)
+			peerAddress, err := NormalizeAddress(address, lw.activeNet.Params.DefaultPort)
 			if err != nil {
 				lw.notifySyncError(ErrorCodeInvalidPeerAddress, errors.E("SPV peer address invalid: %v", err))
 			} else {
@@ -140,7 +139,7 @@ func (lw *LibWallet) connectToRpcClient(ctx context.Context, networkAddress stri
 	}
 
 	// rpcClient is not already set, attempt a new connection.
-	networkAddress, err = utils.NormalizeAddress(networkAddress, lw.activeNet.JSONRPCClientPort)
+	networkAddress, err = NormalizeAddress(networkAddress, lw.activeNet.JSONRPCClientPort)
 	if err != nil {
 		return nil, errors.New(ErrInvalidAddress)
 	}
