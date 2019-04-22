@@ -1,6 +1,6 @@
 package dcrlibwallet
 
-import (
+import 	(
 	"encoding/json"
 	"time"
 
