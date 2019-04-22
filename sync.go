@@ -28,9 +28,15 @@ func (lw *LibWallet) AddSyncProgressListener(syncProgressListener SyncProgressLi
 }
 
 func (lw *LibWallet) SpvSync(peerAddresses string) error {
-	loadedWallet, err := lw.getLoadedWalletForSyncing()
-	if err != nil {
-		return err
+	loadedWallet, walletLoaded := lw.walletLoader.LoadedWallet()
+	if !walletLoaded {
+		return errors.New(ErrWalletNotLoaded)
+	}
+
+	// Error if the wallet is already syncing with the network.
+	currentNetworkBackend, _ := loadedWallet.NetworkBackend()
+	if currentNetworkBackend != nil {
+		return errors.New(ErrSyncAlreadyInProgress)
 	}
 
 	addr := &net.TCPAddr{IP: net.ParseIP("::1"), Port: 0}
@@ -84,9 +90,15 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 }
 
 func (lw *LibWallet) RpcSync(networkAddress string, username string, password string, cert []byte) error {
-	loadedWallet, err := lw.getLoadedWalletForSyncing()
-	if err != nil {
-		return err
+	loadedWallet, walletLoaded := lw.walletLoader.LoadedWallet()
+	if !walletLoaded {
+		return errors.New(ErrWalletNotLoaded)
+	}
+
+	// Error if the wallet is already syncing with the network.
+	currentNetworkBackend, _ := loadedWallet.NetworkBackend()
+	if currentNetworkBackend != nil {
+		return errors.New(ErrSyncAlreadyInProgress)
 	}
 
 	ctx, cancel := contextWithShutdownCancel(context.Background())
@@ -165,20 +177,6 @@ func (lw *LibWallet) connectToRpcClient(ctx context.Context, networkAddress stri
 	lw.mu.Unlock()
 
 	return
-}
-
-func (lw *LibWallet) getLoadedWalletForSyncing() (*wallet.Wallet, error) {
-	loadedWallet, walletLoaded := lw.walletLoader.LoadedWallet()
-	if walletLoaded {
-		// Error if the wallet is already syncing with the network.
-		currentNetworkBackend, _ := loadedWallet.NetworkBackend()
-		if currentNetworkBackend != nil {
-			return nil, errors.New(ErrSyncAlreadyInProgress)
-		}
-	} else {
-		return nil, errors.New(ErrWalletNotLoaded)
-	}
-	return loadedWallet, nil
 }
 
 func (lw *LibWallet) CancelSync() {
