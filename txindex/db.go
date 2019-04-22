@@ -89,6 +89,7 @@ func openDB(dbPath string, generateWalletAddress func() (string, error)) (txDB *
 	}
 
 	if isNewDbFile {
+		fmt.Println("setting address", walletAddress)
 		err = txDB.Set(TxBucketName, KeyMatchingWalletAddress, walletAddress)
 		if err == nil {
 			err = txDB.Set(TxBucketName, KeyDbVersion, TxDbVersion)

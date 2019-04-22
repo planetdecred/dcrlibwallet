@@ -40,12 +40,12 @@ func ensureWalletDatabaseMatch(txDB *storm.DB, dbPath string, addressMatchesWall
 	var walletAddressForCurrentTxDb string
 	err := txDB.Get(TxBucketName, KeyMatchingWalletAddress, &walletAddressForCurrentTxDb)
 	if err != nil && err != storm.ErrNotFound {
-		return fmt.Errorf("error checking tx db - wallet db match: %s", err.Error())
+		return fmt.Errorf("error checking tx/wallet db match: %s", err.Error())
 	}
 
 	txDbMatchesWalletDb, err := addressMatchesWallet(walletAddressForCurrentTxDb)
 	if err != nil {
-		return fmt.Errorf("error checking wallet db for tx db address match: %s", err.Error())
+		return fmt.Errorf("error checking tx/wallet db match: %s", err.Error())
 	}
 
 	if !txDbMatchesWalletDb {
