@@ -89,7 +89,6 @@ func openDB(dbPath string, generateWalletAddress func() (string, error)) (txDB *
 	}
 
 	if isNewDbFile {
-		fmt.Println("setting address", walletAddress)
 		err = txDB.Set(TxBucketName, KeyMatchingWalletAddress, walletAddress)
 		if err == nil {
 			err = txDB.Set(TxBucketName, KeyDbVersion, TxDbVersion)
@@ -97,7 +96,7 @@ func openDB(dbPath string, generateWalletAddress func() (string, error)) (txDB *
 
 		if err != nil {
 			err = fmt.Errorf("error initializing tx index db: %s", err.Error())
-			closeAndDeleteDb(txDB, dbPath)
+			os.RemoveAll(dbPath)
 			return
 		}
 	}

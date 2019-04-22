@@ -17,8 +17,7 @@ func ensureDatabaseVersion(txDB *storm.DB, dbPath string, generateWalletAddress 
 	}
 
 	if currentDbVersion != TxDbVersion {
-		fmt.Println("invalid db version, deleting")
-		if err = closeAndDeleteDb(txDB, dbPath); err != nil {
+		if err = os.RemoveAll(dbPath); err != nil {
 			return fmt.Errorf("error deleting outdated tx index database: %s", err.Error())
 		}
 
@@ -49,8 +48,8 @@ func ensureWalletDatabaseMatch(txDB *storm.DB, dbPath string, addressMatchesWall
 	}
 
 	if !txDbMatchesWalletDb {
-		fmt.Println("invalid wallet db, deleting")
-		if err = closeAndDeleteDb(txDB, dbPath); err != nil {
+		fmt.Println("tx wallet db, deleting")
+		if err = os.RemoveAll(dbPath); err != nil {
 			return fmt.Errorf("error deleting outdated tx index database: %s", err.Error())
 		}
 
@@ -62,11 +61,4 @@ func ensureWalletDatabaseMatch(txDB *storm.DB, dbPath string, addressMatchesWall
 	}
 
 	return nil
-}
-
-func closeAndDeleteDb(txDB *storm.DB, dbPath string) (err error) {
-	if err = txDB.Close(); err == nil {
-		err = os.RemoveAll(dbPath)
-	}
-	return
 }
