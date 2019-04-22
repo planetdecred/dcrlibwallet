@@ -20,10 +20,15 @@ type TransactionListener interface {
 const (
 	BucketTxInfo   = "TxIndexInfo"
 	KeyEndBlock    = "EndBlock"
+	KeyDbVersion   = "DbVersion"
+
+	TxDbVersion    = 1 // necessary to force re-indexing if changes are made to the structure of data being stored
 	MaxReOrgBlocks = 6
 )
 
 func (lw *LibWallet) IndexTransactions(startBlockHeight int32, endBlockHeight int32, afterIndexing func()) error {
+
+
 	ctx, _ := contextWithShutdownCancel(context.Background())
 
 	var totalIndex int32
