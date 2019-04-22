@@ -31,4 +31,5 @@ require (
 	github.com/jrick/logrotate v1.0.0
 	github.com/pkg/errors v0.8.1 // indirect
 	go.etcd.io/bbolt v1.3.0
+	google.golang.org/appengine v1.5.0 // indirect
 )

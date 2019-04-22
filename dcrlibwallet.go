@@ -18,9 +18,9 @@ import (
 	"github.com/decred/dcrwallet/netparams"
 	"github.com/decred/dcrwallet/wallet"
 	"github.com/decred/dcrwallet/wallet/txrules"
+	"github.com/raedahgroup/dcrlibwallet/addresshelper"
 	"github.com/raedahgroup/dcrlibwallet/utils"
 	"go.etcd.io/bbolt"
-	"github.com/raedahgroup/dcrlibwallet/addresshelper"
 )
 
 var shutdownRequestChannel = make(chan struct{})
@@ -31,7 +31,7 @@ const (
 	logFileName = "dcrlibwallet.log"
 	txDbName    = "tx.db"
 
-	BlockValid  = 1 << 0
+	BlockValid = 1 << 0
 )
 
 type LibWallet struct {
