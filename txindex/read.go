@@ -3,16 +3,26 @@ package txindex
 import (
 	"github.com/asdine/storm"
 	"github.com/raedahgroup/dcrlibwallet/txhelper"
+	"github.com/asdine/storm/q"
 )
 
 const MaxReOrgBlocks = 6
 
-func (db *DB) CountTx() (int, error) {
-	return db.txDB.Count(&txhelper.Transaction{})
+func (db *DB) CountTx(txType string) (int, error) {
+	if txType == "" {
+		return db.txDB.Count(&txhelper.Transaction{})
+	}
+
+	return db.txDB.Select(q.EqF("Type", txType)).Count(&txhelper.Transaction{})
 }
 
-func (db *DB) Read(offset, limit int32) (transactions []*txhelper.Transaction, err error) {
-	query := db.txDB.Select().OrderBy("Timestamp").Reverse()
+func (db *DB) Read(offset, limit int32, txType string) (transactions []*txhelper.Transaction, err error) {
+	query := db.txDB.Select()
+	if txType != "" {
+		query = db.txDB.Select(q.EqF("Type", txType))
+	}
+
+	query = query.OrderBy("Timestamp").Reverse()
 	if offset > 0 {
 		query = query.Skip(int(offset))
 	}

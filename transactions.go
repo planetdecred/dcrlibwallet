@@ -10,8 +10,8 @@ import (
 	"github.com/raedahgroup/dcrlibwallet/txhelper"
 )
 
-func (lw *LibWallet) TxCount() (int, error) {
-	return lw.txIndexDB.CountTx()
+func (lw *LibWallet) TxCount(txType string) (int, error) {
+	return lw.txIndexDB.CountTx(txType)
 }
 
 func (lw *LibWallet) IndexTransactions(startBlockHeight int32, endBlockHeight int32, afterIndexing func()) (err error) {
@@ -21,7 +21,7 @@ func (lw *LibWallet) IndexTransactions(startBlockHeight int32, endBlockHeight in
 		// mark current end block height as last index point
 		lw.txIndexDB.SaveLastIndexPoint(endBlockHeight)
 
-		count, err := lw.TxCount()
+		count, err := lw.TxCount("")
 		if err != nil {
 			log.Errorf("Count tx error :%v", err)
 			return
@@ -136,8 +136,8 @@ func (lw *LibWallet) GetTransactionRaw(txHash []byte) (*txhelper.Transaction, er
 	return tx, nil
 }
 
-func (lw *LibWallet) GetTransactions(offset, limit int32) (string, error) {
-	transactions, err := lw.GetTransactionsRaw(offset, limit)
+func (lw *LibWallet) GetTransactions(offset, limit int32, txType string) (string, error) {
+	transactions, err := lw.GetTransactionsRaw(offset, limit, txType)
 	if err != nil {
 		return "", nil
 	}
@@ -150,8 +150,8 @@ func (lw *LibWallet) GetTransactions(offset, limit int32) (string, error) {
 	return string(jsonEncodedTransactions), nil
 }
 
-func (lw *LibWallet) GetTransactionsRaw(offset, limit int32) (transactions []*txhelper.Transaction, err error) {
-	return lw.txIndexDB.Read(offset, limit)
+func (lw *LibWallet) GetTransactionsRaw(offset, limit int32, txType string) (transactions []*txhelper.Transaction, err error) {
+	return lw.txIndexDB.Read(offset, limit, txType)
 }
 
 func (lw *LibWallet) DecodeTransaction(txHash []byte) (string, error) {

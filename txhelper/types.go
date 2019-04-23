@@ -40,12 +40,10 @@ type TransactionDestination struct {
 
 type Transaction struct {
 	Hash          string `storm:"id,unique",json:"hash"`
-	Type          string `json:"type"`
+	Type          string `storm:"index",json:"type"`
 	Hex           string `json:"hex"`
 	Timestamp     int64  `json:"timestamp"`
-	Status        string `json:"status"`
 	BlockHeight   int32  `json:"block_height"`
-	Confirmations int32  `json:"confirmations"`
 
 	Version  int32 `json:"version"`
 	LockTime int32 `json:"lock_time"`

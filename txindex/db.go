@@ -18,7 +18,7 @@ const (
 
 	// necessary to force re-indexing if changes are made to the structure of data being stored
 	// increment value if there's a change to the `txhelper.Transaction` struct
-	TxDbVersion uint32 = 1
+	TxDbVersion uint32 = 2
 )
 
 type DB struct {

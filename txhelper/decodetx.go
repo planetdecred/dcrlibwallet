@@ -34,9 +34,7 @@ func DecodeTransaction(walletTx *TxInfoFromWallet, netParams *chaincfg.Params) (
 		Type:          FormatTransactionType(txType),
 		Hex:           walletTx.Hex,
 		Timestamp:     walletTx.Timestamp,
-		Status:        TxStatus(walletTx.Confirmations),
 		BlockHeight:   walletTx.BlockHeight,
-		Confirmations: walletTx.Confirmations,
 
 		Version:  int32(msgTx.Version),
 		LockTime: int32(msgTx.LockTime),
