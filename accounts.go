@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/decred/dcrwallet/errors"
-	"github.com/decred/dcrwallet/wallet"
 )
 
 func (lw *LibWallet) GetAccounts(requiredConfirmations int32) (string, error) {
@@ -122,25 +121,4 @@ func (lw *LibWallet) AccountNameRaw(accountNumber uint32) (string, error) {
 
 func (lw *LibWallet) AccountNumber(accountName string) (uint32, error) {
 	return lw.wallet.AccountNumber(accountName)
-}
-
-func (lw *LibWallet) CurrentAddress(account int32) (string, error) {
-	addr, err := lw.wallet.CurrentAddress(uint32(account))
-	if err != nil {
-		log.Error(err)
-		return "", err
-	}
-	return addr.EncodeAddress(), nil
-}
-
-func (lw *LibWallet) NextAddress(account int32) (string, error) {
-	var callOpts []wallet.NextAddressCallOption
-	callOpts = append(callOpts, wallet.WithGapPolicyWrap())
-
-	addr, err := lw.wallet.NewExternalAddress(uint32(account), callOpts...)
-	if err != nil {
-		log.Error(err)
-		return "", err
-	}
-	return addr.EncodeAddress(), nil
 }

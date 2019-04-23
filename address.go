@@ -2,6 +2,7 @@ package dcrlibwallet
 
 import (
 	"github.com/decred/dcrd/dcrutil"
+	"github.com/decred/dcrwallet/wallet"
 	"github.com/raedahgroup/dcrlibwallet/addresshelper"
 )
 
@@ -60,4 +61,25 @@ func (lw *LibWallet) AddressInfo(address string) (*AddressInfo, error) {
 	}
 
 	return addressInfo, nil
+}
+
+func (lw *LibWallet) CurrentAddress(account int32) (string, error) {
+	addr, err := lw.wallet.CurrentAddress(uint32(account))
+	if err != nil {
+		log.Error(err)
+		return "", err
+	}
+	return addr.EncodeAddress(), nil
+}
+
+func (lw *LibWallet) NextAddress(account int32) (string, error) {
+	var callOpts []wallet.NextAddressCallOption
+	callOpts = append(callOpts, wallet.WithGapPolicyWrap())
+
+	addr, err := lw.wallet.NewExternalAddress(uint32(account), callOpts...)
+	if err != nil {
+		log.Error(err)
+		return "", err
+	}
+	return addr.EncodeAddress(), nil
 }
