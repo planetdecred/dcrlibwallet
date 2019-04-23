@@ -24,7 +24,6 @@ const (
 type DB struct {
 	txDB  *storm.DB
 	Close func() error
-	Count func(data interface{}) (int, error)
 }
 
 type GenerateAddressFn func() (string, error)
@@ -55,7 +54,6 @@ func Initialize(dbPath string, generateWalletAddress GenerateAddressFn, addressM
 	return &DB{
 		txDB,
 		txDB.Close,
-		txDB.Count,
 	}, nil
 }
 

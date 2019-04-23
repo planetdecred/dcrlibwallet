@@ -10,6 +10,10 @@ import (
 	"github.com/raedahgroup/dcrlibwallet/txhelper"
 )
 
+func (lw *LibWallet) TxCount() (int, error) {
+	return lw.txIndexDB.CountTx()
+}
+
 func (lw *LibWallet) IndexTransactions(startBlockHeight int32, endBlockHeight int32, afterIndexing func()) (err error) {
 	defer func() {
 		afterIndexing()
@@ -17,7 +21,7 @@ func (lw *LibWallet) IndexTransactions(startBlockHeight int32, endBlockHeight in
 		// mark current end block height as last index point
 		lw.txIndexDB.SaveLastIndexPoint(endBlockHeight)
 
-		count, err := lw.txIndexDB.Count(&txhelper.Transaction{})
+		count, err := lw.TxCount()
 		if err != nil {
 			log.Errorf("Count tx error :%v", err)
 			return

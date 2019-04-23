@@ -7,6 +7,10 @@ import (
 
 const MaxReOrgBlocks = 6
 
+func (db *DB) CountTx() (int, error) {
+	return db.txDB.Count(&txhelper.Transaction{})
+}
+
 func (db *DB) Read(offset, limit int32) (transactions []*txhelper.Transaction, err error) {
 	query := db.txDB.Select().OrderBy("Timestamp").Reverse()
 	if offset > 0 {
