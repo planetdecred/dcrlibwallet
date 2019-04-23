@@ -25,7 +25,7 @@ func (lw *LibWallet) ListenForTxNotification() {
 				decodedTx, err := lw.decodeTransactionWithTxSummary(&txSummary, nil)
 				if err != nil {
 					log.Errorf("Tx ntfn decode tx err: %v", err)
-					return
+					continue
 				}
 
 				err = lw.txIndexDB.SaveOrUpdate(decodedTx)
@@ -53,7 +53,7 @@ func (lw *LibWallet) ListenForTxNotification() {
 					decodedTx, err := lw.decodeTransactionWithTxSummary(&txSummary, &blockHash)
 					if err != nil {
 						log.Errorf("Incoming block decode tx err: %v", err)
-						return
+						continue
 					}
 
 					err = lw.txIndexDB.SaveOrUpdate(decodedTx)
