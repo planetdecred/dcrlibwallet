@@ -10,12 +10,6 @@ import (
 	"github.com/raedahgroup/dcrlibwallet/txhelper"
 )
 
-type TransactionListener interface {
-	OnTransaction(transaction string)
-	OnTransactionConfirmed(hash string, height int32)
-	OnBlockAttached(height int32, timestamp int64)
-}
-
 func (lw *LibWallet) IndexTransactions(startBlockHeight int32, endBlockHeight int32, afterIndexing func()) (err error) {
 	defer func() {
 		afterIndexing()
@@ -100,61 +94,6 @@ func (lw *LibWallet) parseAndIndexTransactions(ctx context.Context) func(block *
 			return false, nil
 		}
 	}
-}
-
-func (lw *LibWallet) TransactionNotification(listener TransactionListener) {
-	go func() {
-		txNotifications := lw.wallet.NtfnServer.TransactionNotifications()
-		defer txNotifications.Done()
-
-		for {
-			txNotification := <-txNotifications.C
-
-			// process unmined tx gotten from notification
-			for _, txSummary := range txNotification.UnminedTransactions {
-				decodedTx, err := lw.decodeTransactionWithTxSummary(&txSummary, nil)
-				if err != nil {
-					log.Errorf("Tx ntfn decode tx err: %v", err)
-					return
-				}
-
-				err = lw.txIndexDB.SaveOrUpdate(decodedTx)
-				if err != nil {
-					log.Errorf("Tx ntfn replace tx err: %v", err)
-				}
-
-				log.Info("New Transaction")
-				result, err := json.Marshal(decodedTx)
-				if err != nil {
-					log.Error(err)
-				} else {
-					listener.OnTransaction(string(result))
-				}
-			}
-
-			// process mined tx gotten from notification
-			for _, block := range txNotification.AttachedBlocks {
-				listener.OnBlockAttached(int32(block.Header.Height), block.Header.Timestamp.UnixNano())
-
-				blockHash := block.Header.BlockHash()
-				for _, txSummary := range block.Transactions {
-					decodedTx, err := lw.decodeTransactionWithTxSummary(&txSummary, &blockHash)
-					if err != nil {
-						log.Errorf("Incoming block decode tx err: %v", err)
-						return
-					}
-
-					err = lw.txIndexDB.SaveOrUpdate(decodedTx)
-					if err != nil {
-						log.Errorf("Incoming block replace tx error :%v", err)
-						return
-					}
-
-					listener.OnTransactionConfirmed(txSummary.Hash.String(), int32(block.Header.Height))
-				}
-			}
-		}
-	}()
 }
 
 func (lw *LibWallet) GetTransaction(txHash []byte) (string, error) {

@@ -65,6 +65,10 @@ func (lw *LibWallet) OpenWallet(pubPass []byte) error {
 	}
 	lw.txIndexDB = txIndexDB
 
+	// start tx notification listener now,
+	// so we can index txs as the wallet is notified of new/updated txs
+	lw.ListenForTxNotification()
+
 	return nil
 }
 

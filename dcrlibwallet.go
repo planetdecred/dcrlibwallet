@@ -31,11 +31,12 @@ var (
 const logFileName = "dcrlibwallet.log"
 
 type LibWallet struct {
-	walletDataDir string
-	activeNet     *netparams.Params
-	walletLoader  *WalletLoader
-	wallet        *wallet.Wallet
-	txIndexDB     *txindex.DB
+	walletDataDir          string
+	activeNet              *netparams.Params
+	walletLoader           *WalletLoader
+	wallet                 *wallet.Wallet
+	txIndexDB              *txindex.DB
+	txNotificationListener TransactionListener
 	*syncData
 }
 
