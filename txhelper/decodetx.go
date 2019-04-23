@@ -22,10 +22,17 @@ func DecodeTransaction(walletTx *TxInfoFromWallet, netParams *chaincfg.Params) (
 	txType := wallet.TxTransactionType(msgTx)
 
 	// only use input/output amounts relating to wallet to correctly determine tx direction
-	amount, direction := TransactionAmountAndDirection(walletTx.TotalInputAmount, walletTx.TotalOutputAmount, int64(txFee))
+	var totalWalletInput, totalWalletOutput int64
+	for _, input := range walletTx.Inputs {
+		totalWalletInput += input.AmountIn
+	}
+	for _, output := range walletTx.Outputs {
+		totalWalletOutput += output.AmountOut
+	}
+	amount, direction := TransactionAmountAndDirection(totalWalletInput, totalWalletOutput, int64(txFee))
 
 	inputs := decodeTxInputs(msgTx, walletTx.Inputs)
-	outputs := decodeTxOutputs(msgTx, netParams)
+	outputs := decodeTxOutputs(msgTx, netParams, walletTx.Outputs)
 
 	ssGenVersion, lastBlockValid, voteBits := voteInfo(msgTx)
 
@@ -62,13 +69,13 @@ func decodeTxInputs(mtx *wire.MsgTx, walletInputs []*WalletInput) (inputs []*TxI
 			PreviousTransactionHash:  txIn.PreviousOutPoint.Hash.String(),
 			PreviousTransactionIndex: int32(txIn.PreviousOutPoint.Index),
 			PreviousOutpoint:         txIn.PreviousOutPoint.String(),
-			AmountIn:                 txIn.ValueIn,
+			Amount:                   txIn.ValueIn,
 		}
 
 		// check if this is a wallet input
 		for _, walletInput := range walletInputs {
-			if walletInput.Index == 1 {
-				input.WalletInput = walletInput
+			if walletInput.Index == int32(i) {
+				input.WalletAccount = walletInput.WalletAccount
 				break
 			}
 		}
@@ -79,7 +86,7 @@ func decodeTxInputs(mtx *wire.MsgTx, walletInputs []*WalletInput) (inputs []*TxI
 	return
 }
 
-func decodeTxOutputs(mtx *wire.MsgTx, netParams *chaincfg.Params) (outputs []*TxOutput) {
+func decodeTxOutputs(mtx *wire.MsgTx, netParams *chaincfg.Params, walletOutputs []*WalletOutput) (outputs []*TxOutput) {
 	outputs = make([]*TxOutput, len(mtx.TxOut))
 	txType := stake.DetermineTxType(mtx)
 
@@ -90,6 +97,7 @@ func decodeTxOutputs(mtx *wire.MsgTx, netParams *chaincfg.Params) (outputs []*Tx
 			Version: int32(txOut.Version),
 		}
 
+		// get address and script type for output
 		if (txType == stake.TxTypeSStx) && (stake.IsStakeSubmissionTxOut(i)) {
 			addr, err := stake.AddrFromSStxPkScrCommitment(txOut.PkScript, netParams)
 			if err == nil {
@@ -105,6 +113,15 @@ func decodeTxOutputs(mtx *wire.MsgTx, netParams *chaincfg.Params) (outputs []*Tx
 				output.Address = addrs[0].EncodeAddress()
 			}
 			output.ScriptType = scriptClass.String()
+		}
+
+		// override address and set account details if this is wallet output
+		for _, walletOutput := range walletOutputs {
+			if walletOutput.Index == output.Index {
+				output.Address = walletOutput.Address
+				output.WalletAccount = walletOutput.WalletAccount
+				break
+			}
 		}
 
 		outputs[i] = output

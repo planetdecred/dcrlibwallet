@@ -192,27 +192,37 @@ func (lw *LibWallet) decodeTransactionWithTxSummary(txSummary *wallet.Transactio
 		}
 	}
 
-	var totalInputAmount, totalOutputAmount int64
 	walletInputs := make([]*txhelper.WalletInput, len(txSummary.MyInputs))
 	for i, input := range txSummary.MyInputs {
 		walletInputs[i] = &txhelper.WalletInput{
-			Index:           int32(input.Index),
-			PreviousAccount: int32(input.PreviousAccount),
-			AccountName:     lw.AccountName(input.PreviousAccount),
+			Index:    int32(input.Index),
+			AmountIn: int64(input.PreviousAmount),
+			WalletAccount: &txhelper.WalletAccount{
+				AccountNumber: int32(input.PreviousAccount),
+				AccountName:   lw.AccountName(input.PreviousAccount),
+			},
 		}
-		totalInputAmount += int64(input.PreviousAmount)
 	}
-	for _, output := range txSummary.MyOutputs {
-		totalOutputAmount += int64(output.Amount)
+
+	walletOutputs := make([]*txhelper.WalletOutput, len(txSummary.MyOutputs))
+	for i, output := range txSummary.MyOutputs {
+		walletOutputs[i] = &txhelper.WalletOutput{
+			Index:     int32(output.Index),
+			AmountOut: int64(output.Amount),
+			Address:   output.Address.EncodeAddress(),
+			WalletAccount: &txhelper.WalletAccount{
+				AccountNumber: int32(output.Account),
+				AccountName:   lw.AccountName(output.Account),
+			},
+		}
 	}
 
 	walletTx := &txhelper.TxInfoFromWallet{
-		BlockHeight:       blockHeight,
-		Timestamp:         txSummary.Timestamp,
-		Hex:               fmt.Sprintf("%x", txSummary.Transaction),
-		Inputs:            walletInputs,
-		TotalOutputAmount: totalOutputAmount,
-		TotalInputAmount:  totalInputAmount,
+		BlockHeight: blockHeight,
+		Timestamp:   txSummary.Timestamp,
+		Hex:         fmt.Sprintf("%x", txSummary.Transaction),
+		Inputs:      walletInputs,
+		Outputs:     walletOutputs,
 	}
 
 	return txhelper.DecodeTransaction(walletTx, lw.activeNet.Params)

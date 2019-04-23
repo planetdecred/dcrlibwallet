@@ -67,33 +67,45 @@ type TxInput struct {
 	PreviousTransactionHash  string `json:"previous_transaction_hash"`
 	PreviousTransactionIndex int32  `json:"previous_transaction_index"`
 	PreviousOutpoint         string `json:"previous_outpoint"`
-	AmountIn                 int64  `json:"amount_in"`
-	*WalletInput
+	Amount                   int64  `json:"amount"`
+	*WalletAccount
 }
 
 type TxOutput struct {
 	Index      int32  `json:"index"`
 	Amount     int64  `json:"amount"`
+	Address    string `json:"address"`
 	Version    int32  `json:"version"`
 	ScriptType string `json:"script_type"`
-	Address    string `json:"address"`
+	*WalletAccount
 }
 
 // TxInfoFromWallet contains tx data that relates to the querying wallet.
 // This info is used with `DecodeTransaction` to compose the entire details of a transaction.
 type TxInfoFromWallet struct {
-	Hex               string
-	Timestamp         int64
-	BlockHeight       int32
-	Inputs            []*WalletInput
-	TotalInputAmount  int64
-	TotalOutputAmount int64
+	Hex         string
+	Timestamp   int64
+	BlockHeight int32
+	Inputs      []*WalletInput
+	Outputs     []*WalletOutput
 }
 
 type WalletInput struct {
-	Index           int32  `json:"index"`
-	PreviousAccount int32  `json:"previous_account"`
-	AccountName     string `json:"account_name"`
+	Index    int32 `json:"index"`
+	AmountIn int64 `json:"amount_in"`
+	*WalletAccount
+}
+
+type WalletOutput struct {
+	Index     int32  `json:"index"`
+	AmountOut int64  `json:"amount"`
+	Address   string `json:"address"`
+	*WalletAccount
+}
+
+type WalletAccount struct {
+	AccountNumber int32  `json:"previous_account"`
+	AccountName   string `json:"account_name"`
 }
 
 func FormatTransactionType(txType wallet.TransactionType) string {
