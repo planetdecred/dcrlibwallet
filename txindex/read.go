@@ -2,27 +2,19 @@ package txindex
 
 import (
 	"github.com/asdine/storm"
-	"github.com/raedahgroup/dcrlibwallet/txhelper"
 	"github.com/asdine/storm/q"
+	"github.com/raedahgroup/dcrlibwallet/txhelper"
 )
 
 const MaxReOrgBlocks = 6
 
-func (db *DB) CountTx(txType string) (int, error) {
-	if txType == "" {
-		return db.txDB.Count(&txhelper.Transaction{})
-	}
-
-	return db.txDB.Select(q.EqF("Type", txType)).Count(&txhelper.Transaction{})
+func (db *DB) CountTx(filter *ReadFilter) (int, error) {
+	return db.createTxQuery(filter).Count(&txhelper.Transaction{})
 }
 
-func (db *DB) Read(offset, limit int32, txType string) (transactions []*txhelper.Transaction, err error) {
-	query := db.txDB.Select()
-	if txType != "" {
-		query = db.txDB.Select(q.EqF("Type", txType))
-	}
+func (db *DB) Read(offset, limit int32, filter *ReadFilter) (transactions []*txhelper.Transaction, err error) {
+	query := db.createTxQuery(filter).OrderBy("Timestamp").Reverse()
 
-	query = query.OrderBy("Timestamp").Reverse()
 	if offset > 0 {
 		query = query.Skip(int(offset))
 	}
@@ -35,6 +27,22 @@ func (db *DB) Read(offset, limit int32, txType string) (transactions []*txhelper
 		err = nil
 	}
 
+	return
+}
+
+func (db *DB) createTxQuery(filter *ReadFilter) (query storm.Query) {
+	if filter == nil {
+		query = db.txDB.Select()
+	} else {
+		var filters []q.Matcher
+		for _, txType := range filter.typeFilter {
+			filters = append(filters, q.StrictEq("Type", txType))
+		}
+		for _, direction := range filter.directionFilter {
+			filters = append(filters, q.StrictEq("Direction", direction))
+		}
+		query = db.txDB.Select(filters...)
+	}
 	return
 }
 

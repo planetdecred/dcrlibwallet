@@ -30,11 +30,11 @@ func DecodeTransaction(walletTx *TxInfoFromWallet, netParams *chaincfg.Params) (
 	ssGenVersion, lastBlockValid, voteBits := voteInfo(msgTx)
 
 	return &Transaction{
-		Hash:          msgTx.TxHash().String(),
-		Type:          FormatTransactionType(txType),
-		Hex:           walletTx.Hex,
-		Timestamp:     walletTx.Timestamp,
-		BlockHeight:   walletTx.BlockHeight,
+		Hash:        msgTx.TxHash().String(),
+		Type:        FormatTransactionType(txType),
+		Hex:         walletTx.Hex,
+		Timestamp:   walletTx.Timestamp,
+		BlockHeight: walletTx.BlockHeight,
 
 		Version:  int32(msgTx.Version),
 		LockTime: int32(msgTx.LockTime),

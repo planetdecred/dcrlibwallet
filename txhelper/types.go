@@ -39,11 +39,11 @@ type TransactionDestination struct {
 }
 
 type Transaction struct {
-	Hash          string `storm:"id,unique",json:"hash"`
-	Type          string `storm:"index",json:"type"`
-	Hex           string `json:"hex"`
-	Timestamp     int64  `json:"timestamp"`
-	BlockHeight   int32  `json:"block_height"`
+	Hash        string `storm:"id,unique" json:"hash"`
+	Type        string `storm:"index" json:"type"`
+	Hex         string `json:"hex"`
+	Timestamp   int64  `json:"timestamp"`
+	BlockHeight int32  `json:"block_height"`
 
 	Version  int32 `json:"version"`
 	LockTime int32 `json:"lock_time"`
@@ -52,7 +52,7 @@ type Transaction struct {
 	FeeRate  int64 `json:"fee_rate"`
 	Size     int   `json:"size"`
 
-	Direction TransactionDirection `json:"direction"`
+	Direction TransactionDirection `storm:"index" json:"direction"`
 	Amount    int64                `json:"amount"`
 	Inputs    []*TxInput           `json:"inputs"`
 	Outputs   []*TxOutput          `json:"outputs"`
