@@ -39,7 +39,7 @@ func (lw *LibWallet) AccountOfAddress(address string) string {
 		return err.Error()
 	}
 	info, _ := lw.wallet.AddressInfo(addr)
-	return lw.AccountName(info.Account())
+	return lw.AccountName(int32(info.Account()))
 }
 
 func (lw *LibWallet) AddressInfo(address string) (*AddressInfo, error) {
@@ -57,7 +57,7 @@ func (lw *LibWallet) AddressInfo(address string) (*AddressInfo, error) {
 	if info != nil {
 		addressInfo.IsMine = true
 		addressInfo.AccountNumber = info.Account()
-		addressInfo.AccountName = lw.AccountName(info.Account())
+		addressInfo.AccountName = lw.AccountName(int32(info.Account()))
 	}
 
 	return addressInfo, nil

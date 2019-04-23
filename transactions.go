@@ -267,7 +267,7 @@ func (lw *LibWallet) parseTxSummary(tx *wallet.TransactionSummary, blockHash *ch
 			Index:           int32(debit.Index),
 			PreviousAccount: int32(debit.PreviousAccount),
 			PreviousAmount:  int64(debit.PreviousAmount),
-			AccountName:     lw.AccountName(debit.PreviousAccount)}
+			AccountName:     lw.AccountName(int32(debit.PreviousAccount))}
 	}
 
 	var direction int32 = -1
