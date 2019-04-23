@@ -36,12 +36,12 @@ func Initialize(dbPath string, generateWalletAddress GenerateAddressFn, addressM
 		return nil, err
 	}
 
-	err = ensureDatabaseVersion(txDB, dbPath, generateWalletAddress)
+	txDB, err = ensureDatabaseVersion(txDB, dbPath, generateWalletAddress)
 	if err != nil {
 		return nil, err
 	}
 
-	err = ensureWalletDatabaseMatch(txDB, dbPath, addressMatchesWallet, generateWalletAddress)
+	txDB, err = ensureWalletDatabaseMatch(txDB, dbPath, addressMatchesWallet, generateWalletAddress)
 	if err != nil {
 		return nil, err
 	}

@@ -19,6 +19,10 @@ type TransactionListener interface {
 func (lw *LibWallet) IndexTransactions(startBlockHeight int32, endBlockHeight int32, afterIndexing func()) (err error) {
 	defer func() {
 		afterIndexing()
+
+		// mark current end block height as last index point
+		lw.txIndexDB.SaveLastIndexPoint(endBlockHeight)
+
 		count, err := lw.txIndexDB.Count(&txhelper.Transaction{})
 		if err != nil {
 			log.Errorf("Count tx error :%v", err)
