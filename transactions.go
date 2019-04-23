@@ -209,7 +209,6 @@ func (lw *LibWallet) decodeTransactionWithTxSummary(txSummary *wallet.Transactio
 		BlockHeight:       blockHeight,
 		Timestamp:         txSummary.Timestamp,
 		Hex:               fmt.Sprintf("%x", txSummary.Transaction),
-		Confirmations:     txhelper.TxConfirmations(blockHeight, lw.GetBestBlock()),
 		Inputs:            walletInputs,
 		TotalOutputAmount: totalOutputAmount,
 		TotalInputAmount:  totalInputAmount,

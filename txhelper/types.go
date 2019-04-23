@@ -85,7 +85,6 @@ type TxInfoFromWallet struct {
 	Hex               string
 	Timestamp         int64
 	BlockHeight       int32
-	Confirmations     int32
 	Inputs            []*WalletInput
 	TotalInputAmount  int64
 	TotalOutputAmount int64
