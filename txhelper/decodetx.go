@@ -70,12 +70,15 @@ func decodeTxInputs(mtx *wire.MsgTx, walletInputs []*WalletInput) (inputs []*TxI
 			PreviousTransactionIndex: int32(txIn.PreviousOutPoint.Index),
 			PreviousOutpoint:         txIn.PreviousOutPoint.String(),
 			Amount:                   txIn.ValueIn,
+			AccountName:              "external", // correct account name and number set below if this is a wallet output
+			AccountNumber:            -1,
 		}
 
-		// check if this is a wallet input
+		// override account details if this is wallet input
 		for _, walletInput := range walletInputs {
 			if walletInput.Index == int32(i) {
-				input.WalletAccount = walletInput.WalletAccount
+				input.AccountName = walletInput.AccountName
+				input.AccountNumber = walletInput.AccountNumber
 				break
 			}
 		}
@@ -91,35 +94,41 @@ func decodeTxOutputs(mtx *wire.MsgTx, netParams *chaincfg.Params, walletOutputs 
 	txType := stake.DetermineTxType(mtx)
 
 	for i, txOut := range mtx.TxOut {
-		output := &TxOutput{
-			Index:   int32(i),
-			Amount:  txOut.Value,
-			Version: int32(txOut.Version),
-		}
-
 		// get address and script type for output
+		var address, scriptType string
 		if (txType == stake.TxTypeSStx) && (stake.IsStakeSubmissionTxOut(i)) {
 			addr, err := stake.AddrFromSStxPkScrCommitment(txOut.PkScript, netParams)
 			if err == nil {
-				output.Address = addr.EncodeAddress()
+				address = addr.EncodeAddress()
 			}
-			output.ScriptType = txscript.StakeSubmissionTy.String()
+			scriptType = txscript.StakeSubmissionTy.String()
 		} else {
 			// Ignore the error here since an error means the script
 			// couldn't parse and there is no additional information
 			// about it anyways.
 			scriptClass, addrs, _, _ := txscript.ExtractPkScriptAddrs(txOut.Version, txOut.PkScript, netParams)
 			if len(addrs) > 0 {
-				output.Address = addrs[0].EncodeAddress()
+				address = addrs[0].EncodeAddress()
 			}
-			output.ScriptType = scriptClass.String()
+			scriptType = scriptClass.String()
 		}
 
-		// override address and set account details if this is wallet output
+		output := &TxOutput{
+			Index:         int32(i),
+			Amount:        txOut.Value,
+			Version:       int32(txOut.Version),
+			ScriptType:    scriptType,
+			Address:       address, // correct address, account name and number set below if this is a wallet output
+			AccountName:   "external",
+			AccountNumber: -1,
+		}
+
+		// override address and account details if this is wallet output
 		for _, walletOutput := range walletOutputs {
 			if walletOutput.Index == output.Index {
 				output.Address = walletOutput.Address
-				output.WalletAccount = walletOutput.WalletAccount
+				output.AccountName = walletOutput.AccountName
+				output.AccountNumber = walletOutput.AccountNumber
 				break
 			}
 		}

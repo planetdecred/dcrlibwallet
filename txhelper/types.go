@@ -68,16 +68,18 @@ type TxInput struct {
 	PreviousTransactionIndex int32  `json:"previous_transaction_index"`
 	PreviousOutpoint         string `json:"previous_outpoint"`
 	Amount                   int64  `json:"amount"`
-	*WalletAccount
+	AccountName              string `json:"account_name"`
+	AccountNumber            int32  `json:"previous_account"`
 }
 
 type TxOutput struct {
-	Index      int32  `json:"index"`
-	Amount     int64  `json:"amount"`
-	Address    string `json:"address"`
-	Version    int32  `json:"version"`
-	ScriptType string `json:"script_type"`
-	*WalletAccount
+	Index         int32  `json:"index"`
+	Amount        int64  `json:"amount"`
+	Version       int32  `json:"version"`
+	ScriptType    string `json:"script_type"`
+	Address       string `json:"address"`
+	AccountName   string `json:"account_name"`
+	AccountNumber int32  `json:"previous_account"`
 }
 
 // TxInfoFromWallet contains tx data that relates to the querying wallet.
