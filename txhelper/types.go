@@ -106,7 +106,7 @@ type WalletOutput struct {
 }
 
 type WalletAccount struct {
-	AccountNumber int32  `json:"previous_account"`
+	AccountNumber int32  `json:"account_number"`
 	AccountName   string `json:"account_name"`
 }
 
