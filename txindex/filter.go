@@ -55,7 +55,7 @@ func (filter *ReadFilter) OrForDirections(txDirections ...txhelper.TransactionDi
 	return filter
 }
 
-func (filter *ReadFilter) createMatcher(fieldName string, items []interface{}, joinFunc func(matchers ...q.Matcher) q.Matcher ) q.Matcher {
+func (filter *ReadFilter) createMatcher(fieldName string, items []interface{}, joinFunc func(matchers ...q.Matcher) q.Matcher) q.Matcher {
 	if len(items) == 0 {
 		return filter.matcher
 	}
@@ -99,7 +99,7 @@ func (filter *ReadFilter) AndNotWithTxTypes(txTypes ...string) *ReadFilter {
 	return filter
 }
 
-func (filter *ReadFilter) createNotMatcher(fieldName string, items []interface{}, joinFunc func(matchers ...q.Matcher) q.Matcher ) q.Matcher {
+func (filter *ReadFilter) createNotMatcher(fieldName string, items []interface{}, joinFunc func(matchers ...q.Matcher) q.Matcher) q.Matcher {
 	if len(items) == 0 {
 		return filter.matcher
 	}
