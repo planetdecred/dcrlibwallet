@@ -5,20 +5,20 @@ import (
 )
 
 var (
-	transactionDirectionNames = []string{"Sent", "Received", "Transferred", "Unclear"}
+	transactionDirectionNames = []string{"Sent", "Received", "Yourself", "Unclear"}
 )
 
 const (
-	// TransactionDirectionSent for transactions sent to external address(es) from wallet
+	// TransactionDirectionSent for transactions sent to external address(es) from wallet.
 	TransactionDirectionSent TransactionDirection = iota
 
-	// TransactionDirectionReceived for transactions received from external address(es) into wallet
+	// TransactionDirectionReceived for transactions received from external address(es) into wallet.
 	TransactionDirectionReceived
 
-	// TransactionDirectionTransferred for transactions sent from wallet to internal address(es)
-	TransactionDirectionTransferred
+	// TransactionDirectionYourself for transactions sent from one wallet address to another (within the wallet).
+	TransactionDirectionYourself
 
-	// TransactionDirectionUnclear for unrecognized transaction directions
+	// TransactionDirectionUnclear for unrecognized transaction directions.
 	TransactionDirectionUnclear
 )
 

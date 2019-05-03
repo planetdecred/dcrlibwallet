@@ -49,7 +49,7 @@ func TransactionAmountAndDirection(inputTotal, outputTotal, fee int64) (amount i
 
 	if amountDifference < 0 && float64(fee) == math.Abs(float64(amountDifference)) {
 		// transferred internally, the only real amount spent was transaction fee
-		direction = TransactionDirectionTransferred
+		direction = TransactionDirectionYourself
 		amount = fee
 	} else if amountDifference > 0 {
 		// received
