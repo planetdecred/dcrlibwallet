@@ -15,11 +15,11 @@ func Filter() *ReadFilter {
 
 func (filter *ReadFilter) AndWithTxTypes(txTypes ...string) *ReadFilter {
 	var filterItems []interface{}
-	for _, txDirection := range txTypes {
-		filterItems = append(filterItems, txDirection)
+	for _, txType := range txTypes {
+		filterItems = append(filterItems, txType)
 	}
 
-	filter.matcher = filter.createMatcher("Direction", filterItems, q.And)
+	filter.matcher = filter.createMatcher("Type", filterItems, q.And)
 	return filter
 }
 
@@ -30,17 +30,16 @@ func (filter *ReadFilter) AndForDirections(txDirections ...txhelper.TransactionD
 	}
 
 	filter.matcher = filter.createMatcher("Direction", filterItems, q.And)
-
 	return filter
 }
 
 func (filter *ReadFilter) OrWithTxTypes(txTypes ...string) *ReadFilter {
 	var filterItems []interface{}
-	for _, txDirection := range txTypes {
-		filterItems = append(filterItems, txDirection)
+	for _, txType := range txTypes {
+		filterItems = append(filterItems, txType)
 	}
 
-	filter.matcher = filter.createMatcher("Direction", filterItems, q.Or)
+	filter.matcher = filter.createMatcher("Type", filterItems, q.Or)
 	return filter
 }
 
@@ -55,12 +54,13 @@ func (filter *ReadFilter) OrForDirections(txDirections ...txhelper.TransactionDi
 	return filter
 }
 
-func (filter *ReadFilter) createMatcher(fieldName string, items []interface{}, joinFunc func(matchers ...q.Matcher) q.Matcher) q.Matcher {
-	if len(items) == 0 {
+func (filter *ReadFilter) createMatcher(fieldName string, fieldValues []interface{}, joinMatchers func(matchers ...q.Matcher) q.Matcher) q.Matcher {
+	if len(fieldValues) == 0 {
 		return filter.matcher
 	}
+
 	var matchers []q.Matcher
-	for _, item := range items {
+	for _, item := range fieldValues {
 		matchers = append(matchers, q.StrictEq(fieldName, item))
 	}
 
@@ -70,10 +70,11 @@ func (filter *ReadFilter) createMatcher(fieldName string, items []interface{}, j
 
 	var matcher q.Matcher
 	if len(matchers) > 1 {
-		matcher = joinFunc(matchers...)
+		matcher = joinMatchers(matchers...)
 	} else {
 		matcher = matchers[0]
 	}
+
 	return matcher
 }
 
