@@ -2,7 +2,6 @@ package txindex
 
 import (
 	"github.com/asdine/storm"
-	"github.com/asdine/storm/q"
 	"github.com/raedahgroup/dcrlibwallet/txhelper"
 )
 
@@ -31,17 +30,10 @@ func (db *DB) Read(offset, limit int32, filter *ReadFilter) (transactions []*txh
 }
 
 func (db *DB) createTxQuery(filter *ReadFilter) (query storm.Query) {
-	if filter == nil {
+	if filter == nil || filter.matcher == nil {
 		query = db.txDB.Select()
 	} else {
-		var filters []q.Matcher
-		for _, txType := range filter.typeFilter {
-			filters = append(filters, q.StrictEq("Type", txType))
-		}
-		for _, direction := range filter.directionFilter {
-			filters = append(filters, q.StrictEq("Direction", direction))
-		}
-		query = db.txDB.Select(filters...)
+		query = db.txDB.Select(filter.matcher)
 	}
 	return
 }
