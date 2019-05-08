@@ -8,11 +8,11 @@ import (
 
 	"github.com/decred/dcrd/addrmgr"
 	"github.com/decred/dcrd/rpcclient"
-	"github.com/decred/dcrwallet/chain"
+	chain "github.com/decred/dcrwallet/chain/v2"
 	"github.com/decred/dcrwallet/errors"
 	"github.com/decred/dcrwallet/p2p"
-	"github.com/decred/dcrwallet/spv"
-	"github.com/decred/dcrwallet/wallet"
+	spv "github.com/decred/dcrwallet/spv/v2"
+	wallet "github.com/decred/dcrwallet/wallet/v2"
 )
 
 type syncData struct {

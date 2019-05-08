@@ -12,11 +12,12 @@ import (
 	"github.com/asdine/storm"
 	"github.com/decred/dcrd/dcrjson"
 	"github.com/decred/dcrwallet/errors"
+	loader "github.com/decred/dcrwallet/loader"
 	"github.com/decred/dcrwallet/netparams"
-	"github.com/decred/dcrwallet/wallet"
+	wallet"github.com/decred/dcrwallet/wallet/v2"
 	"github.com/decred/dcrwallet/wallet/txrules"
 	"github.com/raedahgroup/dcrlibwallet/utils"
-	"go.etcd.io/bbolt"
+	bolt "go.etcd.io/bbolt"
 )
 
 var shutdownRequestChannel = make(chan struct{})
@@ -33,7 +34,7 @@ const (
 type LibWallet struct {
 	walletDataDir string
 	activeNet     *netparams.Params
-	walletLoader  *WalletLoader
+	walletLoader  *loader.Loader
 	wallet        *wallet.Wallet
 	txDB          *storm.DB
 	*syncData
@@ -78,15 +79,15 @@ func newLibWallet(walletDataDir, walletDbDriver string, activeNet *netparams.Par
 	// init walletLoader
 	defaultFees := txrules.DefaultRelayFeePerKb.ToCoin()
 
-	stakeOptions := &StakeOptions{
+	stakeOptions := &loader.StakeOptions{
 		VotingEnabled: false,
 		AddressReuse:  false,
 		VotingAddress: nil,
 		TicketFee:     defaultFees,
 	}
 
-	walletLoader := NewLoader(activeNet.Params, walletDataDir, stakeOptions, 20, false,
-		defaultFees, wallet.DefaultAccountGapLimit)
+	walletLoader := loader.NewLoader(activeNet.Params, walletDataDir, stakeOptions, 20, false,
+		defaultFees, wallet.DefaultAccountGapLimit, false)
 
 	if walletDbDriver != "" {
 		walletLoader.SetDatabaseDriver(walletDbDriver)

@@ -6,7 +6,7 @@ import (
 	"github.com/decred/dcrd/dcrec"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrwallet/errors"
-	"github.com/decred/dcrwallet/wallet"
+	wallet "github.com/decred/dcrwallet/wallet/v2"
 	"github.com/raedahgroup/dcrlibwallet/addresshelper"
 )
 

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"os"
 	"os/signal"
+	"strings"
 
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/hdkeychain"
@@ -125,4 +126,14 @@ func DecodeBase64(base64Text string) ([]byte, error) {
 	}
 
 	return b, nil
+}
+
+// normalizeNetwork returns the common name of a network type used to create
+// file paths. This allows differently versioned networks to use the same path.
+func normalizeNetwork(network string) string {
+	if strings.HasPrefix(network, "testnet") {
+		return "testnet"
+	}
+
+	return network
 }
