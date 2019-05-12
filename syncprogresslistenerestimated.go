@@ -92,8 +92,8 @@ type GeneralSyncProgressReport struct {
 	Error          string `json:"error"`
 	Done           bool   `json:"done"`
 
-	TotalSyncProgress  int32    `json:"totalSyncProgress"`
-	TotalTimeRemaining string   `json:"totalTimeRemaining"`
+	TotalSyncProgress  int32  `json:"totalSyncProgress"`
+	TotalTimeRemaining string `json:"totalTimeRemaining"`
 }
 
 type HeadersFetchProgressReport struct {
@@ -108,7 +108,7 @@ type AddressDiscoveryProgressReport struct {
 }
 
 type HeadersRescanProgressReport struct {
-	TotalHeadersToScan  int32  `json:"totalHeadersToScan"`
+	TotalHeadersToScan  int32 `json:"totalHeadersToScan"`
 	RescanProgress      int32 `json:"rescanProgress"`
 	CurrentRescanHeight int32 `json:"currentRescanHeight"`
 }

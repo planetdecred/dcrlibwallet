@@ -7,8 +7,8 @@ type SyncProgressEstimator struct {
 	getBestBlock          func() int32
 	getBestBlockTimestamp func() int64
 
-	showLog             bool
-	syncing             bool
+	showLog bool
+	syncing bool
 
 	generalProgress          GeneralSyncProgressReport
 	headersFetchProgress     HeadersFetchProgressReport
@@ -42,10 +42,10 @@ func SetupSyncProgressEstimator(netType string, showLog bool, getBestBlock func(
 		getBestBlock:          getBestBlock,
 		getBestBlockTimestamp: getBestBlockTimestamp,
 
-		showLog:             showLog,
-		syncing:             true,
+		showLog: showLog,
+		syncing: true,
 
-		progressListener:   progressListener,
+		progressListener: progressListener,
 
 		beginFetchTimeStamp:   -1,
 		headersFetchTimeSpent: -1,
@@ -103,4 +103,3 @@ func (syncListener *SyncProgressEstimator) OnSyncError(code int32, err error) {
 	// notify sync initiator of update
 	syncListener.progressListener.OnGeneralSyncProgress(syncListener.generalProgress)
 }
-
