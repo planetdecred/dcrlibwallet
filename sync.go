@@ -23,8 +23,29 @@ type syncData struct {
 	rescanning            bool
 }
 
+type SyncErrorCode int32
+
+const (
+	ErrorCodeUnexpectedError SyncErrorCode = iota
+	ErrorCodeContextCanceled
+	ErrorCodeDeadlineExceeded
+	ErrorCodeInvalidPeerAddress
+)
+
 func (lw *LibWallet) AddSyncProgressListener(syncProgressListener SyncProgressListener) {
 	lw.syncProgressListeners = append(lw.syncProgressListeners, syncProgressListener)
+}
+
+func (lw *LibWallet) AddEstimatedSyncProgressListener(syncProgressJsonListener EstimatedSyncProgressJsonListener) {
+	syncProgressEstimator := SetupSyncProgressEstimator(
+		lw.activeNet.Params.Name,
+		false,
+		lw.GetBestBlock,
+		lw.GetBestBlockTimeStamp,
+		&EstimatedSyncProgressListenerJsonWrapper{jsonListener: syncProgressJsonListener},
+	)
+
+	lw.AddSyncProgressListener(syncProgressEstimator)
 }
 
 func (lw *LibWallet) SpvSync(peerAddresses string) error {
@@ -72,7 +93,7 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 	ctx, cancel := contextWithShutdownCancel(context.Background())
 	lw.cancelSync = cancel
 
-	// syncer.Run uses a wait group to block the thread until defaultsynclistener completes or an error occurs
+	// syncer.Run uses a wait group to block the thread until syncprogressestimator completes or an error occurs
 	go func() {
 		err := syncer.Run(ctx)
 		if err != nil {

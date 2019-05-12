@@ -12,6 +12,18 @@ const (
 	SyncStateFinish   = "finish"
 )
 
+type SyncProgressListener interface {
+	OnPeerConnected(peerCount int32)
+	OnPeerDisconnected(peerCount int32)
+	OnFetchMissingCFilters(missingCFiltersStart, missingCFiltersEnd int32, state string)
+	OnFetchedHeaders(fetchedHeadersCount int32, lastHeaderTime int64, state string)
+	OnDiscoveredAddresses(state string)
+	OnRescan(rescannedThrough int32, state string)
+	OnIndexTransactions(totalIndex int32)
+	OnSynced(synced bool)
+	OnSyncError(code int32, err error) // use int32 to allow gomobile bind
+}
+
 func (lw *LibWallet) spvSyncNotificationCallbacks(loadedWallet *wallet.Wallet) *spv.Notifications {
 	generalNotifications := lw.generalSyncNotificationCallbacks(loadedWallet)
 	return &spv.Notifications{
@@ -43,7 +55,7 @@ func (lw *LibWallet) spvSyncNotificationCallbacks(loadedWallet *wallet.Wallet) *
 func (lw *LibWallet) generalSyncNotificationCallbacks(loadedWallet *wallet.Wallet) *chain.Notifications {
 	return &chain.Notifications{
 		Synced: func(sync bool) {
-			// begin indexing transactions after defaultsynclistener is completed,
+			// begin indexing transactions after syncprogressestimator is completed,
 			// syncProgressListeners.OnSynced() will be invoked after transactions are indexed
 			lw.IndexTransactions(-1, -1, func() {
 				for _, syncResponse := range lw.syncProgressListeners {

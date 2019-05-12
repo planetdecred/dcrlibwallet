@@ -1,14 +1,12 @@
-package defaultsynclistener
+package dcrlibwallet
 
 import (
 	"fmt"
-	"time"
-
-	"github.com/raedahgroup/dcrlibwallet"
 	"math"
+	"time"
 )
 
-func (syncListener *DefaultSyncListener) OnFetchedHeaders(fetchedHeadersCount int32, lastHeaderTime int64, state string) {
+func (syncListener *SyncProgressEstimator) OnFetchedHeaders(fetchedHeadersCount int32, lastHeaderTime int64, state string) {
 	if !syncListener.syncing || syncListener.headersFetchTimeSpent != -1 {
 		// Ignore this call because this function gets called for each peer and
 		// we'd want to ignore those calls as far as the wallet is synced (i.e. !syncListener.syncing)
@@ -21,7 +19,7 @@ func (syncListener *DefaultSyncListener) OnFetchedHeaders(fetchedHeadersCount in
 	estimatedFinalBlockHeight := estimateFinalBlockHeight(syncListener.netType, bestBlockTimeStamp, bestBlock)
 
 	switch state {
-	case dcrlibwallet.SyncStateStart:
+	case SyncStateStart:
 		if syncListener.beginFetchTimeStamp != -1 {
 			// already started headers fetching
 			break
@@ -32,17 +30,13 @@ func (syncListener *DefaultSyncListener) OnFetchedHeaders(fetchedHeadersCount in
 		syncListener.currentHeaderHeight = syncListener.startHeaderHeight
 
 		totalHeadersToFetch := int32(estimatedFinalBlockHeight) - syncListener.startHeaderHeight
-
-		syncListener.progressReport.Update(SyncStatusInProgress, func(report *progressReport) {
-			report.CurrentStep = FetchingBlockHeaders
-			report.TotalHeadersToFetch = totalHeadersToFetch
-		})
+		syncListener.headersFetchProgress.TotalHeadersToFetch = totalHeadersToFetch
 
 		if syncListener.showLog {
 			fmt.Printf("Step 1 of 3 - fetching %d block headers.\n", totalHeadersToFetch)
 		}
 
-	case dcrlibwallet.SyncStateProgress:
+	case SyncStateProgress:
 		// increment current block height value
 		syncListener.currentHeaderHeight += fetchedHeadersCount
 
@@ -65,29 +59,27 @@ func (syncListener *DefaultSyncListener) OnFetchedHeaders(fetchedHeadersCount in
 		totalTimeRemaining := estimatedTotalSyncTime - float64(timeTakenSoFar)
 		totalSyncProgress := (float64(timeTakenSoFar) / float64(estimatedTotalSyncTime)) * 100.0
 
-		syncListener.progressReport.Update(SyncStatusInProgress, func(report *progressReport) {
-			// update total progress info
-			report.TotalSyncProgress = int32(math.Round(totalSyncProgress))
-			report.TotalTimeRemaining = calculateTotalTimeRemaining(totalTimeRemaining)
+		// update total progress info
+		syncListener.generalProgress.TotalSyncProgress = int32(math.Round(totalSyncProgress))
+		syncListener.generalProgress.TotalTimeRemaining = calculateTotalTimeRemaining(totalTimeRemaining)
 
-			// update headers statistics
-			report.TotalHeadersToFetch = syncEndPoint
-			report.DaysBehind = calculateDaysBehind(lastHeaderTime)
-
-			// update headers progress sync info
-			report.FetchedHeadersCount = totalFetchedHeaders
-			report.HeadersFetchProgress = int32(math.Round(headersFetchingRate * 100))
-		})
+		// update headers progress sync info
+		syncListener.headersFetchProgress.TotalHeadersToFetch = syncEndPoint
+		syncListener.headersFetchProgress.DaysBehind = calculateDaysBehind(lastHeaderTime)
+		syncListener.headersFetchProgress.FetchedHeadersCount = totalFetchedHeaders
+		syncListener.headersFetchProgress.HeadersFetchProgress = int32(math.Round(headersFetchingRate * 100))
 
 		if syncListener.showLog {
-			progressReport := syncListener.progressReport.Read()
 			fmt.Printf("Syncing %d%%, %s remaining, fetched %d of %d block headers, %s behind.\n",
-				progressReport.TotalSyncProgress, progressReport.TotalTimeRemaining,
-				progressReport.FetchedHeadersCount, progressReport.TotalHeadersToFetch,
-				progressReport.DaysBehind)
+				syncListener.generalProgress.TotalSyncProgress,
+				syncListener.generalProgress.TotalTimeRemaining,
+				syncListener.headersFetchProgress.FetchedHeadersCount,
+				syncListener.headersFetchProgress.TotalHeadersToFetch,
+				syncListener.headersFetchProgress.DaysBehind,
+			)
 		}
 
-	case dcrlibwallet.SyncStateFinish:
+	case SyncStateFinish:
 		syncListener.headersFetchTimeSpent = time.Now().Unix() - syncListener.beginFetchTimeStamp
 		syncListener.startHeaderHeight = -1
 		syncListener.currentHeaderHeight = -1
@@ -97,12 +89,5 @@ func (syncListener *DefaultSyncListener) OnFetchedHeaders(fetchedHeadersCount in
 		}
 	}
 
-	syncListener.syncProgressUpdated(syncListener.progressReport, CurrentStepUpdate)
-
-	if state == dcrlibwallet.SyncStateFinish {
-		// clear total headers count to be re-set on RescanHeaders
-		syncListener.progressReport.Update(SyncStatusInProgress, func(report *progressReport) {
-			report.TotalHeadersToFetch = -1
-		})
-	}
+	syncListener.progressListener.OnHeadersFetchProgress(syncListener.headersFetchProgress, syncListener.generalProgress)
 }

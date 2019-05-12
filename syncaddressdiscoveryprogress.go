@@ -1,15 +1,13 @@
-package defaultsynclistener
+package dcrlibwallet
 
 import (
 	"fmt"
 	"math"
 	"time"
-
-	"github.com/raedahgroup/dcrlibwallet"
 )
 
-func (syncListener *DefaultSyncListener) OnDiscoveredAddresses(state string) {
-	if state == dcrlibwallet.SyncStateStart && syncListener.addressDiscoveryCompleted == nil {
+func (syncListener *SyncProgressEstimator) OnDiscoveredAddresses(state string) {
+	if state == SyncStateStart && syncListener.addressDiscoveryCompleted == nil {
 		if syncListener.showLog {
 			fmt.Println("Step 2 of 3 - discovering used addresses.")
 		}
@@ -20,12 +18,7 @@ func (syncListener *DefaultSyncListener) OnDiscoveredAddresses(state string) {
 	}
 }
 
-func (syncListener *DefaultSyncListener) updateAddressDiscoveryProgress() {
-	// update progress report with info of current step
-	syncListener.progressReport.Update(SyncStatusInProgress, func(report *progressReport) {
-		report.CurrentStep = DiscoveringUsedAddresses
-	})
-
+func (syncListener *SyncProgressEstimator) updateAddressDiscoveryProgress() {
 	// these values will be used every second to calculate the total sync progress
 	addressDiscoveryStartTime := time.Now().Unix()
 	totalHeadersFetchTime := float64(syncListener.headersFetchTimeSpent)
@@ -69,11 +62,11 @@ func (syncListener *DefaultSyncListener) updateAddressDiscoveryProgress() {
 				totalTimeRemaining := calculateTotalTimeRemaining(remainingAccountDiscoveryTime + estimatedRescanTime)
 
 				// update address discovery progress, total progress and total time remaining
-				syncListener.progressReport.Update(SyncStatusInProgress, func(report *progressReport) {
-					report.AddressDiscoveryProgress = int32(math.Round(discoveryProgress))
-					report.TotalSyncProgress = totalProgressPercent
-					report.TotalTimeRemaining = totalTimeRemaining
-				})
+				syncListener.generalProgress.TotalSyncProgress = totalProgressPercent
+				syncListener.generalProgress.TotalTimeRemaining = totalTimeRemaining
+
+				syncListener.addressDiscoveryProgress.AddressDiscoveryProgress = int32(math.Round(discoveryProgress))
+				syncListener.progressListener.OnAddressDiscoveryProgress(syncListener.addressDiscoveryProgress, syncListener.generalProgress)
 
 				if syncListener.showLog {
 					// avoid logging same message multiple times

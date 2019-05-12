@@ -1,4 +1,4 @@
-package defaultsynclistener
+package dcrlibwallet
 
 import (
 	"fmt"
