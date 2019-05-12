@@ -55,7 +55,7 @@ func (lw *LibWallet) spvSyncNotificationCallbacks(loadedWallet *wallet.Wallet) *
 func (lw *LibWallet) generalSyncNotificationCallbacks(loadedWallet *wallet.Wallet) *chain.Notifications {
 	return &chain.Notifications{
 		Synced: func(sync bool) {
-			// begin indexing transactions after syncprogressestimator is completed,
+			// begin indexing transactions after sync is completed,
 			// syncProgressListeners.OnSynced() will be invoked after transactions are indexed
 			lw.IndexTransactions(-1, -1, func() {
 				for _, syncResponse := range lw.syncProgressListeners {

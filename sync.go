@@ -93,7 +93,7 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 	ctx, cancel := contextWithShutdownCancel(context.Background())
 	lw.cancelSync = cancel
 
-	// syncer.Run uses a wait group to block the thread until syncprogressestimator completes or an error occurs
+	// syncer.Run uses a wait group to block the thread until sync completes or an error occurs
 	go func() {
 		err := syncer.Run(ctx)
 		if err != nil {
