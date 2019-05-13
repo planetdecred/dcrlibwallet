@@ -30,7 +30,7 @@ func (syncListener *SyncProgressEstimator) updateAddressDiscoveryProgress() {
 	everySecondTickerChannel := everySecondTicker.C
 
 	// track last logged time remaining and total percent to avoid re-logging same message
-	var lastTimeRemaining string
+	var lastTimeRemaining int64
 	var lastTotalPercent int32 = -1
 
 	syncListener.addressDiscoveryCompleted = make(chan bool)
@@ -59,23 +59,23 @@ func (syncListener *SyncProgressEstimator) updateAddressDiscoveryProgress() {
 				}
 
 				totalProgressPercent := int32(math.Round(totalProgress))
-				totalTimeRemaining := calculateTotalTimeRemaining(remainingAccountDiscoveryTime + estimatedRescanTime)
+				totalTimeRemainingSeconds := int64(math.Round(remainingAccountDiscoveryTime + estimatedRescanTime))
 
 				// update address discovery progress, total progress and total time remaining
 				syncListener.generalProgress.TotalSyncProgress = totalProgressPercent
-				syncListener.generalProgress.TotalTimeRemaining = totalTimeRemaining
+				syncListener.generalProgress.TotalTimeRemainingSeconds = totalTimeRemainingSeconds
 
 				syncListener.addressDiscoveryProgress.AddressDiscoveryProgress = int32(math.Round(discoveryProgress))
 				syncListener.progressListener.OnAddressDiscoveryProgress(syncListener.addressDiscoveryProgress, syncListener.generalProgress)
 
 				if syncListener.showLog {
 					// avoid logging same message multiple times
-					if totalProgressPercent != lastTotalPercent || totalTimeRemaining != lastTimeRemaining {
+					if totalProgressPercent != lastTotalPercent || totalTimeRemainingSeconds != lastTimeRemaining {
 						fmt.Printf("Syncing %d%%, %s remaining, discovering used addresses.\n",
-							totalProgressPercent, totalTimeRemaining)
+							totalProgressPercent, calculateTotalTimeRemaining(totalTimeRemainingSeconds))
 
 						lastTotalPercent = totalProgressPercent
-						lastTimeRemaining = totalTimeRemaining
+						lastTimeRemaining = totalTimeRemainingSeconds
 					}
 				}
 

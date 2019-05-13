@@ -92,15 +92,15 @@ type GeneralSyncProgressReport struct {
 	Error          string `json:"error"`
 	Done           bool   `json:"done"`
 
-	TotalSyncProgress  int32  `json:"totalSyncProgress"`
-	TotalTimeRemaining string `json:"totalTimeRemaining"`
+	TotalSyncProgress         int32 `json:"totalSyncProgress"`
+	TotalTimeRemainingSeconds int64 `json:"totalTimeRemainingSeconds"`
 }
 
 type HeadersFetchProgressReport struct {
-	TotalHeadersToFetch  int32  `json:"totalHeadersToFetch"`
-	DaysBehind           string `json:"daysBehind"`
-	FetchedHeadersCount  int32  `json:"fetchedHeadersCount"`
-	HeadersFetchProgress int32  `json:"headersFetchProgress"`
+	TotalHeadersToFetch    int32 `json:"totalHeadersToFetch"`
+	CurrentHeaderTimestamp int64 `json:"currentHeaderTimestamp"`
+	FetchedHeadersCount    int32 `json:"fetchedHeadersCount"`
+	HeadersFetchProgress   int32 `json:"headersFetchProgress"`
 }
 
 type AddressDiscoveryProgressReport struct {

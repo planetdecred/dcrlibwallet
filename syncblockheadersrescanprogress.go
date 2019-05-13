@@ -40,14 +40,15 @@ func (syncListener *SyncProgressEstimator) OnRescan(rescannedThrough int32, stat
 				int64(math.Round(estimatedTotalRescanTime))
 			totalProgress := (float64(totalElapsedTime) / float64(estimatedTotalSyncTime)) * 100
 
-			syncListener.generalProgress.TotalTimeRemaining = calculateTotalTimeRemaining(estimatedTotalRescanTime - float64(elapsedRescanTime))
+			totalTimeRemainingSeconds := int64(math.Round(estimatedTotalRescanTime)) + elapsedRescanTime
+			syncListener.generalProgress.TotalTimeRemainingSeconds = totalTimeRemainingSeconds
 			syncListener.generalProgress.TotalSyncProgress = int32(math.Round(totalProgress))
 		}
 
 		if syncListener.showLog {
 			fmt.Printf("Syncing %d%%, %s remaining, scanning %d of %d block headers.\n",
 				syncListener.generalProgress.TotalSyncProgress,
-				syncListener.generalProgress.TotalTimeRemaining,
+				calculateTotalTimeRemaining(syncListener.generalProgress.TotalTimeRemainingSeconds),
 				syncListener.headersRescanProgress.CurrentRescanHeight,
 				syncListener.headersRescanProgress.TotalHeadersToScan,
 			)

@@ -20,16 +20,16 @@ const (
 	DiscoveryPercentage = 0.8
 )
 
-func calculateTotalTimeRemaining(timeRemainingInSeconds float64) string {
-	minutes := int64(math.Round(timeRemainingInSeconds / 60))
+func calculateTotalTimeRemaining(timeRemainingInSeconds int64) string {
+	minutes := timeRemainingInSeconds / 60
 	if minutes > 0 {
 		return fmt.Sprintf("%d min", minutes)
 	}
-	return fmt.Sprintf("%d sec", int64(math.Round(timeRemainingInSeconds)))
+	return fmt.Sprintf("%d sec", timeRemainingInSeconds)
 }
 
-func calculateDaysBehind(lastHeaderTime int64) string {
-	hoursBehind := float64(time.Now().Unix()-lastHeaderTime) / 60
+func calculateDaysBehind(timestamp int64) string {
+	hoursBehind := float64(time.Now().Unix()-timestamp) / 60
 	daysBehind := int(math.Round(hoursBehind / 24))
 	if daysBehind < 1 {
 		return "<1 day"
