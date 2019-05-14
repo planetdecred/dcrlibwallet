@@ -208,6 +208,14 @@ func (lw *LibWallet) CancelSync() {
 	for _, syncResponse := range lw.syncProgressListeners {
 		syncResponse.OnSynced(false)
 	}
+
+	loadedWallet, walletLoaded := lw.walletLoader.LoadedWallet()
+	if !walletLoaded {
+		return
+	}
+
+	lw.walletLoader.SetNetworkBackend(nil)
+	loadedWallet.SetNetworkBackend(nil)
 }
 
 func (lw *LibWallet) RescanBlocks() error {
