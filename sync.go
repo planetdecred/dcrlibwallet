@@ -13,6 +13,7 @@ import (
 	"github.com/decred/dcrwallet/p2p"
 	"github.com/decred/dcrwallet/spv"
 	"github.com/decred/dcrwallet/wallet"
+	"github.com/raedahgroup/dcrlibwallet/syncprogressestimator"
 )
 
 type syncData struct {
@@ -37,7 +38,7 @@ func (lw *LibWallet) AddSyncProgressListener(syncProgressListener SyncProgressLi
 }
 
 func (lw *LibWallet) AddEstimatedSyncProgressListener(syncProgressJsonListener EstimatedSyncProgressJsonListener) {
-	syncProgressEstimator := SetupSyncProgressEstimator(
+	syncProgressEstimator := syncprogressestimator.Setup(
 		lw.activeNet.Params.Name,
 		false,
 		lw.GetBestBlock,
@@ -247,18 +248,18 @@ func (lw *LibWallet) RescanBlocks() error {
 			}
 			totalHeight += p.ScannedThrough
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnRescan(p.ScannedThrough, SyncStateProgress)
+				syncProgressListener.OnRescan(p.ScannedThrough, syncprogressestimator.SyncStateProgress)
 			}
 		}
 
 		select {
 		case <-ctx.Done():
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnRescan(totalHeight, SyncStateProgress)
+				syncProgressListener.OnRescan(totalHeight, syncprogressestimator.SyncStateProgress)
 			}
 		default:
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnRescan(totalHeight, SyncStateFinish)
+				syncProgressListener.OnRescan(totalHeight, syncprogressestimator.SyncStateFinish)
 			}
 		}
 	}()

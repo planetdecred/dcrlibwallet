@@ -1,4 +1,4 @@
-package dcrlibwallet
+package syncprogressestimator
 
 import "fmt"
 
@@ -34,7 +34,7 @@ type SyncProgressEstimator struct {
 // estimate the progress of the current step of the sync operation and the overall sync progress.
 // This estimated progress report is made available to the sync initiator via the specified `progressListener` callback.
 // If `showLog` is set to true, SyncProgressEstimator also prints calculated progress report to stdout.
-func SetupSyncProgressEstimator(netType string, showLog bool, getBestBlock func() int32, getBestBlockTimestamp func() int64,
+func Setup(netType string, showLog bool, getBestBlock func() int32, getBestBlockTimestamp func() int64,
 	progressListener EstimatedSyncProgressListener) *SyncProgressEstimator {
 
 	return &SyncProgressEstimator{
@@ -56,7 +56,7 @@ func SetupSyncProgressEstimator(netType string, showLog bool, getBestBlock func(
 
 /**
 Following methods satisfy the `SyncProgressListener` interface.
-Other interface methods are implemented in the different sync***progress.go files in this package.
+Other interface methods are implemented in the different step*.go files in this package.
 */
 func (syncListener *SyncProgressEstimator) OnFetchMissingCFilters(missingCFiltersStart, missingCFiltersEnd int32, state string) {
 }
