@@ -10,7 +10,6 @@ type SyncProgressEstimator struct {
 	showLog bool
 	syncing bool
 
-	generalProgress          GeneralSyncProgressReport
 	headersFetchProgress     HeadersFetchProgressReport
 	addressDiscoveryProgress AddressDiscoveryProgressReport
 	headersRescanProgress    HeadersRescanProgressReport
@@ -77,18 +76,13 @@ func (syncListener *SyncProgressEstimator) OnSynced(synced bool) {
 	syncListener.showLog = false // stop showing logs after sync completes
 
 	if synced {
-		syncListener.generalProgress.Done = true
+		syncListener.progressListener.OnSyncCompleted()
 	} else {
-		syncListener.generalProgress.Done = true
-		syncListener.generalProgress.Error = "Sync failed or canceled"
+		syncListener.progressListener.OnSyncCanceled()
 	}
-
-	// notify sync initiator of update
-	syncListener.progressListener.OnGeneralSyncProgress(syncListener.generalProgress)
 }
 
-// todo sync may not have ended
-func (syncListener *SyncProgressEstimator) OnSyncError(code int32, err error) {
+func (syncListener *SyncProgressEstimator) OnSyncEndedWithError(code int32, err error) {
 	if !syncListener.syncing {
 		// ignore subsequent updates
 		return
@@ -97,9 +91,6 @@ func (syncListener *SyncProgressEstimator) OnSyncError(code int32, err error) {
 	syncListener.syncing = false
 	syncListener.showLog = false // stop showing logs after sync completes
 
-	syncListener.generalProgress.Done = true
-	syncListener.generalProgress.Error = fmt.Sprintf("Code: %d, Error: %s", code, err.Error())
-
-	// notify sync initiator of update
-	syncListener.progressListener.OnGeneralSyncProgress(syncListener.generalProgress)
+	syncError := fmt.Sprintf("Code: %d, Error: %s", code, err.Error())
+	syncListener.progressListener.OnSyncEndedWithError(syncError)
 }

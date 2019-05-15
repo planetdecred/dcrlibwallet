@@ -16,7 +16,7 @@ type SyncProgressListener interface {
 	OnRescan(rescannedThrough int32, state string)
 	OnIndexTransactions(totalIndex int32)
 	OnSynced(synced bool)
-	OnSyncError(code int32, err error) // use int32 to allow gomobile bind
+	OnSyncEndedWithError(code int32, err error) // use int32 to allow gomobile bind
 }
 
 func (lw *LibWallet) spvSyncNotificationCallbacks(loadedWallet *wallet.Wallet) *spv.Notifications {
@@ -121,7 +121,7 @@ func (lw *LibWallet) generalSyncNotificationCallbacks(loadedWallet *wallet.Walle
 }
 
 func (lw *LibWallet) notifySyncError(code SyncErrorCode, err error) {
-	for _, syncResponse := range lw.syncProgressListeners {
-		syncResponse.OnSyncError(int32(code), err)
+	for _, syncProgressListener := range lw.syncProgressListeners {
+		syncProgressListener.OnSyncEndedWithError(int32(code), err)
 	}
 }

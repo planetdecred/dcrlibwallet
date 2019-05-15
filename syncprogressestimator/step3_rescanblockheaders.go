@@ -18,6 +18,10 @@ func (syncListener *SyncProgressEstimator) OnRescan(rescannedThrough int32, stat
 	case SyncStateStart:
 		syncListener.rescanStartTime = time.Now().Unix()
 
+		// retain last total progress report from address discovery phase
+		syncListener.headersRescanProgress.TotalTimeRemainingSeconds = syncListener.addressDiscoveryProgress.TotalTimeRemainingSeconds
+		syncListener.headersRescanProgress.TotalSyncProgress = syncListener.addressDiscoveryProgress.TotalSyncProgress
+
 		if syncListener.showLog {
 			fmt.Println("Step 3 of 3 - Scanning block headers")
 		}
@@ -41,24 +45,27 @@ func (syncListener *SyncProgressEstimator) OnRescan(rescannedThrough int32, stat
 			totalProgress := (float64(totalElapsedTime) / float64(estimatedTotalSyncTime)) * 100
 
 			totalTimeRemainingSeconds := int64(math.Round(estimatedTotalRescanTime)) + elapsedRescanTime
-			syncListener.generalProgress.TotalTimeRemainingSeconds = totalTimeRemainingSeconds
-			syncListener.generalProgress.TotalSyncProgress = int32(math.Round(totalProgress))
+			syncListener.headersRescanProgress.TotalTimeRemainingSeconds = totalTimeRemainingSeconds
+			syncListener.headersRescanProgress.TotalSyncProgress = int32(math.Round(totalProgress))
 		}
 
 		if syncListener.showLog {
 			fmt.Printf("Syncing %d%%, %s remaining, scanning %d of %d block headers.\n",
-				syncListener.generalProgress.TotalSyncProgress,
-				calculateTotalTimeRemaining(syncListener.generalProgress.TotalTimeRemainingSeconds),
+				syncListener.headersRescanProgress.TotalSyncProgress,
+				calculateTotalTimeRemaining(syncListener.headersRescanProgress.TotalTimeRemainingSeconds),
 				syncListener.headersRescanProgress.CurrentRescanHeight,
 				syncListener.headersRescanProgress.TotalHeadersToScan,
 			)
 		}
 
 	case SyncStateFinish:
+		syncListener.headersRescanProgress.TotalTimeRemainingSeconds = 0
+		syncListener.headersRescanProgress.TotalSyncProgress = 100
+
 		if syncListener.showLog {
 			fmt.Println("Block headers scan complete.")
 		}
 	}
 
-	syncListener.progressListener.OnHeadersRescanProgress(syncListener.headersRescanProgress, syncListener.generalProgress)
+	syncListener.progressListener.OnHeadersRescanProgress(syncListener.headersRescanProgress)
 }

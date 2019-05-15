@@ -30,7 +30,6 @@ const (
 	ErrorCodeUnexpectedError SyncErrorCode = iota
 	ErrorCodeContextCanceled
 	ErrorCodeDeadlineExceeded
-	ErrorCodeInvalidPeerAddress
 )
 
 func (lw *LibWallet) AddSyncProgressListener(syncProgressListener SyncProgressListener) {
@@ -71,7 +70,7 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 		for _, address := range addresses {
 			peerAddress, err := NormalizeAddress(address, lw.activeNet.Params.DefaultPort)
 			if err != nil {
-				lw.notifySyncError(ErrorCodeInvalidPeerAddress, errors.E("SPV peer address invalid: %v", err))
+				log.Errorf("SPV peer address invalid: %v", err)
 			} else {
 				validPeerAddresses = append(validPeerAddresses, peerAddress)
 			}

@@ -7,23 +7,22 @@ const (
 )
 
 type EstimatedSyncProgressListener interface {
-	OnGeneralSyncProgress(report GeneralSyncProgressReport)
-	OnHeadersFetchProgress(report HeadersFetchProgressReport, generalProgress GeneralSyncProgressReport)
-	OnAddressDiscoveryProgress(report AddressDiscoveryProgressReport, generalProgress GeneralSyncProgressReport)
-	OnHeadersRescanProgress(report HeadersRescanProgressReport, generalProgress GeneralSyncProgressReport)
+	OnPeerConnectedOrDisconnected(numberOfConnectedPeers int32)
+	OnHeadersFetchProgress(headersFetchProgress HeadersFetchProgressReport)
+	OnAddressDiscoveryProgress(addressDiscoveryProgress AddressDiscoveryProgressReport)
+	OnHeadersRescanProgress(headersRescanProgress HeadersRescanProgressReport)
+	OnSyncCompleted()
+	OnSyncCanceled()
+	OnSyncEndedWithError(err string)
 }
 
-type GeneralSyncProgressReport struct {
-	Status         string `json:"status"`
-	ConnectedPeers int32  `json:"connectedPeers"`
-	Error          string `json:"error"`
-	Done           bool   `json:"done"`
-
+type GeneralSyncProgress struct {
 	TotalSyncProgress         int32 `json:"totalSyncProgress"`
 	TotalTimeRemainingSeconds int64 `json:"totalTimeRemainingSeconds"`
 }
 
 type HeadersFetchProgressReport struct {
+	GeneralSyncProgress
 	TotalHeadersToFetch    int32 `json:"totalHeadersToFetch"`
 	CurrentHeaderTimestamp int64 `json:"currentHeaderTimestamp"`
 	FetchedHeadersCount    int32 `json:"fetchedHeadersCount"`
@@ -31,10 +30,12 @@ type HeadersFetchProgressReport struct {
 }
 
 type AddressDiscoveryProgressReport struct {
+	GeneralSyncProgress
 	AddressDiscoveryProgress int32 `json:"addressDiscoveryProgress"`
 }
 
 type HeadersRescanProgressReport struct {
+	GeneralSyncProgress
 	TotalHeadersToScan  int32 `json:"totalHeadersToScan"`
 	RescanProgress      int32 `json:"rescanProgress"`
 	CurrentRescanHeight int32 `json:"currentRescanHeight"`

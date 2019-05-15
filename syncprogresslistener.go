@@ -7,78 +7,61 @@ import (
 )
 
 type EstimatedSyncProgressJsonListener interface {
-	OnGeneralSyncProgress(report string)
-	OnHeadersFetchProgress(report string, generalProgress string)
-	OnAddressDiscoveryProgress(report string, generalProgress string)
-	OnHeadersRescanProgress(report string, generalProgress string)
-	OnError(err error)
+	OnPeerConnectedOrDisconnected(numberOfConnectedPeers int32)
+	OnHeadersFetchProgress(headersFetchProgressJson string)
+	OnAddressDiscoveryProgress(addressDiscoveryProgressJson string)
+	OnHeadersRescanProgress(headersRescanProgressJson string)
+	OnSyncCompleted()
+	OnSyncCanceled()
+	OnSyncEndedWithError(err string)
 }
 
 type EstimatedSyncProgressListenerJsonWrapper struct {
 	jsonListener EstimatedSyncProgressJsonListener
 }
 
-func (wrapper *EstimatedSyncProgressListenerJsonWrapper) OnGeneralSyncProgress(report syncprogressestimator.GeneralSyncProgressReport) {
-	reportJson, err := json.Marshal(report)
-	if err != nil {
-		log.Error(err)
-		wrapper.jsonListener.OnError(err)
-		return
-	}
-
-	wrapper.jsonListener.OnGeneralSyncProgress(string(reportJson))
+func (wrapper *EstimatedSyncProgressListenerJsonWrapper) OnPeerConnectedOrDisconnected(numberOfConnectedPeers int32) {
+	wrapper.jsonListener.OnPeerConnectedOrDisconnected(numberOfConnectedPeers)
 }
 
-func (wrapper *EstimatedSyncProgressListenerJsonWrapper) OnHeadersFetchProgress(report syncprogressestimator.HeadersFetchProgressReport, generalProgress syncprogressestimator.GeneralSyncProgressReport) {
-	reportJson, err := json.Marshal(report)
+func (wrapper *EstimatedSyncProgressListenerJsonWrapper) OnHeadersFetchProgress(headersFetchProgress syncprogressestimator.HeadersFetchProgressReport) {
+	reportJson, err := json.Marshal(headersFetchProgress)
 	if err != nil {
-		log.Error(err)
-		wrapper.jsonListener.OnError(err)
+		log.Error("sync progress json marshal error:", err)
 		return
 	}
 
-	generalProgressJson, err := json.Marshal(generalProgress)
-	if err != nil {
-		log.Error(err)
-		wrapper.jsonListener.OnError(err)
-		return
-	}
-
-	wrapper.jsonListener.OnHeadersFetchProgress(string(reportJson), string(generalProgressJson))
+	wrapper.jsonListener.OnHeadersFetchProgress(string(reportJson))
 }
 
-func (wrapper *EstimatedSyncProgressListenerJsonWrapper) OnAddressDiscoveryProgress(report syncprogressestimator.AddressDiscoveryProgressReport, generalProgress syncprogressestimator.GeneralSyncProgressReport) {
-	reportJson, err := json.Marshal(report)
+func (wrapper *EstimatedSyncProgressListenerJsonWrapper) OnAddressDiscoveryProgress(addressDiscoveryProgress syncprogressestimator.AddressDiscoveryProgressReport) {
+	reportJson, err := json.Marshal(addressDiscoveryProgress)
 	if err != nil {
-		log.Error(err)
-		wrapper.jsonListener.OnError(err)
+		log.Error("sync progress json marshal error:", err)
 		return
 	}
 
-	generalProgressJson, err := json.Marshal(generalProgress)
-	if err != nil {
-		log.Error(err)
-		wrapper.jsonListener.OnError(err)
-		return
-	}
-
-	wrapper.jsonListener.OnAddressDiscoveryProgress(string(reportJson), string(generalProgressJson))
+	wrapper.jsonListener.OnAddressDiscoveryProgress(string(reportJson))
 }
 
-func (wrapper *EstimatedSyncProgressListenerJsonWrapper) OnHeadersRescanProgress(report syncprogressestimator.HeadersRescanProgressReport, generalProgress syncprogressestimator.GeneralSyncProgressReport) {
-	reportJson, err := json.Marshal(report)
+func (wrapper *EstimatedSyncProgressListenerJsonWrapper) OnHeadersRescanProgress(headersRescanProgress syncprogressestimator.HeadersRescanProgressReport) {
+	reportJson, err := json.Marshal(headersRescanProgress)
 	if err != nil {
-		log.Error(err)
-		wrapper.jsonListener.OnError(err)
+		log.Error("sync progress json marshal error:", err)
 		return
 	}
 
-	generalProgressJson, err := json.Marshal(generalProgress)
-	if err != nil {
-		log.Error(err)
-		wrapper.jsonListener.OnError(err)
-		return
-	}
+	wrapper.jsonListener.OnHeadersRescanProgress(string(reportJson))
+}
 
-	wrapper.jsonListener.OnHeadersRescanProgress(string(reportJson), string(generalProgressJson))
+func (wrapper *EstimatedSyncProgressListenerJsonWrapper) OnSyncCompleted() {
+	wrapper.jsonListener.OnSyncCompleted()
+}
+
+func (wrapper *EstimatedSyncProgressListenerJsonWrapper) OnSyncCanceled() {
+	wrapper.jsonListener.OnSyncCanceled()
+}
+
+func (wrapper *EstimatedSyncProgressListenerJsonWrapper) OnSyncEndedWithError(err string) {
+	wrapper.jsonListener.OnSyncEndedWithError(err)
 }

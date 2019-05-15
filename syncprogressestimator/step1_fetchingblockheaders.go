@@ -59,11 +59,9 @@ func (syncListener *SyncProgressEstimator) OnFetchedHeaders(fetchedHeadersCount 
 		totalTimeRemainingSeconds := int64(math.Round(estimatedTotalSyncTime)) + timeTakenSoFar
 		totalSyncProgress := (float64(timeTakenSoFar) / float64(estimatedTotalSyncTime)) * 100.0
 
-		// update total progress info
-		syncListener.generalProgress.TotalSyncProgress = int32(math.Round(totalSyncProgress))
-		syncListener.generalProgress.TotalTimeRemainingSeconds = totalTimeRemainingSeconds
-
-		// update headers progress sync info
+		// update total progress and headers progress sync info
+		syncListener.headersFetchProgress.TotalSyncProgress = int32(math.Round(totalSyncProgress))
+		syncListener.headersFetchProgress.TotalTimeRemainingSeconds = totalTimeRemainingSeconds
 		syncListener.headersFetchProgress.TotalHeadersToFetch = syncEndPoint
 		syncListener.headersFetchProgress.CurrentHeaderTimestamp = lastHeaderTime
 		syncListener.headersFetchProgress.FetchedHeadersCount = totalFetchedHeaders
@@ -71,7 +69,7 @@ func (syncListener *SyncProgressEstimator) OnFetchedHeaders(fetchedHeadersCount 
 
 		if syncListener.showLog {
 			fmt.Printf("Syncing %d%%, %s remaining, fetched %d of %d block headers, %s behind.\n",
-				syncListener.generalProgress.TotalSyncProgress,
+				syncListener.headersFetchProgress.TotalSyncProgress,
 				calculateTotalTimeRemaining(totalTimeRemainingSeconds),
 				syncListener.headersFetchProgress.FetchedHeadersCount,
 				syncListener.headersFetchProgress.TotalHeadersToFetch,
@@ -89,5 +87,5 @@ func (syncListener *SyncProgressEstimator) OnFetchedHeaders(fetchedHeadersCount 
 		}
 	}
 
-	syncListener.progressListener.OnHeadersFetchProgress(syncListener.headersFetchProgress, syncListener.generalProgress)
+	syncListener.progressListener.OnHeadersFetchProgress(syncListener.headersFetchProgress)
 }
