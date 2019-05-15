@@ -43,8 +43,8 @@ type HeadersRescanProgressReport struct {
 }
 
 type DebugInfo struct {
-	TotalTimeElapsed int64
-	TotalTimeRemaining int64
-	CurrentStageTimeElapsed int64
+	TotalTimeElapsed          int64
+	TotalTimeRemaining        int64
+	CurrentStageTimeElapsed   int64
 	CurrentStageTimeRemaining int64
 }
