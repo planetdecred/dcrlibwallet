@@ -29,10 +29,8 @@ func (syncListener *SyncProgressEstimator) OnFetchedHeaders(fetchedHeadersCount 
 		syncListener.startHeaderHeight = bestBlock
 		syncListener.currentHeaderHeight = syncListener.startHeaderHeight
 
-		totalHeadersToFetch := int32(estimatedFinalBlockHeight) - syncListener.startHeaderHeight
-		syncListener.headersFetchProgress.TotalHeadersToFetch = totalHeadersToFetch
-
 		if syncListener.showLog {
+			totalHeadersToFetch := int32(estimatedFinalBlockHeight) - syncListener.startHeaderHeight
 			fmt.Printf("Step 1 of 3 - fetching %d block headers.\n", totalHeadersToFetch)
 		}
 
@@ -67,6 +65,8 @@ func (syncListener *SyncProgressEstimator) OnFetchedHeaders(fetchedHeadersCount 
 		syncListener.headersFetchProgress.FetchedHeadersCount = totalFetchedHeaders
 		syncListener.headersFetchProgress.HeadersFetchProgress = int32(math.Round(headersFetchingRate * 100))
 
+		syncListener.progressListener.OnHeadersFetchProgress(syncListener.headersFetchProgress)
+
 		syncListener.progressListener.Debug(DebugInfo{
 			timeTakenSoFar,
 			totalTimeRemainingSeconds,
@@ -93,6 +93,4 @@ func (syncListener *SyncProgressEstimator) OnFetchedHeaders(fetchedHeadersCount 
 			fmt.Println("Fetch headers completed.")
 		}
 	}
-
-	syncListener.progressListener.OnHeadersFetchProgress(syncListener.headersFetchProgress)
 }
