@@ -14,6 +14,7 @@ type EstimatedSyncProgressJsonListener interface {
 	OnSyncCompleted()
 	OnSyncCanceled()
 	OnSyncEndedWithError(err string)
+	Debug(totalTimeElapsed, totalTimeRemaining, currentStageTimeElapsed, currentStageTimeRemaining int64)
 }
 
 type EstimatedSyncProgressListenerJsonWrapper struct {
@@ -64,4 +65,13 @@ func (wrapper *EstimatedSyncProgressListenerJsonWrapper) OnSyncCanceled() {
 
 func (wrapper *EstimatedSyncProgressListenerJsonWrapper) OnSyncEndedWithError(err string) {
 	wrapper.jsonListener.OnSyncEndedWithError(err)
+}
+
+func (wrapper *EstimatedSyncProgressListenerJsonWrapper) Debug(debugInfo syncprogressestimator.DebugInfo) {
+	wrapper.jsonListener.Debug(
+		debugInfo.TotalTimeElapsed,
+		debugInfo.TotalTimeRemaining,
+		debugInfo.CurrentStageTimeElapsed,
+		debugInfo.CurrentStageTimeRemaining,
+	)
 }

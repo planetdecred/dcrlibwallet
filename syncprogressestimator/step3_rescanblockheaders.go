@@ -34,20 +34,28 @@ func (syncListener *SyncProgressEstimator) OnRescan(rescannedThrough int32, stat
 		elapsedRescanTime := time.Now().Unix() - syncListener.rescanStartTime
 		totalElapsedTime := syncListener.headersFetchTimeSpent + syncListener.totalDiscoveryTimeSpent + elapsedRescanTime
 
+		estimatedTotalRescanTime := float64(elapsedRescanTime) / rescanRate
+		estimatedTotalSyncTime := syncListener.headersFetchTimeSpent + syncListener.totalDiscoveryTimeSpent +
+			int64(math.Round(estimatedTotalRescanTime))
+		totalProgress := (float64(totalElapsedTime) / float64(estimatedTotalSyncTime)) * 100
+
+		totalTimeRemainingSeconds := int64(math.Round(estimatedTotalRescanTime)) + elapsedRescanTime
+
 		// do not update total time taken and total progress percent if elapsedRescanTime is 0
 		// because the estimatedTotalRescanTime will be inaccurate (also 0)
 		// which will make the estimatedTotalSyncTime equal to totalElapsedTime
 		// giving the wrong impression that the process is complete
 		if elapsedRescanTime > 0 {
-			estimatedTotalRescanTime := float64(elapsedRescanTime) / rescanRate
-			estimatedTotalSyncTime := syncListener.headersFetchTimeSpent + syncListener.totalDiscoveryTimeSpent +
-				int64(math.Round(estimatedTotalRescanTime))
-			totalProgress := (float64(totalElapsedTime) / float64(estimatedTotalSyncTime)) * 100
-
-			totalTimeRemainingSeconds := int64(math.Round(estimatedTotalRescanTime)) + elapsedRescanTime
 			syncListener.headersRescanProgress.TotalTimeRemainingSeconds = totalTimeRemainingSeconds
 			syncListener.headersRescanProgress.TotalSyncProgress = int32(math.Round(totalProgress))
 		}
+
+		syncListener.progressListener.Debug(DebugInfo{
+			totalElapsedTime,
+			totalTimeRemainingSeconds,
+			elapsedRescanTime,
+			int64(math.Round(estimatedTotalRescanTime)) - elapsedRescanTime,
+		})
 
 		if syncListener.showLog {
 			fmt.Printf("Syncing %d%%, %s remaining, scanning %d of %d block headers.\n",

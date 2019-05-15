@@ -14,6 +14,7 @@ type EstimatedSyncProgressListener interface {
 	OnSyncCompleted()
 	OnSyncCanceled()
 	OnSyncEndedWithError(err string)
+	Debug(debugInfo DebugInfo)
 }
 
 type GeneralSyncProgress struct {
@@ -39,4 +40,11 @@ type HeadersRescanProgressReport struct {
 	TotalHeadersToScan  int32 `json:"totalHeadersToScan"`
 	RescanProgress      int32 `json:"rescanProgress"`
 	CurrentRescanHeight int32 `json:"currentRescanHeight"`
+}
+
+type DebugInfo struct {
+	TotalTimeElapsed int64
+	TotalTimeRemaining int64
+	CurrentStageTimeElapsed int64
+	CurrentStageTimeRemaining int64
 }

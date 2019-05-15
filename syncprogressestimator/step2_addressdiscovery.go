@@ -68,6 +68,13 @@ func (syncListener *SyncProgressEstimator) updateAddressDiscoveryProgress() {
 
 				syncListener.progressListener.OnAddressDiscoveryProgress(syncListener.addressDiscoveryProgress)
 
+				syncListener.progressListener.Debug(DebugInfo{
+					int64(math.Round(totalElapsedTime)),
+					totalTimeRemainingSeconds,
+					int64(math.Round(elapsedDiscoveryTime)),
+					int64(math.Round(remainingAccountDiscoveryTime)),
+				})
+
 				if syncListener.showLog {
 					// avoid logging same message multiple times
 					if totalProgressPercent != lastTotalPercent || totalTimeRemainingSeconds != lastTimeRemaining {
