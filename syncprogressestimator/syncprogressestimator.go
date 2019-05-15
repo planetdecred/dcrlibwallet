@@ -53,6 +53,13 @@ func Setup(netType string, showLog bool, getBestBlock func() int32, getBestBlock
 	}
 }
 
+func (syncListener *SyncProgressEstimator) Reset() {
+	syncListener.syncing = true
+	syncListener.beginFetchTimeStamp = -1
+	syncListener.headersFetchTimeSpent = -1
+	syncListener.totalDiscoveryTimeSpent = -1
+}
+
 /**
 Following methods satisfy the `SyncProgressListener` interface.
 Other interface methods are implemented in the different step*.go files in this package.
@@ -61,7 +68,7 @@ func (syncListener *SyncProgressEstimator) OnFetchMissingCFilters(missingCFilter
 }
 
 func (syncListener *SyncProgressEstimator) OnIndexTransactions(totalIndexed int32) {
-	if syncListener.showLog {
+	if syncListener.showLog && syncListener.syncing {
 		fmt.Printf("Indexing transactions. %d done.\n", totalIndexed)
 	}
 }
@@ -73,7 +80,6 @@ func (syncListener *SyncProgressEstimator) OnSynced(synced bool) {
 	}
 
 	syncListener.syncing = false
-	syncListener.showLog = false // stop showing logs after sync completes
 
 	if synced {
 		syncListener.progressListener.OnSyncCompleted()
@@ -89,7 +95,6 @@ func (syncListener *SyncProgressEstimator) OnSyncEndedWithError(code int32, err 
 	}
 
 	syncListener.syncing = false
-	syncListener.showLog = false // stop showing logs after sync completes
 
 	syncError := fmt.Sprintf("Code: %d, Error: %s", code, err.Error())
 	syncListener.progressListener.OnSyncEndedWithError(syncError)

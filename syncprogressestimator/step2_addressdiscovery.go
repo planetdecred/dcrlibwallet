@@ -8,7 +8,7 @@ import (
 
 func (syncListener *SyncProgressEstimator) OnDiscoveredAddresses(state string) {
 	if state == SyncStateStart && syncListener.addressDiscoveryCompleted == nil {
-		if syncListener.showLog {
+		if syncListener.showLog && syncListener.syncing {
 			fmt.Println("Step 2 of 3 - discovering used addresses.")
 		}
 		syncListener.updateAddressDiscoveryProgress()
@@ -75,7 +75,7 @@ func (syncListener *SyncProgressEstimator) updateAddressDiscoveryProgress() {
 					int64(math.Round(remainingAccountDiscoveryTime)),
 				})
 
-				if syncListener.showLog {
+				if syncListener.showLog && syncListener.syncing {
 					// avoid logging same message multiple times
 					if totalProgressPercent != lastTotalPercent || totalTimeRemainingSeconds != lastTimeRemaining {
 						fmt.Printf("Syncing %d%%, %s remaining, discovering used addresses.\n",
@@ -94,7 +94,7 @@ func (syncListener *SyncProgressEstimator) updateAddressDiscoveryProgress() {
 				addressDiscoveryFinishTime := time.Now().Unix()
 				syncListener.totalDiscoveryTimeSpent = addressDiscoveryFinishTime - addressDiscoveryStartTime
 
-				if syncListener.showLog {
+				if syncListener.showLog && syncListener.syncing {
 					fmt.Println("Address discovery complete.")
 				}
 

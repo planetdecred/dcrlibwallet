@@ -48,6 +48,14 @@ func (lw *LibWallet) AddEstimatedSyncProgressListener(syncProgressJsonListener E
 	lw.AddSyncProgressListener(syncProgressEstimator)
 }
 
+func (lw *LibWallet) ResetSyncProgressListeners() {
+	for _, syncProgressListener := range lw.syncProgressListeners {
+		if syncProgressEstimator, ok := syncProgressListener.(*syncprogressestimator.SyncProgressEstimator); ok {
+			syncProgressEstimator.Reset()
+		}
+	}
+}
+
 func (lw *LibWallet) SpvSync(peerAddresses string) error {
 	loadedWallet, walletLoaded := lw.walletLoader.LoadedWallet()
 	if !walletLoaded {
@@ -80,6 +88,10 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 			return errors.New(ErrInvalidPeers)
 		}
 	}
+
+	// reset sync listeners before starting sync
+	// (especially useful if this is not the first sync since the listener was registered)
+	lw.ResetSyncProgressListeners()
 
 	syncer := spv.NewSyncer(loadedWallet, lp)
 	syncer.SetNotifications(lw.spvSyncNotificationCallbacks(loadedWallet))
@@ -129,6 +141,10 @@ func (lw *LibWallet) RpcSync(networkAddress string, username string, password st
 	if err != nil {
 		return err
 	}
+
+	// reset sync listeners before starting sync
+	// (especially useful if this is not the first sync since the listener was registered)
+	lw.ResetSyncProgressListeners()
 
 	syncer := chain.NewRPCSyncer(loadedWallet, chainClient)
 	syncer.SetNotifications(lw.generalSyncNotificationCallbacks(loadedWallet))

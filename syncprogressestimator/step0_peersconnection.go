@@ -13,7 +13,7 @@ func (syncListener *SyncProgressEstimator) OnPeerDisconnected(peerCount int32) {
 func (syncListener *SyncProgressEstimator) handlePeerCountUpdate(peerCount int32) {
 	syncListener.progressListener.OnPeerConnectedOrDisconnected(peerCount)
 
-	if syncListener.showLog {
+	if syncListener.showLog && syncListener.syncing {
 		if peerCount == 1 {
 			fmt.Printf("Connected to %d peer on %s.\n", peerCount, syncListener.netType)
 		} else {

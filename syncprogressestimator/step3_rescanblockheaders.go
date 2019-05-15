@@ -22,7 +22,7 @@ func (syncListener *SyncProgressEstimator) OnRescan(rescannedThrough int32, stat
 		syncListener.headersRescanProgress.TotalTimeRemainingSeconds = syncListener.addressDiscoveryProgress.TotalTimeRemainingSeconds
 		syncListener.headersRescanProgress.TotalSyncProgress = syncListener.addressDiscoveryProgress.TotalSyncProgress
 
-		if syncListener.showLog {
+		if syncListener.showLog && syncListener.syncing {
 			fmt.Println("Step 3 of 3 - Scanning block headers")
 		}
 
@@ -57,7 +57,7 @@ func (syncListener *SyncProgressEstimator) OnRescan(rescannedThrough int32, stat
 			int64(math.Round(estimatedTotalRescanTime)) - elapsedRescanTime,
 		})
 
-		if syncListener.showLog {
+		if syncListener.showLog && syncListener.syncing {
 			fmt.Printf("Syncing %d%%, %s remaining, scanning %d of %d block headers.\n",
 				syncListener.headersRescanProgress.TotalSyncProgress,
 				calculateTotalTimeRemaining(syncListener.headersRescanProgress.TotalTimeRemainingSeconds),
@@ -70,7 +70,7 @@ func (syncListener *SyncProgressEstimator) OnRescan(rescannedThrough int32, stat
 		syncListener.headersRescanProgress.TotalTimeRemainingSeconds = 0
 		syncListener.headersRescanProgress.TotalSyncProgress = 100
 
-		if syncListener.showLog {
+		if syncListener.showLog && syncListener.syncing {
 			fmt.Println("Block headers scan complete.")
 		}
 	}
