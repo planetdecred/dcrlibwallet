@@ -218,6 +218,7 @@ func (lw *LibWallet) connectToRpcClient(ctx context.Context, networkAddress stri
 func (lw *LibWallet) CancelSync() {
 	if lw.cancelSync != nil {
 		lw.cancelSync() // will trigger context canceled in rpcSync or spvSync
+		lw.cancelSync = nil
 	}
 
 	loadedWallet, walletLoaded := lw.walletLoader.LoadedWallet()
