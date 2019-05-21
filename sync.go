@@ -48,7 +48,7 @@ func (lw *LibWallet) AddEstimatedSyncProgressListener(syncProgressListener Estim
 
 func (lw *LibWallet) SyncInactiveForPeriod(totalInactiveSeconds int64) {
 	for _, syncProgressListener := range lw.syncProgressListeners {
-		if syncProgressEstimator, ok := syncProgressListener.(*syncprogressestimator.SyncProgressEstimator); ok {
+		if syncProgressEstimator, ok := syncProgressListener.(*SyncProgressEstimator); ok {
 			syncProgressEstimator.DiscardPeriodsOfInactivity(totalInactiveSeconds)
 		}
 	}
