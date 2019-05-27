@@ -21,6 +21,16 @@ type syncData struct {
 	cancelSync            context.CancelFunc
 	syncProgressListeners []SyncProgressListener
 	rescanning            bool
+
+	beginFetchTimeStamp   int64
+	startHeaderHeight     int32
+	currentHeaderHeight   int32
+	headersFetchTimeSpent int64
+
+	addressDiscoveryStartTime int64
+	totalDiscoveryTimeSpent   int64
+
+	rescanStartTime int64
 }
 
 type SyncErrorCode int32
@@ -266,18 +276,18 @@ func (lw *LibWallet) RescanBlocks() error {
 			}
 			totalHeight += p.ScannedThrough
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnRescan(p.ScannedThrough, SyncStateProgress)
+				syncProgressListener.OnRescan(p.ScannedThrough, 0, 0, 0, SyncStateProgress)
 			}
 		}
 
 		select {
 		case <-ctx.Done():
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnRescan(totalHeight, SyncStateProgress)
+				syncProgressListener.OnRescan(totalHeight, 0, 0, 0, SyncStateProgress)
 			}
 		default:
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnRescan(totalHeight, SyncStateFinish)
+				syncProgressListener.OnRescan(totalHeight, 0, 0, 0, SyncStateFinish)
 			}
 		}
 	}()

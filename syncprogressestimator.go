@@ -28,15 +28,7 @@ type SyncProgressEstimator struct {
 
 	connectedPeers int32
 
-	beginFetchTimeStamp   int64
-	startHeaderHeight     int32
-	currentHeaderHeight   int32
-	headersFetchTimeSpent int64
-
 	addressDiscoveryCompleted chan bool
-	totalDiscoveryTimeSpent   int64
-
-	rescanStartTime int64
 
 	totalInactiveSeconds int64
 }
@@ -72,20 +64,12 @@ func SetupSyncProgressEstimator(netType string, showLog bool, getBestBlock func(
 		headersRescanProgress:    headersRescanProgress,
 
 		progressListener: progressListener,
-
-		beginFetchTimeStamp:   -1,
-		headersFetchTimeSpent: -1,
-
-		totalDiscoveryTimeSpent: -1,
 	}
 
 }
 
 func (syncListener *SyncProgressEstimator) Reset() {
 	syncListener.syncing = true
-	syncListener.beginFetchTimeStamp = -1
-	syncListener.headersFetchTimeSpent = -1
-	syncListener.totalDiscoveryTimeSpent = -1
 }
 
 func (syncListener *SyncProgressEstimator) DiscardPeriodsOfInactivity(totalInactiveSeconds int64) {
@@ -148,8 +132,9 @@ func (syncListener *SyncProgressEstimator) handlePeerCountUpdate(peerCount int32
 }
 
 // Step 1 - Fetch Block Headers
-func (syncListener *SyncProgressEstimator) OnFetchedHeaders(fetchedHeadersCount int32, lastHeaderTime int64, state string) {
-	if !syncListener.syncing || syncListener.headersFetchTimeSpent != -1 {
+func (syncListener *SyncProgressEstimator) OnFetchedHeaders(beginFetchTimeStamp, headersFetchTimeSpent,
+	lastHeaderTime int64, fetchedHeadersCount, startHeaderHeight, totalFetchedHeaders int32, state string) {
+	if !syncListener.syncing || headersFetchTimeSpent != -1 {
 		// Ignore this call because this function gets called for each peer and
 		// we'd want to ignore those calls as far as the wallet is synced (i.e. !syncListener.syncing)
 		// or headers are completely fetched (i.e. syncListener.headersFetchTimeSpent != -1)
@@ -162,40 +147,27 @@ func (syncListener *SyncProgressEstimator) OnFetchedHeaders(fetchedHeadersCount 
 
 	switch state {
 	case SyncStateStart:
-		if syncListener.beginFetchTimeStamp != -1 {
-			// already started headers fetching
-			break
-		}
-
-		syncListener.beginFetchTimeStamp = time.Now().Unix()
-		syncListener.startHeaderHeight = bestBlock
-		syncListener.currentHeaderHeight = syncListener.startHeaderHeight
 
 		if syncListener.showLog && syncListener.syncing {
-			totalHeadersToFetch := int32(estimatedFinalBlockHeight) - syncListener.startHeaderHeight
+			totalHeadersToFetch := int32(estimatedFinalBlockHeight) - startHeaderHeight
 			fmt.Printf("Step 1 of 3 - fetching %d block headers.\n", totalHeadersToFetch)
 		}
 
 	case SyncStateProgress:
-		// increment current block height value
-		syncListener.currentHeaderHeight += fetchedHeadersCount
 
-		// calculate percentage progress and eta
-		totalFetchedHeaders := syncListener.currentHeaderHeight
-		if syncListener.startHeaderHeight > 0 {
-			totalFetchedHeaders -= syncListener.startHeaderHeight
+		if startHeaderHeight > 0 {
+			totalFetchedHeaders -= startHeaderHeight
 		}
 
-		syncEndPoint := estimatedFinalBlockHeight - syncListener.startHeaderHeight
+		syncEndPoint := estimatedFinalBlockHeight - startHeaderHeight
 		headersFetchingRate := float64(totalFetchedHeaders) / float64(syncEndPoint)
 
 		// If there was some period of inactivity,
 		// assume that this process started at some point in the future,
 		// thereby accounting for the total reported time of inactivity.
-		syncListener.beginFetchTimeStamp += syncListener.totalInactiveSeconds
-		syncListener.totalInactiveSeconds = 0
+		beginFetchTimeStamp += syncListener.totalInactiveSeconds
 
-		timeTakenSoFar := time.Now().Unix() - syncListener.beginFetchTimeStamp
+		timeTakenSoFar := time.Now().Unix() - beginFetchTimeStamp
 		estimatedTotalHeadersFetchTime := math.Round(float64(timeTakenSoFar) / headersFetchingRate)
 
 		estimatedRescanTime := math.Round(estimatedTotalHeadersFetchTime * RescanPercentage)
@@ -233,9 +205,7 @@ func (syncListener *SyncProgressEstimator) OnFetchedHeaders(fetchedHeadersCount 
 		}
 
 	case SyncStateFinish:
-		syncListener.headersFetchTimeSpent = time.Now().Unix() - syncListener.beginFetchTimeStamp
-		syncListener.startHeaderHeight = -1
-		syncListener.currentHeaderHeight = -1
+		syncListener.totalInactiveSeconds = 0 // assuming it's already added to fetch time
 
 		if syncListener.showLog && syncListener.syncing {
 			fmt.Println("Fetch headers completed.")
@@ -244,22 +214,21 @@ func (syncListener *SyncProgressEstimator) OnFetchedHeaders(fetchedHeadersCount 
 }
 
 // Step 2 - Address Discovery
-func (syncListener *SyncProgressEstimator) OnDiscoveredAddresses(state string) {
+func (syncListener *SyncProgressEstimator) OnDiscoveredAddresses(headersFetchTimeSpent, addressDiscoveryStartTime int64, state string) {
 	if state == SyncStateStart && syncListener.addressDiscoveryCompleted == nil {
 		if syncListener.showLog && syncListener.syncing {
 			fmt.Println("Step 2 of 3 - discovering used addresses.")
 		}
-		syncListener.updateAddressDiscoveryProgress()
+		syncListener.updateAddressDiscoveryProgress(headersFetchTimeSpent, addressDiscoveryStartTime)
 	} else {
 		close(syncListener.addressDiscoveryCompleted)
 		syncListener.addressDiscoveryCompleted = nil
 	}
 }
 
-func (syncListener *SyncProgressEstimator) updateAddressDiscoveryProgress() {
+func (syncListener *SyncProgressEstimator) updateAddressDiscoveryProgress(headersFetchTimeSpent, addressDiscoveryStartTime int64) {
 	// these values will be used every second to calculate the total sync progress
-	addressDiscoveryStartTime := time.Now().Unix()
-	totalHeadersFetchTime := float64(syncListener.headersFetchTimeSpent)
+	totalHeadersFetchTime := float64(headersFetchTimeSpent)
 	if totalHeadersFetchTime < 150 {
 		// 80% of 150 seconds is 120 seconds.
 		// This ensures that minimum estimated discovery time is 120 seconds (2 minutes).
@@ -339,10 +308,6 @@ func (syncListener *SyncProgressEstimator) updateAddressDiscoveryProgress() {
 				// stop updating time taken and progress for address discovery
 				everySecondTicker.Stop()
 
-				// update final discovery time taken
-				addressDiscoveryFinishTime := time.Now().Unix()
-				syncListener.totalDiscoveryTimeSpent = addressDiscoveryFinishTime - addressDiscoveryStartTime
-
 				if syncListener.showLog && syncListener.syncing {
 					fmt.Println("Address discovery complete.")
 				}
@@ -354,7 +319,9 @@ func (syncListener *SyncProgressEstimator) updateAddressDiscoveryProgress() {
 }
 
 // Step 3 - Rescan Blocks
-func (syncListener *SyncProgressEstimator) OnRescan(rescannedThrough int32, state string) {
+func (syncListener *SyncProgressEstimator) OnRescan(rescannedThrough int32, rescanStartTime, headersFetchTimeSpent,
+	totalDiscoveryTimeSpent int64, state string) {
+
 	if syncListener.addressDiscoveryCompleted != nil {
 		close(syncListener.addressDiscoveryCompleted)
 		syncListener.addressDiscoveryCompleted = nil
@@ -364,7 +331,6 @@ func (syncListener *SyncProgressEstimator) OnRescan(rescannedThrough int32, stat
 
 	switch state {
 	case SyncStateStart:
-		syncListener.rescanStartTime = time.Now().Unix()
 
 		// retain last total progress report from address discovery phase
 		syncListener.headersRescanProgress.TotalTimeRemainingSeconds = syncListener.addressDiscoveryProgress.TotalTimeRemainingSeconds
@@ -382,15 +348,14 @@ func (syncListener *SyncProgressEstimator) OnRescan(rescannedThrough int32, stat
 		// If there was some period of inactivity,
 		// assume that this process started at some point in the future,
 		// thereby accounting for the total reported time of inactivity.
-		syncListener.rescanStartTime += syncListener.totalInactiveSeconds
+		rescanStartTime += syncListener.totalInactiveSeconds
 		syncListener.totalInactiveSeconds = 0
 
-		elapsedRescanTime := time.Now().Unix() - syncListener.rescanStartTime
-		totalElapsedTime := syncListener.headersFetchTimeSpent + syncListener.totalDiscoveryTimeSpent + elapsedRescanTime
+		elapsedRescanTime := time.Now().Unix() - rescanStartTime
+		totalElapsedTime := headersFetchTimeSpent + totalDiscoveryTimeSpent + elapsedRescanTime
 
 		estimatedTotalRescanTime := float64(elapsedRescanTime) / rescanRate
-		estimatedTotalSyncTime := syncListener.headersFetchTimeSpent + syncListener.totalDiscoveryTimeSpent +
-			int64(math.Round(estimatedTotalRescanTime))
+		estimatedTotalSyncTime := headersFetchTimeSpent + totalDiscoveryTimeSpent + int64(math.Round(estimatedTotalRescanTime))
 		totalProgress := (float64(totalElapsedTime) / float64(estimatedTotalSyncTime)) * 100
 
 		totalTimeRemainingSeconds := int64(math.Round(estimatedTotalRescanTime)) + elapsedRescanTime
@@ -423,6 +388,7 @@ func (syncListener *SyncProgressEstimator) OnRescan(rescannedThrough int32, stat
 	case SyncStateFinish:
 		syncListener.headersRescanProgress.TotalTimeRemainingSeconds = 0
 		syncListener.headersRescanProgress.TotalSyncProgress = 100
+		syncListener.totalInactiveSeconds = 0 // reset to 0
 
 		if syncListener.showLog && syncListener.syncing {
 			fmt.Println("Block headers scan complete.")

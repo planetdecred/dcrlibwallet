@@ -96,12 +96,18 @@ func newLibWallet(walletDataDir, walletDbDriver string, activeNet *netparams.Par
 		go shutdownListener()
 	}
 
+	syncData := &syncData{
+		beginFetchTimeStamp:     -1,
+		headersFetchTimeSpent:   -1,
+		totalDiscoveryTimeSpent: -1,
+	}
+
 	lw := &LibWallet{
 		walletDataDir: walletDataDir,
 		txDB:          txDB,
 		activeNet:     activeNet,
 		walletLoader:  walletLoader,
-		syncData:      &syncData{},
+		syncData:      syncData,
 	}
 
 	return lw, nil
