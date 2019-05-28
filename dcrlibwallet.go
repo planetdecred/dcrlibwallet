@@ -161,12 +161,12 @@ func (lw *LibWallet) DeleteWallet(privatePassphrase []byte) error {
 	}()
 
 	wallet, loaded := lw.walletLoader.LoadedWallet()
-	if !loaded{
+	if !loaded {
 		return errors.New(ErrWalletNotLoaded)
 	}
 
 	err := wallet.Unlock(privatePassphrase, nil)
-	if err != nil{
+	if err != nil {
 		return translateError(err)
 	}
 	wallet.Lock()
@@ -174,7 +174,7 @@ func (lw *LibWallet) DeleteWallet(privatePassphrase []byte) error {
 	if lw.cancelSync != nil {
 		lw.cancelSync()
 	}
-	
+
 	lw.Shutdown(false)
 	log.Info("Deleting Wallet")
 	return os.RemoveAll(lw.walletDataDir)
