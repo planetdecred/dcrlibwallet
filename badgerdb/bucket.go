@@ -165,12 +165,19 @@ func (b *Bucket) dropBucket(key []byte) error {
 	it := txn.NewIterator(badger.DefaultIteratorOptions)
 
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+
 		item = it.Item()
-		val, err := item.Value()
+
+		var valCopy []byte
+		err := item.Value(func(val []byte) error {
+			valCopy = append([]byte{}, val...)
+			return nil
+		})
+
 		if err != nil {
 			continue
 		}
-		prefixLength := int(val[0])
+		prefixLength := int(valCopy[0])
 		if bytes.Equal(item.Key()[:prefixLength], b.prefix) {
 			b.txn.Delete(item.Key()[:])
 		}
@@ -193,11 +200,17 @@ func (b *Bucket) get(key []byte) []byte {
 		//Not found
 		return nil
 	}
-	val, err := item.Value()
+
+	var valCopy []byte
+	err = item.Value(func(val []byte) error {
+		valCopy = append([]byte{}, val...)
+		return nil
+	})
+
 	if err != nil {
 		return nil
 	}
-	return val[1:]
+	return valCopy[1:]
 }
 
 func (b *Bucket) put(key []byte, value []byte) error {
@@ -249,7 +262,13 @@ func (b *Bucket) forEach(fn func(k, v []byte) error) error {
 		if bytes.Equal(item.Key(), prefix) {
 			continue
 		}
-		v, err := item.Value()
+
+		var v []byte
+		err := item.Value(func(val []byte) error {
+			v = append([]byte{}, val...)
+			return nil
+		})
+
 		if err != nil {
 			return convertErr(err)
 		}

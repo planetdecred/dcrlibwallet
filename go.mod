@@ -33,8 +33,9 @@ require (
 	github.com/decred/dcrwallet/wallet v1.2.3
 	github.com/decred/dcrwallet/walletseed v1.0.1
 	github.com/decred/slog v1.0.0
-	github.com/dgraph-io/badger v1.5.4
+	github.com/dgraph-io/badger v2.0.0-rc.2+incompatible
 	github.com/dgryski/go-farm v0.0.0-20190104051053-3adb47b1fb0f // indirect
+	github.com/dustin/go-humanize v1.0.0 // indirect
 	github.com/gordonklaus/ineffassign v0.0.0-20180909121442-1003c8bd00dc // indirect
 	github.com/jgautheron/goconst v0.0.0-20170703170152-9740945f5dcb // indirect
 	github.com/jrick/logrotate v1.0.0

@@ -86,11 +86,17 @@ func (tx *transaction) DeleteTopLevelBucket(key []byte) error {
 	defer it.Close()
 	for it.Seek(key); it.ValidForPrefix(key); it.Next() {
 		item = it.Item()
-		val, err := item.Value()
+
+		var valCopy []byte
+		err = item.Value(func(val []byte) error {
+			valCopy = append([]byte{}, val...)
+			return nil
+		})
+
 		if err != nil {
 			continue
 		}
-		prefixLength := int(val[0])
+		prefixLength := int(valCopy[0])
 		if bytes.Equal(item.Key()[:prefixLength], key) {
 			tx.badgerTx.Delete(item.Key()[:])
 		}
@@ -109,7 +115,7 @@ func (tx *transaction) DeleteTopLevelBucket(key []byte) error {
 //
 // This function is part of the walletdb.Tx interface implementation.
 func (tx *transaction) Commit() error {
-	err := tx.badgerTx.Commit(nil)
+	err := tx.badgerTx.Commit()
 	if err != nil {
 		return convertErr(err)
 	}
@@ -546,7 +552,7 @@ func openDB(dbPath string, create bool) (walletdb.DB, error) {
 	opts.NumCompactors = 1
 	opts.NumLevelZeroTables = 1
 	opts.NumLevelZeroTablesStall = 2
-
+	println("DCRLIBWALLET IS USING LATEST BADGER")
 	badgerDb, err := badger.Open(opts)
 	if err == nil {
 		go func() {
