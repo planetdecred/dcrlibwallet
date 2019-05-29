@@ -16,23 +16,23 @@ import (
 )
 
 type syncData struct {
-	mu                             sync.Mutex
-	rpcClient                      *chain.RPCClient
-	cancelSync                     context.CancelFunc
-	syncProgressListeners          []SyncProgressListener
-	estimatedSyncProgressListeners []EstimatedSyncProgressListener
-	rescanning                     bool
-	syncing                        bool
-	showLogs                       bool
+	mu                    sync.Mutex
+	rpcClient             *chain.RPCClient
+	cancelSync            context.CancelFunc
+	syncProgressListeners []SyncProgressListener
+	rescanning            bool
+	syncing               bool
+	showLogs              bool
+	targetTimePerBlock    int32
 
 	headersFetchProgress     HeadersFetchProgressReport
 	addressDiscoveryProgress AddressDiscoveryProgressReport
 	headersRescanProgress    HeadersRescanProgressReport
 
-	beginFetchTimeStamp   int64
-	startHeaderHeight     int32
-	currentHeaderHeight   int32
-	headersFetchTimeSpent int64
+	beginFetchTimeStamp      int64
+	totalFetchedHeadersCount int32
+	startHeaderHeight        int32
+	headersFetchTimeSpent    int64
 
 	addressDiscoveryStartTime int64
 	totalDiscoveryTimeSpent   int64
@@ -55,10 +55,6 @@ const (
 
 func (lw *LibWallet) AddSyncProgressListener(syncProgressListener SyncProgressListener) {
 	lw.syncProgressListeners = append(lw.syncProgressListeners, syncProgressListener)
-}
-
-func (lw *LibWallet) AddEstimatedSyncProgressListener(syncProgressListener EstimatedSyncProgressListener, logEstimatedProgress bool) {
-	lw.estimatedSyncProgressListeners = append(lw.estimatedSyncProgressListeners, syncProgressListener)
 }
 
 func (lw *LibWallet) SyncInactiveForPeriod(totalInactiveSeconds int64) {
@@ -177,7 +173,7 @@ func (lw *LibWallet) RpcSync(networkAddress string, username string, password st
 
 	// notify sync progress listeners that connected peer count will not be reported because we're using rpc
 	for _, syncProgressListener := range lw.syncProgressListeners {
-		syncProgressListener.OnPeerDisconnected(-1)
+		syncProgressListener.OnPeerConnectedOrDisconnected(-1)
 	}
 
 	// syncer.Run uses a wait group to block the thread until sync completes or an error occurs
@@ -284,18 +280,27 @@ func (lw *LibWallet) RescanBlocks() error {
 			}
 			totalHeight += p.ScannedThrough
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnRescan(p.ScannedThrough, 0, 0, 0, SyncStateProgress)
+				report := &HeadersRescanProgressReport{
+					CurrentRescanHeight: p.ScannedThrough,
+					TotalHeadersToScan:  lw.GetBestBlock(),
+				}
+				syncProgressListener.OnHeadersRescanProgress(report)
 			}
+		}
+
+		report := &HeadersRescanProgressReport{
+			CurrentRescanHeight: totalHeight,
+			TotalHeadersToScan:  lw.GetBestBlock(),
 		}
 
 		select {
 		case <-ctx.Done():
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnRescan(totalHeight, 0, 0, 0, SyncStateProgress)
+				syncProgressListener.OnHeadersRescanProgress(report)
 			}
 		default:
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnRescan(totalHeight, 0, 0, 0, SyncStateFinish)
+				syncProgressListener.OnHeadersRescanProgress(report)
 			}
 		}
 	}()

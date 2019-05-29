@@ -15,18 +15,6 @@ const (
 	SyncStateFinish   = "finish"
 )
 
-type SyncProgressListener interface {
-	OnPeerConnected(peerCount int32)
-	OnPeerDisconnected(peerCount int32)
-	OnFetchMissingCFilters(missingCFiltersStart, missingCFiltersEnd int32, state string)
-	OnFetchedHeaders(beginFetchTimeStamp, headersFetchTimeSpent, lastHeaderTime int64, fetchedHeadersCount, startHeaderHeight, totalFetchedHeaders int32, state string)
-	OnDiscoveredAddresses(headersFetchTimeSpent, addressDiscoveryStartTime int64, state string)
-	OnRescan(rescannedThrough int32, rescanStartTime, headersFetchTimeSpent, totalDiscoveryTimeSpent int64, state string)
-	OnIndexTransactions(totalIndex int32)
-	OnSynced(synced bool)
-	OnSyncEndedWithError(code int32, err error) // use int32 to allow gomobile bind
-}
-
 func (lw *LibWallet) spvSyncNotificationCallbacks(loadedWallet *wallet.Wallet) *spv.Notifications {
 	generalNotifications := lw.generalSyncNotificationCallbacks(loadedWallet)
 	return &spv.Notifications{
@@ -62,7 +50,7 @@ func (lw *LibWallet) generalSyncNotificationCallbacks(loadedWallet *wallet.Walle
 			// begin indexing transactions after sync is completed,
 			// syncProgressListeners.OnSynced() will be invoked after transactions are indexed
 			lw.IndexTransactions(-1, -1, func() {
-				for _, syncProgressListener := range lw.estimatedSyncProgressListeners {
+				for _, syncProgressListener := range lw.syncProgressListeners {
 					if synced {
 						syncProgressListener.OnSyncCompleted()
 					} else {
@@ -80,25 +68,33 @@ func (lw *LibWallet) generalSyncNotificationCallbacks(loadedWallet *wallet.Walle
 				return
 			}
 
-			bestBlockTimeStamp := lw.GetBestBlockTimeStamp()
-			bestBlock := lw.GetBestBlock()
-			estimatedFinalBlockHeight := estimateFinalBlockHeight(lw.activeNet.Params.Name, bestBlockTimeStamp, bestBlock)
-
 			lw.beginFetchTimeStamp = time.Now().Unix()
 			lw.startHeaderHeight = lw.GetBestBlock()
-			lw.currentHeaderHeight = lw.startHeaderHeight
+			lw.totalFetchedHeadersCount = 0
 
 			if lw.showLogs && lw.syncing {
-				totalHeadersToFetch := int32(estimatedFinalBlockHeight) - lw.startHeaderHeight
+				walletBestBlockTime := lw.GetBestBlockTimeStamp()
+				totalHeadersToFetch := lw.estimateBlockHeadersCountAfter(walletBestBlockTime)
 				log.Infof("Step 1 of 3 - fetching %d block headers.\n", totalHeadersToFetch)
 			}
 		},
 		FetchHeadersProgress: lw.fetchHeadersProgress,
 		FetchHeadersFinished: func() {
 
-			lw.headersFetchTimeSpent = time.Now().Unix() - lw.beginFetchTimeStamp
 			lw.startHeaderHeight = -1
-			lw.currentHeaderHeight = -1
+			lw.headersFetchTimeSpent = time.Now().Unix() - lw.beginFetchTimeStamp
+
+			// If there is some period of inactivity reported at this stage,
+			// subtract it from the total stage time.
+			lw.headersFetchTimeSpent -= lw.totalInactiveSeconds
+			lw.totalInactiveSeconds = 0
+
+			if lw.headersFetchTimeSpent < 150 {
+				// This ensures that minimum ETA used for stage 2 (address discovery) is 120 seconds (80% of 150 seconds).
+				lw.headersFetchTimeSpent = 150
+			}
+
+			lw.totalFetchedHeadersCount = 0
 
 			if lw.showLogs && lw.syncing {
 				log.Info("Fetch headers completed.")
@@ -142,7 +138,7 @@ func (lw *LibWallet) generalSyncNotificationCallbacks(loadedWallet *wallet.Walle
 
 func (lw *LibWallet) handlePeerCountUpdate(peerCount int32) {
 	lw.connectedPeers = peerCount
-	for _, syncProgressListener := range lw.estimatedSyncProgressListeners {
+	for _, syncProgressListener := range lw.syncProgressListeners {
 		syncProgressListener.OnPeerConnectedOrDisconnected(peerCount)
 	}
 
@@ -157,14 +153,14 @@ func (lw *LibWallet) handlePeerCountUpdate(peerCount int32) {
 
 func (lw *LibWallet) notifySyncError(code SyncErrorCode, err error) {
 	lw.syncing = false
-	for _, syncProgressListener := range lw.estimatedSyncProgressListeners {
+	for _, syncProgressListener := range lw.syncProgressListeners {
 		syncProgressListener.OnSyncEndedWithError(err)
 	}
 }
 
 func (lw *LibWallet) notifySyncCanceled() {
 	lw.syncing = false
-	for _, syncProgressListener := range lw.estimatedSyncProgressListeners {
+	for _, syncProgressListener := range lw.syncProgressListeners {
 		syncProgressListener.OnSyncCanceled()
 	}
 }
@@ -177,58 +173,51 @@ func (lw *LibWallet) fetchHeadersProgress(fetchedHeadersCount int32, lastHeaderT
 		return
 	}
 
-	bestBlockTimeStamp := lw.GetBestBlockTimeStamp()
-	bestBlock := lw.GetBestBlock()
-	estimatedFinalBlockHeight := estimateFinalBlockHeight(lw.activeNet.Params.Name, bestBlockTimeStamp, bestBlock)
-
-	lw.currentHeaderHeight += fetchedHeadersCount
-
-	totalFetchedHeaders := lw.currentHeaderHeight
-	if lw.startHeaderHeight > 0 {
-		totalFetchedHeaders -= lw.startHeaderHeight
-	}
-
-	syncEndPoint := estimatedFinalBlockHeight - lw.startHeaderHeight
-	headersFetchingRate := float64(totalFetchedHeaders) / float64(syncEndPoint)
-
 	// If there was some period of inactivity,
 	// assume that this process started at some point in the future,
 	// thereby accounting for the total reported time of inactivity.
 	lw.beginFetchTimeStamp += lw.totalInactiveSeconds
 	lw.totalInactiveSeconds = 0
 
-	timeTakenSoFar := time.Now().Unix() - lw.beginFetchTimeStamp
-	estimatedTotalHeadersFetchTime := math.Round(float64(timeTakenSoFar) / headersFetchingRate)
+	lw.totalFetchedHeadersCount += fetchedHeadersCount
+	headersLeftToFetch := lw.estimateBlockHeadersCountAfter(lastHeaderTime)
+	totalHeadersToFetch := lw.totalFetchedHeadersCount + headersLeftToFetch
+	headersFetchProgress := float64(lw.totalFetchedHeadersCount) / float64(totalHeadersToFetch)
 
-	estimatedRescanTime := math.Round(estimatedTotalHeadersFetchTime * RescanPercentage)
-	estimatedDiscoveryTime := math.Round(estimatedTotalHeadersFetchTime * DiscoveryPercentage)
-	estimatedTotalSyncTime := estimatedTotalHeadersFetchTime + estimatedRescanTime + estimatedDiscoveryTime
-
-	totalTimeRemainingSeconds := int64(math.Round(estimatedTotalSyncTime)) + timeTakenSoFar
-	totalSyncProgress := (float64(timeTakenSoFar) / float64(estimatedTotalSyncTime)) * 100.0
-
-	// update total progress and headers progress sync info
-	lw.headersFetchProgress.TotalSyncProgress = int32(math.Round(totalSyncProgress))
-	lw.headersFetchProgress.TotalTimeRemainingSeconds = totalTimeRemainingSeconds
-	lw.headersFetchProgress.TotalHeadersToFetch = syncEndPoint
+	// update headers fetching progress report
+	lw.headersFetchProgress.TotalHeadersToFetch = totalHeadersToFetch
 	lw.headersFetchProgress.CurrentHeaderTimestamp = lastHeaderTime
-	lw.headersFetchProgress.FetchedHeadersCount = totalFetchedHeaders
-	lw.headersFetchProgress.HeadersFetchProgress = int32(math.Round(headersFetchingRate * 100))
+	lw.headersFetchProgress.FetchedHeadersCount = lw.totalFetchedHeadersCount
+	lw.headersFetchProgress.HeadersFetchProgress = roundUp(headersFetchProgress * 100.0)
 
+	timeTakenSoFar := time.Now().Unix() - lw.beginFetchTimeStamp
+	estimatedTotalHeadersFetchTime := float64(timeTakenSoFar) / headersFetchProgress
+
+	estimatedDiscoveryTime := estimatedTotalHeadersFetchTime * DiscoveryPercentage
+	estimatedRescanTime := estimatedTotalHeadersFetchTime * RescanPercentage
+	estimatedTotalSyncTime := estimatedTotalHeadersFetchTime + estimatedDiscoveryTime + estimatedRescanTime
+
+	// update total progress percentage and total time remaining
+	totalSyncProgress := float64(timeTakenSoFar) / estimatedTotalSyncTime
+	totalTimeRemainingSeconds := int64(math.Round(estimatedTotalSyncTime)) - timeTakenSoFar
+	lw.headersFetchProgress.TotalSyncProgress = roundUp(totalSyncProgress * 100.0)
+	lw.headersFetchProgress.TotalTimeRemainingSeconds = totalTimeRemainingSeconds
+
+	// notify progress listener of estimated progress report
 	lw.publishFetchHeadersProgress()
 
+	headersFetchTimeRemaining := estimatedTotalHeadersFetchTime - float64(timeTakenSoFar)
 	debugInfo := &DebugInfo{
 		timeTakenSoFar,
 		totalTimeRemainingSeconds,
 		timeTakenSoFar,
-		int64(math.Round(estimatedTotalHeadersFetchTime)),
+		int64(math.Round(headersFetchTimeRemaining)),
 	}
-
 	lw.publishDebugInfo(debugInfo)
 }
 
 func (lw *LibWallet) publishFetchHeadersProgress() {
-	for _, syncProgressListener := range lw.estimatedSyncProgressListeners {
+	for _, syncProgressListener := range lw.syncProgressListeners {
 		syncProgressListener.OnHeadersFetchProgress(&lw.headersFetchProgress)
 	}
 }
@@ -249,13 +238,8 @@ func (lw *LibWallet) discoverAddressesStarted() {
 func (lw *LibWallet) updateAddressDiscoveryProgress() {
 	// these values will be used every second to calculate the total sync progress
 	totalHeadersFetchTime := float64(lw.headersFetchTimeSpent)
-	if totalHeadersFetchTime < 150 {
-		// 80% of 150 seconds is 120 seconds.
-		// This ensures that minimum estimated discovery time is 120 seconds (2 minutes).
-		totalHeadersFetchTime = 150
-	}
-	estimatedRescanTime := totalHeadersFetchTime * RescanPercentage
 	estimatedDiscoveryTime := totalHeadersFetchTime * DiscoveryPercentage
+	estimatedRescanTime := totalHeadersFetchTime * RescanPercentage
 
 	// following channels are used to determine next step in the below subroutine
 	everySecondTicker := time.NewTicker(1 * time.Second)
@@ -340,7 +324,7 @@ func (lw *LibWallet) updateAddressDiscoveryProgress() {
 }
 
 func (lw *LibWallet) publishAddressDiscoveryProgress() {
-	for _, syncProgressListener := range lw.estimatedSyncProgressListeners {
+	for _, syncProgressListener := range lw.syncProgressListeners {
 		syncProgressListener.OnAddressDiscoveryProgress(&lw.addressDiscoveryProgress)
 	}
 }
@@ -400,13 +384,29 @@ func (lw *LibWallet) rescanProgress(rescannedThrough int32) {
 }
 
 func (lw *LibWallet) publishHeadersRescanProgress() {
-	for _, syncProgressListener := range lw.estimatedSyncProgressListeners {
+	for _, syncProgressListener := range lw.syncProgressListeners {
 		syncProgressListener.OnHeadersRescanProgress(&lw.headersRescanProgress)
 	}
 }
 
 func (lw *LibWallet) publishDebugInfo(debugInfo *DebugInfo) {
-	for _, syncProgressListener := range lw.estimatedSyncProgressListeners {
+	for _, syncProgressListener := range lw.syncProgressListeners {
 		syncProgressListener.Debug(debugInfo)
 	}
+}
+
+/** Helper functions start here */
+
+func (lw *LibWallet) estimateBlockHeadersCountAfter(lastHeaderTime int64) int32 {
+	if lastHeaderTime == 0 {
+		// use wallet's best block time for estimation
+		lastHeaderTime = lw.GetBestBlockTimeStamp()
+	}
+
+	// Use the difference between current time (now) and last reported block time, to estimate total headers to fetch
+	timeDifference := time.Now().Unix() - lastHeaderTime
+	estimatedHeadersDifference := float64(timeDifference) / float64(lw.targetTimePerBlock)
+
+	// return next integer value (upper limit) if estimatedHeadersDifference is a fraction
+	return int32(math.Ceil(estimatedHeadersDifference))
 }

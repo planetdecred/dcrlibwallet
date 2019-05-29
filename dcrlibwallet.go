@@ -106,7 +106,16 @@ func newLibWallet(walletDataDir, walletDbDriver string, activeNet *netparams.Par
 	headersRescanProgress := HeadersRescanProgressReport{}
 	headersRescanProgress.GeneralSyncProgress = &GeneralSyncProgress{}
 
+	var targetTimePerBlock int32
+	if activeNet.Name == "mainnet" {
+		targetTimePerBlock = MainNetTargetTimePerBlock
+	} else {
+		targetTimePerBlock = TestNetTargetTimePerBlock
+	}
+
 	syncData := &syncData{
+		targetTimePerBlock: targetTimePerBlock,
+
 		headersFetchProgress:     headersFetchProgress,
 		addressDiscoveryProgress: addressDiscoveryProgress,
 		headersRescanProgress:    headersRescanProgress,
