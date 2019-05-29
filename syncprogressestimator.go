@@ -166,15 +166,6 @@ func (syncListener *SyncProgressEstimator) OnFetchedHeaders(fetchedHeadersCount 
 		return
 	}
 
-	// If there was some period of inactivity,
-	// assume that this process started at some point in the future,
-	// thereby accounting for the total reported time of inactivity.
-	// But only do this if the process has actually started, i.e. syncListener.beginFetchTimeStamp != -1
-	if syncListener.beginFetchTimeStamp != -1 {
-		syncListener.beginFetchTimeStamp += syncListener.totalInactiveSeconds
-		syncListener.totalInactiveSeconds = 0
-	}
-
 	switch state {
 	case SyncStateStart:
 		if syncListener.beginFetchTimeStamp != -1 {
@@ -193,6 +184,12 @@ func (syncListener *SyncProgressEstimator) OnFetchedHeaders(fetchedHeadersCount 
 		}
 
 	case SyncStateProgress:
+		// If there was some period of inactivity,
+		// assume that this process started at some point in the future,
+		// thereby accounting for the total reported time of inactivity.
+		syncListener.beginFetchTimeStamp += syncListener.totalInactiveSeconds
+		syncListener.totalInactiveSeconds = 0
+
 		syncListener.totalFetchedHeadersCount += fetchedHeadersCount
 		totalHeadersToFetch := syncListener.estimateTotalHeadersToFetch(lastHeaderTime)
 		headersFetchProgress := float64(syncListener.totalFetchedHeadersCount) / float64(totalHeadersToFetch)
@@ -240,6 +237,12 @@ func (syncListener *SyncProgressEstimator) OnFetchedHeaders(fetchedHeadersCount 
 		syncListener.currentHeaderHeight = -1
 
 		syncListener.headersFetchTimeSpent = time.Now().Unix() - syncListener.beginFetchTimeStamp
+
+		// If there is some period of inactivity reported at this stage,
+		// subtract it from the total stage time.
+		syncListener.headersFetchTimeSpent -= syncListener.totalInactiveSeconds
+		syncListener.totalInactiveSeconds = 0
+
 		if syncListener.headersFetchTimeSpent < 150 {
 			// This ensures that minimum ETA used for stage 2 (address discovery) is 120 seconds (80% of 150 seconds).
 			syncListener.headersFetchTimeSpent = 150

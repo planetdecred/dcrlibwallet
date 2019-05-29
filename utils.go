@@ -167,18 +167,6 @@ func roundUp(n float64) int32 {
 	return int32(math.Round(n))
 }
 
-func estimateFinalBlockHeight(netType string, bestBlockTimeStamp int64, bestBlock int32) int32 {
-	var targetTimePerBlock int32
-	if netType == "mainnet" {
-		targetTimePerBlock = MainNetTargetTimePerBlock
-	} else {
-		targetTimePerBlock = TestNetTargetTimePerBlock
-	}
-
-	timeDifference := time.Now().Unix() - bestBlockTimeStamp
-	return (int32(timeDifference) / targetTimePerBlock) + bestBlock
-}
-
 func IsChannelClosed(ch <-chan struct{}) bool {
 	select {
 	case <-ch:
