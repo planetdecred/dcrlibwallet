@@ -102,47 +102,10 @@ func newLibWallet(walletDataDir, walletDbDriver string, activeNet *netparams.Par
 		txDB:          txDB,
 		activeNet:     activeNet,
 		walletLoader:  walletLoader,
+		syncData:      &syncData{},
 	}
-
-	lw.initSyncData()
 
 	return lw, nil
-}
-
-func (lw *LibWallet) initSyncData() {
-	headersFetchProgress := HeadersFetchProgressReport{}
-	headersFetchProgress.GeneralSyncProgress = &GeneralSyncProgress{}
-
-	addressDiscoveryProgress := AddressDiscoveryProgressReport{}
-	addressDiscoveryProgress.GeneralSyncProgress = &GeneralSyncProgress{}
-
-	headersRescanProgress := HeadersRescanProgressReport{}
-	headersRescanProgress.GeneralSyncProgress = &GeneralSyncProgress{}
-
-	var targetTimePerBlock int32
-	if lw.activeNet.Name == "mainnet" {
-		targetTimePerBlock = MainNetTargetTimePerBlock
-	} else {
-		targetTimePerBlock = TestNetTargetTimePerBlock
-	}
-
-	activeSyncData := &activeSyncData{
-		targetTimePerBlock: targetTimePerBlock,
-
-		headersFetchProgress:     headersFetchProgress,
-		addressDiscoveryProgress: addressDiscoveryProgress,
-		headersRescanProgress:    headersRescanProgress,
-
-		beginFetchTimeStamp:     -1,
-		headersFetchTimeSpent:   -1,
-		totalDiscoveryTimeSpent: -1,
-	}
-
-	syncData := &syncData{
-		activeSyncData: activeSyncData,
-	}
-
-	lw.syncData = syncData
 }
 
 func (lw *LibWallet) Shutdown(exit bool) {
