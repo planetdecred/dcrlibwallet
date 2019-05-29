@@ -43,6 +43,8 @@ func (lw *LibWallet) generalSyncNotificationCallbacks(loadedWallet *wallet.Walle
 	return &chain.Notifications{
 		Synced: func(synced bool) {
 
+			lw.syncing = false
+
 			lw.beginFetchTimeStamp = -1
 			lw.headersFetchTimeSpent = -1
 			lw.totalDiscoveryTimeSpent = -1
@@ -360,8 +362,6 @@ func (lw *LibWallet) rescanProgress(rescannedThrough int32) {
 		lw.headersRescanProgress.TotalTimeRemainingSeconds = totalTimeRemainingSeconds
 		lw.headersRescanProgress.TotalSyncProgress = int32(math.Round(totalProgress))
 	}
-
-	log.Infof("Rescanned Through %d, Progress: %d, Rate: %f", rescannedThrough, lw.headersRescanProgress.RescanProgress, rescanRate)
 
 	lw.publishHeadersRescanProgress()
 

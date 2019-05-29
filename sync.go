@@ -21,9 +21,14 @@ type syncData struct {
 	cancelSync            context.CancelFunc
 	syncProgressListeners []SyncProgressListener
 	rescanning            bool
-	syncing               bool
-	showLogs              bool
-	targetTimePerBlock    int32
+
+	*activeSyncData
+}
+
+type activeSyncData struct {
+	syncing            bool
+	showLogs           bool
+	targetTimePerBlock int32
 
 	headersFetchProgress     HeadersFetchProgressReport
 	addressDiscoveryProgress AddressDiscoveryProgressReport
@@ -59,10 +64,10 @@ func (lw *LibWallet) AddSyncProgressListener(syncProgressListener SyncProgressLi
 
 func (lw *LibWallet) SyncInactiveForPeriod(totalInactiveSeconds int64) {
 
-	lw.totalInactiveSeconds += totalInactiveSeconds
+	lw.syncData.totalInactiveSeconds += totalInactiveSeconds
 	if lw.connectedPeers == 0 {
 		// assume it would take another 60 seconds to reconnect to peers
-		lw.totalInactiveSeconds += 60
+		lw.syncData.totalInactiveSeconds += 60
 	}
 }
 
@@ -124,8 +129,10 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 	// syncer.Run uses a wait group to block the thread until sync completes or an error occurs
 	go func() {
 		lw.syncing = true
+		defer func() {
+			lw.syncing = false
+		}()
 		err := syncer.Run(ctx)
-		lw.syncing = false
 		if err != nil {
 			if err == context.Canceled {
 				lw.notifySyncCanceled()
