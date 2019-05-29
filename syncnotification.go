@@ -147,6 +147,9 @@ func (lw *LibWallet) fetchHeadersProgress(fetchedHeadersCount int32, lastHeaderT
 	lw.activeSyncData.headersFetchProgress.HeadersFetchProgress = roundUp(headersFetchProgress * 100.0)
 
 	timeTakenSoFar := time.Now().Unix() - lw.activeSyncData.beginFetchTimeStamp
+	if timeTakenSoFar < 1 {
+		timeTakenSoFar = 1
+	}
 	estimatedTotalHeadersFetchTime := float64(timeTakenSoFar) / headersFetchProgress
 
 	estimatedDiscoveryTime := estimatedTotalHeadersFetchTime * DiscoveryPercentage
