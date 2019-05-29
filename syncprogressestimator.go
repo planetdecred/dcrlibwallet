@@ -32,7 +32,6 @@ type SyncProgressEstimator struct {
 	beginFetchTimeStamp      int64
 	totalFetchedHeadersCount int32
 	startHeaderHeight        int32
-	currentHeaderHeight      int32
 	headersFetchTimeSpent    int64
 
 	addressDiscoveryCompleted chan bool
@@ -197,6 +196,7 @@ func (syncListener *SyncProgressEstimator) OnFetchedHeaders(fetchedHeadersCount 
 		// update headers fetching progress report
 		syncListener.headersFetchProgress.TotalHeadersToFetch = totalHeadersToFetch
 		syncListener.headersFetchProgress.FetchedHeadersCount = syncListener.totalFetchedHeadersCount
+		syncListener.headersFetchProgress.CurrentHeaderTimestamp = lastHeaderTime
 		syncListener.headersFetchProgress.HeadersFetchProgress = roundUp(headersFetchProgress * 100.0)
 
 		timeTakenSoFar := time.Now().Unix() - syncListener.beginFetchTimeStamp
@@ -234,8 +234,6 @@ func (syncListener *SyncProgressEstimator) OnFetchedHeaders(fetchedHeadersCount 
 
 	case SyncStateFinish:
 		syncListener.startHeaderHeight = -1
-		syncListener.currentHeaderHeight = -1
-
 		syncListener.headersFetchTimeSpent = time.Now().Unix() - syncListener.beginFetchTimeStamp
 
 		// If there is some period of inactivity reported at this stage,
