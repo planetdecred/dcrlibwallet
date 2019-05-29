@@ -445,7 +445,7 @@ func (syncListener *SyncProgressEstimator) estimateTotalHeadersToFetch(lastHeade
 	}
 
 	// Use the difference between current time (now) and last reported block time, to estimate total headers to fetch
-	timeDifference := time.Now().Unix() - syncListener.getBestBlockTimestamp()
+	timeDifference := time.Now().Unix() - lastHeaderTime
 	estimatedHeadersDifference := float64(timeDifference) / float64(syncListener.targetTimePerBlock)
 
 	// return next integer value (upper limit) if estimatedHeadersDifference is a fraction
