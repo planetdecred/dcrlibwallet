@@ -19,10 +19,12 @@ type syncData struct {
 	mu                    sync.Mutex
 	rpcClient             *chain.RPCClient
 	cancelSync            context.CancelFunc
-	syncProgressListeners []SyncProgressListener
-	rescanning            bool
+	syncProgressListeners map[string]SyncProgressListener
 	syncing               bool
 	showLogs              bool
+
+	rescanning   bool
+	cancelRescan context.CancelFunc
 
 	*activeSyncData
 }
@@ -75,7 +77,7 @@ func (lw *LibWallet) initActiveSyncData() {
 		targetTimePerBlock = TestNetTargetTimePerBlock
 	}
 
-	activeSyncData := &activeSyncData{
+	lw.syncData.activeSyncData = &activeSyncData{
 		targetTimePerBlock: targetTimePerBlock,
 
 		headersFetchProgress:     headersFetchProgress,
@@ -86,12 +88,22 @@ func (lw *LibWallet) initActiveSyncData() {
 		headersFetchTimeSpent:   -1,
 		totalDiscoveryTimeSpent: -1,
 	}
-
-	lw.syncData.activeSyncData = activeSyncData
 }
 
-func (lw *LibWallet) AddSyncProgressListener(syncProgressListener SyncProgressListener) {
-	lw.syncProgressListeners = append(lw.syncData.syncProgressListeners, syncProgressListener)
+func (lw *LibWallet) AddSyncProgressListener(syncProgressListener SyncProgressListener, uniqueIdentifier string) error {
+	_, k := lw.syncProgressListeners[uniqueIdentifier]
+	if k {
+		return errors.New(ErrListenerAlreadyExist)
+	}
+	lw.syncProgressListeners[uniqueIdentifier] = syncProgressListener
+	return nil
+}
+
+func (lw *LibWallet) RemoveSyncProgressListener(uniqueIdentifier string) {
+	_, k := lw.syncProgressListeners[uniqueIdentifier]
+	if k {
+		delete(lw.syncProgressListeners, uniqueIdentifier)
+	}
 }
 
 func (lw *LibWallet) EnableSyncLogs() {
@@ -315,7 +327,8 @@ func (lw *LibWallet) RescanBlocks() error {
 		}()
 		lw.rescanning = true
 		progress := make(chan wallet.RescanProgress, 1)
-		ctx, _ := contextWithShutdownCancel(context.Background())
+		ctx, cancel := contextWithShutdownCancel(context.Background())
+		lw.syncData.cancelRescan = cancel
 
 		var totalHeightRescanned int32
 		go lw.wallet.RescanProgressFromHeight(ctx, netBackend, 0, progress)
@@ -326,25 +339,45 @@ func (lw *LibWallet) RescanBlocks() error {
 				return
 			}
 			totalHeightRescanned += p.ScannedThrough
+			report := &HeadersRescanProgressReport{
+				CurrentRescanHeight: totalHeightRescanned,
+				TotalHeadersToScan:  lw.GetBestBlock(),
+			}
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				report := &HeadersRescanProgressReport{
-					CurrentRescanHeight: p.ScannedThrough,
-					TotalHeadersToScan:  lw.GetBestBlock(),
-				}
 				syncProgressListener.OnHeadersRescanProgress(report)
 			}
 
 			select {
 			case <-ctx.Done():
 				log.Info("Rescan cancelled through context")
+				lw.syncData.cancelRescan = nil
 				return
 			default:
 				continue
 			}
 		}
+
+		// set this to nil, it no longer need since rescan has completed
+		lw.syncData.cancelRescan = nil
+
+		// Send final report after rescan has completed.
+		report := &HeadersRescanProgressReport{
+			CurrentRescanHeight: totalHeightRescanned,
+			TotalHeadersToScan:  lw.GetBestBlock(),
+		}
+		for _, syncProgressListener := range lw.syncProgressListeners {
+			syncProgressListener.OnHeadersRescanProgress(report)
+		}
 	}()
 
 	return nil
+}
+
+func (lw *LibWallet) CancelRescan() {
+	if lw.syncData.cancelRescan != nil {
+		lw.syncData.cancelRescan()
+		lw.syncData.cancelRescan = nil
+	}
 }
 
 func (lw *LibWallet) IsScanning() bool {

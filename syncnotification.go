@@ -17,6 +17,12 @@ const (
 func (lw *LibWallet) spvSyncNotificationCallbacks() *spv.Notifications {
 	generalNotifications := lw.generalSyncNotificationCallbacks()
 	return &spv.Notifications{
+		PeerConnected: func(peerCount int32, addr string) {
+			lw.handlePeerCountUpdate(peerCount)
+		},
+		PeerDisconnected: func(peerCount int32, addr string) {
+			lw.handlePeerCountUpdate(peerCount)
+		},
 		Synced:                       generalNotifications.Synced,
 		FetchHeadersStarted:          generalNotifications.FetchHeadersStarted,
 		FetchHeadersProgress:         generalNotifications.FetchHeadersProgress,
@@ -29,18 +35,11 @@ func (lw *LibWallet) spvSyncNotificationCallbacks() *spv.Notifications {
 		RescanStarted:                generalNotifications.RescanStarted,
 		RescanProgress:               generalNotifications.RescanProgress,
 		RescanFinished:               generalNotifications.RescanFinished,
-		PeerDisconnected: func(peerCount int32, addr string) {
-			lw.handlePeerCountUpdate(peerCount)
-		},
-		PeerConnected: func(peerCount int32, addr string) {
-			lw.handlePeerCountUpdate(peerCount)
-		},
 	}
 }
 
 func (lw *LibWallet) generalSyncNotificationCallbacks() *chain.Notifications {
 	return &chain.Notifications{
-		Synced:                       lw.synced,
 		FetchMissingCFiltersStarted:  func() {},
 		FetchMissingCFiltersProgress: func(missingCFitlersStart, missingCFitlersEnd int32) {},
 		FetchMissingCFiltersFinished: func() {},
@@ -52,6 +51,7 @@ func (lw *LibWallet) generalSyncNotificationCallbacks() *chain.Notifications {
 		RescanStarted:                lw.rescanStarted,
 		RescanProgress:               lw.rescanProgress,
 		RescanFinished:               lw.rescanFinished,
+		Synced:                       lw.synced,
 	}
 }
 
@@ -68,38 +68,6 @@ func (lw *LibWallet) handlePeerCountUpdate(peerCount int32) {
 			log.Infof("Connected to %d peers on %s.\n", peerCount, lw.activeNet.Name)
 		}
 	}
-}
-
-func (lw *LibWallet) notifySyncError(code SyncErrorCode, err error) {
-	lw.syncData.syncing = false
-	for _, syncProgressListener := range lw.syncData.syncProgressListeners {
-		syncProgressListener.OnSyncEndedWithError(err)
-	}
-}
-
-func (lw *LibWallet) notifySyncCanceled() {
-	lw.syncData.syncing = false
-	for _, syncProgressListener := range lw.syncData.syncProgressListeners {
-		syncProgressListener.OnSyncCanceled()
-	}
-}
-
-func (lw *LibWallet) synced(synced bool) {
-
-	lw.syncing = false
-	lw.activeSyncData = nil // to be reintialized on next sync
-
-	// begin indexing transactions after sync is completed,
-	// syncProgressListeners.OnSynced() will be invoked after transactions are indexed
-	lw.IndexTransactions(-1, -1, func() {
-		for _, syncProgressListener := range lw.syncProgressListeners {
-			if synced {
-				syncProgressListener.OnSyncCompleted()
-			} else {
-				syncProgressListener.OnSyncCanceled()
-			}
-		}
-	})
 }
 
 // Fetch Headers Callbacks
@@ -426,4 +394,36 @@ func (lw *LibWallet) estimateBlockHeadersCountAfter(lastHeaderTime int64) int32 
 
 	// return next integer value (upper limit) if estimatedHeadersDifference is a fraction
 	return int32(math.Ceil(estimatedHeadersDifference))
+}
+
+func (lw *LibWallet) notifySyncError(code SyncErrorCode, err error) {
+	lw.syncData.syncing = false
+	for _, syncProgressListener := range lw.syncData.syncProgressListeners {
+		syncProgressListener.OnSyncEndedWithError(err)
+	}
+}
+
+func (lw *LibWallet) notifySyncCanceled() {
+	lw.syncData.syncing = false
+	for _, syncProgressListener := range lw.syncData.syncProgressListeners {
+		syncProgressListener.OnSyncCanceled()
+	}
+}
+
+func (lw *LibWallet) synced(synced bool) {
+
+	lw.syncing = false
+	lw.activeSyncData = nil // to be reintialized on next sync
+
+	// begin indexing transactions after sync is completed,
+	// syncProgressListeners.OnSynced() will be invoked after transactions are indexed
+	lw.IndexTransactions(-1, -1, func() {
+		for _, syncProgressListener := range lw.syncProgressListeners {
+			if synced {
+				syncProgressListener.OnSyncCompleted()
+			} else {
+				syncProgressListener.OnSyncCanceled()
+			}
+		}
+	})
 }
