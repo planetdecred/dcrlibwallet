@@ -195,8 +195,8 @@ func (syncListener *SyncProgressEstimator) OnFetchedHeaders(fetchedHeadersCount 
 
 		// update headers fetching progress report
 		syncListener.headersFetchProgress.TotalHeadersToFetch = totalHeadersToFetch
-		syncListener.headersFetchProgress.FetchedHeadersCount = syncListener.totalFetchedHeadersCount
 		syncListener.headersFetchProgress.CurrentHeaderTimestamp = lastHeaderTime
+		syncListener.headersFetchProgress.FetchedHeadersCount = syncListener.totalFetchedHeadersCount
 		syncListener.headersFetchProgress.HeadersFetchProgress = roundUp(headersFetchProgress * 100.0)
 
 		timeTakenSoFar := time.Now().Unix() - syncListener.beginFetchTimeStamp

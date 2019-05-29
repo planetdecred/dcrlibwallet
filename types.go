@@ -127,8 +127,8 @@ type GeneralSyncProgress struct {
 type HeadersFetchProgressReport struct {
 	*GeneralSyncProgress
 	TotalHeadersToFetch    int32 `json:"totalHeadersToFetch"`
-	FetchedHeadersCount    int32 `json:"totalFetchedHeadersCount"`
 	CurrentHeaderTimestamp int64 `json:"currentHeaderTimestamp"`
+	FetchedHeadersCount    int32 `json:"totalFetchedHeadersCount"`
 	HeadersFetchProgress   int32 `json:"headersFetchProgress"`
 }
 
