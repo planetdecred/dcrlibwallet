@@ -16,11 +16,18 @@ import (
 )
 
 type syncData struct {
-	mu                    sync.Mutex
-	rpcClient             *chain.RPCClient
-	cancelSync            context.CancelFunc
-	syncProgressListeners []SyncProgressListener
-	rescanning            bool
+	mu                             sync.Mutex
+	rpcClient                      *chain.RPCClient
+	cancelSync                     context.CancelFunc
+	syncProgressListeners          []SyncProgressListener
+	estimatedSyncProgressListeners []EstimatedSyncProgressListener
+	rescanning                     bool
+	syncing                        bool
+	showLogs                       bool
+
+	headersFetchProgress     HeadersFetchProgressReport
+	addressDiscoveryProgress AddressDiscoveryProgressReport
+	headersRescanProgress    HeadersRescanProgressReport
 
 	beginFetchTimeStamp   int64
 	startHeaderHeight     int32
@@ -30,7 +37,13 @@ type syncData struct {
 	addressDiscoveryStartTime int64
 	totalDiscoveryTimeSpent   int64
 
+	addressDiscoveryCompleted chan bool
+
 	rescanStartTime int64
+
+	connectedPeers int32
+
+	totalInactiveSeconds int64
 }
 
 type SyncErrorCode int32
@@ -45,31 +58,22 @@ func (lw *LibWallet) AddSyncProgressListener(syncProgressListener SyncProgressLi
 }
 
 func (lw *LibWallet) AddEstimatedSyncProgressListener(syncProgressListener EstimatedSyncProgressListener, logEstimatedProgress bool) {
-	syncProgressEstimator := SetupSyncProgressEstimator(
-		lw.activeNet.Params.Name,
-		logEstimatedProgress,
-		lw.GetBestBlock,
-		lw.GetBestBlockTimeStamp,
-		syncProgressListener,
-	)
-
-	lw.AddSyncProgressListener(syncProgressEstimator)
+	lw.estimatedSyncProgressListeners = append(lw.estimatedSyncProgressListeners, syncProgressListener)
 }
 
 func (lw *LibWallet) SyncInactiveForPeriod(totalInactiveSeconds int64) {
-	for _, syncProgressListener := range lw.syncProgressListeners {
-		if syncProgressEstimator, ok := syncProgressListener.(*SyncProgressEstimator); ok {
-			syncProgressEstimator.DiscardPeriodsOfInactivity(totalInactiveSeconds)
-		}
+
+	lw.totalInactiveSeconds += totalInactiveSeconds
+	if lw.connectedPeers == 0 {
+		// assume it would take another 60 seconds to reconnect to peers
+		lw.totalInactiveSeconds += 60
 	}
 }
 
-func (lw *LibWallet) ResetSyncProgressListeners() {
-	for _, syncProgressListener := range lw.syncProgressListeners {
-		if syncProgressEstimator, ok := syncProgressListener.(*SyncProgressEstimator); ok {
-			syncProgressEstimator.Reset()
-		}
-	}
+func (lw *LibWallet) ResetSyncProgressListener() {
+	lw.beginFetchTimeStamp = -1
+	lw.headersFetchTimeSpent = -1
+	lw.totalDiscoveryTimeSpent = -1
 }
 
 func (lw *LibWallet) SpvSync(peerAddresses string) error {
@@ -107,7 +111,7 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 
 	// reset sync listeners before starting sync
 	// (especially useful if this is not the first sync since the listener was registered)
-	lw.ResetSyncProgressListeners()
+	lw.ResetSyncProgressListener()
 
 	syncer := spv.NewSyncer(loadedWallet, lp)
 	syncer.SetNotifications(lw.spvSyncNotificationCallbacks(loadedWallet))
@@ -123,7 +127,9 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 
 	// syncer.Run uses a wait group to block the thread until sync completes or an error occurs
 	go func() {
+		lw.syncing = true
 		err := syncer.Run(ctx)
+		lw.syncing = false
 		if err != nil {
 			if err == context.Canceled {
 				lw.notifySyncCanceled()
@@ -160,7 +166,7 @@ func (lw *LibWallet) RpcSync(networkAddress string, username string, password st
 
 	// reset sync listeners before starting sync
 	// (especially useful if this is not the first sync since the listener was registered)
-	lw.ResetSyncProgressListeners()
+	lw.ResetSyncProgressListener()
 
 	syncer := chain.NewRPCSyncer(loadedWallet, chainClient)
 	syncer.SetNotifications(lw.generalSyncNotificationCallbacks(loadedWallet))
@@ -176,7 +182,9 @@ func (lw *LibWallet) RpcSync(networkAddress string, username string, password st
 
 	// syncer.Run uses a wait group to block the thread until sync completes or an error occurs
 	go func() {
+		lw.syncing = true
 		err := syncer.Run(ctx, true)
+		lw.syncing = true
 		if err != nil {
 			if err == context.Canceled {
 				lw.notifySyncCanceled()

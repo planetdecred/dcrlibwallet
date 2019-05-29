@@ -96,12 +96,27 @@ func newLibWallet(walletDataDir, walletDbDriver string, activeNet *netparams.Par
 		go shutdownListener()
 	}
 
+	// Init Sync Data
+	headersFetchProgress := HeadersFetchProgressReport{}
+	headersFetchProgress.GeneralSyncProgress = &GeneralSyncProgress{}
+
+	addressDiscoveryProgress := AddressDiscoveryProgressReport{}
+	addressDiscoveryProgress.GeneralSyncProgress = &GeneralSyncProgress{}
+
+	headersRescanProgress := HeadersRescanProgressReport{}
+	headersRescanProgress.GeneralSyncProgress = &GeneralSyncProgress{}
+
 	syncData := &syncData{
+		headersFetchProgress:     headersFetchProgress,
+		addressDiscoveryProgress: addressDiscoveryProgress,
+		headersRescanProgress:    headersRescanProgress,
+
 		beginFetchTimeStamp:     -1,
 		headersFetchTimeSpent:   -1,
 		totalDiscoveryTimeSpent: -1,
 	}
 
+	// Finally Init LibWallet
 	lw := &LibWallet{
 		walletDataDir: walletDataDir,
 		txDB:          txDB,
