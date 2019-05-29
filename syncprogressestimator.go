@@ -216,11 +216,12 @@ func (syncListener *SyncProgressEstimator) OnFetchedHeaders(fetchedHeadersCount 
 		// notify progress listener of estimated progress report
 		syncListener.progressListener.OnHeadersFetchProgress(&syncListener.headersFetchProgress)
 
+		headersFetchTimeRemaining := estimatedTotalHeadersFetchTime - float64(timeTakenSoFar)
 		syncListener.progressListener.Debug(&DebugInfo{
 			timeTakenSoFar,
 			totalTimeRemainingSeconds,
 			timeTakenSoFar,
-			int64(math.Round(estimatedTotalHeadersFetchTime)),
+			int64(math.Round(headersFetchTimeRemaining)),
 		})
 
 		if syncListener.showLog && syncListener.syncing {
