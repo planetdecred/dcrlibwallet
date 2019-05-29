@@ -16,6 +16,7 @@ type SyncProgressEstimator struct {
 	netType               string
 	getBestBlock          func() int32
 	getBestBlockTimestamp func() int64
+	targetTimePerBlock    int32
 
 	showLog bool
 	syncing bool
@@ -28,10 +29,11 @@ type SyncProgressEstimator struct {
 
 	connectedPeers int32
 
-	beginFetchTimeStamp   int64
-	startHeaderHeight     int32
-	currentHeaderHeight   int32
-	headersFetchTimeSpent int64
+	beginFetchTimeStamp      int64
+	totalFetchedHeadersCount int32
+	startHeaderHeight        int32
+	currentHeaderHeight      int32
+	headersFetchTimeSpent    int64
 
 	addressDiscoveryCompleted chan bool
 	totalDiscoveryTimeSpent   int64
@@ -59,10 +61,18 @@ func SetupSyncProgressEstimator(netType string, showLog bool, getBestBlock func(
 	headersRescanProgress := HeadersRescanProgressReport{}
 	headersRescanProgress.GeneralSyncProgress = &GeneralSyncProgress{}
 
+	var targetTimePerBlock int32
+	if netType == "mainnet" {
+		targetTimePerBlock = MainNetTargetTimePerBlock
+	} else {
+		targetTimePerBlock = TestNetTargetTimePerBlock
+	}
+
 	return &SyncProgressEstimator{
 		netType:               netType,
 		getBestBlock:          getBestBlock,
 		getBestBlockTimestamp: getBestBlockTimestamp,
+		targetTimePerBlock:    targetTimePerBlock,
 
 		showLog: showLog,
 		syncing: true,
@@ -156,63 +166,56 @@ func (syncListener *SyncProgressEstimator) OnFetchedHeaders(fetchedHeadersCount 
 		return
 	}
 
-	bestBlockTimeStamp := syncListener.getBestBlockTimestamp()
-	bestBlock := syncListener.getBestBlock()
-	estimatedFinalBlockHeight := estimateFinalBlockHeight(syncListener.netType, bestBlockTimeStamp, bestBlock)
+	// If there was some period of inactivity,
+	// assume that this process started at some point in the future,
+	// thereby accounting for the total reported time of inactivity.
+	// But only do this if the process has actually started, i.e. syncListener.beginFetchTimeStamp != -1
+	if syncListener.beginFetchTimeStamp != -1 {
+		syncListener.beginFetchTimeStamp += syncListener.totalInactiveSeconds
+		syncListener.totalInactiveSeconds = 0
+	}
 
 	switch state {
 	case SyncStateStart:
 		if syncListener.beginFetchTimeStamp != -1 {
 			// already started headers fetching
-			break
+			return
 		}
 
 		syncListener.beginFetchTimeStamp = time.Now().Unix()
-		syncListener.startHeaderHeight = bestBlock
-		syncListener.currentHeaderHeight = syncListener.startHeaderHeight
+		syncListener.startHeaderHeight = syncListener.getBestBlock()
+		syncListener.totalFetchedHeadersCount = 0
 
 		if syncListener.showLog && syncListener.syncing {
-			totalHeadersToFetch := int32(estimatedFinalBlockHeight) - syncListener.startHeaderHeight
+			lastReportedHeaderTime := syncListener.getBestBlockTimestamp()
+			totalHeadersToFetch := syncListener.estimateTotalHeadersToFetch(lastReportedHeaderTime)
 			fmt.Printf("Step 1 of 3 - fetching %d block headers.\n", totalHeadersToFetch)
 		}
 
 	case SyncStateProgress:
-		// increment current block height value
-		syncListener.currentHeaderHeight += fetchedHeadersCount
+		syncListener.totalFetchedHeadersCount += fetchedHeadersCount
+		totalHeadersToFetch := syncListener.estimateTotalHeadersToFetch(lastHeaderTime)
+		headersFetchProgress := float64(syncListener.totalFetchedHeadersCount) / float64(totalHeadersToFetch)
 
-		// calculate percentage progress and eta
-		totalFetchedHeaders := syncListener.currentHeaderHeight
-		if syncListener.startHeaderHeight > 0 {
-			totalFetchedHeaders -= syncListener.startHeaderHeight
-		}
-
-		syncEndPoint := estimatedFinalBlockHeight - syncListener.startHeaderHeight
-		headersFetchingRate := float64(totalFetchedHeaders) / float64(syncEndPoint)
-
-		// If there was some period of inactivity,
-		// assume that this process started at some point in the future,
-		// thereby accounting for the total reported time of inactivity.
-		syncListener.beginFetchTimeStamp += syncListener.totalInactiveSeconds
-		syncListener.totalInactiveSeconds = 0
+		// update headers fetching progress report
+		syncListener.headersFetchProgress.TotalHeadersToFetch = totalHeadersToFetch
+		syncListener.headersFetchProgress.FetchedHeadersCount = syncListener.totalFetchedHeadersCount
+		syncListener.headersFetchProgress.HeadersFetchProgress = roundUp(headersFetchProgress * 100.0)
 
 		timeTakenSoFar := time.Now().Unix() - syncListener.beginFetchTimeStamp
-		estimatedTotalHeadersFetchTime := math.Round(float64(timeTakenSoFar) / headersFetchingRate)
+		estimatedTotalHeadersFetchTime := float64(timeTakenSoFar) / headersFetchProgress
 
-		estimatedRescanTime := math.Round(estimatedTotalHeadersFetchTime * RescanPercentage)
-		estimatedDiscoveryTime := math.Round(estimatedTotalHeadersFetchTime * DiscoveryPercentage)
-		estimatedTotalSyncTime := estimatedTotalHeadersFetchTime + estimatedRescanTime + estimatedDiscoveryTime
+		estimatedDiscoveryTime := estimatedTotalHeadersFetchTime * DiscoveryPercentage
+		estimatedRescanTime := estimatedTotalHeadersFetchTime * RescanPercentage
+		estimatedTotalSyncTime := estimatedTotalHeadersFetchTime + estimatedDiscoveryTime + estimatedRescanTime
 
-		totalTimeRemainingSeconds := int64(math.Round(estimatedTotalSyncTime)) + timeTakenSoFar
-		totalSyncProgress := (float64(timeTakenSoFar) / float64(estimatedTotalSyncTime)) * 100.0
-
-		// update total progress and headers progress sync info
-		syncListener.headersFetchProgress.TotalSyncProgress = int32(math.Round(totalSyncProgress))
+		// update total progress percentage and total time remaining
+		totalSyncProgress := float64(timeTakenSoFar) / estimatedTotalSyncTime
+		totalTimeRemainingSeconds := int64(math.Round(estimatedTotalSyncTime)) - timeTakenSoFar
+		syncListener.headersFetchProgress.TotalSyncProgress = roundUp(totalSyncProgress * 100.0)
 		syncListener.headersFetchProgress.TotalTimeRemainingSeconds = totalTimeRemainingSeconds
-		syncListener.headersFetchProgress.TotalHeadersToFetch = syncEndPoint
-		syncListener.headersFetchProgress.CurrentHeaderTimestamp = lastHeaderTime
-		syncListener.headersFetchProgress.FetchedHeadersCount = totalFetchedHeaders
-		syncListener.headersFetchProgress.HeadersFetchProgress = int32(math.Round(headersFetchingRate * 100))
 
+		// notify progress listener of estimated progress report
 		syncListener.progressListener.OnHeadersFetchProgress(&syncListener.headersFetchProgress)
 
 		syncListener.progressListener.Debug(&DebugInfo{
@@ -233,9 +236,14 @@ func (syncListener *SyncProgressEstimator) OnFetchedHeaders(fetchedHeadersCount 
 		}
 
 	case SyncStateFinish:
-		syncListener.headersFetchTimeSpent = time.Now().Unix() - syncListener.beginFetchTimeStamp
 		syncListener.startHeaderHeight = -1
 		syncListener.currentHeaderHeight = -1
+
+		syncListener.headersFetchTimeSpent = time.Now().Unix() - syncListener.beginFetchTimeStamp
+		if syncListener.headersFetchTimeSpent < 150 {
+			// This ensures that minimum ETA used for stage 2 (address discovery) is 120 seconds (80% of 150 seconds).
+			syncListener.headersFetchTimeSpent = 150
+		}
 
 		if syncListener.showLog && syncListener.syncing {
 			fmt.Println("Fetch headers completed.")
@@ -260,13 +268,8 @@ func (syncListener *SyncProgressEstimator) updateAddressDiscoveryProgress() {
 	// these values will be used every second to calculate the total sync progress
 	addressDiscoveryStartTime := time.Now().Unix()
 	totalHeadersFetchTime := float64(syncListener.headersFetchTimeSpent)
-	if totalHeadersFetchTime < 150 {
-		// 80% of 150 seconds is 120 seconds.
-		// This ensures that minimum estimated discovery time is 120 seconds (2 minutes).
-		totalHeadersFetchTime = 150
-	}
-	estimatedRescanTime := totalHeadersFetchTime * RescanPercentage
 	estimatedDiscoveryTime := totalHeadersFetchTime * DiscoveryPercentage
+	estimatedRescanTime := totalHeadersFetchTime * RescanPercentage
 
 	// following channels are used to determine next step in the below subroutine
 	everySecondTicker := time.NewTicker(1 * time.Second)
@@ -430,4 +433,20 @@ func (syncListener *SyncProgressEstimator) OnRescan(rescannedThrough int32, stat
 	}
 
 	syncListener.progressListener.OnHeadersRescanProgress(&syncListener.headersRescanProgress)
+}
+
+/** Helper functions start here */
+
+func (syncListener *SyncProgressEstimator) estimateTotalHeadersToFetch(lastHeaderTime int64) int32 {
+	if lastHeaderTime == 0 {
+		// use wallet's best block time for estimation
+		lastHeaderTime = syncListener.getBestBlockTimestamp()
+	}
+
+	// Use the difference between current time (now) and last reported block time, to estimate total headers to fetch
+	timeDifference := time.Now().Unix() - syncListener.getBestBlockTimestamp()
+	estimatedHeadersDifference := float64(timeDifference) / float64(syncListener.targetTimePerBlock)
+
+	// return next integer value (upper limit) if estimatedHeadersDifference is a fraction
+	return int32(math.Ceil(estimatedHeadersDifference))
 }
