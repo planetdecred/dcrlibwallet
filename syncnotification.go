@@ -6,7 +6,6 @@ import (
 
 	"github.com/decred/dcrwallet/chain"
 	"github.com/decred/dcrwallet/spv"
-	"github.com/decred/dcrwallet/wallet"
 )
 
 const (
@@ -15,8 +14,8 @@ const (
 	SyncStateFinish   = "finish"
 )
 
-func (lw *LibWallet) spvSyncNotificationCallbacks(loadedWallet *wallet.Wallet) *spv.Notifications {
-	generalNotifications := lw.generalSyncNotificationCallbacks(loadedWallet)
+func (lw *LibWallet) spvSyncNotificationCallbacks() *spv.Notifications {
+	generalNotifications := lw.generalSyncNotificationCallbacks()
 	return &spv.Notifications{
 		Synced:                       generalNotifications.Synced,
 		FetchHeadersStarted:          generalNotifications.FetchHeadersStarted,
@@ -39,97 +38,20 @@ func (lw *LibWallet) spvSyncNotificationCallbacks(loadedWallet *wallet.Wallet) *
 	}
 }
 
-func (lw *LibWallet) generalSyncNotificationCallbacks(loadedWallet *wallet.Wallet) *chain.Notifications {
+func (lw *LibWallet) generalSyncNotificationCallbacks() *chain.Notifications {
 	return &chain.Notifications{
-		Synced: func(synced bool) {
-
-			lw.syncing = false
-			lw.activeSyncData = nil // to be reintialized on next sync
-
-			// begin indexing transactions after sync is completed,
-			// syncProgressListeners.OnSynced() will be invoked after transactions are indexed
-			lw.IndexTransactions(-1, -1, func() {
-				for _, syncProgressListener := range lw.syncProgressListeners {
-					if synced {
-						syncProgressListener.OnSyncCompleted()
-					} else {
-						syncProgressListener.OnSyncCanceled()
-					}
-				}
-			})
-		},
+		Synced:                       lw.synced,
 		FetchMissingCFiltersStarted:  func() {},
 		FetchMissingCFiltersProgress: func(missingCFitlersStart, missingCFitlersEnd int32) {},
 		FetchMissingCFiltersFinished: func() {},
-		FetchHeadersStarted: func() {
-			if lw.beginFetchTimeStamp != -1 {
-				// already started headers fetching
-				return
-			}
-
-			lw.activeSyncData.beginFetchTimeStamp = time.Now().Unix()
-			lw.activeSyncData.startHeaderHeight = lw.GetBestBlock()
-			lw.activeSyncData.totalFetchedHeadersCount = 0
-
-			if lw.syncData.showLogs && lw.syncData.syncing {
-				walletBestBlockTime := lw.GetBestBlockTimeStamp()
-				totalHeadersToFetch := lw.estimateBlockHeadersCountAfter(walletBestBlockTime)
-				log.Infof("Step 1 of 3 - fetching %d block headers.\n", totalHeadersToFetch)
-			}
-		},
-		FetchHeadersProgress: lw.fetchHeadersProgress,
-		FetchHeadersFinished: func() {
-
-			lw.activeSyncData.startHeaderHeight = -1
-			lw.activeSyncData.headersFetchTimeSpent = time.Now().Unix() - lw.beginFetchTimeStamp
-
-			// If there is some period of inactivity reported at this stage,
-			// subtract it from the total stage time.
-			lw.activeSyncData.headersFetchTimeSpent -= lw.totalInactiveSeconds
-			lw.activeSyncData.totalInactiveSeconds = 0
-
-			if lw.activeSyncData.headersFetchTimeSpent < 150 {
-				// This ensures that minimum ETA used for stage 2 (address discovery) is 120 seconds (80% of 150 seconds).
-				lw.activeSyncData.headersFetchTimeSpent = 150
-			}
-
-			if lw.syncData.showLogs && lw.syncData.syncing {
-				log.Info("Fetch headers completed.")
-			}
-		},
-		DiscoverAddressesStarted: lw.discoverAddressesStarted,
-		DiscoverAddressesFinished: func() {
-
-			addressDiscoveryFinishTime := time.Now().Unix()
-			lw.activeSyncData.totalDiscoveryTimeSpent = addressDiscoveryFinishTime - lw.addressDiscoveryStartTime
-
-			close(lw.activeSyncData.addressDiscoveryCompleted)
-			lw.activeSyncData.addressDiscoveryCompleted = nil
-
-			if !loadedWallet.Locked() {
-				loadedWallet.Lock()
-			}
-		},
-		RescanStarted: func() {
-			if lw.activeSyncData.addressDiscoveryCompleted != nil {
-				close(lw.activeSyncData.addressDiscoveryCompleted)
-				lw.activeSyncData.addressDiscoveryCompleted = nil
-			}
-
-			lw.activeSyncData.rescanStartTime = time.Now().Unix()
-
-			// retain last total progress report from address discovery phase
-			lw.activeSyncData.headersRescanProgress.TotalTimeRemainingSeconds = lw.activeSyncData.addressDiscoveryProgress.TotalTimeRemainingSeconds
-			lw.activeSyncData.headersRescanProgress.TotalSyncProgress = lw.activeSyncData.addressDiscoveryProgress.TotalSyncProgress
-
-			if lw.syncData.showLogs && lw.syncData.syncing {
-				log.Info("Step 3 of 3 - Scanning block headers")
-			}
-		},
-		RescanProgress: lw.rescanProgress,
-		RescanFinished: func() {
-			lw.publishHeadersRescanProgress()
-		},
+		FetchHeadersStarted:          lw.fetchHeadersStarted,
+		FetchHeadersProgress:         lw.fetchHeadersProgress,
+		FetchHeadersFinished:         lw.fetchHeadersFinished,
+		DiscoverAddressesStarted:     lw.discoverAddressesStarted,
+		DiscoverAddressesFinished:    lw.discoverAddressesFinished,
+		RescanStarted:                lw.rescanStarted,
+		RescanProgress:               lw.rescanProgress,
+		RescanFinished:               lw.rescanFinished,
 	}
 }
 
@@ -159,6 +81,43 @@ func (lw *LibWallet) notifySyncCanceled() {
 	lw.syncData.syncing = false
 	for _, syncProgressListener := range lw.syncData.syncProgressListeners {
 		syncProgressListener.OnSyncCanceled()
+	}
+}
+
+func (lw *LibWallet) synced(synced bool) {
+
+	lw.syncing = false
+	lw.activeSyncData = nil // to be reintialized on next sync
+
+	// begin indexing transactions after sync is completed,
+	// syncProgressListeners.OnSynced() will be invoked after transactions are indexed
+	lw.IndexTransactions(-1, -1, func() {
+		for _, syncProgressListener := range lw.syncProgressListeners {
+			if synced {
+				syncProgressListener.OnSyncCompleted()
+			} else {
+				syncProgressListener.OnSyncCanceled()
+			}
+		}
+	})
+}
+
+// Fetch Headers Callbacks
+
+func (lw *LibWallet) fetchHeadersStarted() {
+	if lw.beginFetchTimeStamp != -1 {
+		// already started headers fetching
+		return
+	}
+
+	lw.activeSyncData.beginFetchTimeStamp = time.Now().Unix()
+	lw.activeSyncData.startHeaderHeight = lw.GetBestBlock()
+	lw.activeSyncData.totalFetchedHeadersCount = 0
+
+	if lw.syncData.showLogs && lw.syncData.syncing {
+		walletBestBlockTime := lw.GetBestBlockTimeStamp()
+		totalHeadersToFetch := lw.estimateBlockHeadersCountAfter(walletBestBlockTime)
+		log.Infof("Step 1 of 3 - fetching %d block headers.\n", totalHeadersToFetch)
 	}
 }
 
@@ -218,6 +177,27 @@ func (lw *LibWallet) publishFetchHeadersProgress() {
 		syncProgressListener.OnHeadersFetchProgress(&lw.headersFetchProgress)
 	}
 }
+
+func (lw *LibWallet) fetchHeadersFinished() {
+	lw.activeSyncData.startHeaderHeight = -1
+	lw.activeSyncData.headersFetchTimeSpent = time.Now().Unix() - lw.beginFetchTimeStamp
+
+	// If there is some period of inactivity reported at this stage,
+	// subtract it from the total stage time.
+	lw.activeSyncData.headersFetchTimeSpent -= lw.totalInactiveSeconds
+	lw.activeSyncData.totalInactiveSeconds = 0
+
+	if lw.activeSyncData.headersFetchTimeSpent < 150 {
+		// This ensures that minimum ETA used for stage 2 (address discovery) is 120 seconds (80% of 150 seconds).
+		lw.activeSyncData.headersFetchTimeSpent = 150
+	}
+
+	if lw.syncData.showLogs && lw.syncData.syncing {
+		log.Info("Fetch headers completed.")
+	}
+}
+
+// Address/Account Discovery Callbacks
 
 func (lw *LibWallet) discoverAddressesStarted() {
 	if lw.activeSyncData.addressDiscoveryCompleted != nil {
@@ -326,6 +306,41 @@ func (lw *LibWallet) publishAddressDiscoveryProgress() {
 	}
 }
 
+func (lw *LibWallet) discoverAddressesFinished() {
+	addressDiscoveryFinishTime := time.Now().Unix()
+	lw.activeSyncData.totalDiscoveryTimeSpent = addressDiscoveryFinishTime - lw.addressDiscoveryStartTime
+
+	close(lw.activeSyncData.addressDiscoveryCompleted)
+	lw.activeSyncData.addressDiscoveryCompleted = nil
+
+	loadedWallet, loaded := lw.walletLoader.LoadedWallet()
+	if loaded { // loaded should always be through
+		if !loadedWallet.Locked() {
+			loadedWallet.Lock()
+		}
+	}
+
+}
+
+// Blocks Scan Callbacks
+
+func (lw *LibWallet) rescanStarted() {
+	if lw.activeSyncData.addressDiscoveryCompleted != nil {
+		close(lw.activeSyncData.addressDiscoveryCompleted)
+		lw.activeSyncData.addressDiscoveryCompleted = nil
+	}
+
+	lw.activeSyncData.rescanStartTime = time.Now().Unix()
+
+	// retain last total progress report from address discovery phase
+	lw.activeSyncData.headersRescanProgress.TotalTimeRemainingSeconds = lw.activeSyncData.addressDiscoveryProgress.TotalTimeRemainingSeconds
+	lw.activeSyncData.headersRescanProgress.TotalSyncProgress = lw.activeSyncData.addressDiscoveryProgress.TotalSyncProgress
+
+	if lw.syncData.showLogs && lw.syncData.syncing {
+		log.Info("Step 3 of 3 - Scanning block headers")
+	}
+}
+
 func (lw *LibWallet) rescanProgress(rescannedThrough int32) {
 
 	lw.activeSyncData.headersRescanProgress.TotalHeadersToScan = lw.GetBestBlock()
@@ -382,6 +397,10 @@ func (lw *LibWallet) publishHeadersRescanProgress() {
 	for _, syncProgressListener := range lw.syncData.syncProgressListeners {
 		syncProgressListener.OnHeadersRescanProgress(&lw.activeSyncData.headersRescanProgress)
 	}
+}
+
+func (lw *LibWallet) rescanFinished() {
+	lw.publishHeadersRescanProgress()
 }
 
 func (lw *LibWallet) publishDebugInfo(debugInfo *DebugInfo) {

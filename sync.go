@@ -150,7 +150,7 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 	lw.initActiveSyncData()
 
 	syncer := spv.NewSyncer(loadedWallet, lp)
-	syncer.SetNotifications(lw.spvSyncNotificationCallbacks(loadedWallet))
+	syncer.SetNotifications(lw.spvSyncNotificationCallbacks())
 	if len(validPeerAddresses) > 0 {
 		syncer.SetPersistantPeers(validPeerAddresses)
 	}
@@ -207,7 +207,7 @@ func (lw *LibWallet) RpcSync(networkAddress string, username string, password st
 	lw.initActiveSyncData()
 
 	syncer := chain.NewRPCSyncer(loadedWallet, chainClient)
-	syncer.SetNotifications(lw.generalSyncNotificationCallbacks(loadedWallet))
+	syncer.SetNotifications(lw.generalSyncNotificationCallbacks())
 
 	networkBackend := chain.BackendFromRPCClient(chainClient.Client)
 	lw.walletLoader.SetNetworkBackend(networkBackend)
