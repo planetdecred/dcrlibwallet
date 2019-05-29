@@ -177,8 +177,8 @@ func (syncListener *SyncProgressEstimator) OnFetchedHeaders(fetchedHeadersCount 
 		syncListener.totalFetchedHeadersCount = 0
 
 		if syncListener.showLog && syncListener.syncing {
-			lastReportedHeaderTime := syncListener.getBestBlockTimestamp()
-			totalHeadersToFetch := syncListener.estimateTotalHeadersToFetch(lastReportedHeaderTime)
+			walletBestBlockTime := syncListener.getBestBlockTimestamp()
+			totalHeadersToFetch := syncListener.estimateBlockHeadersCountAfter(walletBestBlockTime)
 			fmt.Printf("Step 1 of 3 - fetching %d block headers.\n", totalHeadersToFetch)
 		}
 
@@ -190,7 +190,8 @@ func (syncListener *SyncProgressEstimator) OnFetchedHeaders(fetchedHeadersCount 
 		syncListener.totalInactiveSeconds = 0
 
 		syncListener.totalFetchedHeadersCount += fetchedHeadersCount
-		totalHeadersToFetch := syncListener.estimateTotalHeadersToFetch(lastHeaderTime)
+		headersLeftToFetch := syncListener.estimateBlockHeadersCountAfter(lastHeaderTime)
+		totalHeadersToFetch := syncListener.totalFetchedHeadersCount + headersLeftToFetch
 		headersFetchProgress := float64(syncListener.totalFetchedHeadersCount) / float64(totalHeadersToFetch)
 
 		// update headers fetching progress report
@@ -438,7 +439,7 @@ func (syncListener *SyncProgressEstimator) OnRescan(rescannedThrough int32, stat
 
 /** Helper functions start here */
 
-func (syncListener *SyncProgressEstimator) estimateTotalHeadersToFetch(lastHeaderTime int64) int32 {
+func (syncListener *SyncProgressEstimator) estimateBlockHeadersCountAfter(lastHeaderTime int64) int32 {
 	if lastHeaderTime == 0 {
 		// use wallet's best block time for estimation
 		lastHeaderTime = syncListener.getBestBlockTimestamp()
