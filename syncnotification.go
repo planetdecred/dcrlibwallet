@@ -71,7 +71,7 @@ func (lw *LibWallet) generalSyncNotificationCallbacks(loadedWallet *wallet.Walle
 				}
 			})
 		},
-		FetchMissingCFiltersStarted: func() {},
+		FetchMissingCFiltersStarted:  func() {},
 		FetchMissingCFiltersProgress: func(missingCFitlersStart, missingCFitlersEnd int32) {},
 		FetchMissingCFiltersFinished: func() {},
 		FetchHeadersStarted: func() {
