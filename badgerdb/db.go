@@ -607,7 +607,7 @@ func (db *db) Copy(w io.Writer) error {
 //
 // This function is part of the walletdb.Db interface implementation.
 func (db *db) Close() error {
-	if closedDB{
+	if closedDB {
 		return errors.E(errors.Invalid, "database is already closed")
 	}
 
@@ -620,7 +620,7 @@ func (db *db) Close() error {
 	time.Sleep(2 * time.Second) // sleep for 2 seconds to ensure any db operation completes before proceeding
 
 	err := (*badger.DB)(db).Close()
-	if err != nil{
+	if err != nil {
 		return convertErr(err)
 	}
 
