@@ -307,6 +307,10 @@ func (lw *LibWallet) CancelSync() {
 
 	lw.walletLoader.SetNetworkBackend(nil)
 	loadedWallet.SetNetworkBackend(nil)
+
+	log.Info("Waiting to lose all peers")
+	peersWG.Wait()
+	log.Info("All peers are gone")
 }
 
 func (lw *LibWallet) IsSyncing() bool {

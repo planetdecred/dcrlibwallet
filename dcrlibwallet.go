@@ -119,6 +119,8 @@ func (lw *LibWallet) Shutdown(exit bool) {
 		lw.rpcClient.Stop()
 	}
 
+	lw.CancelSync()
+
 	if !IsChannelClosed(shutdownSignaled) {
 		log.Info("Channel not closed, closing")
 		close(shutdownSignaled)
@@ -160,6 +162,8 @@ func (lw *LibWallet) DeleteWallet(privatePassphrase []byte) error {
 		}
 	}()
 
+	lw.CancelSync()
+
 	wallet, loaded := lw.walletLoader.LoadedWallet()
 	if !loaded {
 		return errors.New(ErrWalletNotLoaded)
@@ -170,10 +174,6 @@ func (lw *LibWallet) DeleteWallet(privatePassphrase []byte) error {
 		return translateError(err)
 	}
 	wallet.Lock()
-
-	if lw.cancelSync != nil {
-		lw.cancelSync()
-	}
 
 	lw.Shutdown(false)
 	log.Info("Deleting Wallet")
