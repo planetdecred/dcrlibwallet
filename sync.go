@@ -16,14 +16,14 @@ import (
 )
 
 type syncData struct {
-	mu                    sync.Mutex
-	rpcClient             *chain.RPCClient
+	mu        sync.Mutex
+	rpcClient *chain.RPCClient
 
 	syncProgressListeners map[string]SyncProgressListener
 	showLogs              bool
 
-	syncing               bool
-	cancelSync            context.CancelFunc
+	syncing    bool
+	cancelSync context.CancelFunc
 
 	rescanning   bool
 	cancelRescan context.CancelFunc
