@@ -1,5 +1,16 @@
 package dcrlibwallet
 
+type UnspentOutput struct {
+	TransactionHash []byte
+	OutputIndex     uint32
+	OutputKey       string
+	ReceiveTime     int64
+	Amount          int64
+	FromCoinbase    bool
+	Tree            int32
+	PkScript        []byte
+}
+
 type UnsignedTransaction struct {
 	UnsignedTransaction       []byte
 	EstimatedSignedSize       int

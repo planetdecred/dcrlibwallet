@@ -5,6 +5,7 @@ import (
 	"context"
 	"time"
 
+	"fmt"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrd/wire"
@@ -14,6 +15,66 @@ import (
 	"github.com/decred/dcrwallet/wallet/txrules"
 	"github.com/raedahgroup/dcrlibwallet/txhelper"
 )
+
+func (lw *LibWallet) EstimateMaxSendAmount(destAddr string, srcAccount int32, requiredConfirmations int32) (int64, error) {
+	// Sending maximum amount is only possible by spending all unspent outputs with confirmations
+	// greater than or equal to the provided requiredConfirmations value.
+	// Use targetAmount = 0 to get all such unspent outputs in the specified account.
+	allAvailableWalletInputs, err := lw.UnspentOutputs(uint32(srcAccount), requiredConfirmations, 0)
+	if err != nil {
+		return -1, err
+	}
+
+	var totalInputAmount int64
+	for _, input := range allAvailableWalletInputs {
+		totalInputAmount += input.Amount
+	}
+
+	sendMaxDestination := []txhelper.TransactionDestination{
+		{Address: destAddr, SendMax: true},
+	}
+	return txhelper.EstimateMaxSendAmount(len(allAvailableWalletInputs), totalInputAmount, sendMaxDestination)
+}
+
+func (lw *LibWallet) UnspentOutputs(account uint32, requiredConfirmations int32, targetAmount int64) ([]*UnspentOutput, error) {
+	policy := wallet.OutputSelectionPolicy{
+		Account:               account,
+		RequiredConfirmations: requiredConfirmations,
+	}
+	inputDetail, err := lw.wallet.SelectInputs(dcrutil.Amount(targetAmount), policy)
+
+	// Ignore errors relating to insufficient spendable outputs available for the target amount.
+	if err != nil && !errors.Is(errors.InsufficientBalance, err) {
+		log.Errorf("Error fetching unspent outputs in account: %s", err.Error())
+		return nil, err
+	}
+
+	unspentOutputs := make([]*UnspentOutput, len(inputDetail.Inputs))
+
+	for i, input := range inputDetail.Inputs {
+		outputInfo, err := lw.wallet.OutputInfo(&input.PreviousOutPoint)
+		if err != nil {
+			log.Errorf("Error getting details for unspent output: %s", err.Error())
+			return nil, err
+		}
+
+		// unique key to identify utxo
+		outputKey := fmt.Sprintf("%s:%d", input.PreviousOutPoint.Hash, input.PreviousOutPoint.Index)
+
+		unspentOutputs[i] = &UnspentOutput{
+			TransactionHash: input.PreviousOutPoint.Hash[:],
+			OutputIndex:     input.PreviousOutPoint.Index,
+			OutputKey:       outputKey,
+			Tree:            int32(input.PreviousOutPoint.Tree),
+			Amount:          int64(outputInfo.Amount),
+			PkScript:        inputDetail.Scripts[i],
+			ReceiveTime:     outputInfo.Received.Unix(),
+			FromCoinbase:    outputInfo.FromCoinbase,
+		}
+	}
+
+	return unspentOutputs, nil
+}
 
 func (lw *LibWallet) ConstructTransaction(destAddr string, amount int64, srcAccount int32, requiredConfirmations int32, sendAll bool) (*UnsignedTransaction, error) {
 	// output destination
