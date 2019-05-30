@@ -1,5 +1,10 @@
 package dcrlibwallet
 
+type Amount struct {
+	AtomValue int64
+	DcrValue  float64
+}
+
 type UnspentOutput struct {
 	TransactionHash []byte
 	OutputIndex     uint32

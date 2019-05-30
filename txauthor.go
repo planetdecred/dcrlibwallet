@@ -16,13 +16,13 @@ import (
 	"github.com/raedahgroup/dcrlibwallet/txhelper"
 )
 
-func (lw *LibWallet) EstimateMaxSendAmount(destAddr string, srcAccount int32, requiredConfirmations int32) (int64, error) {
+func (lw *LibWallet) EstimateMaxSendAmount(destAddr string, srcAccount int32, requiredConfirmations int32) (*Amount, error) {
 	// Sending maximum amount is only possible by spending all unspent outputs with confirmations
 	// greater than or equal to the provided requiredConfirmations value.
 	// Use targetAmount = 0 to get all such unspent outputs in the specified account.
 	allAvailableWalletInputs, err := lw.UnspentOutputs(uint32(srcAccount), requiredConfirmations, 0)
 	if err != nil {
-		return -1, err
+		return nil, err
 	}
 
 	var totalInputAmount int64
@@ -33,7 +33,15 @@ func (lw *LibWallet) EstimateMaxSendAmount(destAddr string, srcAccount int32, re
 	sendMaxDestination := []txhelper.TransactionDestination{
 		{Address: destAddr, SendMax: true},
 	}
-	return txhelper.EstimateMaxSendAmount(len(allAvailableWalletInputs), totalInputAmount, sendMaxDestination)
+	maxAmount, err := txhelper.EstimateMaxSendAmount(len(allAvailableWalletInputs), totalInputAmount, sendMaxDestination)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Amount{
+		AtomValue: maxAmount,
+		DcrValue:  dcrutil.Amount(maxAmount).ToCoin(),
+	}, nil
 }
 
 func (lw *LibWallet) UnspentOutputs(account uint32, requiredConfirmations int32, targetAmount int64) ([]*UnspentOutput, error) {
