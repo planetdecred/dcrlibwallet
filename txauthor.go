@@ -37,7 +37,7 @@ func (lw *LibWallet) EstimateMaxSendAmount(fromAccount int32, toAddress string, 
 func (lw *LibWallet) TxSizeAndFee(amount int64, fromAccount int32, toAddress string, requiredConfirmations int32,
 	spendAllFundsInAccount bool) (*TxSizeAndFee, error) {
 
-	unsignedTx, err := lw.ConstructTransaction(amount, fromAccount, toAddress, requiredConfirmations, spendAllFundsInAccount)
+	unsignedTx, err := lw.constructTransaction(amount, fromAccount, toAddress, requiredConfirmations, spendAllFundsInAccount)
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -62,7 +62,7 @@ func (lw *LibWallet) SendTransaction(amount int64, fromAccount int32, toAddress 
 		}
 	}()
 
-	unsignedTx, err := lw.ConstructTransaction(amount, fromAccount, toAddress, requiredConfirmations, spendAllFundsInAccount)
+	unsignedTx, err := lw.constructTransaction(amount, fromAccount, toAddress, requiredConfirmations, spendAllFundsInAccount)
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -134,7 +134,7 @@ func (lw *LibWallet) SendTransaction(amount int64, fromAccount int32, toAddress 
 	return txHash[:], nil
 }
 
-func (lw *LibWallet) ConstructTransaction(amount int64, fromAccount int32, toAddress string, requiredConfirmations int32,
+func (lw *LibWallet) constructTransaction(amount int64, fromAccount int32, toAddress string, requiredConfirmations int32,
 	spendAllFundsInAccount bool) (unsignedTx *txauthor.AuthoredTx, err error) {
 
 	// `outputSelectionAlgorithm` specifies the algorithm to use when selecting outputs to construct a transaction.
