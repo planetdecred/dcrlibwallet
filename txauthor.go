@@ -5,7 +5,6 @@ import (
 	"context"
 	"time"
 
-	"fmt"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrd/wire"
@@ -16,189 +15,55 @@ import (
 	"github.com/raedahgroup/dcrlibwallet/txhelper"
 )
 
-func (lw *LibWallet) EstimateMaxSendAmount(destAddr string, srcAccount int32, requiredConfirmations int32) (*Amount, error) {
-	// Sending maximum amount is only possible by spending all unspent outputs with confirmations
-	// greater than or equal to the provided requiredConfirmations value.
-	// Use targetAmount = 0 to get all such unspent outputs in the specified account.
-	allAvailableWalletInputs, err := lw.UnspentOutputs(uint32(srcAccount), requiredConfirmations, 0)
+func (lw *LibWallet) EstimateMaxSendAmount(fromAccount int32, toAddress string, requiredConfirmations int32) (*Amount, error) {
+	txSizeAndFee, err := lw.TxSizeAndFee(0, fromAccount, toAddress, requiredConfirmations, true)
 	if err != nil {
 		return nil, err
 	}
 
-	var totalInputAmount int64
-	for _, input := range allAvailableWalletInputs {
-		totalInputAmount += input.Amount
-	}
-
-	sendMaxDestination := []txhelper.TransactionDestination{
-		{Address: destAddr, SendMax: true},
-	}
-	maxAmount, err := txhelper.EstimateMaxSendAmount(len(allAvailableWalletInputs), totalInputAmount, sendMaxDestination)
+	spendableAccountBalance, err := lw.SpendableForAccount(fromAccount, requiredConfirmations)
 	if err != nil {
 		return nil, err
 	}
+
+	maxSendableAmount := spendableAccountBalance - txSizeAndFee.Fee
 
 	return &Amount{
-		AtomValue: maxAmount,
-		DcrValue:  dcrutil.Amount(maxAmount).ToCoin(),
+		AtomValue: maxSendableAmount,
+		DcrValue:  dcrutil.Amount(maxSendableAmount).ToCoin(),
 	}, nil
 }
 
-func (lw *LibWallet) UnspentOutputs(account uint32, requiredConfirmations int32, targetAmount int64) ([]*UnspentOutput, error) {
-	policy := wallet.OutputSelectionPolicy{
-		Account:               account,
-		RequiredConfirmations: requiredConfirmations,
-	}
-	inputDetail, err := lw.wallet.SelectInputs(dcrutil.Amount(targetAmount), policy)
+func (lw *LibWallet) TxSizeAndFee(amount int64, fromAccount int32, toAddress string, requiredConfirmations int32,
+	spendAllFundsInAccount bool) (*TxSizeAndFee, error) {
 
-	// Ignore errors relating to insufficient spendable outputs available for the target amount.
-	if err != nil && !errors.Is(errors.InsufficientBalance, err) {
-		log.Errorf("Error fetching unspent outputs in account: %s", err.Error())
-		return nil, err
-	}
-
-	unspentOutputs := make([]*UnspentOutput, len(inputDetail.Inputs))
-
-	for i, input := range inputDetail.Inputs {
-		outputInfo, err := lw.wallet.OutputInfo(&input.PreviousOutPoint)
-		if err != nil {
-			log.Errorf("Error getting details for unspent output: %s", err.Error())
-			return nil, err
-		}
-
-		// unique key to identify utxo
-		outputKey := fmt.Sprintf("%s:%d", input.PreviousOutPoint.Hash, input.PreviousOutPoint.Index)
-
-		unspentOutputs[i] = &UnspentOutput{
-			TransactionHash: input.PreviousOutPoint.Hash[:],
-			OutputIndex:     input.PreviousOutPoint.Index,
-			OutputKey:       outputKey,
-			Tree:            int32(input.PreviousOutPoint.Tree),
-			Amount:          int64(outputInfo.Amount),
-			PkScript:        inputDetail.Scripts[i],
-			ReceiveTime:     outputInfo.Received.Unix(),
-			FromCoinbase:    outputInfo.FromCoinbase,
-		}
-	}
-
-	return unspentOutputs, nil
-}
-
-func (lw *LibWallet) ConstructTransaction(destAddr string, amount int64, srcAccount int32, requiredConfirmations int32, sendAll bool) (*UnsignedTransaction, error) {
-	// output destination
-	addr, err := dcrutil.DecodeAddress(destAddr)
+	unsignedTx, err := lw.ConstructTransaction(amount, fromAccount, toAddress, requiredConfirmations, spendAllFundsInAccount)
 	if err != nil {
-		return nil, err
-	}
-	pkScript, err := txscript.PayToAddrScript(addr)
-	if err != nil {
-		log.Error(err)
-		return nil, err
-	}
-	version := txscript.DefaultScriptVersion
-
-	// pay output
-	outputs := make([]*wire.TxOut, 0)
-	var algo wallet.OutputSelectionAlgorithm = wallet.OutputSelectionAlgorithmAll
-	var changeSource txauthor.ChangeSource
-	if !sendAll {
-		algo = wallet.OutputSelectionAlgorithmDefault
-		output := &wire.TxOut{
-			Value:    amount,
-			Version:  version,
-			PkScript: pkScript,
-		}
-		outputs = append(outputs, output)
-	} else {
-		changeSource, err = txhelper.MakeTxChangeSource(destAddr)
-		if err != nil {
-			log.Error(err)
-			return nil, err
-		}
-	}
-	feePerKb := txrules.DefaultRelayFeePerKb
-
-	// create tx
-	tx, err := lw.wallet.NewUnsignedTransaction(outputs, feePerKb, uint32(srcAccount),
-		requiredConfirmations, algo, changeSource)
-	if err != nil {
-		log.Error(err)
 		return nil, translateError(err)
 	}
 
-	if tx.ChangeIndex >= 0 {
-		tx.RandomizeChangePosition()
-	}
+	feeToSendTx := txrules.FeeForSerializeSize(txrules.DefaultRelayFeePerKb, unsignedTx.EstimatedSignedSerializeSize)
 
-	var txBuf bytes.Buffer
-	txBuf.Grow(tx.Tx.SerializeSize())
-	err = tx.Tx.Serialize(&txBuf)
-	if err != nil {
-		log.Error(err)
-		return nil, err
-	}
-
-	var totalOutput dcrutil.Amount
-	for _, txOut := range outputs {
-		totalOutput += dcrutil.Amount(txOut.Value)
-	}
-
-	return &UnsignedTransaction{
-		UnsignedTransaction:       txBuf.Bytes(),
-		TotalOutputAmount:         int64(totalOutput),
-		TotalPreviousOutputAmount: int64(tx.TotalInput),
-		EstimatedSignedSize:       tx.EstimatedSignedSerializeSize,
-		ChangeIndex:               tx.ChangeIndex,
+	return &TxSizeAndFee{
+		EstimatedSignedSize: unsignedTx.EstimatedSignedSerializeSize,
+		Fee:                 int64(feeToSendTx),
 	}, nil
 }
 
-func (lw *LibWallet) SendTransaction(privPass []byte, destAddr string, amount int64, srcAccount int32, requiredConfs int32, sendAll bool) ([]byte, error) {
+func (lw *LibWallet) SendTransaction(amount int64, fromAccount int32, toAddress string, requiredConfirmations int32, spendAllFundsInAccount bool, privatePassphrase []byte) ([]byte, error) {
 	n, err := lw.wallet.NetworkBackend()
 	if err != nil {
 		log.Error(err)
 		return nil, err
 	}
 	defer func() {
-		for i := range privPass {
-			privPass[i] = 0
+		for i := range privatePassphrase {
+			privatePassphrase[i] = 0
 		}
 	}()
-	// output destination
-	addr, err := dcrutil.DecodeAddress(destAddr)
-	if err != nil {
-		return nil, err
-	}
-	pkScript, err := txscript.PayToAddrScript(addr)
-	if err != nil {
-		log.Error(err)
-		return nil, err
-	}
 
-	// pay output
-	outputs := make([]*wire.TxOut, 0)
-	var algo wallet.OutputSelectionAlgorithm = wallet.OutputSelectionAlgorithmAll
-	var changeSource txauthor.ChangeSource
-	if !sendAll {
-		algo = wallet.OutputSelectionAlgorithmDefault
-		output := &wire.TxOut{
-			Value:    amount,
-			Version:  txscript.DefaultScriptVersion,
-			PkScript: pkScript,
-		}
-		outputs = append(outputs, output)
-	} else {
-		changeSource, err = txhelper.MakeTxChangeSource(destAddr)
-		if err != nil {
-			log.Error(err)
-			return nil, err
-		}
-	}
-
-	// create tx
-	unsignedTx, err := lw.wallet.NewUnsignedTransaction(outputs, txrules.DefaultRelayFeePerKb, uint32(srcAccount),
-		requiredConfs, algo, changeSource)
+	unsignedTx, err := lw.ConstructTransaction(amount, fromAccount, toAddress, requiredConfirmations, spendAllFundsInAccount)
 	if err != nil {
-		log.Error(err)
 		return nil, translateError(err)
 	}
 
@@ -227,7 +92,7 @@ func (lw *LibWallet) SendTransaction(privPass []byte, destAddr string, amount in
 		lock <- time.Time{}
 	}()
 
-	err = lw.wallet.Unlock(privPass, lock)
+	err = lw.wallet.Unlock(privatePassphrase, lock)
 	if err != nil {
 		log.Error(err)
 		return nil, errors.New(ErrInvalidPassphrase)
@@ -267,6 +132,38 @@ func (lw *LibWallet) SendTransaction(privPass []byte, destAddr string, amount in
 		return nil, translateError(err)
 	}
 	return txHash[:], nil
+}
+
+func (lw *LibWallet) ConstructTransaction(amount int64, fromAccount int32, toAddress string, requiredConfirmations int32,
+	spendAllFundsInAccount bool) (unsignedTx *txauthor.AuthoredTx, err error) {
+
+	// `outputSelectionAlgorithm` specifies the algorithm to use when selecting outputs to construct a transaction.
+	// If spendAllFundsInAccount == true, `outputSelectionAlgorithm` will be `wallet.OutputSelectionAlgorithmAll`.
+	// Else, the default algorithm (`wallet.OutputSelectionAlgorithmDefault`) will be used.
+	var outputSelectionAlgorithm wallet.OutputSelectionAlgorithm
+
+	// If spendAllFundsInAccount == false, `outputs` will contain destination address and amount to send.
+	// Else, the destination address will be used to make a `changeSource`.
+	var outputs []*wire.TxOut
+	var changeSource txauthor.ChangeSource
+
+	if spendAllFundsInAccount {
+		outputSelectionAlgorithm = wallet.OutputSelectionAlgorithmAll
+		changeSource, err = txhelper.MakeTxChangeSource(toAddress)
+	} else {
+		outputSelectionAlgorithm = wallet.OutputSelectionAlgorithmDefault
+		outputs, err = txhelper.MakeTxOutputs([]txhelper.TransactionDestination{
+			{Address: toAddress, Amount: dcrutil.Amount(amount).ToCoin()},
+		})
+	}
+
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	return lw.wallet.NewUnsignedTransaction(outputs, txrules.DefaultRelayFeePerKb, uint32(fromAccount),
+		requiredConfirmations, outputSelectionAlgorithm, changeSource)
 }
 
 func (lw *LibWallet) PublishUnminedTransactions() error {
