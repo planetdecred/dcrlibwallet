@@ -5,9 +5,9 @@ type Amount struct {
 	DcrValue  float64
 }
 
-type TxSizeAndFee struct {
+type TxFeeAndSize struct {
+	Fee                 *Amount
 	EstimatedSignedSize int
-	Fee                 int64
 }
 
 type UnsignedTransaction struct {

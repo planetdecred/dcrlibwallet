@@ -16,7 +16,7 @@ import (
 )
 
 func (lw *LibWallet) EstimateMaxSendAmount(fromAccount int32, toAddress string, requiredConfirmations int32) (*Amount, error) {
-	txSizeAndFee, err := lw.CalculateFeeAndSizeForTx(0, fromAccount, toAddress, requiredConfirmations, true)
+	txFeeAndSize, err := lw.CalculateNewTxFeeAndSize(0, fromAccount, toAddress, requiredConfirmations, true)
 	if err != nil {
 		return nil, err
 	}
@@ -26,7 +26,7 @@ func (lw *LibWallet) EstimateMaxSendAmount(fromAccount int32, toAddress string, 
 		return nil, err
 	}
 
-	maxSendableAmount := spendableAccountBalance - txSizeAndFee.Fee
+	maxSendableAmount := spendableAccountBalance - txFeeAndSize.Fee.AtomValue
 
 	return &Amount{
 		AtomValue: maxSendableAmount,
@@ -35,7 +35,7 @@ func (lw *LibWallet) EstimateMaxSendAmount(fromAccount int32, toAddress string, 
 }
 
 func (lw *LibWallet) CalculateNewTxFeeAndSize(amount int64, fromAccount int32, toAddress string, requiredConfirmations int32,
-	spendAllFundsInAccount bool) (*TxSizeAndFee, error) {
+	spendAllFundsInAccount bool) (*TxFeeAndSize, error) {
 
 	unsignedTx, err := lw.constructTransaction(amount, fromAccount, toAddress, requiredConfirmations, spendAllFundsInAccount)
 	if err != nil {
@@ -43,10 +43,14 @@ func (lw *LibWallet) CalculateNewTxFeeAndSize(amount int64, fromAccount int32, t
 	}
 
 	feeToSendTx := txrules.FeeForSerializeSize(txrules.DefaultRelayFeePerKb, unsignedTx.EstimatedSignedSerializeSize)
+	feeAmount := &Amount{
+		AtomValue: int64(feeToSendTx),
+		DcrValue:  feeToSendTx.ToCoin(),
+	}
 
-	return &TxSizeAndFee{
+	return &TxFeeAndSize{
 		EstimatedSignedSize: unsignedTx.EstimatedSignedSerializeSize,
-		Fee:                 int64(feeToSendTx),
+		Fee:                 feeAmount,
 	}, nil
 }
 
