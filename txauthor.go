@@ -16,7 +16,7 @@ import (
 )
 
 func (lw *LibWallet) EstimateMaxSendAmount(fromAccount int32, toAddress string, requiredConfirmations int32) (*Amount, error) {
-	txSizeAndFee, err := lw.TxSizeAndFee(0, fromAccount, toAddress, requiredConfirmations, true)
+	txSizeAndFee, err := lw.CalculateFeeAndSizeForTx(0, fromAccount, toAddress, requiredConfirmations, true)
 	if err != nil {
 		return nil, err
 	}
@@ -34,7 +34,7 @@ func (lw *LibWallet) EstimateMaxSendAmount(fromAccount int32, toAddress string, 
 	}, nil
 }
 
-func (lw *LibWallet) TxSizeAndFee(amount int64, fromAccount int32, toAddress string, requiredConfirmations int32,
+func (lw *LibWallet) CalculateNewTxFeeAndSize(amount int64, fromAccount int32, toAddress string, requiredConfirmations int32,
 	spendAllFundsInAccount bool) (*TxSizeAndFee, error) {
 
 	unsignedTx, err := lw.constructTransaction(amount, fromAccount, toAddress, requiredConfirmations, spendAllFundsInAccount)
