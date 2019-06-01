@@ -60,13 +60,13 @@ func (lw *LibWallet) IndexTransactions(beginHeight int32, endHeight int32, after
 		}
 
 		if block.Header != nil {
-			err := lw.txDB.Set(BucketTxInfo, KeyEndBlock, &endHeight)
+			err := lw.txDB.Set(BucketTxInfo, KeyEndBlock, &block.Header.Height)
 			if err != nil {
 				log.Errorf("Set tx index end block height error: ", err)
 				return false, err
 			}
 
-			log.Infof("Transaction index caught up to %d", endHeight)
+			log.Infof("Transaction index caught up to %d", block.Header.Height)
 		}
 
 		select {
