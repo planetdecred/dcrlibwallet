@@ -123,6 +123,13 @@ func (lw *LibWallet) fetchHeadersProgress(fetchedHeadersCount int32, lastHeaderT
 	}
 	estimatedTotalHeadersFetchTime := float64(timeTakenSoFar) / headersFetchProgress
 
+	// For some reason, the actual total headers fetch time is more than the predicted/estimated time.
+	// Account for this difference by multiplying the estimatedTotalHeadersFetchTime by an incrementing factor.
+	// The incrementing factor is inversely proportional to the headers fetch progress,
+	// ranging from 0.5 to 0 as headers fetching progress increases from 0 to 1.
+	adjustmentFactor := 0.5 * headersFetchProgress
+	estimatedTotalHeadersFetchTime += estimatedTotalHeadersFetchTime * adjustmentFactor
+
 	estimatedDiscoveryTime := estimatedTotalHeadersFetchTime * DiscoveryPercentage
 	estimatedRescanTime := estimatedTotalHeadersFetchTime * RescanPercentage
 	estimatedTotalSyncTime := estimatedTotalHeadersFetchTime + estimatedDiscoveryTime + estimatedRescanTime
