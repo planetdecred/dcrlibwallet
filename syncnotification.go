@@ -362,7 +362,7 @@ func (lw *LibWallet) rescanProgress(rescannedThrough int32) {
 	estimatedTotalSyncTime := lw.activeSyncData.headersFetchTimeSpent + lw.activeSyncData.totalDiscoveryTimeSpent + int64(math.Round(estimatedTotalRescanTime))
 	totalProgress := (float64(totalElapsedTime) / float64(estimatedTotalSyncTime)) * 100
 
-	totalTimeRemainingSeconds := int64(math.Round(estimatedTotalRescanTime)) + elapsedRescanTime
+	totalTimeRemainingSeconds := int64(math.Round(estimatedTotalRescanTime)) - elapsedRescanTime
 
 	// do not update total time taken and total progress percent if elapsedRescanTime is 0
 	// because the estimatedTotalRescanTime will be inaccurate (also 0)
@@ -405,6 +405,8 @@ func (lw *LibWallet) rescanFinished() {
 		return
 	}
 
+	lw.activeSyncData.headersRescanProgress.TotalTimeRemainingSeconds = 0
+	lw.activeSyncData.headersRescanProgress.TotalSyncProgress = 100
 	lw.publishHeadersRescanProgress()
 }
 
