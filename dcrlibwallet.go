@@ -162,8 +162,6 @@ func (lw *LibWallet) DeleteWallet(privatePassphrase []byte) error {
 		}
 	}()
 
-	lw.CancelSync()
-
 	wallet, loaded := lw.walletLoader.LoadedWallet()
 	if !loaded {
 		return errors.New(ErrWalletNotLoaded)

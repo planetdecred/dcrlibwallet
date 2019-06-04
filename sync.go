@@ -294,7 +294,7 @@ func (lw *LibWallet) connectToRpcClient(ctx context.Context, networkAddress stri
 	return
 }
 
-func (lw *LibWallet) CancelSync() {
+func (lw *LibWallet) CancelSync(losePeers bool) {
 	if lw.cancelSync != nil {
 		lw.cancelSync() // will trigger context canceled in rpcSync or spvSync
 		lw.cancelSync = nil
@@ -308,9 +308,11 @@ func (lw *LibWallet) CancelSync() {
 	lw.walletLoader.SetNetworkBackend(nil)
 	loadedWallet.SetNetworkBackend(nil)
 
-	log.Info("Waiting to lose all peers")
-	peersWG.Wait()
-	log.Info("All peers are gone")
+	if losePeers {
+		log.Info("Waiting to lose all peers")
+		peersWG.Wait()
+		log.Info("All peers are gone")
+	}
 }
 
 func (lw *LibWallet) IsSyncing() bool {
