@@ -119,7 +119,7 @@ func (lw *LibWallet) Shutdown(exit bool) {
 		lw.rpcClient.Stop()
 	}
 
-	lw.CancelSync()
+	lw.CancelSync(true)
 
 	if !IsChannelClosed(shutdownSignaled) {
 		log.Info("Channel not closed, closing")

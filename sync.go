@@ -308,6 +308,8 @@ func (lw *LibWallet) CancelSync(losePeers bool) {
 	lw.walletLoader.SetNetworkBackend(nil)
 	loadedWallet.SetNetworkBackend(nil)
 
+	// It's important to wait lose all peers when canceling sync
+	// if database would closed after canceling sync
 	if losePeers {
 		log.Info("Waiting to lose all peers")
 		peersWG.Wait()
