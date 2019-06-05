@@ -30,7 +30,7 @@ const (
 	DiscoveryPercentage = 0.8
 
 	MaxAmountAtom = dcrutil.MaxAmount
-	MaxAmountDcr = dcrutil.MaxAmount / dcrutil.AtomsPerCoin
+	MaxAmountDcr  = dcrutil.MaxAmount / dcrutil.AtomsPerCoin
 )
 
 func shutdownListener() {
