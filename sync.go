@@ -111,7 +111,21 @@ func (lw *LibWallet) AddSyncProgressListener(syncProgressListener SyncProgressLi
 	if k {
 		return errors.New(ErrListenerAlreadyExist)
 	}
+
 	lw.syncProgressListeners[uniqueIdentifier] = syncProgressListener
+
+	// If sync is already on, notify this newly added listener of the current progress report.
+	if lw.syncData.syncing && lw.activeSyncData != nil {
+		switch lw.activeSyncData.syncStage {
+		case HeadersFetchSyncStage:
+			syncProgressListener.OnHeadersFetchProgress(&lw.headersFetchProgress)
+		case AddressDiscoverySyncStage:
+			syncProgressListener.OnAddressDiscoveryProgress(&lw.activeSyncData.addressDiscoveryProgress)
+		case HeadersRescanSyncStage:
+			syncProgressListener.OnHeadersRescanProgress(&lw.activeSyncData.headersRescanProgress)
+		}
+	}
+
 	return nil
 }
 
@@ -429,21 +443,6 @@ func (lw *LibWallet) CancelRescan() {
 
 func (lw *LibWallet) IsScanning() bool {
 	return lw.syncData.rescanning
-}
-
-func (lw *LibWallet) PublishLastSyncProgress() {
-	if lw.activeSyncData == nil {
-		return
-	}
-
-	switch lw.activeSyncData.syncStage {
-	case HeadersFetchSyncStage:
-		lw.publishFetchHeadersProgress()
-	case AddressDiscoverySyncStage:
-		lw.publishAddressDiscoveryProgress()
-	case HeadersRescanSyncStage:
-		lw.publishHeadersRescanProgress()
-	}
 }
 
 func (lw *LibWallet) GetBestBlock() int32 {
