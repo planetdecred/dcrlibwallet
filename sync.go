@@ -13,6 +13,8 @@ import (
 	"github.com/decred/dcrwallet/p2p"
 	"github.com/decred/dcrwallet/spv"
 	"github.com/decred/dcrwallet/wallet"
+	"math"
+	"time"
 )
 
 type syncData struct {
@@ -347,26 +349,40 @@ func (lw *LibWallet) RescanBlocks() error {
 		defer func() {
 			lw.rescanning = false
 		}()
+
 		lw.rescanning = true
-		progress := make(chan wallet.RescanProgress, 1)
 		ctx, cancel := contextWithShutdownCancel(context.Background())
 		lw.syncData.cancelRescan = cancel
 
-		var totalHeightRescanned int32
+		progress := make(chan wallet.RescanProgress, 1)
 		go lw.wallet.RescanProgressFromHeight(ctx, netBackend, 0, progress)
+
+		rescanStartTime := time.Now().Unix()
+		var totalHeightRescanned int32
 
 		for p := range progress {
 			if p.Err != nil {
 				log.Error(p.Err)
 				return
 			}
+
 			totalHeightRescanned += p.ScannedThrough
-			report := &HeadersRescanProgressReport{
+			rescanProgressReport := &HeadersRescanProgressReport{
 				CurrentRescanHeight: totalHeightRescanned,
 				TotalHeadersToScan:  lw.GetBestBlock(),
 			}
+
+			print(totalHeightRescanned, p.ScannedThrough)
+
+			elapsedRescanTime := time.Now().Unix() - rescanStartTime
+			rescanRate := float64(totalHeightRescanned) / float64(rescanProgressReport.TotalHeadersToScan)
+
+			rescanProgressReport.RescanProgress = int32(math.Round(rescanRate * 100))
+			estimatedTotalRescanTime := int64(math.Round(float64(elapsedRescanTime) / rescanRate))
+			rescanProgressReport.RescanTimeRemaining = estimatedTotalRescanTime - elapsedRescanTime
+
 			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnHeadersRescanProgress(report)
+				syncProgressListener.OnHeadersRescanProgress(rescanProgressReport)
 			}
 
 			select {
@@ -386,9 +402,18 @@ func (lw *LibWallet) RescanBlocks() error {
 		report := &HeadersRescanProgressReport{
 			CurrentRescanHeight: totalHeightRescanned,
 			TotalHeadersToScan:  lw.GetBestBlock(),
+			RescanProgress:      100,
+			RescanTimeRemaining: 0,
 		}
 		for _, syncProgressListener := range lw.syncProgressListeners {
 			syncProgressListener.OnHeadersRescanProgress(report)
+		}
+
+		// Trigger sync completed callback.
+		// todo: probably best to have a dedicated rescan listener
+		// with callbacks for rescanStarted, rescanCompleted, rescanError and rescanCancel
+		for _, syncProgressListener := range lw.syncProgressListeners {
+			syncProgressListener.OnSyncCompleted()
 		}
 	}()
 
