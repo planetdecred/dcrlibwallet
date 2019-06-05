@@ -29,6 +29,7 @@ type syncData struct {
 	cancelRescan context.CancelFunc
 
 	connectedPeers int32
+	peersWG        sync.WaitGroup
 
 	*activeSyncData
 }
@@ -308,11 +309,11 @@ func (lw *LibWallet) CancelSync(losePeers bool) {
 	lw.walletLoader.SetNetworkBackend(nil)
 	loadedWallet.SetNetworkBackend(nil)
 
-	// It's important to wait lose all peers when canceling sync
-	// if database would closed after canceling sync
+	// It's important to wait to lose all peers when canceling sync
+	// if the wallet database would be closed after canceling sync.
 	if losePeers {
 		log.Info("Waiting to lose all peers")
-		peersWG.Wait()
+		lw.syncData.peersWG.Wait()
 		log.Info("All peers are gone")
 	}
 }

@@ -2,7 +2,6 @@ package dcrlibwallet
 
 import (
 	"math"
-	"sync"
 	"time"
 
 	"github.com/decred/dcrwallet/chain"
@@ -15,17 +14,15 @@ const (
 	SyncStateFinish   = "finish"
 )
 
-var peersWG sync.WaitGroup
-
 func (lw *LibWallet) spvSyncNotificationCallbacks() *spv.Notifications {
 	generalNotifications := lw.generalSyncNotificationCallbacks()
 	return &spv.Notifications{
 		PeerConnected: func(peerCount int32, addr string) {
-			peersWG.Add(1)
+			lw.syncData.peersWG.Add(1)
 			lw.handlePeerCountUpdate(peerCount)
 		},
 		PeerDisconnected: func(peerCount int32, addr string) {
-			peersWG.Done()
+			lw.syncData.peersWG.Done()
 			lw.handlePeerCountUpdate(peerCount)
 		},
 		Synced:                       generalNotifications.Synced,
