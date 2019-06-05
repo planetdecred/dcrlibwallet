@@ -372,7 +372,6 @@ func (lw *LibWallet) RescanBlocks() error {
 		go lw.wallet.RescanProgressFromHeight(ctx, netBackend, 0, progress)
 
 		rescanStartTime := time.Now().Unix()
-		var totalHeightRescanned int32
 
 		for p := range progress {
 			if p.Err != nil {
@@ -380,16 +379,13 @@ func (lw *LibWallet) RescanBlocks() error {
 				return
 			}
 
-			totalHeightRescanned += p.ScannedThrough
 			rescanProgressReport := &HeadersRescanProgressReport{
-				CurrentRescanHeight: totalHeightRescanned,
+				CurrentRescanHeight: p.ScannedThrough,
 				TotalHeadersToScan:  lw.GetBestBlock(),
 			}
 
-			print(totalHeightRescanned, p.ScannedThrough)
-
 			elapsedRescanTime := time.Now().Unix() - rescanStartTime
-			rescanRate := float64(totalHeightRescanned) / float64(rescanProgressReport.TotalHeadersToScan)
+			rescanRate := float64(p.ScannedThrough) / float64(rescanProgressReport.TotalHeadersToScan)
 
 			rescanProgressReport.RescanProgress = int32(math.Round(rescanRate * 100))
 			estimatedTotalRescanTime := int64(math.Round(float64(elapsedRescanTime) / rescanRate))
@@ -411,17 +407,6 @@ func (lw *LibWallet) RescanBlocks() error {
 
 		// set this to nil, it no longer need since rescan has completed
 		lw.syncData.cancelRescan = nil
-
-		// Send final report after rescan has completed.
-		report := &HeadersRescanProgressReport{
-			CurrentRescanHeight: totalHeightRescanned,
-			TotalHeadersToScan:  lw.GetBestBlock(),
-			RescanProgress:      100,
-			RescanTimeRemaining: 0,
-		}
-		for _, syncProgressListener := range lw.syncProgressListeners {
-			syncProgressListener.OnHeadersRescanProgress(report)
-		}
 
 		// Trigger sync completed callback.
 		// todo: probably best to have a dedicated rescan listener
