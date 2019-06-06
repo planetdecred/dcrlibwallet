@@ -112,7 +112,7 @@ func (lw *LibWallet) Shutdown() {
 		lw.rpcClient.Stop()
 	}
 
-	lw.CancelSync(true)
+	lw.CancelSync()
 
 	if logRotator != nil {
 		log.Info("Shutting down log rotator")

@@ -31,7 +31,6 @@ type syncData struct {
 	cancelRescan context.CancelFunc
 
 	connectedPeers int32
-	peersWG        sync.WaitGroup
 
 	*activeSyncData
 }
@@ -322,7 +321,7 @@ func (lw *LibWallet) connectToRpcClient(ctx context.Context, networkAddress stri
 	return
 }
 
-func (lw *LibWallet) CancelSync(losePeers bool) {
+func (lw *LibWallet) CancelSync() {
 	if lw.cancelSync != nil {
 		lw.cancelSync() // will trigger context canceled in rpcSync or spvSync
 		lw.cancelSync = nil
@@ -335,14 +334,6 @@ func (lw *LibWallet) CancelSync(losePeers bool) {
 
 	lw.walletLoader.SetNetworkBackend(nil)
 	loadedWallet.SetNetworkBackend(nil)
-
-	// It's important to wait to lose all peers when canceling sync
-	// if the wallet database would be closed after canceling sync.
-	if losePeers {
-		log.Info("Waiting to lose all peers")
-		lw.syncData.peersWG.Wait()
-		log.Info("All peers are gone")
-	}
 }
 
 func (lw *LibWallet) IsSyncing() bool {

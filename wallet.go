@@ -2,11 +2,11 @@ package dcrlibwallet
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/decred/dcrwallet/errors"
 	"github.com/decred/dcrwallet/wallet"
 	"github.com/decred/dcrwallet/walletseed"
-	"os"
 )
 
 func (lw *LibWallet) WalletExists() (bool, error) {
