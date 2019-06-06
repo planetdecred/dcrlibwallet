@@ -345,6 +345,10 @@ func (lw *LibWallet) CancelSync(losePeers bool) {
 	}
 }
 
+func (lw *LibWallet) IsSynced() bool {
+	return !lw.syncData.syncing && lw.connectedPeers != 0
+}
+
 func (lw *LibWallet) IsSyncing() bool {
 	return lw.syncData.syncing
 }
