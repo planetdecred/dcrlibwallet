@@ -423,6 +423,9 @@ func (lw *LibWallet) CancelRescan() {
 	if lw.syncData.cancelRescan != nil {
 		lw.syncData.cancelRescan()
 		lw.syncData.cancelRescan = nil
+		for _, syncProgressListener := range lw.syncProgressListeners {
+			syncProgressListener.OnSyncCanceled()
+		}
 	}
 }
 
