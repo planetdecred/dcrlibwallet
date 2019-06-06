@@ -6,6 +6,7 @@ import (
 	"github.com/decred/dcrwallet/errors"
 	"github.com/decred/dcrwallet/wallet"
 	"github.com/decred/dcrwallet/walletseed"
+	"os"
 )
 
 func (lw *LibWallet) WalletExists() (bool, error) {
@@ -118,4 +119,28 @@ func (lw *LibWallet) ChangePublicPassphrase(oldPass []byte, newPass []byte) erro
 func (lw *LibWallet) CloseWallet() error {
 	err := lw.walletLoader.UnloadWallet()
 	return err
+}
+
+func (lw *LibWallet) DeleteWallet(privatePassphrase []byte) error {
+	defer func() {
+		for i := range privatePassphrase {
+			privatePassphrase[i] = 0
+		}
+	}()
+
+	wallet, loaded := lw.walletLoader.LoadedWallet()
+	if !loaded {
+		return errors.New(ErrWalletNotLoaded)
+	}
+
+	err := wallet.Unlock(privatePassphrase, nil)
+	if err != nil {
+		return translateError(err)
+	}
+	wallet.Lock()
+
+	lw.Shutdown()
+
+	log.Info("Deleting Wallet")
+	return os.RemoveAll(lw.walletDataDir)
 }

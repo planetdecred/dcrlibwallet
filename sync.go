@@ -431,11 +431,21 @@ func (lw *LibWallet) IsScanning() bool {
 }
 
 func (lw *LibWallet) GetBestBlock() int32 {
+	if lw.wallet == nil {
+		log.Error("Attempting to read best block height without a loaded wallet.")
+		return 0
+	}
+
 	_, height := lw.wallet.MainChainTip()
 	return height
 }
 
 func (lw *LibWallet) GetBestBlockTimeStamp() int64 {
+	if lw.wallet == nil {
+		log.Error("Attempting to read best block timestamp without a loaded wallet.")
+		return 0
+	}
+
 	_, height := lw.wallet.MainChainTip()
 	identifier := wallet.NewBlockIdentifierFromHeight(height)
 	info, err := lw.wallet.BlockInfo(identifier)
