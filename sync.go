@@ -423,6 +423,7 @@ func (lw *LibWallet) IsScanning() bool {
 
 func (lw *LibWallet) GetBestBlock() int32 {
 	if lw.wallet == nil {
+		// This method is sometimes called after a wallet is deleted and causes crash.
 		log.Error("Attempting to read best block height without a loaded wallet.")
 		return 0
 	}
@@ -433,6 +434,7 @@ func (lw *LibWallet) GetBestBlock() int32 {
 
 func (lw *LibWallet) GetBestBlockTimeStamp() int64 {
 	if lw.wallet == nil {
+		// This method is sometimes called after a wallet is deleted and causes crash.
 		log.Error("Attempting to read best block timestamp without a loaded wallet.")
 		return 0
 	}
