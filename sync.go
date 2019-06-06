@@ -24,6 +24,7 @@ type syncData struct {
 	syncProgressListeners map[string]SyncProgressListener
 	showLogs              bool
 
+	synced     bool
 	syncing    bool
 	cancelSync context.CancelFunc
 
@@ -346,7 +347,7 @@ func (lw *LibWallet) CancelSync(losePeers bool) {
 }
 
 func (lw *LibWallet) IsSynced() bool {
-	return !lw.syncData.syncing && lw.connectedPeers != 0
+	return lw.syncData.synced
 }
 
 func (lw *LibWallet) IsSyncing() bool {
@@ -427,6 +428,7 @@ func (lw *LibWallet) CancelRescan() {
 	if lw.syncData.cancelRescan != nil {
 		lw.syncData.cancelRescan()
 		lw.syncData.cancelRescan = nil
+		lw.syncData.rescanning = false
 		for _, syncProgressListener := range lw.syncProgressListeners {
 			syncProgressListener.OnSyncCanceled()
 		}
