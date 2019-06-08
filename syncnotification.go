@@ -464,8 +464,8 @@ func (lw *LibWallet) notifySyncCanceled() {
 }
 
 func (lw *LibWallet) synced(synced bool) {
-	lw.syncing = false
-	lw.syncData.synced = false
+	lw.syncData.syncing = false
+	lw.syncData.synced = true
 	lw.activeSyncData = nil // to be reintialized on next sync
 
 	// begin indexing transactions after sync is completed,
