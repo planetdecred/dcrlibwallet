@@ -475,6 +475,8 @@ func (lw *LibWallet) parseTxFilter(txFilter int32) storm.Query {
 		)
 	}
 
+	query = query.OrderBy("Timestamp").Reverse()
+
 	return query
 }
 
