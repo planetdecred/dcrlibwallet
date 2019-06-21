@@ -30,8 +30,8 @@ type syncData struct {
 	rescanning   bool
 	cancelRescan context.CancelFunc
 
-	connectedPeers int32
-	peersConnectionWG        sync.WaitGroup
+	connectedPeers    int32
+	peersConnectionWG sync.WaitGroup
 
 	*activeSyncData
 }
