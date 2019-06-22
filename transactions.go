@@ -382,7 +382,8 @@ func (lw *LibWallet) DecodeTransaction(txHash []byte) (string, error) {
 	return string(result), nil
 }
 
-func (lw *LibWallet) queryTransactions(query storm.Query) (string, error) {
+func (lw *LibWallet) FilterTransactions(txFilter int32) (string, error) {
+	query := lw.prepareTxFilter(txFilter)
 	var transactions []Transaction
 
 	err := query.Find(&transactions)
@@ -398,7 +399,8 @@ func (lw *LibWallet) queryTransactions(query storm.Query) (string, error) {
 	return string(jsonEncodedTransactions), nil
 }
 
-func (lw *LibWallet) countTransactions(query storm.Query) (int, error) {
+func (lw *LibWallet) CountTransactions(txFilter int32) (int, error) {
+	query := lw.prepareTxFilter(txFilter)
 
 	count, err := query.Count(&Transaction{})
 	if err != nil {
@@ -406,16 +408,6 @@ func (lw *LibWallet) countTransactions(query storm.Query) (int, error) {
 	}
 
 	return count, nil
-}
-
-func (lw *LibWallet) FilterTransactions(txFilter int32) (string, error) {
-	query := lw.parseTxFilter(txFilter)
-	return lw.queryTransactions(query)
-}
-
-func (lw *LibWallet) CountTransactions(txFilter int32) (int, error) {
-	query := lw.parseTxFilter(txFilter)
-	return lw.countTransactions(query)
 }
 
 func (lw *LibWallet) DetermineTxFilter(txHash []byte) (int32, error) {
@@ -439,23 +431,20 @@ func (lw *LibWallet) DetermineTxFilter(txHash []byte) (int32, error) {
 
 // - Helper Functions
 
-func (lw *LibWallet) parseTxFilter(txFilter int32) storm.Query {
+func (lw *LibWallet) prepareTxFilter(txFilter int32) storm.Query {
 
 	var query storm.Query
 	switch txFilter {
 	case TxFilterSent:
 		query = lw.txDB.Select(
-			q.Eq("Type", TxTypeRegular),
 			q.Eq("Direction", TxDirectionSent),
 		)
 	case TxFilterReceived:
 		query = lw.txDB.Select(
-			q.Eq("Type", TxTypeRegular),
 			q.Eq("Direction", TxDirectionReceived),
 		)
 	case TxFilterTransferred:
 		query = lw.txDB.Select(
-			q.Eq("Type", TxTypeRegular),
 			q.Eq("Direction", TxDirectionTransferred),
 		)
 	case TxFilterStaking:
