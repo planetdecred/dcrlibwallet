@@ -383,7 +383,7 @@ func (lw *LibWallet) DecodeTransaction(txHash []byte) (string, error) {
 }
 
 func (lw *LibWallet) FilterTransactions(txFilter int32) (string, error) {
-	query := lw.prepareTxFilter(txFilter)
+	query := lw.prepareTxQuery(txFilter)
 	var transactions []Transaction
 
 	err := query.Find(&transactions)
@@ -400,7 +400,7 @@ func (lw *LibWallet) FilterTransactions(txFilter int32) (string, error) {
 }
 
 func (lw *LibWallet) CountTransactions(txFilter int32) (int, error) {
-	query := lw.prepareTxFilter(txFilter)
+	query := lw.prepareTxQuery(txFilter)
 
 	count, err := query.Count(&Transaction{})
 	if err != nil {
@@ -410,30 +410,29 @@ func (lw *LibWallet) CountTransactions(txFilter int32) (int, error) {
 	return count, nil
 }
 
-func (lw *LibWallet) DetermineTxFilter(txHash []byte) (int32, error) {
-	tx, err := lw.GetTransactionRaw(txHash)
-	if err != nil {
-		return -1, nil
-	}
-	if tx.Type != TxTypeRegular {
-		return TxFilterStaking, nil
+func (lw *LibWallet) DetermineTxFilter(txType string, txDirection int32) int32 {
+
+	if txType != TxTypeRegular {
+		if txType == TxTypeCoinBase {
+			return TxFilterCoinBase
+		}
+		return TxFilterStaking
 	}
 
-	switch tx.Direction {
+	switch txDirection {
 	case TxDirectionSent:
-		return TxFilterSent, nil
+		return TxFilterSent
 	case TxDirectionReceived:
-		return TxFilterReceived, nil
+		return TxFilterReceived
 	default:
-		return TxFilterTransferred, nil
+		return TxFilterTransferred
 	}
 }
 
 // - Helper Functions
 
-func (lw *LibWallet) prepareTxFilter(txFilter int32) storm.Query {
+func (lw *LibWallet) prepareTxQuery(txFilter int32) (query storm.Query) {
 
-	var query storm.Query
 	switch txFilter {
 	case TxFilterSent:
 		query = lw.txDB.Select(
@@ -465,8 +464,7 @@ func (lw *LibWallet) prepareTxFilter(txFilter int32) storm.Query {
 	}
 
 	query = query.OrderBy("Timestamp").Reverse()
-
-	return query
+	return
 }
 
 func decodeTxInputs(mtx *wire.MsgTx) []DecodedInput {
