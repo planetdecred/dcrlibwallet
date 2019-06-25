@@ -18,12 +18,10 @@ func (lw *LibWallet) spvSyncNotificationCallbacks() *spv.Notifications {
 	generalNotifications := lw.generalSyncNotificationCallbacks()
 	return &spv.Notifications{
 		PeerConnected: func(peerCount int32, addr string) {
-			lw.syncData.peersConnectionWG.Add(1)
 			lw.handlePeerCountUpdate(peerCount)
 		},
 		PeerDisconnected: func(peerCount int32, addr string) {
 			lw.handlePeerCountUpdate(peerCount)
-			lw.syncData.peersConnectionWG.Done()
 		},
 		Synced:                       generalNotifications.Synced,
 		FetchHeadersStarted:          generalNotifications.FetchHeadersStarted,

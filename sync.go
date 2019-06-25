@@ -30,8 +30,7 @@ type syncData struct {
 	rescanning   bool
 	cancelRescan context.CancelFunc
 
-	connectedPeers    int32
-	peersConnectionWG sync.WaitGroup
+	connectedPeers int32
 
 	*activeSyncData
 }
@@ -327,12 +326,6 @@ func (lw *LibWallet) CancelSync() {
 		lw.cancelSync() // will trigger context canceled in rpcSync or spvSync
 		lw.cancelSync = nil
 	}
-
-	// Peers sometimes continue to deliver sync updates even after the sync context has been canceled.
-	// Wait for all peers to disconnect to ensure that the sync operation is effectively canceled.
-	log.Info("Waiting to lose all peers")
-	lw.syncData.peersConnectionWG.Wait()
-	log.Info("All peers are gone")
 
 	loadedWallet, walletLoaded := lw.walletLoader.LoadedWallet()
 	if !walletLoaded {
