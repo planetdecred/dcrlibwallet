@@ -218,27 +218,6 @@ func (lw *LibWallet) GetTransactionRaw(txHash []byte) (*Transaction, error) {
 	return lw.parseTxSummary(txSummary, blockHash)
 }
 
-func (lw *LibWallet) GetTransactions(limit int32) (string, error) {
-	var transactions []Transaction
-
-	query := lw.txDB.Select().OrderBy("Timestamp").Reverse()
-	if limit > 0 {
-		query = query.Limit(int(limit))
-	}
-
-	err := query.Find(&transactions)
-	if err != nil {
-		return "", nil
-	}
-
-	jsonEncodedTransactions, err := json.Marshal(&transactions)
-	if err != nil {
-		return "", err
-	}
-
-	return string(jsonEncodedTransactions), nil
-}
-
 func (lw *LibWallet) replaceTxIfExist(tx *Transaction) error {
 	var oldTx Transaction
 	err := lw.txDB.One("Hash", tx.Hash, &oldTx)
@@ -382,8 +361,12 @@ func (lw *LibWallet) DecodeTransaction(txHash []byte) (string, error) {
 	return string(result), nil
 }
 
-func (lw *LibWallet) FilterTransactions(txFilter int32) (string, error) {
+func (lw *LibWallet) GetTransactions(limit, txFilter int32) (string, error) {
 	query := lw.prepareTxQuery(txFilter)
+	if limit > 0 {
+		query = query.Limit(int(limit))
+	}
+
 	var transactions []Transaction
 
 	err := query.Find(&transactions)
@@ -411,11 +394,10 @@ func (lw *LibWallet) CountTransactions(txFilter int32) (int, error) {
 }
 
 func (lw *LibWallet) DetermineTxFilter(txType string, txDirection int32) int32 {
-
+	if txType == TxTypeCoinBase {
+		return TxFilterCoinBase
+	}
 	if txType != TxTypeRegular {
-		if txType == TxTypeCoinBase {
-			return TxFilterCoinBase
-		}
 		return TxFilterStaking
 	}
 
@@ -432,7 +414,6 @@ func (lw *LibWallet) DetermineTxFilter(txType string, txDirection int32) int32 {
 // - Helper Functions
 
 func (lw *LibWallet) prepareTxQuery(txFilter int32) (query storm.Query) {
-
 	switch txFilter {
 	case TxFilterSent:
 		query = lw.txDB.Select(
