@@ -335,7 +335,7 @@ func (lw *LibWallet) CancelSync() {
 
 		// syncer.Run may not immediately return, following code blocks this function
 		// and waits for the syncer.Run to return `err == context.Canceled`.
-		<- lw.syncCanceled
+		<-lw.syncCanceled
 		log.Info("Sync fully canceled.")
 	}
 
