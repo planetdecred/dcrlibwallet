@@ -32,13 +32,20 @@ const (
 )
 
 var shuttingDown = make(chan bool)
+var cancelFuncs = make([]context.CancelFunc, 0)
+
+func listenForShutdown() {
+	go func() {
+		<-shuttingDown
+		for _, cancel := range cancelFuncs {
+			cancel()
+		}
+	}()
+}
 
 func contextWithShutdownCancel(ctx context.Context) (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(ctx)
-	go func() {
-		<-shuttingDown
-		cancel()
-	}()
+	cancelFuncs = append(cancelFuncs, cancel)
 	return ctx, cancel
 }
 

@@ -100,6 +100,8 @@ func newLibWallet(walletDataDir, walletDbDriver string, activeNet *netparams.Par
 		syncData:      syncData,
 	}
 
+	listenForShutdown()
+
 	return lw, nil
 }
 
