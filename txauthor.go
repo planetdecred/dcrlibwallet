@@ -81,6 +81,62 @@ func (lw *LibWallet) ConstructTransaction(destAddr string, amount int64, srcAcco
 	}, nil
 }
 
+func (lw *LibWallet) CalculateNewTxFeeAndSize(amount int64, fromAccount int32, toAddress string, requiredConfirmations int32,
+	spendAllFundsInAccount bool) (*TxFeeAndSize, error) {
+
+	unsignedTx, err := lw.constructTransaction(amount, fromAccount, toAddress, requiredConfirmations, spendAllFundsInAccount)
+	if err != nil {
+		return nil, translateError(err)
+	}
+
+	feeToSendTx := txrules.FeeForSerializeSize(txrules.DefaultRelayFeePerKb, unsignedTx.EstimatedSignedSerializeSize)
+	feeAmount := &Amount{
+		AtomValue: int64(feeToSendTx),
+		DcrValue:  feeToSendTx.ToCoin(),
+	}
+
+	return &TxFeeAndSize{
+		EstimatedSignedSize: unsignedTx.EstimatedSignedSerializeSize,
+		Fee:                 feeAmount,
+	}, nil
+}
+
+func (lw *LibWallet) constructTransaction(amount int64, fromAccount int32, toAddress string, requiredConfirmations int32,
+	spendAllFundsInAccount bool) (unsignedTx *txauthor.AuthoredTx, err error) {
+
+	if !spendAllFundsInAccount && (amount <= 0 || amount > MaxAmountAtom) {
+		return nil, errors.E(errors.Invalid, "invalid amount")
+	}
+
+	// `outputSelectionAlgorithm` specifies the algorithm to use when selecting outputs to construct a transaction.
+	// If spendAllFundsInAccount == true, `outputSelectionAlgorithm` will be `wallet.OutputSelectionAlgorithmAll`.
+	// Else, the default algorithm (`wallet.OutputSelectionAlgorithmDefault`) will be used.
+	var outputSelectionAlgorithm wallet.OutputSelectionAlgorithm
+
+	// If spendAllFundsInAccount == false, `outputs` will contain destination address and amount to send.
+	// Else, the destination address will be used to make a `changeSource`.
+	var outputs []*wire.TxOut
+	var changeSource txauthor.ChangeSource
+
+	if spendAllFundsInAccount {
+		outputSelectionAlgorithm = wallet.OutputSelectionAlgorithmAll
+		changeSource, err = txhelper.MakeTxChangeSource(toAddress)
+	} else {
+		outputSelectionAlgorithm = wallet.OutputSelectionAlgorithmDefault
+		outputs, err = txhelper.MakeTxOutputs([]txhelper.TransactionDestination{
+			{Address: toAddress, Amount: dcrutil.Amount(amount).ToCoin()},
+		})
+	}
+
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	return lw.wallet.NewUnsignedTransaction(outputs, txrules.DefaultRelayFeePerKb, uint32(fromAccount),
+		requiredConfirmations, outputSelectionAlgorithm, changeSource)
+}
+
 func (lw *LibWallet) SendTransaction(privPass []byte, destAddr string, amount int64, srcAccount int32, requiredConfs int32, sendAll bool) ([]byte, error) {
 	// output destination
 	pkScript, err := addresshelper.PkScript(destAddr)

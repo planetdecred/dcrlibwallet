@@ -20,14 +20,112 @@ type syncData struct {
 	mu                    sync.Mutex
 	rpcClient             *chain.RPCClient
 	cancelSync            context.CancelFunc
-	syncProgressListeners []SyncProgressListener
-	rescanning            bool
+	syncProgressListeners map[string]SyncProgressListener
+
+	rescanning bool
+	syncing     bool
+	showLogs    bool
+	synced      bool
+
+	*activeSyncData
+	connectedPeers int32
+
+
+	// Flag to notify syncCanceled callback if the sync was canceled so as to be restarted.
+	restartSyncRequested bool
+
+
 }
 
-func (lw *LibWallet) AddSyncProgressListener(syncProgressListener SyncProgressListener) {
-	lw.syncProgressListeners = append(lw.syncProgressListeners, syncProgressListener)
+type activeSyncData struct {
+	targetTimePerBlock int32
+
+	syncStage int32
+
+	headersFetchProgress     HeadersFetchProgressReport
+	addressDiscoveryProgress AddressDiscoveryProgressReport
+	headersRescanProgress    HeadersRescanProgressReport
+
+	beginFetchTimeStamp      int64
+	totalFetchedHeadersCount int32
+	startHeaderHeight        int32
+	headersFetchTimeSpent    int64
+
+	addressDiscoveryStartTime int64
+	totalDiscoveryTimeSpent   int64
+
+	addressDiscoveryCompleted chan bool
+
+	rescanStartTime int64
+
+	totalInactiveSeconds int64
 }
 
+
+const (
+	InvalidSyncStage          = -1
+	HeadersFetchSyncStage     = 0
+	AddressDiscoverySyncStage = 1
+	HeadersRescanSyncStage    = 2
+)
+
+func (lw *LibWallet) initActiveSyncData() {
+	headersFetchProgress := HeadersFetchProgressReport{}
+	headersFetchProgress.GeneralSyncProgress = &GeneralSyncProgress{}
+
+	addressDiscoveryProgress := AddressDiscoveryProgressReport{}
+	addressDiscoveryProgress.GeneralSyncProgress = &GeneralSyncProgress{}
+
+	headersRescanProgress := HeadersRescanProgressReport{}
+	headersRescanProgress.GeneralSyncProgress = &GeneralSyncProgress{}
+
+	var targetTimePerBlock int32
+	if lw.activeNet.Name == "mainnet" {
+		targetTimePerBlock = MainNetTargetTimePerBlock
+	} else {
+		targetTimePerBlock = TestNetTargetTimePerBlock
+	}
+
+	lw.syncData.activeSyncData = &activeSyncData{
+		targetTimePerBlock: targetTimePerBlock,
+
+		syncStage: InvalidSyncStage,
+
+		headersFetchProgress:     headersFetchProgress,
+		addressDiscoveryProgress: addressDiscoveryProgress,
+		headersRescanProgress:    headersRescanProgress,
+
+		beginFetchTimeStamp:     -1,
+		headersFetchTimeSpent:   -1,
+		totalDiscoveryTimeSpent: -1,
+	}
+}
+
+
+func (lw *LibWallet) AddSyncProgressListener(syncProgressListener SyncProgressListener, uniqueIdentifier string) error {
+	_, k := lw.syncProgressListeners[uniqueIdentifier]
+	if k {
+		return errors.New(ErrListenerAlreadyExist)
+	}
+
+	lw.syncProgressListeners[uniqueIdentifier] = syncProgressListener
+
+	// If sync is already on, notify this newly added listener of the current progress report.
+	if lw.syncData.syncing && lw.activeSyncData != nil {
+		switch lw.activeSyncData.syncStage {
+		case HeadersFetchSyncStage:
+			syncProgressListener.OnHeadersFetchProgress(&lw.headersFetchProgress)
+		case AddressDiscoverySyncStage:
+			syncProgressListener.OnAddressDiscoveryProgress(&lw.activeSyncData.addressDiscoveryProgress)
+		case HeadersRescanSyncStage:
+			syncProgressListener.OnHeadersRescanProgress(&lw.activeSyncData.headersRescanProgress)
+		}
+	}
+
+	return nil
+}
+
+// SpvSync loads a wallet to be synced via spv
 func (lw *LibWallet) SpvSync(peerAddresses string) error {
 	loadedWallet, err := lw.getLoadedWalletForSyncing()
 	if err != nil {
@@ -84,6 +182,42 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 	return nil
 }
 
+// RemoveSyncProgressListener deletes an  element with specified key `uniqueIdentifier`
+// from the map `syncProgressListeners` in LibWallet
+func (lw *LibWallet) RemoveSyncProgressListener(uniqueIdentifier string) {
+	_, k := lw.syncProgressListeners[uniqueIdentifier]
+	if k {
+		delete(lw.syncProgressListeners, uniqueIdentifier)
+	}
+}
+
+// EnableSyncLogs enables display of logs when syncing a wallet
+func (lw *LibWallet) EnableSyncLogs() {
+	lw.syncData.showLogs = true
+}
+
+func (lw *LibWallet) SyncInactiveForPeriod(totalInactiveSeconds int64) {
+
+	if !lw.syncing || lw.activeSyncData == nil {
+		log.Debug("Not accounting for inactive time, wallet is not syncing.")
+		return
+	}
+
+	lw.syncData.totalInactiveSeconds += totalInactiveSeconds
+	if lw.syncData.connectedPeers == 0 {
+		// assume it would take another 60 seconds to reconnect to peers
+		lw.syncData.totalInactiveSeconds += 60
+	}
+}
+
+// RestartSpvSync  restarts an spv process after cancelling
+func (lw *LibWallet) RestartSpvSync(peerAddresses string) error{
+	lw.syncData.restartSyncRequested = true
+	lw.CancelSync() // necessary to unset the network backend.
+	return lw.SpvSync(peerAddresses)
+}
+
+// RpcSync loads a wallet to be synced via RPC connection
 func (lw *LibWallet) RpcSync(networkAddress string, username string, password string, cert []byte) error {
 	loadedWallet, err := lw.getLoadedWalletForSyncing()
 	if err != nil {
@@ -127,6 +261,9 @@ func (lw *LibWallet) RpcSync(networkAddress string, username string, password st
 	return nil
 }
 
+// connectToRpcClient creates an direct connection to the RPC server
+// described by the networkAddress string and attempts to establish a
+// client connection to the remote server
 func (lw *LibWallet) connectToRpcClient(ctx context.Context, networkAddress string, username string, password string,
 	cert []byte) (chainClient *chain.RPCClient, err error) {
 
@@ -168,6 +305,7 @@ func (lw *LibWallet) connectToRpcClient(ctx context.Context, networkAddress stri
 	return
 }
 
+// getLoadedWalletForSyncing returns a loaded wallet to be synced
 func (lw *LibWallet) getLoadedWalletForSyncing() (*wallet.Wallet, error) {
 	loadedWallet, walletLoaded := lw.walletLoader.LoadedWallet()
 	if walletLoaded {
@@ -192,6 +330,7 @@ func (lw *LibWallet) CancelSync() {
 	}
 }
 
+// RescanBlocks starts a rescan of the wallet for all blocks
 func (lw *LibWallet) RescanBlocks() error {
 	netBackend, err := lw.wallet.NetworkBackend()
 	if err != nil {
@@ -240,6 +379,19 @@ func (lw *LibWallet) RescanBlocks() error {
 	return nil
 }
 
+//IsSynced checks if a wallet is synced.
+// It returns true is a wallet is synced and false if it's not
+func (lw *LibWallet) IsSynced() bool {
+	return lw.syncData.synced
+}
+
+
+func (lw *LibWallet) IsSyncing() bool {
+	return lw.syncData.syncing
+}
+
+// GetBestBlock returns the height of the tip-most block
+// in the main chain that the wallet is synchronized to.
 func (lw *LibWallet) GetBestBlock() int32 {
 	_, height := lw.wallet.MainChainTip()
 	return height

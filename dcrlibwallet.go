@@ -2,6 +2,7 @@ package dcrlibwallet
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -37,6 +38,8 @@ type LibWallet struct {
 	wallet                 *wallet.Wallet
 	txIndexDB              *txindex.DB
 	txNotificationListener TransactionListener
+	cancelFuncs  []context.CancelFunc
+	shuttingDown chan bool
 	*syncData
 }
 
@@ -54,6 +57,7 @@ func NewLibWalletWithDbPath(walletDataDir string, activeNet *netparams.Params) (
 	return newLibWallet(walletDataDir, DefaultDbDriver, activeNet, false)
 }
 
+// newLibWallet creates a LibWallet
 func newLibWallet(walletDataDir, walletDbDriver string, activeNet *netparams.Params, listenForShutdown bool) (*LibWallet, error) {
 	errors.Separator = ":: "
 	initLogRotator(filepath.Join(walletDataDir, logFileName))
@@ -84,6 +88,7 @@ func newLibWallet(walletDataDir, walletDbDriver string, activeNet *netparams.Par
 	return lw, nil
 }
 
+//Shutdown closes a wallet instance
 func (lw *LibWallet) Shutdown(exit bool) {
 	log.Info("Shutting down mobile wallet")
 
@@ -125,6 +130,8 @@ func (lw *LibWallet) Shutdown(exit bool) {
 	}
 }
 
+// SignMessage returns the signature of a signed message
+// using an 'address' associated private key.
 func (lw *LibWallet) SignMessage(passphrase []byte, address string, message string) ([]byte, error) {
 	lock := make(chan time.Time, 1)
 	defer func() {
@@ -159,6 +166,8 @@ func (lw *LibWallet) SignMessage(passphrase []byte, address string, message stri
 	return sig, nil
 }
 
+// VerifyMessage verifies that sig is a valid signature of msg and was created
+// using the secp256k1 private key for addr.
 func (lw *LibWallet) VerifyMessage(address string, message string, signatureBase64 string) (bool, error) {
 	var valid bool
 
@@ -192,6 +201,9 @@ func (lw *LibWallet) VerifyMessage(address string, message string, signatureBase
 	return valid, nil
 }
 
+//CallJSONRPC attempts to make a request to an RPC server using
+// the user specified connection configurations.
+// If request is successful it returns a result
 func (lw *LibWallet) CallJSONRPC(method string, args string, address string, username string, password string, caCert string) (string, error) {
 	arguments := strings.Split(args, ",")
 	params := make([]interface{}, 0)

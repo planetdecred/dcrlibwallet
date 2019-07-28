@@ -22,9 +22,13 @@ const (
 )
 
 type DB struct {
-	txDB  *storm.DB
+	TxDB  *storm.DB
 	Close func() error
 }
+
+
+// ErrNotFound is returned when the specified record is not saved in the bucket.
+var ErrNotFound = storm.ErrNotFound
 
 type GenerateAddressFn func() (string, error)
 type AddressMatchFn func(address string) (bool, error)

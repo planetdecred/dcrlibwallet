@@ -10,6 +10,9 @@ import (
 	"github.com/decred/dcrwallet/wallet"
 )
 
+
+// GetAccounts returns a `Json encoded` representation of all accounts in
+// a single wallet
 func (lw *LibWallet) GetAccounts(requiredConfirmations int32) (string, error) {
 	accountsResponse, err := lw.GetAccountsRaw(requiredConfirmations)
 	if err != nil {
@@ -20,6 +23,7 @@ func (lw *LibWallet) GetAccounts(requiredConfirmations int32) (string, error) {
 	return string(result), nil
 }
 
+// GetAccountsRaw returns all accounts in a single wallet
 func (lw *LibWallet) GetAccountsRaw(requiredConfirmations int32) (*Accounts, error) {
 	resp, err := lw.wallet.Accounts()
 	if err != nil {
@@ -52,6 +56,8 @@ func (lw *LibWallet) GetAccountsRaw(requiredConfirmations int32) (*Accounts, err
 	}, nil
 }
 
+// GetAcountBalance returns a Balance type which represents
+// the remaining balance in a given wallet account
 func (lw *LibWallet) GetAccountBalance(accountNumber uint32, requiredConfirmations int32) (*Balance, error) {
 	balance, err := lw.wallet.CalculateAccountBalance(accountNumber, requiredConfirmations)
 	if err != nil {
@@ -69,6 +75,8 @@ func (lw *LibWallet) GetAccountBalance(accountNumber uint32, requiredConfirmatio
 	}, nil
 }
 
+// SpendableForAccount calculates the unspent transactions
+// of a given wallet account and returns only the spendable balance
 func (lw *LibWallet) SpendableForAccount(account int32, requiredConfirmations int32) (int64, error) {
 	bals, err := lw.wallet.CalculateAccountBalance(uint32(account), requiredConfirmations)
 	if err != nil {
@@ -142,13 +150,16 @@ func (lw *LibWallet) NextAccountRaw(accountName string, privPass []byte) (uint32
 	return lw.wallet.NextAccount(accountName)
 }
 
+// RenameAccount sets the name for an account number to newName.
 func (lw *LibWallet) RenameAccount(accountNumber int32, newName string) error {
 	err := lw.wallet.RenameAccount(uint32(accountNumber), newName)
 	return err
 }
 
-func (lw *LibWallet) AccountName(accountNumber uint32) string {
-	name, err := lw.AccountNameRaw(accountNumber)
+// AccountName takes in accountNumber as input and returns
+// the name of the account if it exists
+func (lw *LibWallet) AccountName(accountNumber int32) string {
+	name, err := lw.AccountNameRaw(uint32(accountNumber))
 	if err != nil {
 		log.Error(err)
 		return "Account not found"
@@ -156,14 +167,18 @@ func (lw *LibWallet) AccountName(accountNumber uint32) string {
 	return name
 }
 
+// AccountNameRaw returns the name of an account.
 func (lw *LibWallet) AccountNameRaw(accountNumber uint32) (string, error) {
 	return lw.wallet.AccountName(accountNumber)
 }
 
+// AccountNumber returns the account number for an account name.
 func (lw *LibWallet) AccountNumber(accountName string) (uint32, error) {
 	return lw.wallet.AccountNumber(accountName)
 }
 
+// CurrentAddress returns the most recently requested payment address
+// from a wallet
 func (lw *LibWallet) CurrentAddress(account int32) (string, error) {
 	addr, err := lw.wallet.CurrentAddress(uint32(account))
 	if err != nil {

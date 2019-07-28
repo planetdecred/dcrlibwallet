@@ -17,11 +17,13 @@ type AddressInfo struct {
 	AccountName   string
 }
 
+// IsAddressValid validates an address
 func (lw *LibWallet) IsAddressValid(address string) bool {
 	_, err := addresshelper.DecodeForNetwork(address, lw.activeNet.Params)
 	return err == nil
 }
 
+// HaveAddress returns whether the wallet is the owner of the address `address`
 func (lw *LibWallet) HaveAddress(address string) bool {
 	addr, err := addresshelper.DecodeForNetwork(address, lw.activeNet.Params)
 	if err != nil {
@@ -35,6 +37,7 @@ func (lw *LibWallet) HaveAddress(address string) bool {
 	return have
 }
 
+// AccountOfAddress returns the account name that an address is associated with.
 func (lw *LibWallet) AccountOfAddress(address string) string {
 	addr, err := dcrutil.DecodeAddress(address)
 	if err != nil {

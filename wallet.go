@@ -2,6 +2,7 @@ package dcrlibwallet
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/decred/dcrwallet/errors"
@@ -10,10 +11,13 @@ import (
 	"github.com/raedahgroup/dcrlibwallet/txindex"
 )
 
+// WalletExists checks if a wallet exists
 func (lw *LibWallet) WalletExists() (bool, error) {
 	return lw.walletLoader.WalletExists()
 }
 
+// CreateWallet creates a new wallet using the passed in passphrase as
+// the wallet's privatePassPhrase and a default passphrase as the public passphrase
 func (lw *LibWallet) CreateWallet(passphrase string, seedMnemonic string) error {
 	log.Info("Creating Wallet")
 	if len(seedMnemonic) == 0 {
@@ -38,6 +42,8 @@ func (lw *LibWallet) CreateWallet(passphrase string, seedMnemonic string) error 
 	return nil
 }
 
+// OPenWallet opens an existing wallet from a wallet's loader
+//database path and public passPhrase
 func (lw *LibWallet) OpenWallet(pubPass []byte) error {
 	w, err := lw.walletLoader.OpenExistingWallet(pubPass)
 	if err != nil {
@@ -72,10 +78,12 @@ func (lw *LibWallet) OpenWallet(pubPass []byte) error {
 	return nil
 }
 
+// WalletOPened checks if a wallet is opened
 func (lw *LibWallet) WalletOpened() bool {
 	return lw.wallet != nil
 }
 
+// UnlockWallet unlocks a wallet using a wallets's private passPhrase
 func (lw *LibWallet) UnlockWallet(privPass []byte) error {
 	loadedWallet, ok := lw.walletLoader.LoadedWallet()
 	if !ok {
@@ -92,6 +100,7 @@ func (lw *LibWallet) UnlockWallet(privPass []byte) error {
 	return err
 }
 
+// LockWallet locks a wallet
 func (lw *LibWallet) LockWallet() {
 	if lw.wallet.Locked() {
 		lw.wallet.Lock()
@@ -144,4 +153,28 @@ func (lw *LibWallet) ChangePublicPassphrase(oldPass []byte, newPass []byte) erro
 func (lw *LibWallet) CloseWallet() error {
 	err := lw.walletLoader.UnloadWallet()
 	return err
+}
+
+func (lw *LibWallet) DeleteWallet(privatePassphrase []byte) error {
+	defer func() {
+		for i := range privatePassphrase {
+			privatePassphrase[i] = 0
+		}
+	}()
+
+	wallet, loaded := lw.walletLoader.LoadedWallet()
+	if !loaded {
+		return errors.New(ErrWalletNotLoaded)
+	}
+
+	err := wallet.Unlock(privatePassphrase, nil)
+	if err != nil {
+		return translateError(err)
+	}
+	wallet.Lock()
+
+	lw.Shutdown(true)
+
+	log.Info("Deleting Wallet")
+	return os.RemoveAll(lw.walletDataDir)
 }
