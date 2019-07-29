@@ -7,6 +7,9 @@ import (
 	"github.com/decred/dcrd/txscript"
 )
 
+// PkScript decodes the string encoding of an address
+// and creates a new script to pay a transaction output
+// to the decoded address
 func PkScript(address string) ([]byte, error) {
 	addr, err := dcrutil.DecodeAddress(address)
 	if err != nil {
@@ -16,6 +19,9 @@ func PkScript(address string) ([]byte, error) {
 	return txscript.PayToAddrScript(addr)
 }
 
+// DecodeForNetwork decodes the string encoding of an address
+// and returns the decoded address if it's associated with the
+// passed network
 func DecodeForNetwork(address string, params *chaincfg.Params) (dcrutil.Address, error) {
 	addr, err := dcrutil.DecodeAddress(address)
 	if err != nil {
