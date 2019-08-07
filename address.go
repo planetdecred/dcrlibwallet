@@ -1,7 +1,10 @@
 package dcrlibwallet
 
 import (
+	"encoding/hex"
+	"fmt"
 	"github.com/decred/dcrd/dcrutil"
+	"github.com/decred/dcrwallet/wallet/udb"
 	"github.com/raedahgroup/dcrlibwallet/addresshelper"
 )
 
@@ -60,4 +63,31 @@ func (lw *LibWallet) AddressInfo(address string) (*AddressInfo, error) {
 	}
 
 	return addressInfo, nil
+}
+
+func (lw *LibWallet) AddressPubKey(address string) (string, error) {
+	addr, err := addresshelper.DecodeForNetwork(address, lw.activeNet.Params)
+	if err != nil {
+		return "", err
+	}
+	ainfo, err := lw.wallet.AddressInfo(addr)
+	if err != nil {
+		return "", err
+	}
+	switch ma := ainfo.(type) {
+	case udb.ManagedPubKeyAddress:
+		pubKey := ma.ExportPubKey()
+		pubKeyBytes, err := hex.DecodeString(pubKey)
+		if err != nil {
+			return "", err
+		}
+		pubKeyAddr, err := dcrutil.NewAddressSecpPubKey(pubKeyBytes, lw.activeNet.Params)
+		if err != nil {
+			return "", err
+		}
+		return pubKeyAddr.String(), nil
+
+	default:
+		return "", fmt.Errorf("address is not a managed pub key address")
+	}
 }

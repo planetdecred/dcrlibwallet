@@ -54,15 +54,16 @@ type UnsignedTransaction struct {
 }
 
 type PurchaseTicketsRequest struct {
-	Passphrase            []byte
 	Account               uint32
 	RequiredConfirmations uint32
-	TicketAddress         string
 	NumTickets            uint32
-	PoolAddress           string
-	PoolFees              float64
+	Passphrase            []byte
 	Expiry                uint32
 	TxFee                 int64
+	VSPHost               string
+	TicketAddress         string
+	PoolAddress           string
+	PoolFees              float64
 	TicketFee             int64
 }
 
@@ -83,4 +84,11 @@ type GetTicketsResponse struct {
 type TicketPriceResponse struct {
 	TicketPrice int64
 	Height      int32
+}
+
+type VSPTicketPurchaseInfo struct {
+	PoolAddress   string  `json:"PoolAddress"`
+	PoolFees      float64 `json:"PoolFees"`
+	Script        string  `json:"Script"`
+	TicketAddress string  `json:"TicketAddress"`
 }

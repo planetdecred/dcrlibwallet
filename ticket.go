@@ -2,7 +2,12 @@ package dcrlibwallet
 
 import (
 	"context"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
@@ -140,6 +145,13 @@ func (lw *LibWallet) TicketPrice(ctx context.Context) (*TicketPriceResponse, err
 func (lw *LibWallet) PurchaseTickets(ctx context.Context, request *PurchaseTicketsRequest) ([]string, error) {
 	var err error
 
+	// fetch redeem script+ticket address+pool address+pool fee if vsp host is provided
+	if request.VSPHost != "" {
+		if err = lw.updateTicketPurchaseRequestWithVSPInfo(request); err != nil {
+			return nil, err
+		}
+	}
+
 	// Unmarshall the received data and prepare it as input for the ticket purchase request.
 	ticketPriceResponse, err := lw.TicketPrice(ctx)
 	if err != nil {
@@ -221,4 +233,76 @@ func (lw *LibWallet) PurchaseTickets(ctx context.Context, request *PurchaseTicke
 	}
 
 	return hashes, nil
+}
+
+func (lw *LibWallet) updateTicketPurchaseRequestWithVSPInfo(request *PurchaseTicketsRequest) error {
+	// generate an address and get the pubkeyaddr
+	address, err := lw.CurrentAddress(0)
+	if err != nil {
+		return fmt.Errorf("get wallet pubkeyaddr error: %s", err.Error())
+	}
+	pubKeyAddr, err := lw.AddressPubKey(address)
+	if err != nil {
+		return fmt.Errorf("get wallet pubkeyaddr error: %s", err.Error())
+	}
+
+	// invoke vsp api
+	ticketPurchaseInfo, err := CallVSPTicketInfoAPI(request.VSPHost, pubKeyAddr)
+	if err != nil {
+		return fmt.Errorf("vsp connection error: %s", err.Error())
+	}
+
+	// decode the redeem script gotten from vsp
+	rs, err := hex.DecodeString(ticketPurchaseInfo.Script)
+	if err != nil {
+		return fmt.Errorf("vsp data corruption: %s", err.Error())
+	}
+
+	// unlock wallet and import the decoded script
+	lock := make(chan time.Time, 1)
+	lw.wallet.Unlock(request.Passphrase, lock)
+	err = lw.wallet.ImportScript(rs)
+	lock <- time.Time{}
+	if err != nil && !errors.Is(errors.Exist, err) {
+		return fmt.Errorf("error importing vsp redeem script: %s", err.Error())
+	}
+
+	request.TicketAddress = ticketPurchaseInfo.TicketAddress
+	request.PoolAddress = ticketPurchaseInfo.PoolAddress
+	request.PoolFees = ticketPurchaseInfo.PoolFees
+
+	return nil
+}
+
+func CallVSPTicketInfoAPI(vspHost, pubKeyAddr string) (ticketPurchaseInfo *VSPTicketPurchaseInfo, err error) {
+	apiUrl := fmt.Sprintf("%s/api/v2/purchaseticket", strings.TrimSuffix(vspHost, "/"))
+	data := url.Values{}
+	data.Set("UserPubKeyAddr", pubKeyAddr)
+
+	req, err := http.NewRequest("POST", apiUrl, strings.NewReader(data.Encode()))
+	if err != nil {
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	var apiResponse map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&apiResponse)
+	if err == nil {
+		data := apiResponse["data"].(map[string]interface{})
+		ticketPurchaseInfo = &VSPTicketPurchaseInfo{
+			Script:        data["Script"].(string),
+			PoolFees:      data["PoolFees"].(float64),
+			PoolAddress:   data["PoolAddress"].(string),
+			TicketAddress: data["TicketAddress"].(string),
+		}
+	}
+	return
 }
