@@ -53,6 +53,10 @@ func NewLibWallet(homeDir string, dbDriver string, netType string) (*LibWallet, 
 	return newLibWallet(walletDataDir, dbDriver, activeNet, true)
 }
 
+func NewLibWalletWithDbPath(walletDataDir string, activeNet *netparams.Params) (*LibWallet, error) {
+	return newLibWallet(walletDataDir, DefaultDbDriver, activeNet, false)
+}
+
 // newLibWallet creates a LibWallet
 func newLibWallet(walletDataDir, walletDbDriver string, activeNet *netparams.Params, listenForShutdown bool) (*LibWallet, error) {
 	errors.Separator = ":: "
