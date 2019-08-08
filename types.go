@@ -42,7 +42,6 @@ type Accounts struct {
 	CurrentBlockHeight int32
 }
 
-
 /*
 Direction
 0: Sent

@@ -38,8 +38,8 @@ type LibWallet struct {
 	wallet                 *wallet.Wallet
 	txIndexDB              *txindex.DB
 	txNotificationListener TransactionListener
-	cancelFuncs  []context.CancelFunc
-	shuttingDown chan bool
+	cancelFuncs            []context.CancelFunc
+	shuttingDown           chan bool
 	*syncData
 }
 

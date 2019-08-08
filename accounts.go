@@ -10,7 +10,6 @@ import (
 	"github.com/decred/dcrwallet/wallet"
 )
 
-
 // GetAccounts returns a `Json encoded` representation of all accounts in
 // a single wallet
 func (lw *LibWallet) GetAccounts(requiredConfirmations int32) (string, error) {

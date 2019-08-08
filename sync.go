@@ -23,18 +23,15 @@ type syncData struct {
 	syncProgressListeners map[string]SyncProgressListener
 
 	rescanning bool
-	syncing     bool
-	showLogs    bool
-	synced      bool
+	syncing    bool
+	showLogs   bool
+	synced     bool
 
 	*activeSyncData
 	connectedPeers int32
 
-
 	// Flag to notify syncCanceled callback if the sync was canceled so as to be restarted.
 	restartSyncRequested bool
-
-
 }
 
 type activeSyncData struct {
@@ -60,7 +57,6 @@ type activeSyncData struct {
 
 	totalInactiveSeconds int64
 }
-
 
 const (
 	InvalidSyncStage          = -1
@@ -100,7 +96,6 @@ func (lw *LibWallet) initActiveSyncData() {
 		totalDiscoveryTimeSpent: -1,
 	}
 }
-
 
 func (lw *LibWallet) AddSyncProgressListener(syncProgressListener SyncProgressListener, uniqueIdentifier string) error {
 	_, k := lw.syncProgressListeners[uniqueIdentifier]
@@ -211,7 +206,7 @@ func (lw *LibWallet) SyncInactiveForPeriod(totalInactiveSeconds int64) {
 }
 
 // RestartSpvSync  restarts an spv process after cancelling
-func (lw *LibWallet) RestartSpvSync(peerAddresses string) error{
+func (lw *LibWallet) RestartSpvSync(peerAddresses string) error {
 	lw.syncData.restartSyncRequested = true
 	lw.CancelSync() // necessary to unset the network backend.
 	return lw.SpvSync(peerAddresses)
@@ -384,7 +379,6 @@ func (lw *LibWallet) RescanBlocks() error {
 func (lw *LibWallet) IsSynced() bool {
 	return lw.syncData.synced
 }
-
 
 func (lw *LibWallet) IsSyncing() bool {
 	return lw.syncData.syncing
