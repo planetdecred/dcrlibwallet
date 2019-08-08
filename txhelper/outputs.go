@@ -9,7 +9,7 @@ import (
 	"github.com/raedahgroup/dcrlibwallet/addresshelper"
 )
 
-func makeTxOutputs(destinations []TransactionDestination) (outputs []*wire.TxOut, totalSendAmount int64, err error) {
+func MakeTxOutputs(destinations []TransactionDestination) (outputs []*wire.TxOut, totalSendAmount int64, err error) {
 	for _, destination := range destinations {
 		var output *wire.TxOut
 		output, err = MakeTxOutput(destination)

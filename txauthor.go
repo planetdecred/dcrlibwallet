@@ -123,7 +123,7 @@ func (lw *LibWallet) constructTransaction(amount int64, fromAccount int32, toAdd
 		changeSource, err = txhelper.MakeTxChangeSource(toAddress)
 	} else {
 		outputSelectionAlgorithm = wallet.OutputSelectionAlgorithmDefault
-		outputs, err = txhelper.MakeTxOutputs([]txhelper.TransactionDestination{
+		outputs, _, err = txhelper.MakeTxOutputs([]txhelper.TransactionDestination{
 			{Address: toAddress, Amount: dcrutil.Amount(amount).ToCoin()},
 		})
 	}

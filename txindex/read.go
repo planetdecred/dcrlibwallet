@@ -31,9 +31,9 @@ func (db *DB) Read(offset, limit int32, filter *ReadFilter) (transactions []*txh
 
 func (db *DB) createTxQuery(filter *ReadFilter) (query storm.Query) {
 	if filter == nil || filter.matcher == nil {
-		query = db.txDB.Select()
+		query = db.TxDB.Select()
 	} else {
-		query = db.txDB.Select(filter.matcher)
+		query = db.TxDB.Select(filter.matcher)
 	}
 	return
 }
@@ -41,7 +41,7 @@ func (db *DB) createTxQuery(filter *ReadFilter) (query storm.Query) {
 // ReadIndexingStartBlock checks if a end block height was saved from last indexing operation.
 // If so, the end block height - MaxReOrgBlocks is returned. Otherwise, 0 (default int32 value) is returned.
 func (db *DB) ReadIndexingStartBlock() (startBlockHeight int32, err error) {
-	err = db.txDB.Get(TxBucketName, KeyEndBlock, &startBlockHeight)
+	err = db.TxDB.Get(TxBucketName, KeyEndBlock, &startBlockHeight)
 	if err != nil && err != storm.ErrNotFound {
 		return
 	}

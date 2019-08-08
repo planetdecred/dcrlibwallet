@@ -18,7 +18,7 @@ func EstimateChange(numberOfInputs int, totalInputAmount int64, destinations []T
 		}
 	}
 
-	outputs, totalSendAmount, err := makeTxOutputs(destinations)
+	outputs, totalSendAmount, err := MakeTxOutputs(destinations)
 	if err != nil {
 		return 0, err
 	}

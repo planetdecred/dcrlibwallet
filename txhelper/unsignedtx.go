@@ -84,7 +84,7 @@ func NewUnsignedTx(inputs []*wire.TxIn, sendDestinations, changeDestinations []T
 			return nil, fmt.Errorf("script size exceed maximum bytes pushable to the stack")
 		}
 
-		changeOutputs, totalChangeAmount, err := makeTxOutputs(changeDestinations)
+		changeOutputs, totalChangeAmount, err := MakeTxOutputs(changeDestinations)
 		if err != nil {
 			return nil, fmt.Errorf("error creating change outputs for tx: %s", err.Error())
 		}
