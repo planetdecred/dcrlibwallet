@@ -26,7 +26,6 @@ type DB struct {
 	Close func() error
 }
 
-
 // ErrNotFound is returned when the specified record is not saved in the bucket.
 var ErrNotFound = storm.ErrNotFound
 
