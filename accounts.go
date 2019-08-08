@@ -149,12 +149,6 @@ func (lw *LibWallet) NextAccountRaw(accountName string, privPass []byte) (uint32
 	return lw.wallet.NextAccount(accountName)
 }
 
-// RenameAccount sets the name for an account number to newName.
-func (lw *LibWallet) RenameAccount(accountNumber int32, newName string) error {
-	err := lw.wallet.RenameAccount(uint32(accountNumber), newName)
-	return err
-}
-
 // AccountName takes in accountNumber as input and returns
 // the name of the account if it exists
 func (lw *LibWallet) AccountName(accountNumber int32) string {
@@ -164,6 +158,12 @@ func (lw *LibWallet) AccountName(accountNumber int32) string {
 		return "Account not found"
 	}
 	return name
+}
+
+// RenameAccount sets the name for an account number to newName.
+func (lw *LibWallet) RenameAccount(accountNumber int32, newName string) error {
+	err := lw.wallet.RenameAccount(uint32(accountNumber), newName)
+	return err
 }
 
 // AccountNameRaw returns the name of an account.
