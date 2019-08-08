@@ -116,11 +116,6 @@ func (lw *LibWallet) ChangePublicPassphrase(oldPass []byte, newPass []byte) erro
 	return nil
 }
 
-func (lw *LibWallet) CloseWallet() error {
-	err := lw.walletLoader.UnloadWallet()
-	return err
-}
-
 func (lw *LibWallet) DeleteWallet(privatePassphrase []byte) error {
 	defer func() {
 		for i := range privatePassphrase {
@@ -143,4 +138,9 @@ func (lw *LibWallet) DeleteWallet(privatePassphrase []byte) error {
 
 	log.Info("Deleting Wallet")
 	return os.RemoveAll(lw.walletDataDir)
+}
+
+func (lw *LibWallet) CloseWallet() error {
+	err := lw.walletLoader.UnloadWallet()
+	return err
 }
