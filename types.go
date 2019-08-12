@@ -135,13 +135,6 @@ type TicketPriceResponse struct {
 	Height      int32
 }
 
-type VSPTicketPurchaseInfo struct {
-	PoolAddress   string  `json:"PoolAddress"`
-	PoolFees      float64 `json:"PoolFees"`
-	Script        string  `json:"Script"`
-	TicketAddress string  `json:"TicketAddress"`
-}
-
 type GeneralSyncProgress struct {
 	TotalSyncProgress         int32 `json:"totalSyncProgress"`
 	TotalTimeRemainingSeconds int64 `json:"totalTimeRemainingSeconds"`
@@ -173,4 +166,11 @@ type DebugInfo struct {
 	TotalTimeRemaining        int64
 	CurrentStageTimeElapsed   int64
 	CurrentStageTimeRemaining int64
+}
+
+type VSPTicketPurchaseInfo struct {
+	PoolAddress   string  `json:"PoolAddress"`
+	PoolFees      float64 `json:"PoolFees"`
+	Script        string  `json:"Script"`
+	TicketAddress string  `json:"TicketAddress"`
 }
