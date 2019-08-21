@@ -2,7 +2,12 @@ package dcrlibwallet
 
 import (
 	"encoding/json"
+
 	"github.com/decred/dcrd/chaincfg/chainhash"
+	"github.com/decred/dcrd/dcrutil"
+	"github.com/decred/dcrd/txscript"
+	"github.com/decred/dcrd/wire"
+	wallet "github.com/decred/dcrwallet/wallet/v2"
 	"github.com/raedahgroup/dcrlibwallet/txhelper"
 	"github.com/raedahgroup/dcrlibwallet/txindex"
 )

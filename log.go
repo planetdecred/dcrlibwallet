@@ -16,13 +16,13 @@ import (
 	"github.com/decred/dcrwallet/chain"
 	"github.com/decred/dcrwallet/loader"
 	"github.com/decred/dcrwallet/p2p"
-	"github.com/decred/dcrwallet/spv"
 	"github.com/decred/dcrwallet/ticketbuyer"
 	ticketbuyerv2 "github.com/decred/dcrwallet/ticketbuyer/v2"
 	"github.com/decred/dcrwallet/wallet"
 	"github.com/decred/dcrwallet/wallet/udb"
 	"github.com/decred/slog"
 	"github.com/jrick/logrotate/rotator"
+	spv "github.com/raedahgroup/dcrlibwallet/spv"
 )
 
 // logWriter implements an io.Writer that outputs to both standard output and

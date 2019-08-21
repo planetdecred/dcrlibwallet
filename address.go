@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/decred/dcrd/dcrutil"
-	"github.com/decred/dcrwallet/wallet"
-	"github.com/decred/dcrwallet/wallet/udb"
+	wallet "github.com/decred/dcrwallet/wallet/v2"
+	"github.com/decred/dcrwallet/wallet/v2/udb"
 	"github.com/raedahgroup/dcrlibwallet/addresshelper"
 )
 

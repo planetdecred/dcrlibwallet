@@ -10,6 +10,7 @@ const (
 	ErrPassphraseRequired    = "passphrase_required"
 	ErrInvalidPassphrase     = "invalid_passphrase"
 	ErrNotConnected          = "not_connected"
+	ErrExist                 = "exists"
 	ErrNotExist              = "not_exists"
 	ErrEmptySeed             = "empty_seed"
 	ErrInvalidAddress        = "invalid_address"

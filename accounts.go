@@ -45,7 +45,6 @@ func (lw *LibWallet) GetAccountsRaw(requiredConfirmations int32) (*Accounts, err
 		CurrentBlockHash:   resp.CurrentBlockHash[:],
 		CurrentBlockHeight: resp.CurrentBlockHeight,
 		Acc:                accounts,
-		ErrorOccurred:      false,
 	}, nil
 }
 

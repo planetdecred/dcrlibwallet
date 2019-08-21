@@ -11,12 +11,12 @@ import (
 
 	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/dcrutil"
-	"github.com/decred/dcrwallet/chain"
+	// chain "github.com/decred/dcrwallet/chain/v2"
 	"github.com/decred/dcrwallet/errors"
 	"github.com/decred/dcrwallet/ticketbuyer"
-	"github.com/decred/dcrwallet/wallet"
-	_ "github.com/decred/dcrwallet/wallet/drivers/bdb" // driver loaded during init
-	_ "github.com/raedahgroup/dcrlibwallet/badgerdb"   // initialize badger driver
+	_ "github.com/decred/dcrwallet/wallet/v2/drivers/bdb" // driver loaded during init
+	wallet "github.com/decred/dcrwallet/wallet/v2"
+	_ "github.com/raedahgroup/dcrlibwallet/badgerdb" // initialize badger driver
 )
 
 const (
@@ -440,21 +440,21 @@ func (l *WalletLoader) StartTicketPurchase(passphrase []byte, ticketbuyerCfg *ti
 		return errors.E(op, errors.Invalid, "wallet must be loaded")
 	}
 
-	c, err := chain.RPCClientFromBackend(l.backend)
-	if err != nil {
-		return errors.E(op, errors.Invalid, "dcrd RPC client must be loaded")
-	}
+	// c, err := chain.RPCClientFromBackend(l.backend)
+	// if err != nil {
+	// 	return errors.E(op, errors.Invalid, "dcrd RPC client must be loaded")
+	// }
 
 	w := l.wallet
-	p, err := ticketbuyer.NewTicketPurchaser(ticketbuyerCfg, c, w, l.chainParams)
-	if err != nil {
-		return errors.E(op, err)
-	}
+	// p, err := ticketbuyer.NewTicketPurchaser(ticketbuyerCfg, c, w, l.chainParams)
+	// if err != nil {
+	// 	return errors.E(op, err)
+	// }
 	n := w.NtfnServer.MainTipChangedNotifications()
-	pm := ticketbuyer.NewPurchaseManager(w, p, n.C, passphrase)
+	// pm := ticketbuyer.NewPurchaseManager(w, p, n.C, passphrase)
 	l.ntfnClient = n
-	l.purchaseManager = pm
-	pm.Start()
+	// l.purchaseManager = pm
+	// pm.Start()
 	return nil
 }
 

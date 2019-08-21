@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/decred/dcrwallet/errors"
-	"github.com/decred/dcrwallet/wallet"
+	wallet "github.com/decred/dcrwallet/wallet/v2"
 	"github.com/decred/dcrwallet/walletseed"
 )
 
@@ -176,5 +176,5 @@ func (lw *LibWallet) DeleteWallet(privatePassphrase []byte) error {
 	lw.Shutdown()
 
 	log.Info("Deleting Wallet")
-	return os.RemoveAll(lw.walletDataDir)
+	return os.RemoveAll(lw.WalletDataDir)
 }
