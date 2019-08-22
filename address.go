@@ -4,9 +4,9 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/decred/dcrd/dcrutil"
-	wallet "github.com/decred/dcrwallet/wallet/v2"
-	"github.com/decred/dcrwallet/wallet/v2/udb"
+	"github.com/decred/dcrwallet/wallet/v3/udb"
+	"github.com/decred/dcrd/dcrutil/v2"
+	wallet "github.com/decred/dcrwallet/wallet/v3"
 	"github.com/raedahgroup/dcrlibwallet/addresshelper"
 )
 
@@ -38,7 +38,7 @@ func (lw *LibWallet) HaveAddress(address string) bool {
 }
 
 func (lw *LibWallet) AccountOfAddress(address string) string {
-	addr, err := dcrutil.DecodeAddress(address)
+	addr, err := dcrutil.DecodeAddress(address, lw.activeNet.Params)
 	if err != nil {
 		return err.Error()
 	}
@@ -47,7 +47,7 @@ func (lw *LibWallet) AccountOfAddress(address string) string {
 }
 
 func (lw *LibWallet) AddressInfo(address string) (*AddressInfo, error) {
-	addr, err := dcrutil.DecodeAddress(address)
+	addr, err := dcrutil.DecodeAddress(address, lw.activeNet.Params)
 	if err != nil {
 		log.Error(err)
 		return nil, err
@@ -73,19 +73,18 @@ func (lw *LibWallet) CurrentAddress(account int32) (string, error) {
 		log.Error(err)
 		return "", err
 	}
-	return addr.EncodeAddress(), nil
+	return addr.Address(), nil
 }
 
 func (lw *LibWallet) NextAddress(account int32) (string, error) {
-	var callOpts []wallet.NextAddressCallOption
-	callOpts = append(callOpts, wallet.WithGapPolicyWrap())
+	ctx, _ := lw.contextWithShutdownCancel()
 
-	addr, err := lw.wallet.NewExternalAddress(uint32(account), callOpts...)
+	addr, err := lw.wallet.NewExternalAddress(ctx, uint32(account), wallet.WithGapPolicyWrap())
 	if err != nil {
 		log.Error(err)
 		return "", err
 	}
-	return addr.EncodeAddress(), nil
+	return addr.Address(), nil
 }
 
 func (lw *LibWallet) AddressPubKey(address string) (string, error) {

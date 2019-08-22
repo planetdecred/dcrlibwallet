@@ -1,15 +1,19 @@
 package dcrlibwallet
 
 import (
+	"bytes"
+	"encoding/binary"
 	"encoding/json"
 
+	"github.com/decred/dcrd/blockchain/stake/v2"
+	"github.com/decred/dcrd/chaincfg/v2"
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrd/dcrutil"
-	"github.com/decred/dcrd/txscript"
+	"github.com/decred/dcrd/dcrutil/v2"
+	"github.com/decred/dcrd/txscript/v2"
 	"github.com/decred/dcrd/wire"
-	wallet "github.com/decred/dcrwallet/wallet/v2"
 	"github.com/raedahgroup/dcrlibwallet/txhelper"
 	"github.com/raedahgroup/dcrlibwallet/txindex"
+	wallet "github.com/decred/dcrwallet/wallet/v3"
 )
 
 type TransactionListener interface {

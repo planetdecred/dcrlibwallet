@@ -139,7 +139,9 @@ func (lw *LibWallet) NextAccountRaw(accountName string, privPass []byte) (uint32
 		return 0, errors.New(ErrInvalidPassphrase)
 	}
 
-	return lw.wallet.NextAccount(accountName)
+	ctx, _ := lw.contextWithShutdownCancel()
+
+	return lw.wallet.NextAccount(ctx, accountName)
 }
 
 func (lw *LibWallet) RenameAccount(accountNumber int32, newName string) error {

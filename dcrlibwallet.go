@@ -8,8 +8,8 @@ import (
 	"github.com/asdine/storm"
 	"github.com/decred/dcrwallet/errors"
 	"github.com/decred/dcrwallet/netparams"
-	wallet "github.com/decred/dcrwallet/wallet/v2"
-	"github.com/decred/dcrwallet/wallet/v2/txrules"
+	wallet "github.com/decred/dcrwallet/wallet/v3"
+	"github.com/decred/dcrwallet/wallet/v3/txrules"
 	"github.com/raedahgroup/dcrlibwallet/txindex"
 	"github.com/raedahgroup/dcrlibwallet/utils"
 	bolt "go.etcd.io/bbolt"
@@ -85,10 +85,6 @@ func (lw *LibWallet) Shutdown() {
 
 	// Trigger shuttingDown signal to cancel all contexts created with `contextWithShutdownCancel`.
 	lw.shuttingDown <- true
-
-	if lw.rpcClient != nil {
-		lw.rpcClient.Stop()
-	}
 
 	// lw.CancelSync()
 

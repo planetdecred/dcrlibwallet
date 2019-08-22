@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/decred/dcrwallet/errors"
-	wallet "github.com/decred/dcrwallet/wallet/v2"
+	wallet "github.com/decred/dcrwallet/wallet/v3"
 	"github.com/decred/dcrwallet/walletseed"
 )
 

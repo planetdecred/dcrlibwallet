@@ -12,8 +12,8 @@ import (
 	"github.com/decred/dcrd/addrmgr"
 	"github.com/decred/dcrwallet/errors"
 	"github.com/decred/dcrwallet/netparams"
-	"github.com/decred/dcrwallet/p2p"
-	wallet "github.com/decred/dcrwallet/wallet/v2"
+	p2p "github.com/decred/dcrwallet/p2p/v2"
+	wallet "github.com/decred/dcrwallet/wallet/v3"
 	spv "github.com/raedahgroup/dcrlibwallet/spv"
 	"github.com/raedahgroup/dcrlibwallet/utils"
 	bolt "go.etcd.io/bbolt"
@@ -244,10 +244,10 @@ func (mw *MultiWallet) SpvSync(peerAddresses string) error {
 		wallets[alias] = wallet.wallet
 	}
 
-	syncer := spv.NewSyncer(wallets, lp)
+	syncer := spv.NewSyncer(wallets["default"], lp)
 	syncer.SetNotifications(mw.spvSyncNotificationCallbacks())
 	if len(validPeerAddresses) > 0 {
-		syncer.SetPersistantPeers(validPeerAddresses)
+		syncer.SetPersistentPeers(validPeerAddresses)
 	}
 
 	mw.setNetworkBackend(syncer)

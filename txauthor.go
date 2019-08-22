@@ -6,12 +6,12 @@ import (
 	"time"
 
 	"github.com/decred/dcrd/dcrutil"
-	"github.com/decred/dcrd/txscript"
+	"github.com/decred/dcrd/txscript/v2"
 	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrwallet/errors"
-	wallet "github.com/decred/dcrwallet/wallet/v2"
-	txauthor "github.com/decred/dcrwallet/wallet/v2/txauthor"
-	txrules "github.com/decred/dcrwallet/wallet/v2/txrules"
+	wallet "github.com/decred/dcrwallet/wallet/v3"
+	txauthor "github.com/decred/dcrwallet/wallet/v3/txauthor"
+	txrules "github.com/decred/dcrwallet/wallet/v3/txrules"
 	"github.com/raedahgroup/dcrlibwallet/txhelper"
 )
 

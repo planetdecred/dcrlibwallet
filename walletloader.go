@@ -9,14 +9,13 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/decred/dcrd/chaincfg"
-	"github.com/decred/dcrd/dcrutil"
-	// chain "github.com/decred/dcrwallet/chain/v2"
+	"github.com/decred/dcrd/chaincfg/v2"
+	"github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/dcrwallet/errors"
 	"github.com/decred/dcrwallet/ticketbuyer"
-	_ "github.com/decred/dcrwallet/wallet/v2/drivers/bdb" // driver loaded during init
-	wallet "github.com/decred/dcrwallet/wallet/v2"
-	_ "github.com/raedahgroup/dcrlibwallet/badgerdb" // initialize badger driver
+	wallet "github.com/decred/dcrwallet/wallet/v3"
+	_ "github.com/decred/dcrwallet/wallet/v3/drivers/bdb" // driver loaded during init
+	_ "github.com/raedahgroup/dcrlibwallet/badgerdb"      // initialize badger driver
 )
 
 const (
@@ -195,7 +194,6 @@ func (l *WalletLoader) CreateWatchingOnlyWallet(extendedPubKey string, pubPass [
 	if err != nil {
 		return nil, errors.E(op, err)
 	}
-	w.Start()
 
 	l.onLoaded(w, db)
 	return w, nil
@@ -286,7 +284,6 @@ func (l *WalletLoader) CreateNewWallet(pubPassphrase, privPassphrase, seed []byt
 	if err != nil {
 		return nil, errors.E(op, err)
 	}
-	w.Start()
 
 	l.onLoaded(w, db)
 	return w, nil
@@ -348,7 +345,6 @@ func (l *WalletLoader) OpenExistingWallet(pubPassphrase []byte) (w *wallet.Walle
 		return nil, errors.E(op, err)
 	}
 
-	w.Start()
 	l.onLoaded(w, db)
 	return w, nil
 }
@@ -396,8 +392,6 @@ func (l *WalletLoader) UnloadWallet() error {
 
 	l.stopTicketPurchase()
 
-	l.wallet.Stop()
-	l.wallet.WaitForShutdown()
 	err := l.db.Close()
 	if err != nil {
 		return errors.E(op, err)

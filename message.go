@@ -4,9 +4,9 @@ import (
 	"time"
 
 	"github.com/decred/dcrd/dcrec"
-	"github.com/decred/dcrd/dcrutil"
+	dcrutil "github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/dcrwallet/errors"
-	wallet "github.com/decred/dcrwallet/wallet/v2"
+	wallet "github.com/decred/dcrwallet/wallet/v3"
 	"github.com/raedahgroup/dcrlibwallet/addresshelper"
 )
 
@@ -29,7 +29,7 @@ func (lw *LibWallet) SignMessage(passphrase []byte, address string, message stri
 	switch a := addr.(type) {
 	case *dcrutil.AddressSecpPubKey:
 	case *dcrutil.AddressPubKeyHash:
-		if a.DSA(a.Net()) != dcrec.STEcdsaSecp256k1 {
+		if a.DSA() != dcrec.STEcdsaSecp256k1 {
 			return nil, errors.New(ErrInvalidAddress)
 		}
 	default:
@@ -47,7 +47,7 @@ func (lw *LibWallet) SignMessage(passphrase []byte, address string, message stri
 func (lw *LibWallet) VerifyMessage(address string, message string, signatureBase64 string) (bool, error) {
 	var valid bool
 
-	addr, err := dcrutil.DecodeAddress(address)
+	addr, err := dcrutil.DecodeAddress(address, lw.activeNet.Params)
 	if err != nil {
 		return false, translateError(err)
 	}
@@ -62,14 +62,14 @@ func (lw *LibWallet) VerifyMessage(address string, message string, signatureBase
 	switch a := addr.(type) {
 	case *dcrutil.AddressSecpPubKey:
 	case *dcrutil.AddressPubKeyHash:
-		if a.DSA(a.Net()) != dcrec.STEcdsaSecp256k1 {
+		if a.DSA() != dcrec.STEcdsaSecp256k1 {
 			return false, errors.New(ErrInvalidAddress)
 		}
 	default:
 		return false, errors.New(ErrInvalidAddress)
 	}
 
-	valid, err = wallet.VerifyMessage(message, addr, signature)
+	valid, err = wallet.VerifyMessage(message, addr, signature, lw.activeNet.Params)
 	if err != nil {
 		return false, translateError(err)
 	}

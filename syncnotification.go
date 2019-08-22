@@ -4,7 +4,7 @@ import (
 	"math"
 	"time"
 
-	chain "github.com/decred/dcrwallet/chain/v2"
+	chain "github.com/decred/dcrwallet/chain/v3"
 	spv "github.com/raedahgroup/dcrlibwallet/spv"
 )
 
@@ -37,8 +37,8 @@ func (mw *MultiWallet) spvSyncNotificationCallbacks() *spv.Notifications {
 	}
 }
 
-func (mw *LibWallet) generalSyncNotificationCallbacks() *chain.Notifications {
-	return &chain.Notifications{
+func (mw *LibWallet) generalSyncNotificationCallbacks() *chain.Callbacks {
+	return &chain.Callbacks{
 		// FetchMissingCFiltersStarted:  func() {},
 		// FetchMissingCFiltersProgress: func(missingCFitlersStart, missingCFitlersEnd int32) {},
 		// FetchMissingCFiltersFinished: func() {},
