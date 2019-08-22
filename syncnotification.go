@@ -71,36 +71,32 @@ func (mw *MultiWallet) handlePeerCountUpdate(peerCount int32) {
 
 // Fetch Headers Callbacks
 
-func (mw *MultiWallet) fetchHeadersStarted(walletAlias string) {
+func (mw *MultiWallet) fetchHeadersStarted(peerInitialHeight int32) {
 	if !mw.syncData.syncing || mw.beginFetchTimeStamp != -1 {
 		// ignore if sync is not in progress i.e. !mw.syncData.syncing
 		// or already started headers fetching i.e. mw.beginFetchTimeStamp != -1
 		return
 	}
 
-	w, _ := mw.wallets[walletAlias]
-
 	mw.activeSyncData.syncStage = HeadersFetchSyncStage
 	mw.activeSyncData.beginFetchTimeStamp = time.Now().Unix()
-	mw.activeSyncData.startHeaderHeight = w.GetBestBlock()
+	mw.activeSyncData.startHeaderHeight = peerInitialHeight
 	mw.activeSyncData.totalFetchedHeadersCount = 0
 
 	if mw.syncData.showLogs && mw.syncData.syncing {
-		// walletBestBlockTime := w.GetBestBlockTimeStamp()
-		totalHeadersToFetch := mw.estimateBlockHeadersCountAfter(0)
+		walletBestBlockTime := mw.GetLowestBlockTimestamp()
+		totalHeadersToFetch := mw.estimateBlockHeadersCountAfter(walletBestBlockTime)
 		log.Infof("Step 1 of 3 - fetching %d block headers.\n", totalHeadersToFetch)
 	}
 }
 
-func (mw *MultiWallet) fetchHeadersProgress(walletAlias string, fetchedHeadersCount int32, lastHeaderTime int64) {
+func (mw *MultiWallet) fetchHeadersProgress(fetchedHeadersCount int32, lastHeaderTime int64) {
 	if !mw.syncData.syncing || mw.activeSyncData.headersFetchTimeSpent != -1 {
 		// Ignore this call because this function gets called for each peer and
 		// we'd want to ignore those calls as far as the wallet is synced (i.e. !syncListener.syncing)
 		// or headers are completely fetched (i.e. syncListener.headersFetchTimeSpent != -1)
 		return
 	}
-
-	w, _ := mw.wallets[walletAlias]
 
 	// If there was some period of inactivity,
 	// assume that this process started at some point in the future,
@@ -110,11 +106,7 @@ func (mw *MultiWallet) fetchHeadersProgress(walletAlias string, fetchedHeadersCo
 
 	mw.activeSyncData.totalFetchedHeadersCount += fetchedHeadersCount
 
-	bestBlockTime := lastHeaderTime
-	if bestBlockTime == 0 {
-		bestBlockTime = w.GetBestBlockTimeStamp()
-	}
-	headersLeftToFetch := mw.estimateBlockHeadersCountAfter(bestBlockTime)
+	headersLeftToFetch := mw.estimateBlockHeadersCountAfter(lastHeaderTime)
 	totalHeadersToFetch := mw.activeSyncData.totalFetchedHeadersCount + headersLeftToFetch
 	headersFetchProgress := float64(mw.activeSyncData.totalFetchedHeadersCount) / float64(totalHeadersToFetch)
 
@@ -166,7 +158,7 @@ func (mw *MultiWallet) publishFetchHeadersProgress() {
 	}
 }
 
-func (mw *MultiWallet) fetchHeadersFinished(walletAlias string) {
+func (mw *MultiWallet) fetchHeadersFinished() {
 	if !mw.syncData.syncing {
 		// ignore if sync is not in progress
 		return

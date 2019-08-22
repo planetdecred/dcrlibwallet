@@ -199,7 +199,7 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 	wallets := make(map[string]*wallet.Wallet)
 	wallets["default"] = loadedWallet
 
-	syncer := spv.NewSyncer(wallets["default"], lp)
+	syncer := spv.NewSyncer(wallets, lp)
 	//syncer.SetNotifications(lw.spvSyncNotificationCallbacks())
 	if len(validPeerAddresses) > 0 {
 		syncer.SetPersistentPeers(validPeerAddresses)
@@ -439,4 +439,15 @@ func (lw *LibWallet) GetBestBlockTimeStamp() int64 {
 
 func (lw *LibWallet) GetConnectedPeersCount() int32 {
 	return lw.connectedPeers
+}	
+
+func (mw *MultiWallet) GetLowestBlockTimestamp() int64 {
+	var timestamp int64 = -1
+	for _, w := range mw.wallets {
+		bestBlockTimestamp := w.GetBestBlockTimeStamp()
+		if bestBlockTimestamp < timestamp || timestamp == -1 {
+			timestamp = bestBlockTimestamp
+		}
+	}
+	return timestamp
 }
