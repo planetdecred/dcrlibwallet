@@ -75,10 +75,11 @@ type GetTicketsRequest struct {
 	TargetTicketCount   int32
 }
 
-type GetTicketsResponse struct {
-	Ticket       *wallet.TicketSummary
-	BlockHeight  uint32
-	TicketStatus TicketStatus
+type TicketInfo struct {
+	BlockHeight uint32
+	Status      string
+	Ticket      *wallet.TransactionSummary
+	Spender     *wallet.TransactionSummary
 }
 
 type TicketPriceResponse struct {

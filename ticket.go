@@ -33,14 +33,14 @@ func (lw *LibWallet) StakeInfo() (*wallet.StakeInfoData, error) {
 	return lw.wallet.StakeInfo()
 }
 
-func (lw *LibWallet) GetTickets(req *GetTicketsRequest) (<-chan *GetTicketsResponse, <-chan error, error) {
+func (lw *LibWallet) GetTickets(req *GetTicketsRequest) (ticketInfos []*TicketInfo, err error) {
 	var startBlock, endBlock *wallet.BlockIdentifier
 	if req.StartingBlockHash != nil && req.StartingBlockHeight != 0 {
-		return nil, nil, fmt.Errorf("starting block hash and height may not be specified simultaneously")
+		return nil, fmt.Errorf("starting block hash and height may not be specified simultaneously")
 	} else if req.StartingBlockHash != nil {
 		startBlockHash, err := chainhash.NewHash(req.StartingBlockHash)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		startBlock = wallet.NewBlockIdentifierFromHash(startBlockHash)
 	} else if req.StartingBlockHeight != 0 {
@@ -48,11 +48,11 @@ func (lw *LibWallet) GetTickets(req *GetTicketsRequest) (<-chan *GetTicketsRespo
 	}
 
 	if req.EndingBlockHash != nil && req.EndingBlockHeight != 0 {
-		return nil, nil, fmt.Errorf("ending block hash and height may not be specified simultaneously")
+		return nil, fmt.Errorf("ending block hash and height may not be specified simultaneously")
 	} else if req.EndingBlockHash != nil {
 		endBlockHash, err := chainhash.NewHash(req.EndingBlockHash)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		endBlock = wallet.NewBlockIdentifierFromHash(endBlockHash)
 	} else if req.EndingBlockHeight != 0 {
@@ -61,47 +61,32 @@ func (lw *LibWallet) GetTickets(req *GetTicketsRequest) (<-chan *GetTicketsRespo
 
 	targetTicketCount := int(req.TargetTicketCount)
 	if targetTicketCount < 0 {
-		return nil, nil, fmt.Errorf("target ticket count may not be negative")
+		return nil, fmt.Errorf("target ticket count may not be negative")
 	}
-
-	ticketCount := 0
-
-	ch := make(chan *GetTicketsResponse)
-	errCh := make(chan error)
 
 	rangeFn := func(tickets []*wallet.TicketSummary, block *wire.BlockHeader) (bool, error) {
-		resp := &GetTicketsResponse{
-			BlockHeight: block.Height,
-		}
-
 		for _, t := range tickets {
-			resp.TicketStatus = ticketStatus(t)
-			resp.Ticket = t
-			ch <- resp
+			ticketInfos = append(ticketInfos, &TicketInfo{
+				BlockHeight: block.Height,
+				Status:      ticketStatusString(t.Status),
+				Ticket:      t.Ticket,
+				Spender:     t.Spender,
+			})
 		}
-		ticketCount += len(tickets)
 
-		return (targetTicketCount > 0) && (ticketCount >= targetTicketCount), nil
+		return (targetTicketCount > 0) && (len(ticketInfos) >= targetTicketCount), nil
 	}
 
-	go func() {
-		var chainClient *rpcclient.Client
-		if n, err := lw.wallet.NetworkBackend(); err == nil {
-			client, err := chain.RPCClientFromBackend(n)
-			if err == nil {
-				chainClient = client
-			}
-		}
-		if chainClient != nil {
-			errCh <- lw.wallet.GetTicketsPrecise(rangeFn, chainClient, startBlock, endBlock)
-		} else {
-			errCh <- lw.wallet.GetTickets(rangeFn, startBlock, endBlock)
-		}
-		close(errCh)
-		close(ch)
-	}()
-
-	return ch, errCh, nil
+	var chainClient *rpcclient.Client
+	if n, err := lw.wallet.NetworkBackend(); err == nil {
+		chainClient, _ = chain.RPCClientFromBackend(n)
+	}
+	if chainClient != nil {
+		err = lw.wallet.GetTicketsPrecise(rangeFn, chainClient, startBlock, endBlock)
+	} else {
+		err = lw.wallet.GetTickets(rangeFn, startBlock, endBlock)
+	}
+	return
 }
 
 // TicketPrice returns the price of a ticket for the next block, also known as the stake difficulty.
