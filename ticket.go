@@ -66,12 +66,20 @@ func (lw *LibWallet) GetTickets(req *GetTicketsRequest) (ticketInfos []*TicketIn
 
 	rangeFn := func(tickets []*wallet.TicketSummary, block *wire.BlockHeader) (bool, error) {
 		for _, t := range tickets {
-			ticketInfos = append(ticketInfos, &TicketInfo{
-				BlockHeight: block.Height,
-				Status:      ticketStatusString(t.Status),
-				Ticket:      t.Ticket,
-				Spender:     t.Spender,
-			})
+			ticketInfo := &TicketInfo{
+				Status:  ticketStatusString(t.Status),
+				Ticket:  t.Ticket,
+				Spender: t.Spender,
+			}
+			if block != nil {
+				ticketInfo.BlockHeight = block.Height
+			}
+
+			// hash loses its value after exiting this rangeFn, not sure why
+			// recreating the hash instead of simply copying it fixes that.
+			ticketInfo.Ticket.Hash, _ = chainhash.NewHash(t.Ticket.Hash[:])
+
+			ticketInfos = append(ticketInfos, ticketInfo)
 		}
 
 		return (targetTicketCount > 0) && (len(ticketInfos) >= targetTicketCount), nil
@@ -86,6 +94,7 @@ func (lw *LibWallet) GetTickets(req *GetTicketsRequest) (ticketInfos []*TicketIn
 	} else {
 		err = lw.wallet.GetTickets(rangeFn, startBlock, endBlock)
 	}
+
 	return
 }
 
