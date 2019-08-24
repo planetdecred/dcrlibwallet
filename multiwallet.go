@@ -179,7 +179,7 @@ func (mw *MultiWallet) CreateNewWallet(walletAlias, passphrase, seedMnemonic str
 }
 
 func (mw *MultiWallet) GetWallet(walletAlias string) *LibWallet {
-	w, _ := mw.wallets[walletAlias]
+	w := mw.wallets[walletAlias]
 	return w
 }
 

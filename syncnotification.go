@@ -311,7 +311,7 @@ func (mw *MultiWallet) discoverAddressesFinished(walletAlias string) {
 	close(mw.activeSyncData.addressDiscoveryCompleted)
 	mw.activeSyncData.addressDiscoveryCompleted = nil
 
-	w, _ := mw.wallets[walletAlias]
+	w := mw.wallets[walletAlias]
 	loadedWallet, loaded := w.walletLoader.LoadedWallet()
 	if loaded { // loaded should always be through
 		if !loadedWallet.Locked() {
@@ -352,7 +352,7 @@ func (mw *MultiWallet) rescanProgress(walletAlias string, rescannedThrough int32
 		return
 	}
 
-	w, _ := mw.wallets[walletAlias]
+	w := mw.wallets[walletAlias]
 
 	mw.activeSyncData.headersRescanProgress.TotalHeadersToScan = w.GetBestBlock()
 
