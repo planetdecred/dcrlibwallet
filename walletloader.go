@@ -303,7 +303,7 @@ func (l *WalletLoader) OpenExistingWallet(pubPassphrase []byte) (w *wallet.Walle
 		return nil, errors.E(op, errors.Exist, "wallet already opened")
 	}
 
-	// Open the database using the boltdb backend.
+	// Open the database using the wallet db backend.
 	dbPath := filepath.Join(l.dbDirPath, walletDbName)
 	l.mu.Unlock()
 	db, err := wallet.OpenDB(l.dbDriver, dbPath)

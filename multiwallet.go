@@ -113,7 +113,7 @@ func (mw *MultiWallet) loadWallets() (int, error) {
 
 	mw.wallets = make(map[string]*LibWallet)
 	for _, w := range wallets {
-		libWallet, err := NewLibWallet(w.WalletDataDir, "bdb", mw.activeNet.Name)
+		libWallet, err := NewLibWallet(w.WalletDataDir, mw.dbDriver, mw.activeNet.Name)
 		if err != nil {
 			return 0, err
 		}
