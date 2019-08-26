@@ -65,6 +65,8 @@ func (lw *LibWallet) GetTickets(req *GetTicketsRequest) (ticketInfos []*TicketIn
 	}
 
 	rangeFn := func(tickets []*wallet.TicketSummary, block *wire.BlockHeader) (bool, error) {
+		// todo: should not keep copies of the ticket or block pointers (or some pointer sub-component)
+		// as they could be reused, see the comment to wallet.GetTickets
 		for _, t := range tickets {
 			ticketInfo := &TicketInfo{
 				Status:  ticketStatusString(t.Status),
