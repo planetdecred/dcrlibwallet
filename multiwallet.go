@@ -3,18 +3,13 @@ package dcrlibwallet
 import (
 	"context"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/asdine/storm"
-	"github.com/decred/dcrd/addrmgr"
 	"github.com/decred/dcrwallet/errors"
 	"github.com/decred/dcrwallet/netparams"
-	p2p "github.com/decred/dcrwallet/p2p/v2"
 	wallet "github.com/decred/dcrwallet/wallet/v3"
-	spv "github.com/raedahgroup/dcrlibwallet/spv"
 	"github.com/raedahgroup/dcrlibwallet/utils"
 	bolt "go.etcd.io/bbolt"
 )
@@ -78,6 +73,8 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 		syncData:  syncData,
 	}
 
+	mw.listenForShutdown()
+
 	loadedWallets, err := mw.loadWallets()
 	if err != nil {
 		return nil, err
@@ -89,6 +86,17 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 }
 
 func (mw *MultiWallet) Shutdown() {
+	log.Info("Shutting down dcrlibwallet")
+
+	// Trigger shuttingDown signal to cancel all contexts created with `contextWithShutdownCancel`.
+	mw.shuttingDown <- true
+
+	mw.CancelSync()
+
+	for _, w := range mw.wallets {
+		w.Shutdown()
+	}
+
 	if logRotator != nil {
 		log.Info("Shutting down log rotator")
 		logRotator.Close()
@@ -124,18 +132,29 @@ func (mw *MultiWallet) loadWallets() (int, error) {
 	return len(wallets), nil
 }
 
-func (mw *MultiWallet) LoadedWalletsCount() int {
-	return len(mw.wallets)
+func (mw *MultiWallet) LoadedWalletsCount() int32 {
+	return int32(len(mw.wallets))
 }
 
-func (mw *MultiWallet) OpenedWalletsCount() int {
-	return len(mw.wallets)
+func (mw *MultiWallet) OpenedWallets() []string {
+	wallets := make([]string, 0)
+	for _, w := range mw.wallets {
+		if w.WalletOpened() {
+			wallets = append(wallets, w.WalletAlias)
+		}
+	}
+
+	return wallets
+}
+
+func (mw *MultiWallet) OpenedWalletsCount() int32 {
+	return int32(len(mw.OpenedWallets()))
 }
 
 func (mw *MultiWallet) SyncedWalletCount() int32 {
 	var syncedWallet int32
 	for _, w := range mw.wallets {
-		if w.synced {
+		if w.WalletOpened() && w.synced {
 			syncedWallet++
 		}
 	}
@@ -210,70 +229,6 @@ func (mw *MultiWallet) UnlockWallet(walletAlias string, privPass []byte) error {
 	}
 
 	return errors.New(ErrNotExist)
-}
-
-func (mw *MultiWallet) SpvSync(peerAddresses string) error {
-
-	addr := &net.TCPAddr{IP: net.ParseIP("::1"), Port: 0}
-	addrManager := addrmgr.New(mw.rootDir, net.LookupIP) // TODO: be mindful of tor
-	lp := p2p.NewLocalPeer(mw.activeNet.Params, addr, addrManager)
-
-	var validPeerAddresses []string
-	if peerAddresses != "" {
-		addresses := strings.Split(peerAddresses, ";")
-		for _, address := range addresses {
-			peerAddress, err := NormalizeAddress(address, mw.activeNet.Params.DefaultPort)
-			if err != nil {
-				log.Errorf("SPV peer address invalid: %v", err)
-			} else {
-				validPeerAddresses = append(validPeerAddresses, peerAddress)
-			}
-		}
-
-		if len(validPeerAddresses) == 0 {
-			return errors.New(ErrInvalidPeers)
-		}
-	}
-
-	// init activeSyncData to be used to hold data used
-	// to calculate sync estimates only during sync
-	mw.initActiveSyncData()
-
-	wallets := make(map[string]*wallet.Wallet)
-	for alias, wallet := range mw.wallets {
-		wallets[alias] = wallet.wallet
-	}
-
-	syncer := spv.NewSyncer(wallets, lp)
-	syncer.SetNotifications(mw.spvSyncNotificationCallbacks())
-	if len(validPeerAddresses) > 0 {
-		syncer.SetPersistentPeers(validPeerAddresses)
-	}
-
-	mw.setNetworkBackend(syncer)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	mw.cancelSync = cancel
-
-	// syncer.Run uses a wait group to block the thread until sync completes or an error occurs
-	go func() {
-		mw.syncing = true
-		defer func() {
-			mw.syncing = false
-		}()
-		err := syncer.Run(ctx)
-		if err != nil {
-			if err == context.Canceled {
-				mw.notifySyncCanceled()
-				mw.syncCanceled <- true
-			} else if err == context.DeadlineExceeded {
-				mw.notifySyncError(ErrorCodeDeadlineExceeded, errors.E("SPV synchronization deadline exceeded: %v", err))
-			} else {
-				mw.notifySyncError(ErrorCodeUnexpectedError, err)
-			}
-		}
-	}()
-	return nil
 }
 
 func (mw *MultiWallet) setNetworkBackend(netBakend wallet.NetworkBackend) {

@@ -109,14 +109,30 @@ func (mw *MultiWallet) initActiveSyncData() {
 }
 
 func (mw *MultiWallet) AddSyncProgressListener(syncProgressListener SyncProgressListener, uniqueIdentifier string) error {
-	_, k := mw.syncProgressListeners[uniqueIdentifier]
-	if k {
+	_, ok := mw.syncProgressListeners[uniqueIdentifier]
+	if ok {
 		return errors.New(ErrListenerAlreadyExist)
 	}
 
 	mw.syncProgressListeners[uniqueIdentifier] = syncProgressListener
 
 	// If sync is already on, notify this newly added listener of the current progress report.
+	return mw.PublishLastSyncProgress(uniqueIdentifier)
+}
+
+func (mw *MultiWallet) RemoveSyncProgressListener(uniqueIdentifier string) {
+	_, k := mw.syncProgressListeners[uniqueIdentifier]
+	if k {
+		delete(mw.syncProgressListeners, uniqueIdentifier)
+	}
+}
+
+func (mw *MultiWallet) PublishLastSyncProgress(uniqueIdentifier string) error {
+	syncProgressListener, ok := mw.syncProgressListeners[uniqueIdentifier]
+	if !ok {
+		return errors.New(ErrInvalid)
+	}
+
 	if mw.syncData.syncing && mw.activeSyncData != nil {
 		switch mw.activeSyncData.syncStage {
 		case HeadersFetchSyncStage:
@@ -129,13 +145,6 @@ func (mw *MultiWallet) AddSyncProgressListener(syncProgressListener SyncProgress
 	}
 
 	return nil
-}
-
-func (mw *MultiWallet) RemoveSyncProgressListener(uniqueIdentifier string) {
-	_, k := mw.syncProgressListeners[uniqueIdentifier]
-	if k {
-		delete(mw.syncProgressListeners, uniqueIdentifier)
-	}
 }
 
 func (mw *MultiWallet) EnableSyncLogs() {
@@ -156,30 +165,19 @@ func (mw *MultiWallet) SyncInactiveForPeriod(totalInactiveSeconds int64) {
 	}
 }
 
-func (lw *LibWallet) SpvSync(peerAddresses string) error {
+func (mw *MultiWallet) SpvSync(peerAddresses string) error {
 	// Unset this flag as the invocation of this method implies that any request to restart sync has been fulfilled.
-	lw.syncData.restartSyncRequested = false
-
-	loadedWallet, walletLoaded := lw.walletLoader.LoadedWallet()
-	if !walletLoaded {
-		return errors.New(ErrWalletNotLoaded)
-	}
-
-	// Error if the wallet is already syncing with the network.
-	currentNetworkBackend, _ := loadedWallet.NetworkBackend()
-	if currentNetworkBackend != nil {
-		return errors.New(ErrSyncAlreadyInProgress)
-	}
+	mw.syncData.restartSyncRequested = false
 
 	addr := &net.TCPAddr{IP: net.ParseIP("::1"), Port: 0}
-	addrManager := addrmgr.New(lw.WalletDataDir, net.LookupIP) // TODO: be mindful of tor
-	lp := p2p.NewLocalPeer(loadedWallet.ChainParams(), addr, addrManager)
+	addrManager := addrmgr.New(mw.rootDir, net.LookupIP) // TODO: be mindful of tor
+	lp := p2p.NewLocalPeer(mw.activeNet.Params, addr, addrManager)
 
 	var validPeerAddresses []string
 	if peerAddresses != "" {
 		addresses := strings.Split(peerAddresses, ";")
 		for _, address := range addresses {
-			peerAddress, err := NormalizeAddress(address, lw.activeNet.Params.DefaultPort)
+			peerAddress, err := NormalizeAddress(address, mw.activeNet.Params.DefaultPort)
 			if err != nil {
 				log.Errorf("SPV peer address invalid: %v", err)
 			} else {
@@ -194,42 +192,48 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 
 	// init activeSyncData to be used to hold data used
 	// to calculate sync estimates only during sync
-	// lw.initActiveSyncData()
+	mw.initActiveSyncData()
 
 	wallets := make(map[string]*wallet.Wallet)
-	wallets["default"] = loadedWallet
+	for alias, wallet := range mw.wallets {
+		if wallet.WalletOpened() {
+			wallets[alias] = wallet.wallet
+		}
+	}
 
 	syncer := spv.NewSyncer(wallets, lp)
-	//syncer.SetNotifications(lw.spvSyncNotificationCallbacks())
+	syncer.SetNotifications(mw.spvSyncNotificationCallbacks())
 	if len(validPeerAddresses) > 0 {
 		syncer.SetPersistentPeers(validPeerAddresses)
 	}
 
-	loadedWallet.SetNetworkBackend(syncer)
-	lw.walletLoader.SetNetworkBackend(syncer)
+	mw.setNetworkBackend(syncer)
 
-	ctx, cancel := lw.contextWithShutdownCancel()
-	lw.cancelSync = cancel
+	ctx, cancel := context.WithCancel(context.Background())
+	mw.cancelSync = cancel
 
 	// syncer.Run uses a wait group to block the thread until sync completes or an error occurs
 	go func() {
-		lw.syncing = true
+		mw.syncing = true
 		defer func() {
-			lw.syncing = false
+			mw.syncing = false
 		}()
+
+		for _, listener := range mw.syncData.syncProgressListeners {
+			listener.OnSyncStarted()
+		}
 		err := syncer.Run(ctx)
 		if err != nil {
 			if err == context.Canceled {
-				// lw.notifySyncCanceled()
-				lw.syncCanceled <- true
+				mw.notifySyncCanceled()
+				mw.syncCanceled <- true
 			} else if err == context.DeadlineExceeded {
-				// lw.notifySyncError(ErrorCodeDeadlineExceeded, errors.E("SPV synchronization deadline exceeded: %v", err))
+				mw.notifySyncError(ErrorCodeDeadlineExceeded, errors.E("SPV synchronization deadline exceeded: %v", err))
 			} else {
-				// lw.notifySyncError(ErrorCodeUnexpectedError, err)
+				mw.notifySyncError(ErrorCodeUnexpectedError, err)
 			}
 		}
 	}()
-
 	return nil
 }
 
@@ -239,15 +243,16 @@ func (mw *MultiWallet) RestartSpvSync(peerAddresses string) error {
 	return mw.SpvSync(peerAddresses)
 }
 
-func (lw *LibWallet) RpcSync(networkAddress string, username string, password string, cert []byte) error {
-	networkAddress, err := NormalizeAddress(networkAddress, lw.activeNet.JSONRPCClientPort)
+func (mw *MultiWallet) RpcSync(networkAddress string, username string, password string, cert []byte) error {
+	networkAddress, err := NormalizeAddress(networkAddress, mw.activeNet.JSONRPCClientPort)
 	if err != nil {
 		return errors.New(ErrInvalidAddress)
 	}
 	// Unset this flag as the invocation of this method implies that any request to restart sync has been fulfilled.
-	lw.syncData.restartSyncRequested = false
+	mw.syncData.restartSyncRequested = false
 
-	loadedWallet, walletLoaded := lw.walletLoader.LoadedWallet()
+	defaultWallet := mw.wallets["default"]
+	loadedWallet, walletLoaded := defaultWallet.walletLoader.LoadedWallet()
 	if !walletLoaded {
 		return errors.New(ErrWalletNotLoaded)
 	}
@@ -260,40 +265,40 @@ func (lw *LibWallet) RpcSync(networkAddress string, username string, password st
 
 	// init activeSyncData to be used to hold data used
 	// to calculate sync estimates only during sync
-	// lw.initActiveSyncData()
+	mw.initActiveSyncData()
 
 	syncer := chain.NewSyncer(loadedWallet, &chain.RPCOptions{
 		Address:     networkAddress,
-		DefaultPort: lw.activeNet.JSONRPCClientPort,
+		DefaultPort: mw.activeNet.JSONRPCClientPort,
 		User:        username,
 		Pass:        password,
 		CA:          cert,
 		Insecure:    false,
 	})
-	syncer.SetCallbacks(lw.generalSyncNotificationCallbacks())
+	// syncer.SetCallbacks(mw.generalSyncNotificationCallbacks())
 
 	// notify sync progress listeners that connected peer count will not be reported because we're using rpc
-	for _, syncProgressListener := range lw.syncProgressListeners {
+	for _, syncProgressListener := range mw.syncProgressListeners {
 		syncProgressListener.OnPeerConnectedOrDisconnected(-1)
 	}
 
 	// syncer.Run uses a wait group to block the thread until sync completes or an error occurs
 	go func() {
-		lw.syncing = true
+		mw.syncing = true
 		defer func() {
-			lw.syncing = false
+			mw.syncing = false
 		}()
-		ctx, cancel := lw.contextWithShutdownCancel()
-		lw.cancelSync = cancel
+		ctx, cancel := mw.contextWithShutdownCancel()
+		mw.cancelSync = cancel
 		err := syncer.Run(ctx)
 		if err != nil {
 			if err == context.Canceled {
-				// lw.notifySyncCanceled()
-				lw.syncCanceled <- true
+				mw.notifySyncCanceled()
+				mw.syncCanceled <- true
 			} else if err == context.DeadlineExceeded {
-				// lw.notifySyncError(ErrorCodeDeadlineExceeded, errors.E("RPC synchronization deadline exceeded: %v", err))
+				mw.notifySyncError(ErrorCodeDeadlineExceeded, errors.E("RPC synchronization deadline exceeded: %v", err))
 			} else {
-				// lw.notifySyncError(ErrorCodeUnexpectedError, err)
+				mw.notifySyncError(ErrorCodeUnexpectedError, err)
 			}
 		}
 	}()
@@ -301,10 +306,10 @@ func (lw *LibWallet) RpcSync(networkAddress string, username string, password st
 	return nil
 }
 
-func (lw *LibWallet) RestartRpcSync(networkAddress string, username string, password string, cert []byte) error {
-	lw.syncData.restartSyncRequested = true
-	// lw.CancelSync() // necessary to unset the network backend.
-	return lw.RpcSync(networkAddress, username, password, cert)
+func (mw *MultiWallet) RestartRpcSync(networkAddress string, username string, password string, cert []byte) error {
+	mw.syncData.restartSyncRequested = true
+	// mw.CancelSync() // necessary to unset the network backend.
+	return mw.RpcSync(networkAddress, username, password, cert)
 }
 
 func (mw *MultiWallet) CancelSync() {
@@ -338,6 +343,10 @@ func (mw *MultiWallet) IsSynced() bool {
 
 func (mw *MultiWallet) IsSyncing() bool {
 	return mw.syncData.syncing
+}
+
+func (mw *MultiWallet) ConnectedPeers() int32 {
+	return mw.syncData.connectedPeers
 }
 
 func (lw *LibWallet) RescanBlocks() error {
@@ -381,9 +390,9 @@ func (lw *LibWallet) RescanBlocks() error {
 			estimatedTotalRescanTime := int64(math.Round(float64(elapsedRescanTime) / rescanRate))
 			rescanProgressReport.RescanTimeRemaining = estimatedTotalRescanTime - elapsedRescanTime
 
-			for _, syncProgressListener := range lw.syncProgressListeners {
-				syncProgressListener.OnHeadersRescanProgress(rescanProgressReport)
-			}
+			// for _, syncProgressListener := range mw.syncProgressListeners {
+			// 	syncProgressListener.OnHeadersRescanProgress(rescanProgressReport)
+			// }
 
 			select {
 			case <-ctx.Done():
@@ -397,9 +406,9 @@ func (lw *LibWallet) RescanBlocks() error {
 		// Trigger sync completed callback.
 		// todo: probably best to have a dedicated rescan listener
 		// with callbacks for rescanStarted, rescanCompleted, rescanError and rescanCancel
-		for _, syncProgressListener := range lw.syncProgressListeners {
-			syncProgressListener.OnSyncCompleted()
-		}
+		// for _, syncProgressListener := range lw.syncProgressListeners {
+		// 	syncProgressListener.OnSyncCompleted()
+		// }
 	}()
 
 	return nil
@@ -407,6 +416,41 @@ func (lw *LibWallet) RescanBlocks() error {
 
 func (mw *MultiWallet) IsScanning() bool {
 	return mw.syncData.rescanning
+}
+
+func (mw *MultiWallet) GetBestBlock() *BlockInfo {
+	var bestBlock int32 = -1
+	var blockInfo *BlockInfo
+	for _, w := range mw.wallets {
+		if !w.WalletOpened() {
+			continue
+		}
+
+		walletBestBLock := w.GetBestBlock()
+		if walletBestBLock > bestBlock || bestBlock == -1 {
+			bestBlock = walletBestBLock
+			blockInfo = &BlockInfo{Height: bestBlock, Timestamp: w.GetBestBlockTimeStamp()}
+		}
+	}
+
+	return blockInfo
+}
+
+func (mw *MultiWallet) GetLowestBlock() *BlockInfo {
+	var lowestBlock int32 = -1
+	var blockInfo *BlockInfo
+	for _, w := range mw.wallets {
+		if !w.WalletOpened() {
+			continue
+		}
+		walletBestBLock := w.GetBestBlock()
+		if walletBestBLock < lowestBlock || lowestBlock == -1 {
+			lowestBlock = walletBestBLock
+			blockInfo = &BlockInfo{Height: lowestBlock, Timestamp: w.GetBestBlockTimeStamp()}
+		}
+	}
+
+	return blockInfo
 }
 
 func (lw *LibWallet) GetBestBlock() int32 {
@@ -437,9 +481,9 @@ func (lw *LibWallet) GetBestBlockTimeStamp() int64 {
 	return info.Timestamp
 }
 
-func (lw *LibWallet) GetConnectedPeersCount() int32 {
-	return lw.connectedPeers
-}	
+func (mw *MultiWallet) GetConnectedPeersCount() int32 {
+	return mw.connectedPeers
+}
 
 func (mw *MultiWallet) GetLowestBlockTimestamp() int64 {
 	var timestamp int64 = -1

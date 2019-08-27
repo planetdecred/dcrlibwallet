@@ -80,12 +80,12 @@ func (mw *MultiWallet) fetchHeadersStarted(peerInitialHeight int32) {
 
 	mw.activeSyncData.syncStage = HeadersFetchSyncStage
 	mw.activeSyncData.beginFetchTimeStamp = time.Now().Unix()
-	mw.activeSyncData.startHeaderHeight = peerInitialHeight
+	mw.activeSyncData.startHeaderHeight = mw.GetLowestBlock().Height
 	mw.activeSyncData.totalFetchedHeadersCount = 0
 
 	if mw.syncData.showLogs && mw.syncData.syncing {
-		walletBestBlockTime := mw.GetLowestBlockTimestamp()
-		totalHeadersToFetch := mw.estimateBlockHeadersCountAfter(walletBestBlockTime)
+		blockInfo := mw.GetLowestBlock()
+		totalHeadersToFetch := mw.estimateBlockHeadersCountAfter(blockInfo.Timestamp)
 		log.Infof("Step 1 of 3 - fetching %d block headers.\n", totalHeadersToFetch)
 	}
 }
@@ -104,8 +104,7 @@ func (mw *MultiWallet) fetchHeadersProgress(fetchedHeadersCount int32, lastHeade
 	mw.activeSyncData.beginFetchTimeStamp += mw.activeSyncData.totalInactiveSeconds
 	mw.activeSyncData.totalInactiveSeconds = 0
 
-	mw.activeSyncData.totalFetchedHeadersCount += fetchedHeadersCount
-
+	mw.activeSyncData.totalFetchedHeadersCount = fetchedHeadersCount
 	headersLeftToFetch := mw.estimateBlockHeadersCountAfter(lastHeaderTime)
 	totalHeadersToFetch := mw.activeSyncData.totalFetchedHeadersCount + headersLeftToFetch
 	headersFetchProgress := float64(mw.activeSyncData.totalFetchedHeadersCount) / float64(totalHeadersToFetch)
@@ -460,27 +459,32 @@ func (mw *MultiWallet) notifySyncCanceled() {
 }
 
 func (mw *MultiWallet) synced(walletAlias string, synced bool) {
-	mw.syncData.syncing = false
-	mw.syncData.synced = true
-	mw.activeSyncData = nil // to be reintialized on next sync
+	w := mw.wallets[walletAlias]
+	w.synced = synced
+	w.syncing = false
+	if mw.OpenedWalletsCount() == mw.SyncedWalletCount() {
+		mw.syncData.syncing = false
+		mw.syncData.synced = true
+		mw.activeSyncData = nil // to be reintialized on next sync
 
-	for _, syncProgressListener := range mw.syncProgressListeners {
-		if synced {
-			syncProgressListener.OnSyncCompleted()
-		} else {
-			syncProgressListener.OnSyncCanceled(false)
-		}
-	}
-
-	// begin indexing transactions after sync is completed,
-	// syncProgressListeners.OnSynced() will be invoked after transactions are indexed
-	lw.IndexTransactions(func() {
-		for _, syncProgressListener := range lw.syncProgressListeners {
+		for _, syncProgressListener := range mw.syncProgressListeners {
 			if synced {
 				syncProgressListener.OnSyncCompleted()
 			} else {
 				syncProgressListener.OnSyncCanceled(false)
 			}
 		}
-	})
+
+		// begin indexing transactions after sync is completed,
+		// syncProgressListeners.OnSynced() will be invoked after transactions are indexed
+		lw.IndexTransactions(func() {
+			for _, syncProgressListener := range lw.syncProgressListeners {
+				if synced {
+					syncProgressListener.OnSyncCompleted()
+				} else {
+					syncProgressListener.OnSyncCanceled(false)
+				}
+			}
+		})
+	}
 }

@@ -30,6 +30,10 @@ type LibWallet struct {
 	txDB         *txindex.DB
 	configDB     *storm.DB
 
+	synced     bool
+	syncing    bool
+	rescanning bool
+
 	shuttingDown chan bool
 	cancelFuncs  []context.CancelFunc
 }
@@ -81,12 +85,9 @@ func NewLibWallet(walletDataDir, walletDbDriver string, netType string) (*LibWal
 }
 
 func (lw *LibWallet) Shutdown() {
-	log.Info("Shutting down dcrlibwallet")
 
 	// Trigger shuttingDown signal to cancel all contexts created with `contextWithShutdownCancel`.
 	lw.shuttingDown <- true
-
-	// lw.CancelSync()
 
 	if _, loaded := lw.walletLoader.LoadedWallet(); loaded {
 		err := lw.walletLoader.UnloadWallet()

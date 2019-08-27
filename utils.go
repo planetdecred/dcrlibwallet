@@ -49,9 +49,27 @@ func (lw *LibWallet) listenForShutdown() {
 	}()
 }
 
+func (lw *MultiWallet) listenForShutdown() {
+
+	lw.cancelFuncs = make([]context.CancelFunc, 0)
+	lw.shuttingDown = make(chan bool)
+	go func() {
+		<-lw.shuttingDown
+		for _, cancel := range lw.cancelFuncs {
+			cancel()
+		}
+	}()
+}
+
 func (lw *LibWallet) contextWithShutdownCancel() (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(context.Background())
 	lw.cancelFuncs = append(lw.cancelFuncs, cancel)
+	return ctx, cancel
+}
+
+func (mw *MultiWallet) contextWithShutdownCancel() (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(context.Background())
+	mw.cancelFuncs = append(mw.cancelFuncs, cancel)
 	return ctx, cancel
 }
 
