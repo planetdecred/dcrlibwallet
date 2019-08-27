@@ -3,6 +3,7 @@ package txindex
 import (
 	"github.com/asdine/storm"
 	"github.com/asdine/storm/q"
+	"github.com/raedahgroup/dcrlibwallet/txhelper"
 )
 
 const (
@@ -12,31 +13,20 @@ const (
 	TxFilterTransferred int32 = 3
 	TxFilterStaking     int32 = 4
 	TxFilterCoinBase    int32 = 5
-
-	TxDirectionInvalid     int32 = -1
-	TxDirectionSent        int32 = 0
-	TxDirectionReceived    int32 = 1
-	TxDirectionTransferred int32 = 2
-
-	TxTypeRegular        = "REGULAR"
-	TxTypeCoinBase       = "COINBASE"
-	TxTypeTicketPurchase = "TICKET_PURCHASE"
-	TxTypeVote           = "VOTE"
-	TxTypeRevocation     = "REVOCATION"
 )
 
 func DetermineTxFilter(txType string, txDirection int32) int32 {
-	if txType == TxTypeCoinBase {
+	if txType == txhelper.TxTypeCoinBase {
 		return TxFilterCoinBase
 	}
-	if txType != TxTypeRegular {
+	if txType != txhelper.TxTypeRegular {
 		return TxFilterStaking
 	}
 
 	switch txDirection {
-	case TxDirectionSent:
+	case txhelper.TxDirectionSent:
 		return TxFilterSent
-	case TxDirectionReceived:
+	case txhelper.TxDirectionReceived:
 		return TxFilterReceived
 	default:
 		return TxFilterTransferred
@@ -47,26 +37,26 @@ func (db *DB) prepareTxQuery(txFilter int32) (query storm.Query) {
 	switch txFilter {
 	case TxFilterSent:
 		query = db.txDB.Select(
-			q.Eq("Direction", TxDirectionSent),
+			q.Eq("Direction", txhelper.TxDirectionSent),
 		)
 	case TxFilterReceived:
 		query = db.txDB.Select(
-			q.Eq("Direction", TxDirectionReceived),
+			q.Eq("Direction", txhelper.TxDirectionReceived),
 		)
 	case TxFilterTransferred:
 		query = db.txDB.Select(
-			q.Eq("Direction", TxDirectionTransferred),
+			q.Eq("Direction", txhelper.TxDirectionTransferred),
 		)
 	case TxFilterStaking:
 		query = db.txDB.Select(
 			q.Not(
-				q.Eq("Type", TxTypeRegular),
-				q.Eq("Type", TxTypeCoinBase),
+				q.Eq("Type", txhelper.TxTypeRegular),
+				q.Eq("Type", txhelper.TxTypeCoinBase),
 			),
 		)
 	case TxFilterCoinBase:
 		query = db.txDB.Select(
-			q.Eq("Type", TxTypeCoinBase),
+			q.Eq("Type", txhelper.TxTypeCoinBase),
 		)
 	default:
 		query = db.txDB.Select(

@@ -15,6 +15,7 @@ import (
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrwallet/wallet"
+	"github.com/raedahgroup/dcrlibwallet/txhelper"
 	"github.com/raedahgroup/dcrlibwallet/txindex"
 )
 
@@ -34,16 +35,16 @@ const (
 	TxFilterStaking     = txindex.TxFilterStaking
 	TxFilterCoinBase    = txindex.TxFilterCoinBase
 
-	TxDirectionInvalid     = txindex.TxDirectionInvalid
-	TxDirectionSent        = txindex.TxDirectionSent
-	TxDirectionReceived    = txindex.TxDirectionReceived
-	TxDirectionTransferred = txindex.TxDirectionTransferred
+	TxDirectionInvalid     = txhelper.TxDirectionInvalid
+	TxDirectionSent        = txhelper.TxDirectionSent
+	TxDirectionReceived    = txhelper.TxDirectionReceived
+	TxDirectionTransferred = txhelper.TxDirectionTransferred
 
-	TxTypeRegular        = txindex.TxTypeRegular
-	TxTypeCoinBase       = txindex.TxTypeCoinBase
-	TxTypeTicketPurchase = txindex.TxTypeTicketPurchase
-	TxTypeVote           = txindex.TxTypeVote
-	TxTypeRevocation     = txindex.TxTypeRevocation
+	TxTypeRegular        = txhelper.TxTypeRegular
+	TxTypeCoinBase       = txhelper.TxTypeCoinBase
+	TxTypeTicketPurchase = txhelper.TxTypeTicketPurchase
+	TxTypeVote           = txhelper.TxTypeVote
+	TxTypeRevocation     = txhelper.TxTypeRevocation
 )
 
 func (lw *LibWallet) IndexTransactions(afterIndexing func()) error {
