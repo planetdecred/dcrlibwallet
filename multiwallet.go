@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/asdine/storm"
 	"github.com/decred/dcrwallet/errors"
@@ -25,7 +26,7 @@ type MultiWallet struct {
 	db       *storm.DB
 
 	activeNet *netparams.Params
-	wallets   map[string]*LibWallet
+	wallets   map[int]*LibWallet
 	*syncData
 
 	shuttingDown chan bool
@@ -69,7 +70,7 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 		rootDir:   rootDir,
 		db:        db,
 		activeNet: activeNet,
-		wallets:   make(map[string]*LibWallet),
+		wallets:   make(map[int]*LibWallet),
 		syncData:  syncData,
 	}
 
@@ -119,14 +120,14 @@ func (mw *MultiWallet) loadWallets() (int, error) {
 		return 0, err
 	}
 
-	mw.wallets = make(map[string]*LibWallet)
+	mw.wallets = make(map[int]*LibWallet)
 	for _, w := range wallets {
 		libWallet, err := NewLibWallet(w.WalletDataDir, mw.dbDriver, mw.activeNet.Name)
 		if err != nil {
 			return 0, err
 		}
 
-		mw.wallets[w.WalletAlias] = libWallet
+		mw.wallets[w.WalletID] = libWallet
 	}
 
 	return len(wallets), nil
@@ -136,11 +137,11 @@ func (mw *MultiWallet) LoadedWalletsCount() int32 {
 	return int32(len(mw.wallets))
 }
 
-func (mw *MultiWallet) OpenedWallets() []string {
-	wallets := make([]string, 0)
+func (mw *MultiWallet) OpenedWallets() []int {
+	wallets := make([]int, 0)
 	for _, w := range mw.wallets {
 		if w.WalletOpened() {
-			wallets = append(wallets, w.WalletAlias)
+			wallets = append(wallets, w.WalletID)
 		}
 	}
 
@@ -162,32 +163,33 @@ func (mw *MultiWallet) SyncedWalletCount() int32 {
 	return syncedWallet
 }
 
-func (mw *MultiWallet) CreateNewWallet(walletAlias, passphrase, seedMnemonic string) (*LibWallet, error) {
-	err := mw.db.One("WalletAlias", walletAlias, &LibWallet{})
-	if err != nil {
-		if err != storm.ErrNotFound {
-			return nil, err
-		}
-	} else {
-		log.Infof("Wallet alias exists: %s", walletAlias)
-		return nil, errors.New(ErrExist)
+func (mw *MultiWallet) CreateNewWallet(passphrase, seedMnemonic string) (*LibWallet, error) {
+
+	lw := &LibWallet{
+		WalletSeed: seedMnemonic,
 	}
 
-	homeDir := filepath.Join(mw.rootDir, walletAlias)
+	err := mw.db.Save(lw)
+	if err != nil {
+		return nil, err
+	}
+
+	homeDir := filepath.Join(mw.rootDir, strconv.Itoa(lw.WalletID))
 	os.MkdirAll(homeDir, os.ModePerm) // create wallet dir
-	lw, err := NewLibWallet(homeDir, mw.dbDriver, mw.activeNet.Name)
-	if err != nil {
-		return nil, err
-	}
-	lw.WalletAlias = walletAlias
-	lw.WalletSeed = seedMnemonic
 
-	err = mw.db.Save(lw)
+	// update database wallet data dir
+	lw.WalletDataDir = homeDir
+	err = mw.db.Update(lw)
 	if err != nil {
 		return nil, err
 	}
 
-	mw.wallets[walletAlias] = lw
+	lw, err = NewLibWallet(homeDir, mw.dbDriver, mw.activeNet.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	mw.wallets[lw.WalletID] = lw
 
 	err = lw.CreateWallet(passphrase, seedMnemonic)
 	if err != nil {
@@ -197,8 +199,8 @@ func (mw *MultiWallet) CreateNewWallet(walletAlias, passphrase, seedMnemonic str
 	return lw, nil
 }
 
-func (mw *MultiWallet) GetWallet(walletAlias string) *LibWallet {
-	w := mw.wallets[walletAlias]
+func (mw *MultiWallet) GetWallet(walletID int) *LibWallet {
+	w := mw.wallets[walletID]
 	return w
 }
 
@@ -213,8 +215,8 @@ func (mw *MultiWallet) OpenWallets(pubPass []byte) error {
 	return nil
 }
 
-func (mw *MultiWallet) OpenWallet(walletAlias string, pubPass []byte) error {
-	wallet, ok := mw.wallets[walletAlias]
+func (mw *MultiWallet) OpenWallet(walletID int, pubPass []byte) error {
+	wallet, ok := mw.wallets[walletID]
 	if ok {
 		return wallet.OpenWallet(pubPass)
 	}
@@ -222,8 +224,8 @@ func (mw *MultiWallet) OpenWallet(walletAlias string, pubPass []byte) error {
 	return errors.New(ErrNotExist)
 }
 
-func (mw *MultiWallet) UnlockWallet(walletAlias string, privPass []byte) error {
-	w, ok := mw.wallets[walletAlias]
+func (mw *MultiWallet) UnlockWallet(walletID int, privPass []byte) error {
+	w, ok := mw.wallets[walletID]
 	if ok {
 		return w.UnlockWallet(privPass)
 	}

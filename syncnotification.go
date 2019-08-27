@@ -26,9 +26,9 @@ func (mw *MultiWallet) spvSyncNotificationCallbacks() *spv.Notifications {
 		FetchHeadersStarted:          mw.fetchHeadersStarted,
 		FetchHeadersProgress:         mw.fetchHeadersProgress,
 		FetchHeadersFinished:         mw.fetchHeadersFinished,
-		FetchMissingCFiltersStarted:  func(walletAlias string) {},
-		FetchMissingCFiltersProgress: func(walletAlias string, missingCFitlersStart, missingCFitlersEnd int32) {},
-		FetchMissingCFiltersFinished: func(walletAlias string) {},
+		FetchMissingCFiltersStarted:  func(walletID int) {},
+		FetchMissingCFiltersProgress: func(walletID int, missingCFitlersStart, missingCFitlersEnd int32) {},
+		FetchMissingCFiltersFinished: func(walletID int) {},
 		DiscoverAddressesStarted:     mw.discoverAddressesStarted,
 		DiscoverAddressesFinished:    mw.discoverAddressesFinished,
 		RescanStarted:                mw.rescanStarted,
@@ -183,7 +183,7 @@ func (mw *MultiWallet) fetchHeadersFinished() {
 
 // Address/Account Discovery Callbacks
 
-func (mw *MultiWallet) discoverAddressesStarted(walletAlias string) {
+func (mw *MultiWallet) discoverAddressesStarted(walletID int) {
 	if !mw.syncData.syncing || mw.activeSyncData.addressDiscoveryCompleted != nil {
 		// ignore if sync is not in progress i.e. !mw.syncData.syncing
 		// or already started address discovery i.e. mw.activeSyncData.addressDiscoveryCompleted != nil
@@ -298,7 +298,7 @@ func (mw *MultiWallet) publishAddressDiscoveryProgress() {
 	}
 }
 
-func (mw *MultiWallet) discoverAddressesFinished(walletAlias string) {
+func (mw *MultiWallet) discoverAddressesFinished(walletID int) {
 	if !mw.syncData.syncing {
 		// ignore if sync is not in progress
 		return
@@ -310,7 +310,7 @@ func (mw *MultiWallet) discoverAddressesFinished(walletAlias string) {
 	close(mw.activeSyncData.addressDiscoveryCompleted)
 	mw.activeSyncData.addressDiscoveryCompleted = nil
 
-	w := mw.wallets[walletAlias]
+	w := mw.wallets[walletID]
 	loadedWallet, loaded := w.walletLoader.LoadedWallet()
 	if loaded { // loaded should always be through
 		if !loadedWallet.Locked() {
@@ -322,7 +322,7 @@ func (mw *MultiWallet) discoverAddressesFinished(walletAlias string) {
 
 // Blocks Scan Callbacks
 
-func (mw *MultiWallet) rescanStarted(walletAlias string) {
+func (mw *MultiWallet) rescanStarted(walletID int) {
 	if !mw.syncData.syncing {
 		// ignore if sync is not in progress
 		return
@@ -345,13 +345,13 @@ func (mw *MultiWallet) rescanStarted(walletAlias string) {
 	}
 }
 
-func (mw *MultiWallet) rescanProgress(walletAlias string, rescannedThrough int32) {
+func (mw *MultiWallet) rescanProgress(walletID int, rescannedThrough int32) {
 	if !mw.syncData.syncing {
 		// ignore if sync is not in progress
 		return
 	}
 
-	w := mw.wallets[walletAlias]
+	w := mw.wallets[walletID]
 
 	mw.activeSyncData.headersRescanProgress.TotalHeadersToScan = w.GetBestBlock()
 
@@ -410,7 +410,7 @@ func (mw *MultiWallet) publishHeadersRescanProgress() {
 	}
 }
 
-func (mw *MultiWallet) rescanFinished(walletAlias string) {
+func (mw *MultiWallet) rescanFinished(walletID int) {
 	if !mw.syncData.syncing {
 		// ignore if sync is not in progress
 		return
@@ -458,8 +458,8 @@ func (mw *MultiWallet) notifySyncCanceled() {
 	}
 }
 
-func (mw *MultiWallet) synced(walletAlias string, synced bool) {
-	w := mw.wallets[walletAlias]
+func (mw *MultiWallet) synced(walletID int, synced bool) {
+	w := mw.wallets[walletID]
 	w.synced = synced
 	w.syncing = false
 	if mw.OpenedWalletsCount() == mw.SyncedWalletCount() {

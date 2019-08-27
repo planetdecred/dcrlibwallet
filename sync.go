@@ -194,14 +194,14 @@ func (mw *MultiWallet) SpvSync(peerAddresses string) error {
 	// to calculate sync estimates only during sync
 	mw.initActiveSyncData()
 
-	wallets := make(map[string]*wallet.Wallet)
-	for alias, wallet := range mw.wallets {
+	wallets := make(map[int]*wallet.Wallet)
+	for id, wallet := range mw.wallets {
 		if wallet.WalletOpened() {
-			wallets[alias] = wallet.wallet
+			wallets[id] = wallet.wallet
 		}
 	}
 
-	syncer := spv.NewSyncer(wallets, lp)
+	syncer := spv.NewSyncer(wallets, mw.activeNet.Params, lp)
 	syncer.SetNotifications(mw.spvSyncNotificationCallbacks())
 	if len(validPeerAddresses) > 0 {
 		syncer.SetPersistentPeers(validPeerAddresses)
@@ -251,7 +251,7 @@ func (mw *MultiWallet) RpcSync(networkAddress string, username string, password 
 	// Unset this flag as the invocation of this method implies that any request to restart sync has been fulfilled.
 	mw.syncData.restartSyncRequested = false
 
-	defaultWallet := mw.wallets["default"]
+	defaultWallet := mw.wallets[0] // TODO
 	loadedWallet, walletLoaded := defaultWallet.walletLoader.LoadedWallet()
 	if !walletLoaded {
 		return errors.New(ErrWalletNotLoaded)

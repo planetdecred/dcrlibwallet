@@ -20,7 +20,7 @@ errors.Separator = ":: "
 const logFileName = "dcrlibwallet.log"
 
 type LibWallet struct {
-	WalletAlias   string `storm:"id,unique"`
+	WalletID      int `storm:"id,increment"`
 	WalletDataDir string
 	WalletSeed    string
 
