@@ -67,6 +67,8 @@ func ReadValue(key string) (val interface{}, err error) {
 		fmt.Println("Settings db doesn't exist")
 		return nil, err
 	}
+
+	defer txDb.Close()
 	err = txDb.Get(TxBucketName, key, &val)
 	if err != nil {
 		return nil, err
@@ -82,6 +84,7 @@ func WriteValue(key, value string) error{
 		return err
 	}
 
+	defer txDb.Close()
 	err = txDb.Set(TxBucketName, key, value)
 	if err != nil {
 		fmt.Errorf("Could not write to settings db; %s", err.Error())
@@ -96,6 +99,7 @@ func dbExists() (*storm.DB, error) {
 	}
 	txDb, err := storm.Open(DbName)
 	if err != nil {
+		defer txDb.Close()
 		if err != bolt.ErrTimeout {
 			fmt.Errorf("tx index database is in use by another process")
 		}

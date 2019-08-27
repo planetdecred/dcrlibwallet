@@ -8,7 +8,7 @@ before_install:
  - export GO111MODULE=on
  - go mod download
  - go mod vendor
- - export GO111MODULE=off
+ - export GO111MODULE=on
  - go get -u github.com/alecthomas/gometalinter
  - gometalinter --install
  - gometalinter --vendor --disable-all --deadline=10m --enable=gofmt --enable=staticcheck --enable=ineffassign ./...
