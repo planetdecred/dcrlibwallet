@@ -25,12 +25,6 @@ type TransactionListener interface {
 }
 
 const (
-	BucketTxInfo   = "TxIndexInfo"
-	KeyEndBlock    = "EndBlock"
-	MaxReOrgBlocks = 6
-)
-
-const (
 	// Export constants for use in mobile apps
 	// since gomobile excludes fields from sub packages.
 	TxFilterAll         = txindex.TxFilterAll
