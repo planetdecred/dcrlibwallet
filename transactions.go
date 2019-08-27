@@ -30,25 +30,26 @@ const (
 	MaxReOrgBlocks = 6
 )
 
-// todo should reference txindex properties
 const (
-	TxFilterAll         int32 = 0
-	TxFilterSent        int32 = 1
-	TxFilterReceived    int32 = 2
-	TxFilterTransferred int32 = 3
-	TxFilterStaking     int32 = 4
-	TxFilterCoinBase    int32 = 5
+	// Export constants for use in mobile apps
+	// since gomobile excludes fields from sub packages.
+	TxFilterAll         = txindex.TxFilterAll
+	TxFilterSent        = txindex.TxFilterSent
+	TxFilterReceived    = txindex.TxFilterReceived
+	TxFilterTransferred = txindex.TxFilterTransferred
+	TxFilterStaking     = txindex.TxFilterStaking
+	TxFilterCoinBase    = txindex.TxFilterCoinBase
 
-	TxDirectionInvalid     int32 = -1
-	TxDirectionSent        int32 = 0
-	TxDirectionReceived    int32 = 1
-	TxDirectionTransferred int32 = 2
+	TxDirectionInvalid     = txindex.TxDirectionInvalid
+	TxDirectionSent        = txindex.TxDirectionSent
+	TxDirectionReceived    = txindex.TxDirectionReceived
+	TxDirectionTransferred = txindex.TxDirectionTransferred
 
-	TxTypeRegular        = "REGULAR"
-	TxTypeCoinBase       = "COINBASE"
-	TxTypeTicketPurchase = "TICKET_PURCHASE"
-	TxTypeVote           = "VOTE"
-	TxTypeRevocation     = "REVOCATION"
+	TxTypeRegular        = txindex.TxTypeRegular
+	TxTypeCoinBase       = txindex.TxTypeCoinBase
+	TxTypeTicketPurchase = txindex.TxTypeTicketPurchase
+	TxTypeVote           = txindex.TxTypeVote
+	TxTypeRevocation     = txindex.TxTypeRevocation
 )
 
 func (lw *LibWallet) IndexTransactions(afterIndexing func()) error {
@@ -232,7 +233,7 @@ func (lw *LibWallet) parseTxSummary(tx *wallet.TransactionSummary, blockHash *ch
 			AccountName:     lw.AccountName(int32(debit.PreviousAccount))}
 	}
 
-	var direction int32 = TxDirectionInvalid
+	var direction = TxDirectionInvalid
 	if tx.Type == wallet.TransactionTypeRegular {
 		amountDifference := outputTotal - inputTotal
 		if amountDifference < 0 && (float64(tx.Fee) == math.Abs(float64(amountDifference))) {
