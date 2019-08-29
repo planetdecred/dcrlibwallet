@@ -21,6 +21,7 @@ const logFileName = "dcrlibwallet.log"
 
 type LibWallet struct {
 	WalletID      int `storm:"id,increment"`
+	WalletName    string
 	WalletDataDir string
 	WalletSeed    string
 
@@ -32,6 +33,7 @@ type LibWallet struct {
 
 	synced     bool
 	syncing    bool
+	waiting    bool
 	rescanning bool
 
 	shuttingDown chan bool

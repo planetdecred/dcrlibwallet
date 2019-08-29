@@ -166,6 +166,9 @@ func (mw *MultiWallet) SyncInactiveForPeriod(totalInactiveSeconds int64) {
 }
 
 func (mw *MultiWallet) SpvSync(peerAddresses string) error {
+	mw.syncData.mu.Lock()
+	defer mw.syncData.mu.Unlock()
+
 	// Unset this flag as the invocation of this method implies that any request to restart sync has been fulfilled.
 	mw.syncData.restartSyncRequested = false
 
@@ -214,9 +217,14 @@ func (mw *MultiWallet) SpvSync(peerAddresses string) error {
 
 	// syncer.Run uses a wait group to block the thread until sync completes or an error occurs
 	go func() {
+		mw.syncData.mu.Lock()
 		mw.syncing = true
+		mw.syncData.mu.Unlock()
+
 		defer func() {
+			mw.syncData.mu.Lock()
 			mw.syncing = false
+			mw.syncData.mu.Unlock()
 		}()
 
 		for _, listener := range mw.syncData.syncProgressListeners {
@@ -238,7 +246,10 @@ func (mw *MultiWallet) SpvSync(peerAddresses string) error {
 }
 
 func (mw *MultiWallet) RestartSpvSync(peerAddresses string) error {
+	mw.syncData.mu.Lock()
 	mw.syncData.restartSyncRequested = true
+	mw.syncData.mu.Unlock()
+
 	mw.CancelSync() // necessary to unset the network backend.
 	return mw.SpvSync(peerAddresses)
 }
@@ -314,11 +325,14 @@ func (mw *MultiWallet) RestartRpcSync(networkAddress string, username string, pa
 
 func (mw *MultiWallet) CancelSync() {
 	if mw.cancelSync != nil {
+		mw.syncData.mu.Lock()
 		log.Info("Canceling sync. May take a while for sync to fully cancel.")
 
 		// Cancel the context used for syncer.Run in rpcSync() or spvSync().
 		mw.cancelSync()
 		mw.cancelSync = nil
+
+		mw.syncData.mu.Unlock()
 
 		// syncer.Run may not immediately return, following code blocks this function
 		// and waits for the syncer.Run to return `err == context.Canceled`.
@@ -337,15 +351,27 @@ func (mw *MultiWallet) CancelSync() {
 	}
 }
 
+func (lw *LibWallet) IsWaiting() bool {
+	return lw.waiting
+}
+
 func (mw *MultiWallet) IsSynced() bool {
+	mw.syncData.mu.Lock()
+	defer mw.syncData.mu.Unlock()
+
 	return mw.syncData.synced
 }
 
 func (mw *MultiWallet) IsSyncing() bool {
+	mw.syncData.mu.Lock()
+	defer mw.syncData.mu.Unlock()
 	return mw.syncData.syncing
 }
 
 func (mw *MultiWallet) ConnectedPeers() int32 {
+	mw.syncData.mu.Lock()
+	defer mw.syncData.mu.Unlock()
+
 	return mw.syncData.connectedPeers
 }
 

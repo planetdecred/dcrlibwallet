@@ -1227,7 +1227,6 @@ func (s *Syncer) getHeaders(ctx context.Context, rp *p2p.RemotePeer) error {
 				s.locatorMu.Unlock()
 				continue
 			}
-			s.fetchHeadersProgress(headers[len(headers)-1])
 			log.Debugf("[%d] Fetched %d new header(s) ending at height %d from %v",
 				walletID, added, nodes[len(nodes)-1].Header.Height, rp)
 
@@ -1267,6 +1266,8 @@ func (s *Syncer) getHeaders(ctx context.Context, rp *p2p.RemotePeer) error {
 				log.Infof("[%d] Connected %d blocks, new tip %v, height %d, date %v",
 					walletID, len(bestChain), tip.Hash, tip.Header.Height, tip.Header.Timestamp)
 			}
+
+			s.fetchHeadersProgress(headers[len(headers)-1])
 
 			s.sidechainMu.Unlock()
 		}
@@ -1326,8 +1327,8 @@ func (s *Syncer) startupSync(ctx context.Context, rp *p2p.RemotePeer) error {
 	s.fetchHeadersFinished()
 	log.Infof("Finished Fetching Headers")
 
-	for key, w := range s.wallets {
-		if atomic.CompareAndSwapUint32(&s.atomicCatchUpTryLock, 0, 1) {
+	if atomic.CompareAndSwapUint32(&s.atomicCatchUpTryLock, 0, 1) {
+		for key, w := range s.wallets {
 			err = func() error {
 				rescanPoint, err := w.RescanPoint()
 				if err != nil {
@@ -1387,24 +1388,25 @@ func (s *Syncer) startupSync(ctx context.Context, rp *p2p.RemotePeer) error {
 
 				return nil
 			}()
-			atomic.StoreUint32(&s.atomicCatchUpTryLock, 0)
+
+			unminedTxs, err := w.UnminedTransactions()
 			if err != nil {
-				return err
+				log.Errorf("Cannot load unmined transactions for resending: %v", err)
+				continue
+			}
+			if len(unminedTxs) == 0 {
+				continue
+			}
+			err = rp.PublishTransactions(ctx, unminedTxs...)
+			if err != nil {
+				// TODO: Transactions should be removed if this is a double spend.
+				log.Errorf("Failed to resent one or more unmined transactions: %v", err)
 			}
 		}
 
-		unminedTxs, err := w.UnminedTransactions()
+		atomic.StoreUint32(&s.atomicCatchUpTryLock, 0)
 		if err != nil {
-			log.Errorf("Cannot load unmined transactions for resending: %v", err)
-			return nil
-		}
-		if len(unminedTxs) == 0 {
-			return nil
-		}
-		err = rp.PublishTransactions(ctx, unminedTxs...)
-		if err != nil {
-			// TODO: Transactions should be removed if this is a double spend.
-			log.Errorf("Failed to resent one or more unmined transactions: %v", err)
+			return err
 		}
 	}
 

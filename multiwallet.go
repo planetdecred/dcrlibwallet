@@ -2,6 +2,7 @@ package dcrlibwallet
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -127,6 +128,8 @@ func (mw *MultiWallet) loadWallets() (int, error) {
 			return 0, err
 		}
 
+		libWallet.WalletID = w.WalletID
+		libWallet.WalletName = w.WalletName
 		mw.wallets[w.WalletID] = libWallet
 	}
 
@@ -137,7 +140,7 @@ func (mw *MultiWallet) LoadedWalletsCount() int32 {
 	return int32(len(mw.wallets))
 }
 
-func (mw *MultiWallet) OpenedWallets() []int {
+func (mw *MultiWallet) OpenedWalletsRaw() []int {
 	wallets := make([]int, 0)
 	for _, w := range mw.wallets {
 		if w.WalletOpened() {
@@ -148,8 +151,15 @@ func (mw *MultiWallet) OpenedWallets() []int {
 	return wallets
 }
 
+func (mw *MultiWallet) OpenedWallets() string {
+	wallets := mw.OpenedWalletsRaw()
+	jsonEncoded, _ := json.Marshal(&wallets)
+
+	return string(jsonEncoded)
+}
+
 func (mw *MultiWallet) OpenedWalletsCount() int32 {
-	return int32(len(mw.OpenedWallets()))
+	return int32(len(mw.OpenedWalletsRaw()))
 }
 
 func (mw *MultiWallet) SyncedWalletCount() int32 {
@@ -165,6 +175,10 @@ func (mw *MultiWallet) SyncedWalletCount() int32 {
 
 func (mw *MultiWallet) CreateNewWallet(passphrase, seedMnemonic string) (*LibWallet, error) {
 
+	if mw.activeSyncData != nil {
+		return nil, errors.New(ErrSyncAlreadyInProgress)
+	}
+
 	lw := &LibWallet{
 		WalletSeed: seedMnemonic,
 	}
@@ -174,12 +188,16 @@ func (mw *MultiWallet) CreateNewWallet(passphrase, seedMnemonic string) (*LibWal
 		return nil, err
 	}
 
-	homeDir := filepath.Join(mw.rootDir, strconv.Itoa(lw.WalletID))
+	walletID := lw.WalletID
+	walletName := "wallet-" + strconv.Itoa(walletID) // wallet-#
+
+	homeDir := filepath.Join(mw.rootDir, strconv.Itoa(walletID))
 	os.MkdirAll(homeDir, os.ModePerm) // create wallet dir
 
 	// update database wallet data dir
 	lw.WalletDataDir = homeDir
-	err = mw.db.Update(lw)
+	lw.WalletName = walletName
+	err = mw.db.Save(lw) // updating database with new complete wallet information
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +207,9 @@ func (mw *MultiWallet) CreateNewWallet(passphrase, seedMnemonic string) (*LibWal
 		return nil, err
 	}
 
-	mw.wallets[lw.WalletID] = lw
+	lw.WalletID = walletID
+	lw.WalletName = walletName
+	mw.wallets[walletID] = lw
 
 	err = lw.CreateWallet(passphrase, seedMnemonic)
 	if err != nil {
@@ -205,6 +225,10 @@ func (mw *MultiWallet) GetWallet(walletID int) *LibWallet {
 }
 
 func (mw *MultiWallet) OpenWallets(pubPass []byte) error {
+	if mw.activeSyncData != nil {
+		return errors.New(ErrSyncAlreadyInProgress)
+	}
+
 	for _, w := range mw.wallets {
 		err := w.OpenWallet(pubPass)
 		if err != nil {
@@ -216,6 +240,9 @@ func (mw *MultiWallet) OpenWallets(pubPass []byte) error {
 }
 
 func (mw *MultiWallet) OpenWallet(walletID int, pubPass []byte) error {
+	if mw.activeSyncData != nil {
+		return errors.New(ErrSyncAlreadyInProgress)
+	}
 	wallet, ok := mw.wallets[walletID]
 	if ok {
 		return wallet.OpenWallet(pubPass)
