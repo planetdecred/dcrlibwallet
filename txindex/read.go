@@ -35,7 +35,7 @@ func (db *DB) Read(offset, limit, txFilter int32, transactions interface{}) erro
 		query = query.Limit(int(limit))
 	}
 
-	return query.Find(&transactions)
+	return query.Find(transactions)
 }
 
 // Count queries the db for transactions of the `txObj` type
