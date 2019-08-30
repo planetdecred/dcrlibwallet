@@ -87,6 +87,11 @@ type TicketPriceResponse struct {
 	Height      int32
 }
 
+type VSPTicketPurchaseInfoRequest struct {
+	TicketHash                string
+	TicketOwnerCommitmentAddr string
+}
+
 type VSPTicketPurchaseInfo struct {
 	PoolAddress   string  `json:"PoolAddress"`
 	PoolFees      float64 `json:"PoolFees"`

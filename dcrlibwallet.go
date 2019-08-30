@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/asdine/storm"
 	"github.com/decred/dcrd/dcrec"
 	"github.com/decred/dcrd/dcrjson"
 	"github.com/decred/dcrd/dcrutil"
@@ -35,6 +36,7 @@ type LibWallet struct {
 	activeNet              *netparams.Params
 	walletLoader           *WalletLoader
 	wallet                 *wallet.Wallet
+	settingsDB             *storm.DB
 	txIndexDB              *txindex.DB
 	txNotificationListener TransactionListener
 	*syncData

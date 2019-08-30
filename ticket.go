@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"encoding/base64"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/rpcclient"
@@ -19,6 +20,7 @@ import (
 	"github.com/decred/dcrwallet/wallet"
 	"github.com/decred/dcrwallet/wallet/txrules"
 	"github.com/raedahgroup/dcrlibwallet/addresshelper"
+	"sync"
 )
 
 // StakeInfo returns information about wallet stakes, tickets and their statuses.
@@ -243,23 +245,13 @@ func (lw *LibWallet) updateTicketPurchaseRequestWithVSPInfo(request *PurchaseTic
 	}
 
 	// invoke vsp api
-	ticketPurchaseInfo, err := CallVSPTicketInfoAPI(request.VSPHost, pubKeyAddr)
+	ticketPurchaseInfo, err := CallVSPPurchaseTicketAPI(request.VSPHost, pubKeyAddr)
 	if err != nil {
 		return fmt.Errorf("vsp connection error: %s", err.Error())
 	}
 
-	// decode the redeem script gotten from vsp
-	rs, err := hex.DecodeString(ticketPurchaseInfo.Script)
+	err = lw.decodeAndImportScript(ticketPurchaseInfo.Script, request.Passphrase)
 	if err != nil {
-		return fmt.Errorf("vsp data corruption: %s", err.Error())
-	}
-
-	// unlock wallet and import the decoded script
-	lock := make(chan time.Time, 1)
-	lw.wallet.Unlock(request.Passphrase, lock)
-	err = lw.wallet.ImportScript(rs)
-	lock <- time.Time{}
-	if err != nil && !errors.Is(errors.Exist, err) {
 		return fmt.Errorf("error importing vsp redeem script: %s", err.Error())
 	}
 
@@ -270,7 +262,7 @@ func (lw *LibWallet) updateTicketPurchaseRequestWithVSPInfo(request *PurchaseTic
 	return nil
 }
 
-func CallVSPTicketInfoAPI(vspHost, pubKeyAddr string) (ticketPurchaseInfo *VSPTicketPurchaseInfo, err error) {
+func CallVSPPurchaseTicketAPI(vspHost, pubKeyAddr string) (ticketPurchaseInfo *VSPTicketPurchaseInfo, err error) {
 	apiUrl := fmt.Sprintf("%s/api/v2/purchaseticket", strings.TrimSuffix(vspHost, "/"))
 	data := url.Values{}
 	data.Set("UserPubKeyAddr", pubKeyAddr)
@@ -301,4 +293,91 @@ func CallVSPTicketInfoAPI(vspHost, pubKeyAddr string) (ticketPurchaseInfo *VSPTi
 		}
 	}
 	return
+}
+
+func (lw *LibWallet) ImportRedeemScriptsForTickets(requests []VSPTicketPurchaseInfoRequest, vspHost string,
+	passphrase []byte) (errors []error) {
+
+	var wg sync.WaitGroup
+
+	for _, req := range requests {
+		wg.Add(1)
+		go func() {
+			ticketPurchaseInfo, err := CallVSPTicketInfoAPI(vspHost, req, passphrase, lw.SignMessage)
+			if err != nil {
+				errors = append(errors, err)
+				return
+			}
+
+			err = lw.decodeAndImportScript(ticketPurchaseInfo.Script, passphrase)
+			if err != nil {
+				errors = append(errors, err)
+			}
+		}()
+	}
+
+	wg.Wait()
+	return
+}
+
+func CallVSPTicketInfoAPI(vspHost string, request VSPTicketPurchaseInfoRequest, passphrase []byte,
+	signMessage func(passphrase []byte, address string, message string) ([]byte, error)) (*VSPTicketPurchaseInfo, error) {
+
+	apiUrl := fmt.Sprintf("%s/api/v2/getpurchaseinfo", strings.TrimSuffix(vspHost, "/"))
+
+	req, err := http.NewRequest("GET", apiUrl, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	timestamp := fmt.Sprintf("%d", time.Now().Unix())
+	signature, err := signMessage(passphrase, request.TicketOwnerCommitmentAddr, timestamp)
+	if err != nil {
+		return nil, err
+	}
+
+	authData := fmt.Sprintf("TicketAuth SignedTimestamp=%s, Signature=%s, TicketHash=%s",
+		timestamp,
+		base64.StdEncoding.EncodeToString(signature),
+		request.TicketHash)
+	req.Header.Set("Authorization", authData)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var apiResponse map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&apiResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	data := apiResponse["data"].(map[string]interface{})
+	return &VSPTicketPurchaseInfo{
+		Script:        data["Script"].(string),
+		PoolFees:      data["PoolFees"].(float64),
+		PoolAddress:   data["PoolAddress"].(string),
+		TicketAddress: data["TicketAddress"].(string),
+	}, nil
+}
+
+func (lw *LibWallet) decodeAndImportScript(script string, passphrase []byte) error {
+	rs, err := hex.DecodeString(script)
+	if err != nil {
+		return fmt.Errorf("invalid script: %s", err.Error())
+	}
+
+	// unlock wallet and import the decoded script
+	lock := make(chan time.Time, 1)
+	lw.wallet.Unlock(passphrase, lock)
+	err = lw.wallet.ImportScript(rs)
+	lock <- time.Time{}
+	if err != nil && !errors.Is(errors.Exist, err) {
+		return err
+	}
+
+	return nil
 }
