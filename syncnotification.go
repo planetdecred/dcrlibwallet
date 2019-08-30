@@ -215,6 +215,7 @@ func (mw *MultiWallet) discoverAddressesStarted(walletID int) {
 
 	mw.activeSyncData.syncStage = AddressDiscoverySyncStage
 	mw.activeSyncData.addressDiscoveryStartTime = time.Now().Unix()
+	mw.activeSyncData.addressDiscoveryProgress.WalletID = walletID
 	if mw.syncData.showLogs && mw.syncData.syncing {
 		log.Info("Step 2 of 3 - discovering used addresses.")
 	}
@@ -377,6 +378,7 @@ func (mw *MultiWallet) rescanStarted(walletID int) {
 	// retain last total progress report from address discovery phase
 	mw.activeSyncData.headersRescanProgress.TotalTimeRemainingSeconds = mw.activeSyncData.addressDiscoveryProgress.TotalTimeRemainingSeconds
 	mw.activeSyncData.headersRescanProgress.TotalSyncProgress = mw.activeSyncData.addressDiscoveryProgress.TotalSyncProgress
+	mw.activeSyncData.headersRescanProgress.WalletID = walletID
 
 	if mw.syncData.showLogs && mw.syncData.syncing {
 		log.Info("Step 3 of 3 - Scanning block headers")
@@ -394,6 +396,7 @@ func (mw *MultiWallet) rescanProgress(walletID int, rescannedThrough int32) {
 
 	w := mw.wallets[walletID]
 
+	mw.activeSyncData.headersRescanProgress.WalletID = walletID
 	mw.activeSyncData.headersRescanProgress.TotalHeadersToScan = w.GetBestBlock()
 
 	rescanRate := float64(rescannedThrough) / float64(mw.activeSyncData.headersRescanProgress.TotalHeadersToScan)
@@ -460,6 +463,7 @@ func (mw *MultiWallet) rescanFinished(walletID int) {
 		return
 	}
 
+	mw.activeSyncData.headersRescanProgress.WalletID = walletID
 	mw.activeSyncData.headersRescanProgress.TotalTimeRemainingSeconds = 0
 	mw.activeSyncData.headersRescanProgress.TotalSyncProgress = 100
 	mw.publishHeadersRescanProgress()

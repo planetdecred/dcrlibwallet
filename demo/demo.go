@@ -13,18 +13,18 @@ func main() {
 	}
 
 	seed1, _ := dcrlibwallet.GenerateSeed()
-	_, err = multiWallet.CreateNewWallet("default", "private", seed1)
+	_, err = multiWallet.CreateNewWallet("private", seed1)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("Created and Loaded wallet [default]\n")
+	fmt.Printf("Created and Loaded wallet\n")
 
 	seed2, _ := dcrlibwallet.GenerateSeed()
-	_, err = multiWallet.CreateNewWallet("wallet-2", "private", seed2)
+	_, err = multiWallet.CreateNewWallet("private", seed2)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("Created and Loaded wallet [wallet-2]\n")
+	fmt.Printf("Created and Loaded wallet\n")
 
 	// err = multiWallet.OpenWallet("default", []byte("public"))
 	// if err != nil {

@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/asdine/storm"
+	"github.com/asdine/storm/q"
 	"github.com/decred/dcrwallet/errors"
 	"github.com/decred/dcrwallet/netparams"
 	wallet "github.com/decred/dcrwallet/wallet/v3"
@@ -115,8 +116,9 @@ func (mw *MultiWallet) Shutdown() {
 }
 
 func (mw *MultiWallet) loadWallets() (int, error) {
+	query := mw.db.Select(q.True()).OrderBy("WalletID")
 	var wallets []LibWallet
-	err := mw.db.All(&wallets)
+	err := query.Find(&wallets)
 	if err != nil && err != storm.ErrNotFound {
 		return 0, err
 	}
