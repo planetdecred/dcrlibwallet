@@ -132,6 +132,9 @@ func (mw *MultiWallet) loadWallets() (int, error) {
 
 		libWallet.WalletID = w.WalletID
 		libWallet.WalletName = w.WalletName
+		libWallet.WalletSeed = w.WalletSeed
+		libWallet.SpendingPassphraseType = w.SpendingPassphraseType
+		libWallet.DiscoveredAccounts = w.DiscoveredAccounts
 		mw.wallets[w.WalletID] = libWallet
 	}
 
@@ -175,16 +178,41 @@ func (mw *MultiWallet) SyncedWalletCount() int32 {
 	return syncedWallet
 }
 
-func (mw *MultiWallet) CreateNewWallet(passphrase, seedMnemonic string) (*LibWallet, error) {
+func (mw *MultiWallet) CreateNewWallet(passphrase string, spendingPassphraseType int32) (*LibWallet, error) {
 
 	if mw.activeSyncData != nil {
 		return nil, errors.New(ErrSyncAlreadyInProgress)
 	}
 
-	lw := &LibWallet{
-		WalletSeed: seedMnemonic,
+	seed, err := GenerateSeed()
+	if err != nil {
+		return nil, err
 	}
 
+	lw := &LibWallet{
+		WalletSeed:             seed,
+		SpendingPassphraseType: spendingPassphraseType,
+		DiscoveredAccounts:     true,
+	}
+
+	return mw.createWallet(lw, passphrase)
+}
+
+func (mw *MultiWallet) RestoreWallet(seedMnemonic, passphrase string, spendingPassphraseType int32) (*LibWallet, error) {
+	if mw.activeSyncData != nil {
+		return nil, errors.New(ErrSyncAlreadyInProgress)
+	}
+
+	lw := &LibWallet{
+		WalletSeed:             seedMnemonic,
+		SpendingPassphraseType: spendingPassphraseType,
+		DiscoveredAccounts:     false,
+	}
+
+	return mw.createWallet(lw, passphrase)
+}
+
+func (mw *MultiWallet) createWallet(lw *LibWallet, passphrase string) (*LibWallet, error) {
 	err := mw.db.Save(lw)
 	if err != nil {
 		return nil, err
@@ -204,21 +232,31 @@ func (mw *MultiWallet) CreateNewWallet(passphrase, seedMnemonic string) (*LibWal
 		return nil, err
 	}
 
-	lw, err = NewLibWallet(homeDir, mw.dbDriver, mw.activeNet.Name)
+	defer func() {
+		if err != nil {
+			mw.db.DeleteStruct(lw)
+		}
+
+	}()
+
+	libWallet, err := NewLibWallet(homeDir, mw.dbDriver, mw.activeNet.Name)
 	if err != nil {
 		return nil, err
 	}
 
-	lw.WalletID = walletID
-	lw.WalletName = walletName
-	mw.wallets[walletID] = lw
+	libWallet.WalletID = walletID
+	libWallet.WalletName = lw.WalletName
+	libWallet.WalletSeed = lw.WalletSeed
+	libWallet.SpendingPassphraseType = lw.SpendingPassphraseType
+	libWallet.DiscoveredAccounts = lw.DiscoveredAccounts
+	mw.wallets[walletID] = libWallet
 
-	err = lw.CreateWallet(passphrase, seedMnemonic)
+	err = libWallet.CreateWallet(passphrase, lw.WalletSeed)
 	if err != nil {
 		return nil, err
 	}
 
-	return lw, nil
+	return libWallet, nil
 }
 
 func (mw *MultiWallet) GetWallet(walletID int) *LibWallet {
@@ -260,6 +298,23 @@ func (mw *MultiWallet) UnlockWallet(walletID int, privPass []byte) error {
 	}
 
 	return errors.New(ErrNotExist)
+}
+
+func (mw *MultiWallet) discoveredAccounts(walletID int) error {
+	var w LibWallet
+	err := mw.db.One("WalletID", walletID, &w)
+	if err != nil {
+		return err
+	}
+
+	w.DiscoveredAccounts = true
+	err = mw.db.Save(&w)
+	if err != nil {
+		return err
+	}
+
+	mw.wallets[walletID].DiscoveredAccounts = true
+	return nil
 }
 
 func (mw *MultiWallet) setNetworkBackend(netBakend wallet.NetworkBackend) {

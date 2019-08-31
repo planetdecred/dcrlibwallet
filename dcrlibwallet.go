@@ -20,10 +20,12 @@ errors.Separator = ":: "
 const logFileName = "dcrlibwallet.log"
 
 type LibWallet struct {
-	WalletID      int `storm:"id,increment"`
-	WalletName    string
-	WalletDataDir string
-	WalletSeed    string
+	WalletID               int `storm:"id,increment"`
+	WalletName             string
+	WalletDataDir          string
+	WalletSeed             string
+	SpendingPassphraseType int32
+	DiscoveredAccounts     bool
 
 	activeNet    *netparams.Params
 	walletLoader *WalletLoader

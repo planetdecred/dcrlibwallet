@@ -204,7 +204,7 @@ func (mw *MultiWallet) SpvSync(peerAddresses string) error {
 		}
 	}
 
-	syncer := spv.NewSyncer(wallets, mw.activeNet.Params, lp)
+	syncer := spv.NewSyncer(wallets, mw.activeNet.Params, lp, true)
 	syncer.SetNotifications(mw.spvSyncNotificationCallbacks())
 	if len(validPeerAddresses) > 0 {
 		syncer.SetPersistentPeers(validPeerAddresses)

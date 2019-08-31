@@ -98,13 +98,21 @@ func (lw *LibWallet) UnlockWallet(privPass []byte) error {
 	}()
 
 	err := loadedWallet.Unlock(privPass, nil)
-	return err
+	if err != nil {
+		return translateError(err)
+	}
+
+	return nil
 }
 
 func (lw *LibWallet) LockWallet() {
-	if lw.wallet.Locked() {
+	if !lw.wallet.Locked() {
 		lw.wallet.Lock()
 	}
+}
+
+func (lw *LibWallet) IsLocked() bool {
+	return lw.wallet.Locked()
 }
 
 func (lw *LibWallet) ChangePrivatePassphrase(oldPass []byte, newPass []byte) error {

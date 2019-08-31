@@ -351,6 +351,10 @@ func (mw *MultiWallet) discoverAddressesFinished(walletID int) {
 	if loaded { // loaded should always be through
 		if !loadedWallet.Locked() {
 			loadedWallet.Lock()
+			err := mw.discoveredAccounts(walletID)
+			if err != nil {
+				log.Error(err)
+			}
 		}
 	}
 
