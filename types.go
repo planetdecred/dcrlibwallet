@@ -89,6 +89,7 @@ type TicketPriceResponse struct {
 
 type VSPTicketPurchaseInfoRequest struct {
 	TicketHash                string
+	BlockHeight               uint32
 	TicketOwnerCommitmentAddr string
 }
 

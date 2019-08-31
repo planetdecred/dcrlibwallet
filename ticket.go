@@ -2,6 +2,7 @@ package dcrlibwallet
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -10,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"encoding/base64"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/rpcclient"
@@ -20,7 +20,6 @@ import (
 	"github.com/decred/dcrwallet/wallet"
 	"github.com/decred/dcrwallet/wallet/txrules"
 	"github.com/raedahgroup/dcrlibwallet/addresshelper"
-	"sync"
 )
 
 // StakeInfo returns information about wallet stakes, tickets and their statuses.
@@ -142,6 +141,12 @@ func (lw *LibWallet) TicketPrice(ctx context.Context) (*TicketPriceResponse, err
 // PurchaseTickets purchases tickets from the wallet. Returns a slice of hashes for tickets purchased
 func (lw *LibWallet) PurchaseTickets(ctx context.Context, request *PurchaseTicketsRequest) ([]string, error) {
 	var err error
+
+	defer func() {
+		for i := range request.Passphrase {
+			request.Passphrase[i] = 0
+		}
+	}()
 
 	// fetch redeem script+ticket address+pool address+pool fee if vsp host is provided
 	if request.VSPHost != "" {
@@ -284,6 +289,13 @@ func CallVSPPurchaseTicketAPI(vspHost, pubKeyAddr string) (ticketPurchaseInfo *V
 	var apiResponse map[string]interface{}
 	err = json.NewDecoder(resp.Body).Decode(&apiResponse)
 	if err == nil {
+		if apiResponse["data"] == nil {
+			if apiResponse["message"] != nil {
+				return nil, fmt.Errorf(apiResponse["message"].(string))
+			}
+			return nil, fmt.Errorf("unexpected vsp response")
+		}
+
 		data := apiResponse["data"].(map[string]interface{})
 		ticketPurchaseInfo = &VSPTicketPurchaseInfo{
 			Script:        data["Script"].(string),
@@ -296,28 +308,48 @@ func CallVSPPurchaseTicketAPI(vspHost, pubKeyAddr string) (ticketPurchaseInfo *V
 }
 
 func (lw *LibWallet) ImportRedeemScriptsForTickets(requests []VSPTicketPurchaseInfoRequest, vspHost string,
-	passphrase []byte) (errors []error) {
+	passphrase []byte) (chan wallet.RescanProgress, []error) {
 
-	var wg sync.WaitGroup
+	defer func() {
+		for i := range passphrase {
+			passphrase[i] = 0
+		}
+	}()
+
+	var errs []error
+	var rescanPoint uint32
 
 	for _, req := range requests {
-		wg.Add(1)
-		go func() {
-			ticketPurchaseInfo, err := CallVSPTicketInfoAPI(vspHost, req, passphrase, lw.SignMessage)
-			if err != nil {
-				errors = append(errors, err)
-				return
-			}
+		ticketPurchaseInfo, err := CallVSPTicketInfoAPI(vspHost, req, passphrase, lw.SignMessage)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
 
-			err = lw.decodeAndImportScript(ticketPurchaseInfo.Script, passphrase)
-			if err != nil {
-				errors = append(errors, err)
-			}
-		}()
+		err = lw.decodeAndImportScript(ticketPurchaseInfo.Script, passphrase)
+		if err != nil {
+			errs = append(errs, err)
+		} else if rescanPoint == 0 || rescanPoint > req.BlockHeight {
+			// this ensures that the lowest block height value is set as the rescan point
+			rescanPoint = req.BlockHeight
+		}
 	}
 
-	wg.Wait()
-	return
+	if rescanPoint > 0 {
+		netBackend, err := lw.wallet.NetworkBackend()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("cannot rescan: %s", err.Error()))
+			return nil, errs
+		}
+
+		progress := make(chan wallet.RescanProgress, 1)
+		ctx, _ := contextWithShutdownCancel(context.Background())
+
+		go lw.wallet.RescanProgressFromHeight(ctx, netBackend, int32(rescanPoint-1), progress)
+		return progress, errs
+	}
+
+	return nil, errs
 }
 
 func CallVSPTicketInfoAPI(vspHost string, request VSPTicketPurchaseInfoRequest, passphrase []byte,
@@ -341,6 +373,7 @@ func CallVSPTicketInfoAPI(vspHost string, request VSPTicketPurchaseInfoRequest, 
 		base64.StdEncoding.EncodeToString(signature),
 		request.TicketHash)
 	req.Header.Set("Authorization", authData)
+	println(authData)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -353,6 +386,13 @@ func CallVSPTicketInfoAPI(vspHost string, request VSPTicketPurchaseInfoRequest, 
 	err = json.NewDecoder(resp.Body).Decode(&apiResponse)
 	if err != nil {
 		return nil, err
+	}
+
+	if apiResponse["data"] == nil {
+		if apiResponse["message"] != nil {
+			return nil, fmt.Errorf(apiResponse["message"].(string))
+		}
+		return nil, fmt.Errorf("unexpected vsp response")
 	}
 
 	data := apiResponse["data"].(map[string]interface{})
