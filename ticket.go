@@ -373,7 +373,6 @@ func CallVSPTicketInfoAPI(vspHost string, request VSPTicketPurchaseInfoRequest, 
 		base64.StdEncoding.EncodeToString(signature),
 		request.TicketHash)
 	req.Header.Set("Authorization", authData)
-	println(authData)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
