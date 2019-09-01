@@ -4,20 +4,21 @@ import (
 	"fmt"
 
 	"github.com/asdine/storm"
+	"reflect"
 )
 
 const KeyEndBlock = "EndBlock"
 
-func (db *DB) SaveOrUpdate(txHash string, tx interface{}) error {
-	var oldTx interface{}
-	err := db.txDB.One("Hash", txHash, &oldTx)
+func (db *DB) SaveOrUpdate(emptyTxPointer, tx interface{}) error {
+	txHash := reflect.ValueOf(tx).FieldByName("Hash").String()
+	err := db.txDB.One("Hash", txHash, emptyTxPointer)
 	if err != nil && err != storm.ErrNotFound {
 		return fmt.Errorf("error checking if tx was already indexed: %s", err.Error())
 	}
 
-	if oldTx != nil {
+	if emptyTxPointer != nil {
 		// delete old tx before saving new
-		err = db.txDB.DeleteStruct(&oldTx)
+		err = db.txDB.DeleteStruct(emptyTxPointer)
 		if err != nil {
 			return fmt.Errorf("error deleting previously indexed tx: %s", err.Error())
 		}

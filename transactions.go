@@ -68,7 +68,7 @@ func (lw *LibWallet) IndexTransactions(afterIndexing func()) error {
 				return false, err
 			}
 
-			err = lw.txDB.SaveOrUpdate(tx.Hash, tx)
+			err = lw.txDB.SaveOrUpdate(&Transaction{}, tx)
 			if err != nil {
 				log.Errorf("Index tx replace tx err :%v", err)
 				return false, err
@@ -134,7 +134,7 @@ func (lw *LibWallet) TransactionNotification(listener TransactionListener) {
 					return
 				}
 
-				err = lw.txDB.SaveOrUpdate(tempTransaction.Hash, tempTransaction)
+				err = lw.txDB.SaveOrUpdate(&Transaction{}, tempTransaction)
 				if err != nil {
 					log.Errorf("Tx ntfn replace tx err: %v", err)
 				}
@@ -158,7 +158,7 @@ func (lw *LibWallet) TransactionNotification(listener TransactionListener) {
 						return
 					}
 
-					err = lw.txDB.SaveOrUpdate(tempTransaction.Hash, tempTransaction)
+					err = lw.txDB.SaveOrUpdate(&Transaction{}, tempTransaction)
 					if err != nil {
 						log.Errorf("Incoming block replace tx error :%v", err)
 						return
