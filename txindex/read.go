@@ -35,7 +35,11 @@ func (db *DB) Read(offset, limit, txFilter int32, transactions interface{}) erro
 		query = query.Limit(int(limit))
 	}
 
-	return query.Find(transactions)
+	err := query.Find(transactions)
+	if err != nil && err != storm.ErrNotFound {
+		return err
+	}
+	return nil
 }
 
 // Count queries the db for transactions of the `txObj` type
