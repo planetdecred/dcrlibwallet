@@ -10,13 +10,14 @@ import (
 const KeyEndBlock = "EndBlock"
 
 func (db *DB) SaveOrUpdate(emptyTxPointer, tx interface{}) error {
-	txHash := reflect.ValueOf(tx).FieldByName("Hash").String()
+	v := reflect.ValueOf(tx)
+	txHash := reflect.Indirect(v).FieldByName("Hash").String()
 	err := db.txDB.One("Hash", txHash, emptyTxPointer)
 	if err != nil && err != storm.ErrNotFound {
 		return fmt.Errorf("error checking if tx was already indexed: %s", err.Error())
 	}
 
-	if emptyTxPointer != nil {
+	if err == nil {
 		// delete old tx before saving new
 		err = db.txDB.DeleteStruct(emptyTxPointer)
 		if err != nil {
