@@ -300,6 +300,30 @@ func (mw *MultiWallet) UnlockWallet(walletID int, privPass []byte) error {
 	return errors.New(ErrNotExist)
 }
 
+func (mw *MultiWallet) DeleteWallet(walletID int, privPass []byte) error {
+	if mw.activeSyncData != nil {
+		return errors.New(ErrSyncAlreadyInProgress)
+	}
+
+	w, ok := mw.wallets[walletID]
+	if ok {
+		err := w.DeleteWallet(privPass)
+		if err != nil {
+			return translateError(err)
+		}
+
+		err = mw.db.DeleteStruct(w)
+		if err != nil {
+			return translateError(err)
+		}
+
+		delete(mw.wallets, walletID)
+		return nil
+	}
+
+	return errors.New(ErrNotExist)
+}
+
 func (mw *MultiWallet) discoveredAccounts(walletID int) error {
 	var w LibWallet
 	err := mw.db.One("WalletID", walletID, &w)
