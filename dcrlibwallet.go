@@ -30,6 +30,7 @@ type LibWallet struct {
 	activeNet     *netparams.Params
 	walletLoader  *WalletLoader
 	wallet        *wallet.Wallet
+	settingsDB    *storm.DB
 	txDB          *storm.DB
 	*syncData
 

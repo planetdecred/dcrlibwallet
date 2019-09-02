@@ -3,36 +3,54 @@ package dcrlibwallet
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/asdine/storm"
 	bolt "go.etcd.io/bbolt"
 )
 
 const (
-	DbName       = "settings.db"
-	TxBucketName = "SettingsIndex"
+	settingsDb         = "config.db"
+	settingsBucketName = "SettingsIndex"
 )
 
-func InitSettings() {
-	var isNewDbFile bool
-	txDb, err := dbExists()
-	if err != nil {
-		isNewDbFile = true
-		log.Infof("Settings DB " + DbName + " doesn't exist.\n")
-	}
-
-	if isNewDbFile {
-		log.Infof("Creating DB " + DbName)
-		defer txDb.Close()
-		_, err = initializeDB(txDb)
-		if err != nil {
-			return
+// initSettingsDb checks if settingsDb (config.db) exists.
+// If it exists, it attempts to open it. If it doesn't, it atempts
+// to create a new settings DB and save default settings.
+func (lw *LibWallet) initSettingsDb() error {
+	if lw.dbExists() {
+		if lw.settingsDB != nil {
+			// already open
+			return nil
+		} else {
+			err := fmt.Errorf("%s is not open", settingsDb)
+			return err
 		}
-		log.Infof("Default settings set in %s", DbName)
+	} else {
+		log.Infof("Settings DB " + settingsDb + " doesn't exist.\n")
+		//create and set default settings in settingsDb
+		dbPath := filepath.Join(lw.walletDataDir, settingsDb)
+		log.Infof("Creating DB " + settingsDb)
+		settingsDb, err := storm.Open(dbPath)
+		defer settingsDb.Close()
+
+		if err != nil {
+			if err == bolt.ErrTimeout {
+				log.Errorf("settingsDb is in use by another process")
+			}
+			log.Errorf("Error opening database: %s", err.Error())
+		}
+
+		lw.settingsDB = settingsDb
+		err = lw.setDefaultSettings(settingsDb)
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-func initializeDB(db *storm.DB) (*storm.DB, error) {
+func (lw *LibWallet) setDefaultSettings(db *storm.DB) error {
 	config := map[string]interface{}{
 		"new_wallet_set_up":     true,
 		"initial_sync_complete": false,
@@ -52,60 +70,37 @@ func initializeDB(db *storm.DB) (*storm.DB, error) {
 	}
 
 	for key, value := range config {
-		err := db.Set(TxBucketName, key, value)
+		err := db.Set(settingsBucketName, key, value)
 		if err != nil {
-			err = fmt.Errorf("error initializing value %s in %s", value, DbName)
-			return nil, err
+			err = fmt.Errorf("error initializing value %s in %s", value, settingsDb)
+			return err
 		}
 	}
-	return db, nil
+
+	return nil
 }
 
-func ReadValue(key string) (val interface{}, err error) {
-	txDb, err := dbExists()
-	if err != nil {
-		fmt.Println("Settings db doesn't exist")
-		return nil, err
-	}
-
-	defer txDb.Close()
-	err = txDb.Get(TxBucketName, key, &val)
-	if err != nil {
-		return nil, err
-	}
-
-	return val, nil
-}
-
-func WriteValue(key, value string) error {
-	txDb, err := dbExists()
-	if err != nil {
-		fmt.Println("Settings db doesn't exist")
+func (lw *LibWallet) ReadValue(key string, valueOut interface{}) error {
+	if err := lw.initSettingsDb(); err != nil {
 		return err
 	}
-
-	defer txDb.Close()
-	err = txDb.Set(TxBucketName, key, value)
-	if err != nil {
-		log.Errorf("Could not write to settings db; %s", err.Error())
+	err := lw.settingsDB.Get(settingsBucketName, key, valueOut)
+	if err != nil && err != storm.ErrNotFound {
 		return err
 	}
 	return nil
 }
 
-func dbExists() (*storm.DB, error) {
-	if _, err := os.Stat(DbName); os.IsNotExist(err) {
-		return nil, err
+func (lw *LibWallet) WriteValue(key string, value interface{}) error {
+	if err := lw.initSettingsDb(); err != nil {
+		return err
 	}
-	txDb, err := storm.Open(DbName)
-	if err != nil {
-		defer txDb.Close()
-		if err != bolt.ErrTimeout {
-			log.Errorf("tx index database is in use by another process")
-		}
-		log.Errorf("Error opening database: %s", err.Error())
-		return nil, err
-	}
+	return lw.settingsDB.Set(settingsBucketName, key, value)
+}
 
-	return txDb, nil
+func (lw *LibWallet) dbExists() bool {
+	if _, err := os.Stat(settingsDb); os.IsExist(err) {
+		return false
+	}
+	return true
 }
