@@ -36,7 +36,6 @@ const reqSvcs = wire.SFNodeNetwork | wire.SFNodeCF
 type Syncer struct {
 	// atomics
 	atomicCatchUpTryLock uint32 // CAS (entered=1) to perform discovery/rescan
-	atomicWalletSynced   uint32 // CAS (synced=1) when wallet syncing complete
 
 	rescanningWalletAlias int
 	wallets               map[int]*wallet.Wallet
@@ -140,9 +139,7 @@ func (s *Syncer) SetNotifications(ntfns *Notifications) {
 // synced checks the atomic that controls wallet syncness and if previously
 // unsynced, updates to synced and notifies the callback, if set.
 func (s *Syncer) synced(walletID int) {
-	if atomic.CompareAndSwapUint32(&s.atomicWalletSynced, 0, 1) &&
-		s.notifications != nil &&
-		s.notifications.Synced != nil {
+	if s.notifications != nil && s.notifications.Synced != nil {
 		s.notifications.Synced(walletID, true)
 	}
 }
@@ -150,9 +147,7 @@ func (s *Syncer) synced(walletID int) {
 // unsynced checks the atomic that controls wallet syncness and if previously
 // synced, updates to unsynced and notifies the callback, if set.
 func (s *Syncer) unsynced(walletID int) {
-	if atomic.CompareAndSwapUint32(&s.atomicWalletSynced, 1, 0) &&
-		s.notifications != nil &&
-		s.notifications.Synced != nil {
+	if s.notifications != nil && s.notifications.Synced != nil {
 		s.notifications.Synced(walletID, false)
 	}
 }
