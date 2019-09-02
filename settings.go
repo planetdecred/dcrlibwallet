@@ -32,7 +32,6 @@ func (lw *LibWallet) initSettingsDb() error {
 		dbPath := filepath.Join(lw.walletDataDir, settingsDb)
 		log.Infof("Creating DB " + settingsDb)
 		settingsDb, err := storm.Open(dbPath)
-		defer settingsDb.Close()
 
 		if err != nil {
 			if err == bolt.ErrTimeout {
@@ -92,6 +91,7 @@ func (lw *LibWallet) ReadValue(key string, valueOut interface{}) error {
 }
 
 func (lw *LibWallet) WriteValue(key string, value interface{}) error {
+	defer lw.settingsDB.Close()
 	if err := lw.initSettingsDb(); err != nil {
 		return err
 	}
@@ -99,6 +99,7 @@ func (lw *LibWallet) WriteValue(key string, value interface{}) error {
 }
 
 func (lw *LibWallet) dbExists() bool {
+	defer lw.settingsDB.Close()
 	if _, err := os.Stat(settingsDb); os.IsExist(err) {
 		return false
 	}
