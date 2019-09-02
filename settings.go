@@ -80,6 +80,7 @@ func (lw *LibWallet) setDefaultSettings(db *storm.DB) error {
 }
 
 func (lw *LibWallet) ReadValue(key string, valueOut interface{}) error {
+	defer lw.settingsDB.Close()
 	if err := lw.initSettingsDb(); err != nil {
 		return err
 	}
@@ -99,7 +100,6 @@ func (lw *LibWallet) WriteValue(key string, value interface{}) error {
 }
 
 func (lw *LibWallet) dbExists() bool {
-	defer lw.settingsDB.Close()
 	if _, err := os.Stat(settingsDb); os.IsExist(err) {
 		return false
 	}
