@@ -1,5 +1,7 @@
 package dcrlibwallet
 
+import "github.com/decred/dcrwallet/wallet"
+
 type Amount struct {
 	AtomValue int64
 	DcrValue  float64
@@ -52,6 +54,40 @@ type BlockScanResponse interface {
 	OnScan(rescannedThrough int32) bool
 	OnEnd(height int32, cancelled bool)
 	OnError(err string)
+}
+
+type PurchaseTicketsRequest struct {
+	Account               uint32
+	RequiredConfirmations uint32
+	NumTickets            uint32
+	Passphrase            []byte
+	Expiry                uint32
+	TxFee                 int64
+	VSPHost               string
+	TicketAddress         string
+	PoolAddress           string
+	PoolFees              float64
+	TicketFee             int64
+}
+
+type GetTicketsRequest struct {
+	StartingBlockHash   []byte
+	StartingBlockHeight int32
+	EndingBlockHash     []byte
+	EndingBlockHeight   int32
+	TargetTicketCount   int32
+}
+
+type TicketInfo struct {
+	BlockHeight uint32
+	Status      string
+	Ticket      *wallet.TransactionSummary
+	Spender     *wallet.TransactionSummary
+}
+
+type TicketPriceResponse struct {
+	TicketPrice int64
+	Height      int32
 }
 
 /*
@@ -160,4 +196,11 @@ type DebugInfo struct {
 	TotalTimeRemaining        int64
 	CurrentStageTimeElapsed   int64
 	CurrentStageTimeRemaining int64
+}
+
+type VSPTicketPurchaseInfo struct {
+	PoolAddress   string  `json:"PoolAddress"`
+	PoolFees      float64 `json:"PoolFees"`
+	Script        string  `json:"Script"`
+	TicketAddress string  `json:"TicketAddress"`
 }
