@@ -137,6 +137,17 @@ func (mw *MultiWallet) loadWallets() (int, error) {
 	return len(wallets), nil
 }
 
+func (mw *MultiWallet) GetBackupsNeeded() int32 {
+	var backupsNeeded int32
+	for _, w := range mw.wallets {
+		if w.WalletOpened() && w.WalletSeed != "" {
+			backupsNeeded++
+		}
+	}
+
+	return backupsNeeded
+}
+
 func (mw *MultiWallet) LoadedWalletsCount() int32 {
 	return int32(len(mw.wallets))
 }
