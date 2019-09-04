@@ -43,6 +43,7 @@ func (lw *LibWallet) CreateWatchingOnlyWallet(publicPassphrase, extendedPublicKe
 
 	w, err := lw.walletLoader.CreateWatchingOnlyWallet(extendedPublicKey, pubPass)
 	if err != nil {
+		log.Error(err)
 		return err
 	}
 	lw.wallet = w
