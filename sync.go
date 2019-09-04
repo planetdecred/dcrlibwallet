@@ -2,14 +2,13 @@ package dcrlibwallet
 
 import (
 	"context"
+	"fmt"
+	"math"
 	"net"
 	"strings"
 	"sync"
-
-	"math"
 	"time"
 
-	"fmt"
 	"github.com/decred/dcrd/addrmgr"
 	"github.com/decred/dcrd/rpcclient"
 	"github.com/decred/dcrwallet/chain"
