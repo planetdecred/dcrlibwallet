@@ -9,6 +9,7 @@ import (
 	"math"
 	"time"
 
+	"fmt"
 	"github.com/decred/dcrd/addrmgr"
 	"github.com/decred/dcrd/rpcclient"
 	"github.com/decred/dcrwallet/chain"
@@ -16,7 +17,6 @@ import (
 	"github.com/decred/dcrwallet/p2p"
 	"github.com/decred/dcrwallet/spv"
 	"github.com/decred/dcrwallet/wallet"
-	"fmt"
 )
 
 type syncData struct {
@@ -182,7 +182,7 @@ func (lw *LibWallet) SpvSync() error {
 	var peerAddresses string
 	err := lw.ReadFromSettings(SpvPersistentPeerAddresses, &peerAddresses)
 	if err != nil {
-		return fmt.Errorf("error reading pre-configured " +
+		return fmt.Errorf("error reading pre-configured "+
 			"spv peer addresses from settings db: %v", err)
 	}
 

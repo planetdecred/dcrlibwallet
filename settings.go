@@ -8,7 +8,7 @@ const (
 	settingsDbFilename = "config.db"
 	settingsBucketName = "settings"
 
-	AppDataDir = "app_data_dir"
+	AppDataDir                 = "app_data_dir"
 	SpvPersistentPeerAddresses = "spv_peer_addresses"
 )
 

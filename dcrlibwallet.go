@@ -34,7 +34,8 @@ type LibWallet struct {
 	cancelFuncs  []context.CancelFunc
 }
 
-func NewLibWallet(defaultAppDataDir, walletDbDriver string, netType string) (*LibWallet, error) {activeNet := utils.NetParams(netType)
+func NewLibWallet(defaultAppDataDir, walletDbDriver string, netType string) (*LibWallet, error) {
+	activeNet := utils.NetParams(netType)
 	if activeNet == nil {
 		return nil, fmt.Errorf("unsupported network type: %s", netType)
 	}
@@ -101,6 +102,7 @@ func NewLibWallet(defaultAppDataDir, walletDbDriver string, netType string) (*Li
 		syncProgressListeners: make(map[string]SyncProgressListener),
 	}
 
+	// todo add interrupt listener
 	lw.listenForShutdown()
 
 	return lw, nil
