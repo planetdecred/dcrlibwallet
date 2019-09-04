@@ -34,16 +34,11 @@ type LibWallet struct {
 	cancelFuncs  []context.CancelFunc
 }
 
-func NewLibWallet(defaultAppDataDir string, dbDriver string, netType string) (*LibWallet, error) {
-	activeNet := utils.NetParams(netType)
+func NewLibWallet(defaultAppDataDir, walletDbDriver string, netType string) (*LibWallet, error) {activeNet := utils.NetParams(netType)
 	if activeNet == nil {
 		return nil, fmt.Errorf("unsupported network type: %s", netType)
 	}
 
-	return newLibWallet(defaultAppDataDir, dbDriver, activeNet)
-}
-
-func newLibWallet(defaultAppDataDir, walletDbDriver string, activeNet *netparams.Params) (*LibWallet, error) {
 	settingsDbPath := filepath.Join(defaultAppDataDir, settingsDbFilename)
 	settingsDB, err := storm.Open(settingsDbPath)
 	if err != nil {
