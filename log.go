@@ -112,6 +112,18 @@ func initLogRotator(logFile string) {
 	logRotator = r
 }
 
+// RegisterLogger should be called before SetLogLevels.
+func RegisterLogger(tag string) (slog.Logger, error) {
+	if _, exists := subsystemLoggers[tag]; exists {
+		return nil, fmt.Errorf("logger already registered for tag: %s", tag)
+	}
+
+	logger := backendLog.Logger(tag)
+	subsystemLoggers[tag] = logger
+
+	return logger, nil
+}
+
 func SetLogLevels(logLevel string) {
 	_, ok := slog.LevelFromString(logLevel)
 	if !ok {

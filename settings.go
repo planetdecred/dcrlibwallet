@@ -9,6 +9,7 @@ const (
 	settingsBucketName = "settings"
 
 	AppDataDir = "app_data_dir"
+	SpvPersistentPeerAddresses = "spv_peer_addresses"
 )
 
 func (lw *LibWallet) SaveToSettings(key string, value interface{}) error {

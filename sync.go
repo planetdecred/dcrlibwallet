@@ -16,6 +16,7 @@ import (
 	"github.com/decred/dcrwallet/p2p"
 	"github.com/decred/dcrwallet/spv"
 	"github.com/decred/dcrwallet/wallet"
+	"fmt"
 )
 
 type syncData struct {
@@ -140,6 +141,7 @@ func (lw *LibWallet) RemoveSyncProgressListener(uniqueIdentifier string) {
 	}
 }
 
+// todo use preset log level
 func (lw *LibWallet) EnableSyncLogs() {
 	lw.syncData.showLogs = true
 }
@@ -158,7 +160,7 @@ func (lw *LibWallet) SyncInactiveForPeriod(totalInactiveSeconds int64) {
 	}
 }
 
-func (lw *LibWallet) SpvSync(peerAddresses string) error {
+func (lw *LibWallet) SpvSync() error {
 	// Unset this flag as the invocation of this method implies that any request to restart sync has been fulfilled.
 	lw.syncData.restartSyncRequested = false
 
@@ -176,6 +178,13 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 	addr := &net.TCPAddr{IP: net.ParseIP("::1"), Port: 0}
 	addrManager := addrmgr.New(lw.walletDataDir, net.LookupIP) // TODO: be mindful of tor
 	lp := p2p.NewLocalPeer(loadedWallet.ChainParams(), addr, addrManager)
+
+	var peerAddresses string
+	err := lw.ReadFromSettings(SpvPersistentPeerAddresses, &peerAddresses)
+	if err != nil {
+		return fmt.Errorf("error reading pre-configured " +
+			"spv peer addresses from settings db: %v", err)
+	}
 
 	var validPeerAddresses []string
 	if peerAddresses != "" {
@@ -232,10 +241,10 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 	return nil
 }
 
-func (lw *LibWallet) RestartSpvSync(peerAddresses string) error {
+func (lw *LibWallet) RestartSpvSync() error {
 	lw.syncData.restartSyncRequested = true
 	lw.CancelSync() // necessary to unset the network backend.
-	return lw.SpvSync(peerAddresses)
+	return lw.SpvSync()
 }
 
 func (lw *LibWallet) RpcSync(networkAddress string, username string, password string, cert []byte) error {

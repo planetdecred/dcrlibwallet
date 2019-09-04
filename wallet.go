@@ -61,6 +61,10 @@ func (lw *LibWallet) IsWatchingOnlyWallet() bool {
 }
 
 func (lw *LibWallet) OpenWallet(pubPass []byte) error {
+	if pubPass == nil {
+		pubPass = []byte("public")
+	}
+
 	w, err := lw.walletLoader.OpenExistingWallet(pubPass)
 	if err != nil {
 		log.Error(err)
