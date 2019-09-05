@@ -161,3 +161,14 @@ type DebugInfo struct {
 	CurrentStageTimeElapsed   int64
 	CurrentStageTimeRemaining int64
 }
+
+type UnspentOutput struct {
+	TransactionHash []byte
+	OutputIndex     uint32
+	OutputKey       string
+	ReceiveTime     int64
+	Amount          int64
+	FromCoinbase    bool
+	Tree            int32
+	PkScript        []byte
+}
