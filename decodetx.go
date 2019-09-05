@@ -14,7 +14,7 @@ import (
 
 const BlockValid = 1 << 0
 
-// DecodeTransaction uses the tx hex provided to retrieve detailed information for a transaction.
+// DecodeTransaction uses `walletTx.Hex` to retrieve detailed information for a transaction.
 func DecodeTransaction(walletTx *TxInfoFromWallet, netParams *chaincfg.Params) (*Transaction, error) {
 	msgTx, txFee, txSize, txFeeRate, err := txhelper.MsgTxFeeSizeRate(walletTx.Hex)
 	if err != nil {
