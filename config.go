@@ -64,6 +64,13 @@ func (lw *LibWallet) SetIntConfigValueForKey(key string, value int) {
 	}
 }
 
+func (lw *LibWallet) SetLongConfigValueForKey(key string, value int64) {
+	err := lw.SaveUserConfigValue(key, value)
+	if err != nil {
+		log.Errorf("error setting config value: %v", err)
+	}
+}
+
 func (lw *LibWallet) SetStringConfigValueForKey(key, value string) {
 	err := lw.SaveUserConfigValue(key, value)
 	if err != nil {
@@ -88,6 +95,14 @@ func (lw *LibWallet) ReadDoubleConfigValueForKey(key string) (valueOut float64) 
 }
 
 func (lw *LibWallet) ReadIntConfigValueForKey(key string) (valueOut int) {
+	err := lw.ReadUserConfigValue(key, &valueOut)
+	if err != nil {
+		log.Errorf("error reading config value: %v", err)
+	}
+	return
+}
+
+func (lw *LibWallet) ReadLongConfigValueForKey(key string) (valueOut int64) {
 	err := lw.ReadUserConfigValue(key, &valueOut)
 	if err != nil {
 		log.Errorf("error reading config value: %v", err)
