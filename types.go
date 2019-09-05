@@ -227,3 +227,14 @@ type VSPTicketPurchaseInfo struct {
 }
 
 /** end ticket-related types */
+
+type UnspentOutput struct {
+	TransactionHash []byte
+	OutputIndex     uint32
+	OutputKey       string
+	ReceiveTime     int64
+	Amount          int64
+	FromCoinbase    bool
+	Tree            int32
+	PkScript        []byte
+}
