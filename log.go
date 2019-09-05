@@ -112,8 +112,12 @@ func initLogRotator(logFile string) {
 	logRotator = r
 }
 
-// RegisterLogger should be called before SetLogLevels.
+// RegisterLogger should be called before logRotator is initialized.
 func RegisterLogger(tag string) (slog.Logger, error) {
+	if logRotator != nil {
+		return nil, fmt.Errorf("cannot register logger after log rotator is initialized")
+	}
+
 	if _, exists := subsystemLoggers[tag]; exists {
 		return nil, fmt.Errorf("logger already registered for tag: %s", tag)
 	}

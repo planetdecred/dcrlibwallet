@@ -70,8 +70,9 @@ func NewLibWallet(defaultAppDataDir, walletDbDriver string, netType string) (*Li
 
 	errors.Separator = ":: "
 
-	// todo read log level
 	initLogRotator(filepath.Join(lw.walletDataDir, logFileName))
+	logLevel := lw.ReadStringConfigValueForKey(LogLevel)
+	SetLogLevels(logLevel)
 
 	// open database for indexing transactions for faster loading
 	txDBPath := filepath.Join(lw.walletDataDir, txindex.DbName)

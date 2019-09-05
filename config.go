@@ -9,6 +9,7 @@ const (
 	userConfigBucketName = "user_config"
 
 	AppDataDir = "app_data_dir"
+	LogLevel = "log_level"
 
 	NewWalletSetUp                 = "new_wallet_set_up"
 	InitialSyncCompleted           = "initial_sync_complete"
