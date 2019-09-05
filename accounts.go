@@ -3,11 +3,11 @@ package dcrlibwallet
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/decred/dcrd/dcrutil"
-	"github.com/decred/dcrwallet/wallet"
 	"time"
 
+	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrwallet/errors"
+	"github.com/decred/dcrwallet/wallet"
 )
 
 func (lw *LibWallet) GetAccounts(requiredConfirmations int32) (string, error) {
