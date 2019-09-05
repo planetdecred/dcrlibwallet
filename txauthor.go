@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrd/wire"
@@ -220,4 +221,137 @@ func (tx *TxAuthor) constructTransaction() (*txauthor.AuthoredTx, error) {
 
 	return tx.lw.wallet.NewUnsignedTransaction(outputs, txrules.DefaultRelayFeePerKb, tx.sendFromAccount,
 		tx.requiredConfirmations, outputSelectionAlgorithm, changeSource)
+}
+
+func (lw *LibWallet) SendFromCustomInputs(sourceAccount uint32, requiredConfirmations int32, utxoKeys []string,
+	txDestinations []txhelper.TransactionDestination, changeDestinations []txhelper.TransactionDestination, privPass []byte) (string, error) {
+
+	// fetch all utxos in account to extract details for the utxos selected by user
+	// use targetAmount = 0 to fetch ALL utxos in account
+	unspentOutputs, err := lw.UnspentOutputs(sourceAccount, requiredConfirmations, 0)
+	if err != nil {
+		return "", err
+	}
+
+	// loop through unspentOutputs to find user selected utxos
+	inputs := make([]*wire.TxIn, 0, len(utxoKeys))
+	var totalInputAmount int64
+	for _, utxo := range unspentOutputs {
+		useUtxo := false
+		for _, key := range utxoKeys {
+			if utxo.OutputKey == key {
+				useUtxo = true
+			}
+		}
+		if !useUtxo {
+			continue
+		}
+
+		// this is a reverse conversion and should not throw an error
+		// this []byte was originally converted from chainhash.Hash using chainhash.Hash[:]
+		txHash, _ := chainhash.NewHash(utxo.TransactionHash)
+
+		outpoint := wire.NewOutPoint(txHash, utxo.OutputIndex, int8(utxo.Tree))
+		input := wire.NewTxIn(outpoint, int64(utxo.Amount), nil)
+		inputs = append(inputs, input)
+		totalInputAmount += input.ValueIn
+
+		if len(inputs) == len(utxoKeys) {
+			break
+		}
+	}
+
+	unsignedTx, err := txhelper.NewUnsignedTx(inputs, txDestinations, changeDestinations, func() (address string, err error) {
+		return lw.NextAddress(int32(sourceAccount))
+	})
+	if err != nil {
+		return "", err
+	}
+
+	// serialize unsigned tx
+	var txBuf bytes.Buffer
+	txBuf.Grow(unsignedTx.SerializeSize())
+	err = unsignedTx.Serialize(&txBuf)
+	if err != nil {
+		return "", fmt.Errorf("error serializing transaction: %s", err.Error())
+	}
+
+	txHash, err := lw.SignAndPublishTransaction(txBuf.Bytes(), privPass)
+	if err != nil {
+		return "", err
+	}
+
+	transactionHash, err := chainhash.NewHash(txHash)
+	if err != nil {
+		return "", fmt.Errorf("error parsing successful transaction hash: %s", err.Error())
+	}
+
+	return transactionHash.String(), nil
+}
+
+func (lw *LibWallet) SignAndPublishTransaction(serializedTx, privPass []byte) ([]byte, error) {
+	n, err := lw.wallet.NetworkBackend()
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+	defer func() {
+		for i := range privPass {
+			privPass[i] = 0
+		}
+	}()
+
+	var tx wire.MsgTx
+	err = tx.Deserialize(bytes.NewReader(serializedTx))
+	if err != nil {
+		log.Error(err)
+		//Bytes do not represent a valid raw transaction
+		return nil, err
+	}
+
+	lock := make(chan time.Time, 1)
+	defer func() {
+		lock <- time.Time{}
+	}()
+
+	err = lw.wallet.Unlock(privPass, lock)
+	if err != nil {
+		log.Error(err)
+		return nil, errors.New(ErrInvalidPassphrase)
+	}
+
+	var additionalPkScripts map[wire.OutPoint][]byte
+
+	invalidSigs, err := lw.wallet.SignTransaction(&tx, txscript.SigHashAll, additionalPkScripts, nil, nil)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+
+	invalidInputIndexes := make([]uint32, len(invalidSigs))
+	for i, e := range invalidSigs {
+		invalidInputIndexes[i] = e.InputIndex
+	}
+
+	var serializedTransaction bytes.Buffer
+	serializedTransaction.Grow(tx.SerializeSize())
+	err = tx.Serialize(&serializedTransaction)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+
+	var msgTx wire.MsgTx
+	err = msgTx.Deserialize(bytes.NewReader(serializedTransaction.Bytes()))
+	if err != nil {
+		//Invalid tx
+		log.Error(err)
+		return nil, err
+	}
+
+	txHash, err := lw.wallet.PublishTransaction(&msgTx, serializedTransaction.Bytes(), n)
+	if err != nil {
+		return nil, translateError(err)
+	}
+	return txHash[:], nil
 }
