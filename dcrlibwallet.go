@@ -40,7 +40,7 @@ func NewLibWallet(defaultAppDataDir, walletDbDriver string, netType string) (*Li
 		return nil, fmt.Errorf("unsupported network type: %s", netType)
 	}
 
-	settingsDbPath := filepath.Join(defaultAppDataDir, settingsDbFilename)
+	settingsDbPath := filepath.Join(defaultAppDataDir, userConfigDbFilename)
 	settingsDB, err := storm.Open(settingsDbPath)
 	if err != nil {
 		if err == bolt.ErrTimeout {
@@ -57,7 +57,7 @@ func NewLibWallet(defaultAppDataDir, walletDbDriver string, netType string) (*Li
 
 	var appDataDir string
 
-	err = lw.ReadFromSettings(AppDataDir, &appDataDir)
+	err = lw.ReadUserConfigValue(AppDataDir, &appDataDir)
 	if err != nil {
 		return nil, fmt.Errorf("error reading app data dir from settings db: %s", err.Error())
 	}

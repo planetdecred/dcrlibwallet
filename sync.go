@@ -179,7 +179,7 @@ func (lw *LibWallet) SpvSync() error {
 	lp := p2p.NewLocalPeer(loadedWallet.ChainParams(), addr, addrManager)
 
 	var peerAddresses string
-	err := lw.ReadFromSettings(SpvPersistentPeerAddresses, &peerAddresses)
+	err := lw.ReadUserConfigValue(SpvPersistentPeerAddresses, &peerAddresses)
 	if err != nil {
 		return fmt.Errorf("error reading pre-configured "+
 			"spv peer addresses from settings db: %v", err)
