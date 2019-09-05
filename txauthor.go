@@ -3,6 +3,7 @@ package dcrlibwallet
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/decred/dcrd/dcrutil"
@@ -183,4 +184,136 @@ func (lw *LibWallet) PublishUnminedTransactions() error {
 	ctx, _ := lw.contextWithShutdownCancel(context.Background())
 	err = lw.wallet.PublishUnminedTransactions(ctx, netBackend)
 	return err
+}
+
+func (lw *LibWallet) MultiSend(privPass []byte, destinations []txhelper.TransactionDestination, srcAccount int32, requiredConfs int32) ([]byte, error) {
+	nOutputs := len(destinations)
+	var maxAmountRecipientAddress string
+	for _, destination := range destinations {
+		if destination.SendMax && maxAmountRecipientAddress != "" {
+			return nil, fmt.Errorf("cannot send max amount to multiple recipients")
+		} else if destination.SendMax {
+			maxAmountRecipientAddress = destination.Address
+			nOutputs--
+		}
+	}
+
+	// create transaction outputs for all destination addresses and amounts, excluding destination for send max
+	outputs := make([]*wire.TxOut, 0, nOutputs)
+	for _, destination := range destinations {
+		if !destination.SendMax {
+			output, err := txhelper.MakeTxOutput(destination)
+			if err != nil {
+				log.Error(err)
+				return nil, err
+			}
+
+			outputs = append(outputs, output)
+		}
+	}
+
+	var algo wallet.OutputSelectionAlgorithm
+	var changeSource txauthor.ChangeSource
+	var err error
+
+	// if no max amount recipient, use default utxo selection algorithm and nil change source
+	// so that a change source to the sending account is automatically created
+	// otherwise, create a change source for the max amount recipient so that the remaining change from the tx is sent to the max amount recipient
+	if maxAmountRecipientAddress != "" {
+		algo = wallet.OutputSelectionAlgorithmAll
+		changeSource, err = txhelper.MakeTxChangeSource(maxAmountRecipientAddress)
+		if err != nil {
+			log.Error(err)
+			return nil, err
+		}
+	} else {
+		algo = wallet.OutputSelectionAlgorithmDefault
+	}
+
+	unsignedTx, err := lw.wallet.NewUnsignedTransaction(outputs, txrules.DefaultRelayFeePerKb, uint32(srcAccount), requiredConfs, algo, changeSource)
+	if err != nil {
+		log.Error(err)
+		return nil, translateError(err)
+	}
+
+	if unsignedTx.ChangeIndex >= 0 {
+		unsignedTx.RandomizeChangePosition()
+	}
+
+	var txBuf bytes.Buffer
+	txBuf.Grow(unsignedTx.Tx.SerializeSize())
+	err = unsignedTx.Tx.Serialize(&txBuf)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+
+	return lw.SignAndPublishTransaction(txBuf.Bytes(), privPass)
+}
+
+func (lw *LibWallet) SignAndPublishTransaction(serializedTx, privPass []byte) ([]byte, error) {
+	n, err := lw.wallet.NetworkBackend()
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+	defer func() {
+		for i := range privPass {
+			privPass[i] = 0
+		}
+	}()
+
+	var tx wire.MsgTx
+	err = tx.Deserialize(bytes.NewReader(serializedTx))
+	if err != nil {
+		log.Error(err)
+		//Bytes do not represent a valid raw transaction
+		return nil, err
+	}
+
+	lock := make(chan time.Time, 1)
+	defer func() {
+		lock <- time.Time{}
+	}()
+
+	err = lw.wallet.Unlock(privPass, lock)
+	if err != nil {
+		log.Error(err)
+		return nil, errors.New(ErrInvalidPassphrase)
+	}
+
+	var additionalPkScripts map[wire.OutPoint][]byte
+
+	invalidSigs, err := lw.wallet.SignTransaction(&tx, txscript.SigHashAll, additionalPkScripts, nil, nil)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+
+	invalidInputIndexes := make([]uint32, len(invalidSigs))
+	for i, e := range invalidSigs {
+		invalidInputIndexes[i] = e.InputIndex
+	}
+
+	var serializedTransaction bytes.Buffer
+	serializedTransaction.Grow(tx.SerializeSize())
+	err = tx.Serialize(&serializedTransaction)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+
+	var msgTx wire.MsgTx
+	err = msgTx.Deserialize(bytes.NewReader(serializedTransaction.Bytes()))
+	if err != nil {
+		//Invalid tx
+		log.Error(err)
+		return nil, err
+	}
+
+	txHash, err := lw.wallet.PublishTransaction(&msgTx, serializedTransaction.Bytes(), n)
+	if err != nil {
+		return nil, translateError(err)
+	}
+	return txHash[:], nil
 }
