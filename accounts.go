@@ -78,15 +78,14 @@ func (lw *LibWallet) SpendableForAccount(account int32, requiredConfirmations in
 	return int64(bals.Spendable), nil
 }
 
-func (lw *LibWallet) UnspentOutputs(account uint32, requiredConfirmations int32, targetAmount int64) ([]*UnspentOutput, error) {
+func (lw *LibWallet) UnspentOutputs(account uint32, requiredConfirmations int32) ([]*UnspentOutput, error) {
 	policy := wallet.OutputSelectionPolicy{
 		Account:               account,
 		RequiredConfirmations: requiredConfirmations,
 	}
-	inputDetail, err := lw.wallet.SelectInputs(dcrutil.Amount(targetAmount), policy)
-	// Do not return errors to caller when there was insufficient spendable
-	// outputs available for the target amount.
-	if err != nil && !errors.Is(errors.InsufficientBalance, err) {
+	inputDetail, err := lw.wallet.SelectInputs(dcrutil.Amount(0), policy)
+
+	if err != nil {
 		return nil, err
 	}
 
