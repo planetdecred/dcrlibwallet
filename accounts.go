@@ -78,11 +78,14 @@ func (lw *LibWallet) SpendableForAccount(account int32, requiredConfirmations in
 	return int64(bals.Spendable), nil
 }
 
-func (lw *LibWallet) UnspentOutputs(account uint32, requiredConfirmations int32) ([]*UnspentOutput, error) {
+func (lw *LibWallet) AllUnspentOutputs(account uint32, requiredConfirmations int32) ([]*UnspentOutput, error) {
 	policy := wallet.OutputSelectionPolicy{
 		Account:               account,
 		RequiredConfirmations: requiredConfirmations,
 	}
+
+	// fetch all utxos in account to extract details for the utxos selected by user
+	// use targetAmount = 0 to fetch ALL utxos in account
 	inputDetail, err := lw.wallet.SelectInputs(dcrutil.Amount(0), policy)
 
 	if err != nil {

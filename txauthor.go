@@ -226,9 +226,7 @@ func (tx *TxAuthor) constructTransaction() (*txauthor.AuthoredTx, error) {
 func (lw *LibWallet) SendFromCustomInputs(sourceAccount uint32, requiredConfirmations int32, utxoKeys []string,
 	txDestinations []txhelper.TransactionDestination, changeDestinations []txhelper.TransactionDestination, privPass []byte) (string, error) {
 
-	// fetch all utxos in account to extract details for the utxos selected by user
-	// use targetAmount = 0 to fetch ALL utxos in account
-	unspentOutputs, err := lw.UnspentOutputs(sourceAccount, requiredConfirmations, 0)
+	unspentOutputs, err := lw.AllUnspentOutputs(sourceAccount, requiredConfirmations)
 	if err != nil {
 		return "", err
 	}
@@ -256,8 +254,8 @@ func (lw *LibWallet) SendFromCustomInputs(sourceAccount uint32, requiredConfirma
 		inputs = append(inputs, input)
 		totalInputAmount += input.ValueIn
 
-		if len(inputs) == len(utxoKeys) {
-			break
+		if len(inputs) != len(utxoKeys) {
+			return "", fmt.Errorf("could not find matching inputs for all provided utxo keys")
 		}
 	}
 
