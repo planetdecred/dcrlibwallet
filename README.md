@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/raedahgroup/dcrlibwallet.svg?branch=master)](https://travis-ci.org/raedahgroup/dcrlibwallet)
 
-A Decred wallet library written in golang for [dcrwallet](https://github.com/decred/dcrwallet)
+A standalone Decred wallet library written in golang for [dcrwallet](https://github.com/decred/dcrwallet), and used directly with [godcr](https://github.com/raedahgroup/godcr) for all wallet access and control functionality.
 
 ## Build Dependencies
 
