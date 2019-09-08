@@ -95,6 +95,33 @@ func (lw *LibWallet) GetTransactionsRaw(offset, limit, txFilter int32) (transact
 	return
 }
 
+func (mw *MultiWallet) GetTransactions(offset, limit, txFilter int32) (string, error) {
+	transactions := make([]Transaction, 0)
+	for _, w := range mw.wallets {
+		walletTransactions, err := w.GetTransactionsRaw(offset, limit, txFilter)
+		if err != nil {
+			return "", nil
+		}
+
+		transactions = append(transactions, walletTransactions...)
+	}
+
+	sort.Slice(transactions[:], func(i, j int) bool {
+		return transactions[i].Timestamp < transactions[j].Timestamp
+	})
+
+	if len(transactions) > int(limit) {
+		transactions = transactions[:limit]
+	}
+
+	jsonEncodedTransactions, err := json.Marshal(&transactions)
+	if err != nil {
+		return "", err
+	}
+
+	return string(jsonEncodedTransactions), nil
+}
+
 func (lw *LibWallet) CountTransactions(txFilter int32) (int, error) {
 	return lw.txDB.Count(txFilter, &Transaction{})
 }

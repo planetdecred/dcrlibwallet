@@ -87,6 +87,7 @@ func (accountsInterator *AccountsIterator) Next() *Account {
 		accountsInterator.currentIndex++
 		return account
 	}
+
 	return nil
 }
 
