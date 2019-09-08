@@ -36,6 +36,9 @@ type MultiWallet struct {
 }
 
 func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
+
+	errors.Separator = ":: "
+
 	activeNet := utils.NetParams(netType)
 	if activeNet == nil {
 		return nil, fmt.Errorf("unsupported network type: %s", netType)

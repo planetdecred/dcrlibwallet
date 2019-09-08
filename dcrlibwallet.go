@@ -12,12 +12,12 @@ import (
 	"github.com/decred/dcrwallet/wallet/v3/txrules"
 	"github.com/raedahgroup/dcrlibwallet/txindex"
 	"github.com/raedahgroup/dcrlibwallet/utils"
-	bolt "go.etcd.io/bbolt"
 )
 
-errors.Separator = ":: "
-
-const logFileName = "dcrlibwallet.log"
+const (
+	SpendingPassphraseTypePin  int32 = 0
+	SpendingPassphraseTypePass int32 = 1
+)
 
 type WalletProperties struct {
 	WalletID               int `storm:"id,increment"`

@@ -2,6 +2,7 @@ package dcrlibwallet
 
 import (
 	"math"
+	"sync"
 	"time"
 
 	chain "github.com/decred/dcrwallet/chain/v3"
@@ -547,14 +548,21 @@ func (mw *MultiWallet) synced(walletID int, synced bool) {
 
 		// begin indexing transactions after sync is completed,
 		// syncProgressListeners.OnSynced() will be invoked after transactions are indexed
-		lw.IndexTransactions(func() {
-			for _, syncProgressListener := range lw.syncProgressListeners {
-				if synced {
+		var waitForIndexing sync.WaitGroup
+		waitForIndexing.Add(len(mw.wallets))
+		for _, w := range mw.wallets {
+			go w.IndexTransactions(&waitForIndexing)
+		}
+
+		go func() {
+			waitForIndexing.Wait()
+			for _, syncProgressListener := range mw.syncProgressListeners {
+				if mw.IsSynced() {
 					syncProgressListener.OnSyncCompleted()
 				} else {
 					syncProgressListener.OnSyncCanceled(false)
 				}
 			}
-		})
+		}()
 	}
 }
