@@ -39,6 +39,20 @@ func (lw *LibWallet) GetWalletSeed() string {
 	return lw.WalletSeed
 }
 
+func (mw *MultiWallet) VerifySeed(walletID int, seedMnemonic string) error {
+	w, ok := mw.wallets[walletID]
+	if !ok {
+		return errors.New(ErrNotExist)
+	}
+
+	if w.WalletSeed == seedMnemonic {
+		w.WalletSeed = ""
+		return translateError(mw.db.Save(w))
+	}
+
+	return errors.New(ErrInvalid)
+}
+
 func (lw *LibWallet) CreateWallet(passphrase string, seedMnemonic string) error {
 	log.Info("Creating Wallet")
 	if len(seedMnemonic) == 0 {
