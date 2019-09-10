@@ -4,54 +4,51 @@ import (
 	"encoding/json"
 )
 
-func (lw *LibWallet) TransactionNotification(listener TransactionListener) {
-	go func() {
-		n := lw.wallet.NtfnServer.TransactionNotifications()
-		defer n.Done() // disassociate this notification client from server when this goroutine exits.
+func (mw *MultiWallet) listenForTransactions(lw *LibWallet) {
+	n := lw.wallet.NtfnServer.TransactionNotifications()
+	defer n.Done() // disassociate this notification client from server when this goroutine exits.
 
-		for {
-			v := <-n.C
+	for {
+		v := <-n.C
 
-			for _, transaction := range v.UnminedTransactions {
-				tempTransaction, err := lw.decodeTransactionWithTxSummary(&transaction, nil)
+		for _, transaction := range v.UnminedTransactions {
+			tempTransaction, err := lw.decodeTransactionWithTxSummary(&transaction, nil)
+			if err != nil {
+				log.Errorf("[%d] Error ntfn parse tx: %v", lw.WalletID, err)
+				return
+			}
+
+			err = lw.txDB.SaveOrUpdate(&Transaction{}, tempTransaction)
+			if err != nil {
+				log.Errorf("[%d] Tx ntfn replace tx err: %v", lw.WalletID, err)
+			}
+
+			log.Infof("[%d] New Transaction", lw.WalletID)
+
+			result, err := json.Marshal(tempTransaction)
+			if err != nil {
+				log.Error(err)
+			} else {
+				mw.mempoolTransactionNotification(string(result))
+			}
+		}
+
+		for _, block := range v.AttachedBlocks {
+			blockHash := block.Header.BlockHash()
+			for _, transaction := range block.Transactions {
+				tempTransaction, err := lw.decodeTransactionWithTxSummary(&transaction, &blockHash)
 				if err != nil {
-					log.Errorf("Error ntfn parse tx: %v", err)
+					log.Errorf("[%d] Error ntfn parse tx: %v", lw.WalletID, err)
 					return
 				}
 
 				err = lw.txDB.SaveOrUpdate(&Transaction{}, tempTransaction)
 				if err != nil {
-					log.Errorf("Tx ntfn replace tx err: %v", err)
+					log.Errorf("[%d] Incoming block replace tx error :%v", lw.WalletID, err)
+					return
 				}
-
-				log.Info("New Transaction")
-
-				result, err := json.Marshal(tempTransaction)
-				if err != nil {
-					log.Error(err)
-				} else {
-					listener.OnTransaction(string(result))
-				}
-			}
-
-			for _, block := range v.AttachedBlocks {
-				listener.OnBlockAttached(int32(block.Header.Height), block.Header.Timestamp.UnixNano())
-				blockHash := block.Header.BlockHash()
-				for _, transaction := range block.Transactions {
-					tempTransaction, err := lw.decodeTransactionWithTxSummary(&transaction, &blockHash)
-					if err != nil {
-						log.Errorf("Error ntfn parse tx: %v", err)
-						return
-					}
-
-					err = lw.txDB.SaveOrUpdate(&Transaction{}, tempTransaction)
-					if err != nil {
-						log.Errorf("Incoming block replace tx error :%v", err)
-						return
-					}
-					listener.OnTransactionConfirmed(transaction.Hash.String(), int32(block.Header.Height))
-				}
+				mw.publishTransactionConfirmed(lw.WalletID, transaction.Hash.String(), int32(block.Header.Height))
 			}
 		}
-	}()
+	}
 }

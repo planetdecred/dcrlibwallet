@@ -1,15 +1,15 @@
 package dcrlibwallet
 
 import (
-	"context"
+	"sync"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrwallet/wallet"
+	wallet "github.com/decred/dcrwallet/wallet/v3"
 	"github.com/raedahgroup/dcrlibwallet/txindex"
 )
 
-func (lw *LibWallet) IndexTransactions(afterIndexing func()) error {
-	ctx, _ := lw.contextWithShutdownCancel(context.Background())
+func (lw *LibWallet) IndexTransactions(waitGroup *sync.WaitGroup) error {
+	ctx, _ := lw.contextWithShutdownCancel()
 
 	var totalIndex int32
 	var txEndHeight uint32
@@ -69,7 +69,7 @@ func (lw *LibWallet) IndexTransactions(afterIndexing func()) error {
 	endBlock := wallet.NewBlockIdentifierFromHeight(endHeight)
 
 	defer func() {
-		afterIndexing()
+		waitGroup.Done()
 		count, err := lw.txDB.Count(txindex.TxFilterAll, &Transaction{})
 		if err != nil {
 			log.Errorf("Post-indexing tx count error :%v", err)
@@ -78,6 +78,7 @@ func (lw *LibWallet) IndexTransactions(afterIndexing func()) error {
 		log.Infof("Transaction index finished at %d, %d transaction(s) indexed in total", txEndHeight, count)
 	}()
 
+	waitGroup.Add(1)
 	log.Infof("Indexing transactions start height: %d, end height: %d", beginHeight, endHeight)
 	return lw.wallet.GetTransactions(rangeFn, startBlock, endBlock)
 }

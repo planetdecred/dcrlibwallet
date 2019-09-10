@@ -58,6 +58,7 @@ github.com/decred/dcrd/chaincfg v1.0.1/go.mod h1:O+443mQNPjci+WqWkKta3v2MgJn2u20
 github.com/decred/dcrd/chaincfg v1.1.1 h1:qRZkiA7ucsfsQPE/G/U1OnEUFozDl1MvM4ysJCUndLU=
 github.com/decred/dcrd/chaincfg v1.1.1/go.mod h1:UlGtnp8Xx9YK+etBTybGjoFGoGXSw2bxZQuAnwfKv6I=
 github.com/decred/dcrd/chaincfg v1.2.0/go.mod h1:kpoGTMIriKn5hHRSu5b65+Q9LlGUdbQcMzGujac1BVs=
+github.com/decred/dcrd/chaincfg v1.3.0/go.mod h1:kpoGTMIriKn5hHRSu5b65+Q9LlGUdbQcMzGujac1BVs=
 github.com/decred/dcrd/chaincfg v1.4.0/go.mod h1:ypuM30F+XgZmZTFfAkWHWd0lwwkWWAOAQYNRkRDlYLc=
 github.com/decred/dcrd/chaincfg v1.5.1 h1:u1Xbq0VTnAXIHW5ECqrWe0VYSgf5vWHqpSiwoLBzxAQ=
 github.com/decred/dcrd/chaincfg v1.5.1/go.mod h1:FukMzTjkwzjPU+hK7CqDMQe3NMbSZAYU5PAcsx1wlv0=
@@ -93,6 +94,7 @@ github.com/decred/dcrd/dcrec v0.0.0-20180809193022-9536f0c88fa8/go.mod h1:cRAH1S
 github.com/decred/dcrd/dcrec v0.0.0-20181212181811-1a370d38d671 h1:7CaWvkh3YH6zUtM68d0HVxslhU2o4hChc22sDonRPbI=
 github.com/decred/dcrd/dcrec v0.0.0-20181212181811-1a370d38d671/go.mod h1:cRAH1SNk8Mi9hKBc/DHbeiWz/fyO8KWZR3H7okrIuOA=
 github.com/decred/dcrd/dcrec v0.0.0-20190130161649-59ed4247a1d5/go.mod h1:cRAH1SNk8Mi9hKBc/DHbeiWz/fyO8KWZR3H7okrIuOA=
+github.com/decred/dcrd/dcrec v0.0.0-20190402182842-879eebce3333/go.mod h1:HIaqbEJQ+PDzQcORxnqen5/V1FR3B4VpIfmePklt8Q8=
 github.com/decred/dcrd/dcrec v1.0.0 h1:W+z6Es+Rai3MXYVoPAxYr5U1DGis0Co33scJ6uH2J6o=
 github.com/decred/dcrd/dcrec v1.0.0/go.mod h1:HIaqbEJQ+PDzQcORxnqen5/V1FR3B4VpIfmePklt8Q8=
 github.com/decred/dcrd/dcrec/edwards v0.0.0-20180721005212-59fe2b293f69/go.mod h1:+ehP0Hk/mesyZXttxCtBbhPX23BMpZJ1pcVBqUfbmvU=
@@ -102,6 +104,7 @@ github.com/decred/dcrd/dcrec/edwards v0.0.0-20181208004914-a0816cf4301f h1:NF7vp
 github.com/decred/dcrd/dcrec/edwards v0.0.0-20181208004914-a0816cf4301f/go.mod h1:+ehP0Hk/mesyZXttxCtBbhPX23BMpZJ1pcVBqUfbmvU=
 github.com/decred/dcrd/dcrec/edwards v0.0.0-20190130161649-59ed4247a1d5 h1:qA+q5URxOMLCts1hTsNlXfOOtT2d83b3Z597yupIn5A=
 github.com/decred/dcrd/dcrec/edwards v0.0.0-20190130161649-59ed4247a1d5/go.mod h1:+ehP0Hk/mesyZXttxCtBbhPX23BMpZJ1pcVBqUfbmvU=
+github.com/decred/dcrd/dcrec/edwards v0.0.0-20190402182842-879eebce3333/go.mod h1:HblVh1OfMt7xSxUL1ufjToaEvpbjpWvvTAUx4yem8BI=
 github.com/decred/dcrd/dcrec/edwards v1.0.0 h1:UDcPNzclKiJlWqV3x1Fl8xMCJrolo4PB4X9t8LwKDWU=
 github.com/decred/dcrd/dcrec/edwards v1.0.0/go.mod h1:HblVh1OfMt7xSxUL1ufjToaEvpbjpWvvTAUx4yem8BI=
 github.com/decred/dcrd/dcrec/secp256k1 v1.0.0 h1:Le54WTGdTQv7XYXpS31uhFE8LZE7ypwsIL+FgDP2x5Q=
@@ -160,6 +163,7 @@ github.com/decred/dcrd/rpc/jsonrpc/types v1.0.0/go.mod h1:0dwmpIP21tJxjg/UuUHWIF
 github.com/decred/dcrd/rpcclient v1.0.1/go.mod h1:tApXK3wwrAQtz7lcXeeqBwuktUZesvrFfvhAdedYqdM=
 github.com/decred/dcrd/rpcclient v1.1.0 h1:nQZ1qOJaLYoOTM1oQ2dLaqocb5TWI7gNBK+BTY7UVXk=
 github.com/decred/dcrd/rpcclient v1.1.0/go.mod h1:SCwBs4d+aqRV2ChnriIZ1y/LgNVHG/2ieEC1vIop82s=
+github.com/decred/dcrd/rpcclient/v2 v2.0.0/go.mod h1:9XjbRHBSNqN+DXz8I47gUZszvVjvugqLGK8TZQ4c/u0=
 github.com/decred/dcrd/rpcclient/v2 v2.1.0 h1:oaHR2ZIe6TyINbLgmrRkS8xddLr5gDmkX6BkWwSFy6Q=
 github.com/decred/dcrd/rpcclient/v2 v2.1.0/go.mod h1:tVaa1C6a0Cqdcpi393nm2AQZeZdxKwrCfToashLIv8w=
 github.com/decred/dcrd/txscript v1.0.0/go.mod h1:9byvrOaBSBVVnDG7Cm0JgN8bZytl1oi9Ba245VBeI18=
@@ -167,6 +171,7 @@ github.com/decred/dcrd/txscript v1.0.1 h1:IMgxZFCw3AyG4EbKwywE3SDNshOSHsoUK1Wk/5
 github.com/decred/dcrd/txscript v1.0.1/go.mod h1:FqUX07Y+u3cJ1eIGPoyWbJg+Wk1NTllln/TyDpx9KnY=
 github.com/decred/dcrd/txscript v1.0.2 h1:kzJZDuteyzvI15VNhtgFHxeeq210RTkFyfzN7d+1iPo=
 github.com/decred/dcrd/txscript v1.0.2/go.mod h1:hmUOHFlOjU7H6T/czt6kurWwXJvGPGKKGtXoft6w/qY=
+github.com/decred/dcrd/txscript v1.0.3-0.20190402182842-879eebce3333/go.mod h1:OhSIXbXdGDRNtkzW7Pil22tj+fcqpUp8r/E4LAz1yoQ=
 github.com/decred/dcrd/txscript v1.1.0 h1:MwkLXdc4Yq83oeNNEQJdlBTkNlorKXn8Nd5W2JXyMZg=
 github.com/decred/dcrd/txscript v1.1.0/go.mod h1:gbcq6gpGfKddPmZSKp+17ils2cLzUqHopXf8H5rCY7Y=
 github.com/decred/dcrd/txscript/v2 v2.0.0 h1:So+NcQY58mDHDN2N2edED5syGZp2ed8Ltxj8mDE5CAs=
@@ -311,6 +316,7 @@ golang.org/x/crypto v0.0.0-20181203042331-505ab145d0a9/go.mod h1:6SG95UA2DQfeDnf
 golang.org/x/crypto v0.0.0-20190131182504-b8fe1690c613/go.mod h1:6SG95UA2DQfeDnfUPMdvaQW0Q7yPrPDi9nlGo2tz2b4=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2 h1:VklqNMn3ovrHsnt90PveolxSbWFaJdECFbxSq0Mqo2M=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
+golang.org/x/crypto v0.0.0-20190325154230-a5d413f7728c/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
 golang.org/x/crypto v0.0.0-20190611184440-5c40567a22f8 h1:1wopBVtVdWnn03fZelqdXTqk7U7zPQCb+T4rbU9ZEoU=
 golang.org/x/crypto v0.0.0-20190611184440-5c40567a22f8/go.mod h1:yigFU9vqHzYiE8UmvKecakEJjdnWj3jj499lnFckfCI=
 golang.org/x/lint v0.0.0-20181026193005-c67002cb31c3/go.mod h1:UVdnD1Gm6xHRNCYTkRU2/jEulfH38KcIWyp/GAMgvoE=
@@ -322,6 +328,7 @@ golang.org/x/net v0.0.0-20180808004115-f9ce57c11b24/go.mod h1:mL1N/T3taQHkDXs73r
 golang.org/x/net v0.0.0-20180826012351-8a410e7b638d/go.mod h1:mL1N/T3taQHkDXs73rZJwtUhF3w3ftmwwsq0BUmARs4=
 golang.org/x/net v0.0.0-20180906233101-161cd47e91fd/go.mod h1:mL1N/T3taQHkDXs73rZJwtUhF3w3ftmwwsq0BUmARs4=
 golang.org/x/net v0.0.0-20181207154023-610586996380/go.mod h1:mL1N/T3taQHkDXs73rZJwtUhF3w3ftmwwsq0BUmARs4=
+golang.org/x/net v0.0.0-20190125091013-d26f9f9a57f3/go.mod h1:mL1N/T3taQHkDXs73rZJwtUhF3w3ftmwwsq0BUmARs4=
 golang.org/x/net v0.0.0-20190311183353-d8887717615a/go.mod h1:t9HGtf8HONx5eT2rtn7q6eTqICYqUVnKs3thJo3Qplg=
 golang.org/x/net v0.0.0-20190404232315-eb5bcb51f2a3/go.mod h1:t9HGtf8HONx5eT2rtn7q6eTqICYqUVnKs3thJo3Qplg=
 golang.org/x/net v0.0.0-20190420063019-afa5a82059c6 h1:HdqqaWmYAUI7/dmByKKEw+yxDksGSo+9GjkUc9Zp34E=
@@ -331,6 +338,7 @@ golang.org/x/sync v0.0.0-20180314180146-1d60e4601c6f h1:wMNYb4v58l5UBM7MYRLPG6Zh
 golang.org/x/sync v0.0.0-20180314180146-1d60e4601c6f/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sync v0.0.0-20181108010431-42b317875d0f h1:Bl/8QSvNqXvPGPGXa2z5xUTmV7VDcZyvRZ+QQXkXTZQ=
 golang.org/x/sync v0.0.0-20181108010431-42b317875d0f/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
+golang.org/x/sync v0.0.0-20181221193216-37e7f081c4d4/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sync v0.0.0-20190423024810-112230192c58 h1:8gQV6CLnAEikrhgkHFbMAEhagSSnXWGV915qUMm9mrU=
 golang.org/x/sync v0.0.0-20190423024810-112230192c58/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sys v0.0.0-20180810070207-f0d5e33068cb h1:8RtOlGoYzeQE/7H55BC4Ct/2wxzIXu6esHJefkHwc48=
@@ -341,7 +349,9 @@ golang.org/x/sys v0.0.0-20180909124046-d0be0721c37e/go.mod h1:STP8DvDyc/dI5b8T5h
 golang.org/x/sys v0.0.0-20181206074257-70b957f3b65e/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
 golang.org/x/sys v0.0.0-20181212120007-b05ddf57801d h1:G59MrP9Qg6bymPjN3yGmqnmuCEH1h0eFP8zpRpl1RiU=
 golang.org/x/sys v0.0.0-20181212120007-b05ddf57801d/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
+golang.org/x/sys v0.0.0-20190203050204-7ae0202eb74c/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
 golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
+golang.org/x/sys v0.0.0-20190402142545-baf5eb976a8c/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20190412213103-97732733099d/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20190422165155-953cdadca894 h1:Cz4ceDQGXuKRnVBDTS23GTn/pU5OE2C0WrNTOYK1Uuc=
 golang.org/x/sys v0.0.0-20190422165155-953cdadca894/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=

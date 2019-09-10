@@ -482,6 +482,20 @@ func (mw *MultiWallet) publishDebugInfo(debugInfo *DebugInfo) {
 	}
 }
 
+// Transaction Notification
+
+func (mw *MultiWallet) mempoolTransactionNotification(transaction string) {
+	for _, syncProgressListener := range mw.syncData.syncProgressListeners {
+		syncProgressListener.OnTransaction(transaction)
+	}
+}
+
+func (mw *MultiWallet) publishTransactionConfirmed(walletID int, transactionHash string, blockHeight int32) {
+	for _, syncProgressListener := range mw.syncData.syncProgressListeners {
+		syncProgressListener.OnTransactionConfirmed(walletID, transactionHash)
+	}
+}
+
 /** Helper functions start here */
 
 func (mw *MultiWallet) estimateBlockHeadersCountAfter(lastHeaderTime int64) int32 {

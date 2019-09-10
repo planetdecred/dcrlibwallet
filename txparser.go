@@ -3,13 +3,13 @@ package dcrlibwallet
 import (
 	"fmt"
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrwallet/wallet"
+	wallet "github.com/decred/dcrwallet/wallet/v3"
 )
 
 func (lw *LibWallet) decodeTransactionWithTxSummary(txSummary *wallet.TransactionSummary,
 	blockHash *chainhash.Hash) (*Transaction, error) {
 
-	var blockHeight int32 = -1
+	var blockHeight int32 = BlockHeightInvalid
 	if blockHash != nil {
 		blockIdentifier := wallet.NewBlockIdentifierFromHash(blockHash)
 		blockInfo, err := lw.wallet.BlockInfo(blockIdentifier)
@@ -40,7 +40,7 @@ func (lw *LibWallet) decodeTransactionWithTxSummary(txSummary *wallet.Transactio
 			Index:     int32(output.Index),
 			AmountOut: int64(output.Amount),
 			Internal:  output.Internal,
-			Address:   output.Address.EncodeAddress(),
+			Address:   output.Address.Address(),
 			WalletAccount: &WalletAccount{
 				AccountNumber: accountNumber,
 				AccountName:   lw.AccountName(accountNumber),
@@ -49,6 +49,7 @@ func (lw *LibWallet) decodeTransactionWithTxSummary(txSummary *wallet.Transactio
 	}
 
 	walletTx := &TxInfoFromWallet{
+		WalletID:    lw.WalletID,
 		BlockHeight: blockHeight,
 		Timestamp:   txSummary.Timestamp,
 		Hex:         fmt.Sprintf("%x", txSummary.Transaction),

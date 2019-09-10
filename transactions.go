@@ -1,26 +1,13 @@
 package dcrlibwallet
 
 import (
-	"bytes"
-	"encoding/binary"
 	"encoding/json"
+	"sort"
 
-	"github.com/decred/dcrd/blockchain/stake/v2"
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrd/chaincfg/v2"
-	"github.com/decred/dcrd/dcrutil/v2"
-	"github.com/decred/dcrd/txscript/v2"
-	"github.com/decred/dcrd/wire"
-	wallet "github.com/decred/dcrwallet/wallet/v3"
 	"github.com/raedahgroup/dcrlibwallet/txhelper"
 	"github.com/raedahgroup/dcrlibwallet/txindex"
 )
-
-type TransactionListener interface {
-	OnTransaction(transaction string)
-	OnTransactionConfirmed(hash string, height int32)
-	OnBlockAttached(height int32, timestamp int64)
-}
 
 const (
 	// Export constants for use in mobile apps
@@ -31,6 +18,7 @@ const (
 	TxFilterTransferred = txindex.TxFilterTransferred
 	TxFilterStaking     = txindex.TxFilterStaking
 	TxFilterCoinBase    = txindex.TxFilterCoinBase
+	TxFilterRegular     = txindex.TxFilterRegular
 
 	TxDirectionInvalid     = txhelper.TxDirectionInvalid
 	TxDirectionSent        = txhelper.TxDirectionSent
@@ -111,7 +99,7 @@ func (mw *MultiWallet) GetTransactions(offset, limit, txFilter int32) (string, e
 		return transactions[i].Timestamp > transactions[j].Timestamp
 	})
 
-	if len(transactions) > int(limit) {
+	if len(transactions) > int(limit) && limit > 0 {
 		transactions = transactions[:limit]
 	}
 
@@ -127,6 +115,6 @@ func (lw *LibWallet) CountTransactions(txFilter int32) (int, error) {
 	return lw.txDB.Count(txFilter, &Transaction{})
 }
 
-func (lw *LibWallet) DetermineTxFilter(txType string, txDirection int32) int32 {
-	return txindex.DetermineTxFilter(txType, txDirection)
+func (lw *LibWallet) CompareTxFilter(txFilter int32, txType string, txDirection int32) bool {
+	return txindex.CompareTxFilter(txFilter, txType, txDirection)
 }

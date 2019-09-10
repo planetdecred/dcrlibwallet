@@ -267,6 +267,8 @@ func (mw *MultiWallet) createWallet(properties WalletProperties, seedMnemonic, p
 		return nil, err
 	}
 
+	go mw.listenForTransactions(libWallet)
+
 	return libWallet, nil
 }
 
@@ -285,6 +287,8 @@ func (mw *MultiWallet) OpenWallets(pubPass []byte) error {
 		if err != nil {
 			return err
 		}
+
+		go mw.listenForTransactions(w)
 	}
 
 	return nil
@@ -296,7 +300,13 @@ func (mw *MultiWallet) OpenWallet(walletID int, pubPass []byte) error {
 	}
 	wallet, ok := mw.wallets[walletID]
 	if ok {
-		return wallet.OpenWallet(pubPass)
+		err := wallet.OpenWallet(pubPass)
+		if err != nil {
+			return err
+		}
+
+		go mw.listenForTransactions(wallet)
+		return nil
 	}
 
 	return errors.New(ErrNotExist)

@@ -95,7 +95,7 @@ func (s *Syncer) String() string {
 // interface.
 func (s *Syncer) LoadTxFilter(ctx context.Context, reload bool, addrs []dcrutil.Address, outpoints []wire.OutPoint) error {
 	s.filterMu.Lock()
-	if reload || s.rescanFilter == nil {
+	if reload || s.rescanFilter[s.filterWalletID] == nil {
 		s.rescanFilter[s.filterWalletID] = wallet.NewRescanFilter(nil, nil)
 		s.filterData[s.filterWalletID] = &blockcf.Entries{}
 	}

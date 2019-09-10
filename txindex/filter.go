@@ -13,24 +13,28 @@ const (
 	TxFilterTransferred int32 = 3
 	TxFilterStaking     int32 = 4
 	TxFilterCoinBase    int32 = 5
+	TxFilterRegular     int32 = 6
 )
 
-func DetermineTxFilter(txType string, txDirection int32) int32 {
-	if txType == txhelper.TxTypeCoinBase {
-		return TxFilterCoinBase
-	}
-	if txType != txhelper.TxTypeRegular {
-		return TxFilterStaking
+func CompareTxFilter(txFilter int32, txType string, txDirection int32) bool {
+	switch txFilter {
+	case TxFilterSent:
+		return txType == txhelper.TxTypeRegular && txDirection == txhelper.TxDirectionSent
+	case TxFilterReceived:
+		return txType == txhelper.TxTypeRegular && txDirection == txhelper.TxDirectionReceived
+	case TxFilterTransferred:
+		return txType == txhelper.TxTypeRegular && txDirection == txhelper.TxDirectionTransferred
+	case TxFilterStaking:
+		return txType != txhelper.TxTypeRegular && txType != txhelper.TxTypeCoinBase
+	case TxFilterCoinBase:
+		return txType == txhelper.TxTypeCoinBase
+	case TxFilterRegular:
+		return txType == txhelper.TxTypeRegular
+	case TxFilterAll:
+		return true
 	}
 
-	switch txDirection {
-	case txhelper.TxDirectionSent:
-		return TxFilterSent
-	case txhelper.TxDirectionReceived:
-		return TxFilterReceived
-	default:
-		return TxFilterTransferred
-	}
+	return false
 }
 
 func (db *DB) prepareTxQuery(txFilter int32) (query storm.Query) {
@@ -57,6 +61,10 @@ func (db *DB) prepareTxQuery(txFilter int32) (query storm.Query) {
 	case TxFilterCoinBase:
 		query = db.txDB.Select(
 			q.Eq("Type", txhelper.TxTypeCoinBase),
+		)
+	case TxFilterRegular:
+		query = db.txDB.Select(
+			q.Eq("Type", txhelper.TxTypeRegular),
 		)
 	default:
 		query = db.txDB.Select(

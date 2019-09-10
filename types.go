@@ -71,8 +71,7 @@ type SyncProgressListener interface {
 	Debug(debugInfo *DebugInfo)
 
 	OnTransaction(transaction string)
-	OnTransactionConfirmed(hash string, height int32)
-	OnBlockAttached(height int32, timestamp int64)
+	OnTransactionConfirmed(walletID int, hash string)
 }
 
 type GeneralSyncProgress struct {
@@ -117,6 +116,7 @@ type DebugInfo struct {
 // Transaction is used with storm for tx indexing operations.
 // For faster queries, the `Hash`, `Type` and `Direction` fields are indexed.
 type Transaction struct {
+	WalletID    int    `json:"walletID"`
 	Hash        string `storm:"id,unique" json:"hash"`
 	Type        string `storm:"index" json:"type"`
 	Hex         string `json:"hex"`
@@ -164,6 +164,7 @@ type TxOutput struct {
 // TxInfoFromWallet contains tx data that relates to the querying wallet.
 // This info is used with `DecodeTransaction` to compose the entire details of a transaction.
 type TxInfoFromWallet struct {
+	WalletID    int
 	Hex         string
 	Timestamp   int64
 	BlockHeight int32
