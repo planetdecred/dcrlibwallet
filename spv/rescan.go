@@ -42,7 +42,7 @@ func (s *Syncer) rescanCheckTransactions(matches *[]*wire.MsgTx, fadded *blockcf
 		}
 
 		for _, input := range inputs {
-			if !s.rescanFilter.ExistsUnspentOutPoint(&input.PreviousOutPoint) {
+			if !s.rescanFilter[s.rescanningWalletID].ExistsUnspentOutPoint(&input.PreviousOutPoint) {
 				continue
 			}
 			if !added {
@@ -60,7 +60,7 @@ func (s *Syncer) rescanCheckTransactions(matches *[]*wire.MsgTx, fadded *blockcf
 				continue
 			}
 			for _, a := range addrs {
-				if !s.rescanFilter.ExistsAddress(a) {
+				if !s.rescanFilter[s.rescanningWalletID].ExistsAddress(a) {
 					continue
 				}
 
@@ -69,9 +69,9 @@ func (s *Syncer) rescanCheckTransactions(matches *[]*wire.MsgTx, fadded *blockcf
 					Index: uint32(i),
 					Tree:  tree,
 				}
-				if !s.rescanFilter.ExistsUnspentOutPoint(&op) {
-					s.rescanFilter.AddUnspentOutPoint(&op)
-					s.filterData.AddOutPoint(&op)
+				if !s.rescanFilter[s.rescanningWalletID].ExistsUnspentOutPoint(&op) {
+					s.rescanFilter[s.rescanningWalletID].AddUnspentOutPoint(&op)
+					s.filterData[s.rescanningWalletID].AddOutPoint(&op)
 					fadded.AddOutPoint(&op)
 				}
 
@@ -97,7 +97,7 @@ func (s *Syncer) rescanBlock(block *wire.MsgBlock) (matches []*wire.MsgTx, fadde
 
 // filterRelevant filters out all transactions considered irrelevant
 // without updating filters.
-func (s *Syncer) filterRelevant(txs []*wire.MsgTx) []*wire.MsgTx {
+func (s *Syncer) filterRelevant(txs []*wire.MsgTx, walletID int) []*wire.MsgTx {
 	defer s.filterMu.Unlock()
 	s.filterMu.Lock()
 
@@ -105,7 +105,7 @@ func (s *Syncer) filterRelevant(txs []*wire.MsgTx) []*wire.MsgTx {
 Txs:
 	for _, tx := range txs {
 		for _, in := range tx.TxIn {
-			if s.rescanFilter.ExistsUnspentOutPoint(&in.PreviousOutPoint) {
+			if s.rescanFilter[walletID].ExistsUnspentOutPoint(&in.PreviousOutPoint) {
 				matches = append(matches, tx)
 				continue Txs
 			}
@@ -117,7 +117,7 @@ Txs:
 				continue
 			}
 			for _, a := range addrs {
-				if s.rescanFilter.ExistsAddress(a) {
+				if s.rescanFilter[walletID].ExistsAddress(a) {
 					matches = append(matches, tx)
 					continue Txs
 				}

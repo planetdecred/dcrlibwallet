@@ -106,8 +106,9 @@ func (mw *MultiWallet) GetTransactions(offset, limit, txFilter int32) (string, e
 		transactions = append(transactions, walletTransactions...)
 	}
 
+	// sort transaction by timestamp in descending order
 	sort.Slice(transactions[:], func(i, j int) bool {
-		return transactions[i].Timestamp < transactions[j].Timestamp
+		return transactions[i].Timestamp > transactions[j].Timestamp
 	})
 
 	if len(transactions) > int(limit) {

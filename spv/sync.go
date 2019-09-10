@@ -37,14 +37,14 @@ type Syncer struct {
 	// atomics
 	atomicCatchUpTryLock uint32 // CAS (entered=1) to perform discovery/rescan
 
-	rescanningWalletAlias int
-	wallets               map[int]*wallet.Wallet
-	chainParams           *chaincfg.Params
-	lp                    *p2p.LocalPeer
+	rescanningWalletID int
+	wallets            map[int]*wallet.Wallet
+	chainParams        *chaincfg.Params
+	lp                 *p2p.LocalPeer
 
 	// Protected by atomicCatchUpTryLock
 	discoverAccountsIfUnlocked bool
-	loadedFilters              bool
+	loadedFilters              map[int]bool
 
 	persistentPeers []string
 
@@ -56,9 +56,10 @@ type Syncer struct {
 	//
 	// TODO: Replace precise rescan filter with wallet db accesses to avoid
 	// needing to keep all relevant data in memory.
-	rescanFilter *wallet.RescanFilter
-	filterData   blockcf.Entries
-	filterMu     sync.Mutex
+	rescanFilter   map[int]*wallet.RescanFilter
+	filterData     map[int]*blockcf.Entries
+	filterWalletID int
+	filterMu       sync.Mutex
 
 	// seenTxs records hashes of received inventoried transactions.  Once a
 	// transaction is fetched and processed from one peer, the hash is added to
@@ -98,7 +99,7 @@ type Notifications struct {
 
 	// MempoolTxs is called whenever new relevant unmined transactions are
 	// observed and saved.
-	MempoolTxs func(txs []*wire.MsgTx)
+	MempoolTxs func(walletID int, txs []*wire.MsgTx)
 
 	// TipChanged is called when the main chain tip block changes.
 	// When reorgDepth is zero, the new block is a direct child of the previous tip.
@@ -116,9 +117,11 @@ func NewSyncer(wallets map[int]*wallet.Wallet, chainParams *chaincfg.Params, lp 
 		chainParams:                chainParams,
 		wallets:                    wallets,
 		discoverAccountsIfUnlocked: discoverAccountsIfUnlocked,
+		loadedFilters:              make(map[int]bool, len(wallets)),
 		connectingRemotes:          make(map[string]struct{}),
 		remotes:                    make(map[string]*p2p.RemotePeer),
-		rescanFilter:               wallet.NewRescanFilter(nil, nil),
+		rescanFilter:               make(map[int]*wallet.RescanFilter),
+		filterData:                 make(map[int]*blockcf.Entries),
 		seenTxs:                    lru.NewCache(2000),
 		lp:                         lp,
 	}
@@ -231,9 +234,9 @@ func (s *Syncer) rescanFinished(walletID int) {
 	}
 }
 
-func (s *Syncer) mempoolTxs(txs []*wire.MsgTx) {
+func (s *Syncer) mempoolTxs(walletID int, txs []*wire.MsgTx) {
 	if s.notifications != nil && s.notifications.MempoolTxs != nil {
-		s.notifications.MempoolTxs(txs)
+		s.notifications.MempoolTxs(walletID, txs)
 	}
 }
 
@@ -764,21 +767,6 @@ func (s *Syncer) lowestRescanPoint() (*chainhash.Hash, error) {
 	return rescanChainHash, nil
 }
 
-func (s *Syncer) acceptMempoolTx(ctx context.Context, tx *wire.MsgTx) error {
-	var err = errors.E(errors.Invalid)
-
-	for _, w := range s.wallets {
-		_err := w.AcceptMempoolTx(ctx, tx)
-		if _err == nil {
-			err = nil
-		} else if err != nil {
-			err = _err
-		}
-	}
-
-	return err
-}
-
 // handleTxInvs responds to the inv message created by rp by fetching
 // all unseen transactions announced by the peer.  Any transactions
 // that are relevant to the wallet are saved as unconfirmed
@@ -837,15 +825,22 @@ func (s *Syncer) handleTxInvs(ctx context.Context, rp *p2p.RemotePeer, hashes []
 	}
 
 	// Save any relevant transaction.
-	relevant := s.filterRelevant(txs)
-	for _, tx := range relevant {
-		err := s.acceptMempoolTx(ctx, tx)
-		if err != nil {
-			op := errors.Opf(opf, rp.RemoteAddr())
-			log.Warn(errors.E(op, err))
+	for walletID, w := range s.wallets {
+		s.filterWalletID = walletID
+		relevant := s.filterRelevant(txs, walletID)
+		for _, tx := range relevant {
+			err := w.AcceptMempoolTx(ctx, tx)
+			if err != nil {
+				op := errors.Opf(opf, rp.RemoteAddr())
+				log.Warn(errors.E(op, err))
+			}
+		}
+		s.filterWalletID = -1
+
+		if len(relevant) > 0 {
+			s.mempoolTxs(walletID, relevant)
 		}
 	}
-	s.mempoolTxs(relevant)
 }
 
 // receiveHeaderAnnouncements receives all block announcements through pushed
@@ -881,12 +876,12 @@ func (s *Syncer) receiveHeadersAnnouncements(ctx context.Context) error {
 // relevant wallet transactions keyed by block hash.  bmap is queried
 // for the block first with fallback to querying rp using getdata.
 func (s *Syncer) scanChain(ctx context.Context, rp *p2p.RemotePeer, chain []*wallet.BlockNode,
-	bmap map[chainhash.Hash]*wire.MsgBlock) (map[chainhash.Hash][]*wire.MsgTx, error) {
+	bmap map[chainhash.Hash]*wire.MsgBlock, walletID int) (map[chainhash.Hash][]*wire.MsgTx, error) {
 
 	found := make(map[chainhash.Hash][]*wire.MsgTx)
 
 	s.filterMu.Lock()
-	filterData := s.filterData
+	filterData := *s.filterData[walletID]
 	s.filterMu.Unlock()
 
 	fetched := make([]*wire.MsgBlock, len(chain))
@@ -1061,7 +1056,7 @@ func (s *Syncer) handleBlockAnnouncements(ctx context.Context, rp *p2p.RemotePee
 				return err
 			}
 			if rpt == nil {
-				matchingTxs, err = s.scanChain(ctx, rp, bestChain, bmap)
+				matchingTxs, err = s.scanChain(ctx, rp, bestChain, bmap, key)
 				if err != nil {
 					return err
 				}
@@ -1330,12 +1325,14 @@ func (s *Syncer) startupSync(ctx context.Context, rp *p2p.RemotePeer) error {
 					return err
 				}
 				if rescanPoint == nil {
-					if !s.loadedFilters {
+					if !s.loadedFilters[key] {
+						s.filterWalletID = key
 						err = w.LoadActiveDataFilters(ctx, s, true)
 						if err != nil {
 							return err
 						}
-						s.loadedFilters = true
+						s.loadedFilters[key] = true
+						s.filterWalletID = -1
 					}
 
 					s.synced(key)
@@ -1353,13 +1350,15 @@ func (s *Syncer) startupSync(ctx context.Context, rp *p2p.RemotePeer) error {
 				}
 				s.discoverAddressesFinished(key)
 
+				s.filterWalletID = key
 				err = w.LoadActiveDataFilters(ctx, s, true)
 				if err != nil {
 					return err
 				}
-				s.loadedFilters = true
+				s.loadedFilters[key] = true
+				s.filterWalletID = -1
 
-				s.rescanningWalletAlias = key
+				s.rescanningWalletID = key
 				s.rescanStart(key)
 
 				rescanBlock, err := w.BlockHeader(rescanPoint)
@@ -1376,7 +1375,7 @@ func (s *Syncer) startupSync(ctx context.Context, rp *p2p.RemotePeer) error {
 					s.rescanProgress(key, p.ScannedThrough)
 				}
 				s.rescanFinished(key)
-				s.rescanningWalletAlias = -1
+				s.rescanningWalletID = -1
 
 				s.synced(key)
 

@@ -35,6 +35,8 @@ func (mw *MultiWallet) spvSyncNotificationCallbacks() *spv.Notifications {
 		RescanStarted:                mw.rescanStarted,
 		RescanProgress:               mw.rescanProgress,
 		RescanFinished:               mw.rescanFinished,
+
+		// MempoolTxs: mw.MempoolTxs,
 	}
 }
 
