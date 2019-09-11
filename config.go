@@ -9,7 +9,7 @@ const (
 	userConfigBucketName = "user_config"
 
 	AppDataDir = "app_data_dir"
-	LogLevel = "log_level"
+	LogLevel   = "log_level"
 
 	NewWalletSetUp                 = "new_wallet_set_up"
 	InitialSyncCompleted           = "initial_sync_complete"
@@ -33,11 +33,11 @@ const (
 )
 
 func (lw *LibWallet) SaveUserConfigValue(key string, value interface{}) error {
-	return lw.settingsDB.Set(userConfigBucketName, key, value)
+	return lw.configDB.Set(userConfigBucketName, key, value)
 }
 
 func (lw *LibWallet) ReadUserConfigValue(key string, valueOut interface{}) error {
-	err := lw.settingsDB.Get(userConfigBucketName, key, valueOut)
+	err := lw.configDB.Get(userConfigBucketName, key, valueOut)
 	if err != nil && err != storm.ErrNotFound {
 		return err
 	}

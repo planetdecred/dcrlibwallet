@@ -27,7 +27,7 @@ type LibWallet struct {
 	walletLoader  *WalletLoader
 	wallet        *wallet.Wallet
 	txDB          *txindex.DB
-	settingsDB    *storm.DB
+	configDB      *storm.DB
 	*syncData
 
 	shuttingDown chan bool
@@ -40,8 +40,8 @@ func NewLibWallet(defaultAppDataDir, walletDbDriver string, netType string) (*Li
 		return nil, fmt.Errorf("unsupported network type: %s", netType)
 	}
 
-	settingsDbPath := filepath.Join(defaultAppDataDir, userConfigDbFilename)
-	settingsDB, err := storm.Open(settingsDbPath)
+	configDbPath := filepath.Join(defaultAppDataDir, userConfigDbFilename)
+	configDB, err := storm.Open(configDbPath)
 	if err != nil {
 		if err == bolt.ErrTimeout {
 			// timeout error occurs if storm fails to acquire a lock on the database file
@@ -51,8 +51,8 @@ func NewLibWallet(defaultAppDataDir, walletDbDriver string, netType string) (*Li
 	}
 
 	lw := &LibWallet{
-		activeNet:  activeNet,
-		settingsDB: settingsDB,
+		activeNet: activeNet,
+		configDB:  configDB,
 	}
 
 	var appDataDir string
