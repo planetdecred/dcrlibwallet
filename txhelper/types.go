@@ -12,9 +12,3 @@ const (
 	TxTypeVote           = "VOTE"
 	TxTypeRevocation     = "REVOCATION"
 )
-
-type TransactionDestination struct {
-	Address string
-	Amount  float64
-	SendMax bool
-}
