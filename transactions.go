@@ -78,7 +78,7 @@ func (lw *LibWallet) GetTransactions(offset, limit, txFilter int32) (string, err
 	return string(jsonEncodedTransactions), nil
 }
 
-func (lw *LibWallet) GetTransactionsRaw(offset, limit, txFilter int32) (transactions []*Transaction, err error) {
+func (lw *LibWallet) GetTransactionsRaw(offset, limit, txFilter int32) (transactions []Transaction, err error) {
 	err = lw.txDB.Read(offset, limit, txFilter, &transactions)
 	return
 }
@@ -115,6 +115,6 @@ func (lw *LibWallet) CountTransactions(txFilter int32) (int, error) {
 	return lw.txDB.Count(txFilter, &Transaction{})
 }
 
-func (lw *LibWallet) CompareTxFilter(txFilter int32, txType string, txDirection int32) bool {
+func CompareTxFilter(txFilter int32, txType string, txDirection int32) bool {
 	return txindex.CompareTxFilter(txFilter, txType, txDirection)
 }

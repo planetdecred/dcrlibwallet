@@ -41,14 +41,17 @@ func (db *DB) prepareTxQuery(txFilter int32) (query storm.Query) {
 	switch txFilter {
 	case TxFilterSent:
 		query = db.txDB.Select(
+			q.Eq("Type", txhelper.TxTypeRegular),
 			q.Eq("Direction", txhelper.TxDirectionSent),
 		)
 	case TxFilterReceived:
 		query = db.txDB.Select(
+			q.Eq("Type", txhelper.TxTypeRegular),
 			q.Eq("Direction", txhelper.TxDirectionReceived),
 		)
 	case TxFilterTransferred:
 		query = db.txDB.Select(
+			q.Eq("Type", txhelper.TxTypeRegular),
 			q.Eq("Direction", txhelper.TxDirectionTransferred),
 		)
 	case TxFilterStaking:
