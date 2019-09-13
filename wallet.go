@@ -37,7 +37,37 @@ func (lw *LibWallet) CreateWallet(passphrase string, seedMnemonic string) error 
 	return nil
 }
 
+func (lw *LibWallet) CreateWatchingOnlyWallet(publicPassphrase, extendedPublicKey string) error {
+
+	pubPass := []byte(publicPassphrase)
+
+	w, err := lw.walletLoader.CreateWatchingOnlyWallet(extendedPublicKey, pubPass)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	lw.wallet = w
+
+	log.Info("Created Watching Only Wallet")
+	return nil
+}
+
+func (lw *LibWallet) IsWatchingOnlyWallet() bool {
+	if w, ok := lw.walletLoader.LoadedWallet(); ok {
+		return w.Manager.WatchingOnly()
+	}
+
+	return false
+}
+
 func (lw *LibWallet) OpenWallet(pubPass []byte) error {
+	if lw.ReadBoolConfigValueForKey(IsStartupSecuritySetConfigKey) && pubPass == nil {
+		return fmt.Errorf("public passphrase is required")
+	}
+	if pubPass == nil {
+		pubPass = []byte("public")
+	}
+
 	w, err := lw.walletLoader.OpenExistingWallet(pubPass)
 	if err != nil {
 		log.Error(err)

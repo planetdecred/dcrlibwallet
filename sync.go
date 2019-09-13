@@ -2,11 +2,10 @@ package dcrlibwallet
 
 import (
 	"context"
+	"math"
 	"net"
 	"strings"
 	"sync"
-
-	"math"
 	"time"
 
 	"github.com/decred/dcrd/addrmgr"
@@ -472,4 +471,8 @@ func (lw *LibWallet) GetBestBlockTimeStamp() int64 {
 		return 0
 	}
 	return info.Timestamp
+}
+
+func (lw *LibWallet) GetConnectedPeersCount() int32 {
+	return lw.connectedPeers
 }

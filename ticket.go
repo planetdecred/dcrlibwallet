@@ -33,7 +33,23 @@ func (lw *LibWallet) StakeInfo() (*wallet.StakeInfoData, error) {
 	return lw.wallet.StakeInfo()
 }
 
-func (lw *LibWallet) GetTickets(req *GetTicketsRequest) (ticketInfos []*TicketInfo, err error) {
+func (lw *LibWallet) GetTickets(startingBlockHash, endingBlockHash []byte, targetCount int32) ([]*TicketInfo, error) {
+	return lw.getTickets(&GetTicketsRequest{
+		StartingBlockHash: startingBlockHash,
+		EndingBlockHash:   endingBlockHash,
+		TargetTicketCount: targetCount,
+	})
+}
+
+func (lw *LibWallet) GetTicketsForBlockHeightRange(startHeight, endHeight, targetCount int32) ([]*TicketInfo, error) {
+	return lw.getTickets(&GetTicketsRequest{
+		StartingBlockHeight: startHeight,
+		EndingBlockHeight:   endHeight,
+		TargetTicketCount:   targetCount,
+	})
+}
+
+func (lw *LibWallet) getTickets(req *GetTicketsRequest) (ticketInfos []*TicketInfo, err error) {
 	var startBlock, endBlock *wallet.BlockIdentifier
 	if req.StartingBlockHash != nil && req.StartingBlockHeight != 0 {
 		return nil, fmt.Errorf("starting block hash and height may not be specified simultaneously")
@@ -66,20 +82,45 @@ func (lw *LibWallet) GetTickets(req *GetTicketsRequest) (ticketInfos []*TicketIn
 
 	rangeFn := func(tickets []*wallet.TicketSummary, block *wire.BlockHeader) (bool, error) {
 		for _, t := range tickets {
-			ticketInfo := &TicketInfo{
-				Status:  ticketStatusString(t.Status),
-				Ticket:  t.Ticket,
-				Spender: t.Spender,
-			}
+			var blockHeight int32 = -1
 			if block != nil {
-				ticketInfo.BlockHeight = block.Height
+				blockHeight = int32(block.Height)
 			}
 
-			// hash loses its value after exiting this rangeFn, not sure why
-			// recreating the hash instead of simply copying it fixes that.
-			ticketInfo.Ticket.Hash, _ = chainhash.NewHash(t.Ticket.Hash[:])
+			// t.Ticket and t.Ticket.Hash are pointers, avoid using them directly
+			// as they could be re-used to hold information for some other ticket.
+			// See the doc on `wallet.GetTickets`.
+			ticketHash, _ := chainhash.NewHash(t.Ticket.Hash[:])
+			ticket := &wallet.TransactionSummary{
+				Hash:        ticketHash,
+				Transaction: t.Ticket.Transaction,
+				MyInputs:    t.Ticket.MyInputs,
+				MyOutputs:   t.Ticket.MyOutputs,
+				Fee:         t.Ticket.Fee,
+				Timestamp:   t.Ticket.Timestamp,
+				Type:        t.Ticket.Type,
+			}
 
-			ticketInfos = append(ticketInfos, ticketInfo)
+			// t.Spender and t.Spender.Hash are pointers, avoid using them directly
+			// as they could be re-used to hold information for some other ticket.
+			// See the doc on `wallet.GetTickets`.
+			spenderHash, _ := chainhash.NewHash(t.Spender.Hash[:])
+			spender := &wallet.TransactionSummary{
+				Hash:        spenderHash,
+				Transaction: t.Spender.Transaction,
+				MyInputs:    t.Spender.MyInputs,
+				MyOutputs:   t.Spender.MyOutputs,
+				Fee:         t.Spender.Fee,
+				Timestamp:   t.Spender.Timestamp,
+				Type:        t.Spender.Type,
+			}
+
+			ticketInfos = append(ticketInfos, &TicketInfo{
+				BlockHeight: blockHeight,
+				Status:      ticketStatusString(t.Status),
+				Ticket:      ticket,
+				Spender:     spender,
+			})
 		}
 
 		return (targetTicketCount > 0) && (len(ticketInfos) >= targetTicketCount), nil
@@ -139,9 +180,10 @@ func (lw *LibWallet) TicketPrice(ctx context.Context) (*TicketPriceResponse, err
 func (lw *LibWallet) PurchaseTickets(ctx context.Context, request *PurchaseTicketsRequest) ([]string, error) {
 	var err error
 
-	// fetch redeem script+ticket address+pool address+pool fee if vsp host is provided
-	if request.VSPHost != "" {
-		if err = lw.updateTicketPurchaseRequestWithVSPInfo(request); err != nil {
+	// fetch redeem script, ticket address, pool address and pool fee if vsp host is configured
+	vspHost := lw.ReadStringConfigValueForKey(VSPHostConfigKey)
+	if vspHost != "" {
+		if err = lw.updateTicketPurchaseRequestWithVSPInfo(vspHost, request); err != nil {
 			return nil, err
 		}
 	}
@@ -162,7 +204,7 @@ func (lw *LibWallet) PurchaseTickets(ctx context.Context, request *PurchaseTicke
 	if request.TicketAddress != "" {
 		ticketAddr, err = addresshelper.DecodeForNetwork(request.TicketAddress, params)
 		if err != nil {
-			return nil, err
+			return nil, errors.New("Invalid ticket address")
 		}
 	}
 
@@ -170,14 +212,12 @@ func (lw *LibWallet) PurchaseTickets(ctx context.Context, request *PurchaseTicke
 	if request.PoolAddress != "" {
 		poolAddr, err = addresshelper.DecodeForNetwork(request.PoolAddress, params)
 		if err != nil {
-			return nil, err
+			return nil, errors.New("Invalid pool address")
 		}
 	}
 
-	if request.PoolFees > 0 {
-		if !txrules.ValidPoolFeeRate(request.PoolFees) {
-			return nil, errors.New("Invalid pool fees percentage")
-		}
+	if request.PoolFees > 0 && !txrules.ValidPoolFeeRate(request.PoolFees) {
+		return nil, errors.New("Invalid pool fees percentage")
 	}
 
 	if request.PoolFees > 0 && poolAddr == nil {
@@ -229,7 +269,7 @@ func (lw *LibWallet) PurchaseTickets(ctx context.Context, request *PurchaseTicke
 	return hashes, nil
 }
 
-func (lw *LibWallet) updateTicketPurchaseRequestWithVSPInfo(request *PurchaseTicketsRequest) error {
+func (lw *LibWallet) updateTicketPurchaseRequestWithVSPInfo(vspHost string, request *PurchaseTicketsRequest) error {
 	// generate an address and get the pubkeyaddr
 	address, err := lw.CurrentAddress(0)
 	if err != nil {
@@ -241,7 +281,7 @@ func (lw *LibWallet) updateTicketPurchaseRequestWithVSPInfo(request *PurchaseTic
 	}
 
 	// invoke vsp api
-	ticketPurchaseInfo, err := CallVSPTicketInfoAPI(request.VSPHost, pubKeyAddr)
+	ticketPurchaseInfo, err := CallVSPTicketInfoAPI(vspHost, pubKeyAddr)
 	if err != nil {
 		return fmt.Errorf("vsp connection error: %s", err.Error())
 	}
@@ -249,7 +289,7 @@ func (lw *LibWallet) updateTicketPurchaseRequestWithVSPInfo(request *PurchaseTic
 	// decode the redeem script gotten from vsp
 	rs, err := hex.DecodeString(ticketPurchaseInfo.Script)
 	if err != nil {
-		return fmt.Errorf("vsp data corruption: %s", err.Error())
+		return fmt.Errorf("invalid vsp purchase ticket response: %s", err.Error())
 	}
 
 	// unlock wallet and import the decoded script
