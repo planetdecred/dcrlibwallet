@@ -3,6 +3,7 @@ package dcrlibwallet
 import (
 	"encoding/hex"
 	"fmt"
+
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrwallet/wallet"
 	"github.com/decred/dcrwallet/wallet/udb"
