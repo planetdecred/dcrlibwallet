@@ -113,6 +113,13 @@ type Notifications struct {
 
 // NewSyncer creates a Syncer that will sync the wallet using SPV.
 func NewSyncer(wallets map[int]*wallet.Wallet, chainParams *chaincfg.Params, lp *p2p.LocalPeer, discoverAccountsIfUnlocked bool) *Syncer {
+	rescanFilter := make(map[int]*wallet.RescanFilter)
+	filterData := make(map[int]*blockcf.Entries)
+	for walletID := range wallets {
+		rescanFilter[walletID] = wallet.NewRescanFilter(nil, nil)
+		filterData[walletID] = &blockcf.Entries{}
+	}
+
 	return &Syncer{
 		chainParams:                chainParams,
 		wallets:                    wallets,
@@ -120,8 +127,8 @@ func NewSyncer(wallets map[int]*wallet.Wallet, chainParams *chaincfg.Params, lp 
 		loadedFilters:              make(map[int]bool, len(wallets)),
 		connectingRemotes:          make(map[string]struct{}),
 		remotes:                    make(map[string]*p2p.RemotePeer),
-		rescanFilter:               make(map[int]*wallet.RescanFilter),
-		filterData:                 make(map[int]*blockcf.Entries),
+		rescanFilter:               rescanFilter,
+		filterData:                 filterData,
 		seenTxs:                    lru.NewCache(2000),
 		lp:                         lp,
 	}

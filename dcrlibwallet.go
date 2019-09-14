@@ -12,6 +12,7 @@ import (
 	"github.com/decred/dcrwallet/wallet/v3/txrules"
 	"github.com/raedahgroup/dcrlibwallet/txindex"
 	"github.com/raedahgroup/dcrlibwallet/utils"
+	bolt "go.etcd.io/bbolt"
 )
 
 const (
@@ -55,11 +56,12 @@ func NewLibWallet(walletDataDir, walletDbDriver string, netType string) (*LibWal
 	}
 
 	lw := &LibWallet{
-		activeNet:     activeNet,
-	} 
+		activeNet: activeNet,
+	}
 
 	// open database for indexing transactions for faster loading
-	txDBPath := filepath.Join(lw.WalletDataDir, txindex.DbName)
+	txDBPath := filepath.Join(walletDataDir, txindex.DbName)
+	var err error
 	lw.txDB, err = txindex.Initialize(txDBPath, &Transaction{})
 	if err != nil {
 		log.Error(err.Error())
@@ -76,15 +78,10 @@ func NewLibWallet(walletDataDir, walletDbDriver string, netType string) (*LibWal
 		TicketFee:     defaultFees,
 	}
 
-	lw.walletLoader = NewLoader(activeNet.Params, lw.WalletDataDir, stakeOptions, 20, false,
+	lw.walletLoader = NewLoader(activeNet.Params, walletDataDir, stakeOptions, 20, false,
 		defaultFees, wallet.DefaultAccountGapLimit)
 	if walletDbDriver != "" {
 		lw.walletLoader.SetDatabaseDriver(walletDbDriver)
-	}
-
-	lw.syncData = &syncData{
-		syncCanceled:          make(chan bool),
-		syncProgressListeners: make(map[string]SyncProgressListener),
 	}
 
 	// todo add interrupt listener

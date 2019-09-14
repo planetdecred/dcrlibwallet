@@ -1,6 +1,6 @@
 package dcrlibwallet
 
-import "github.com/decred/dcrwallet/wallet"
+import wallet "github.com/decred/dcrwallet/wallet/v3"
 
 type BlockInfo struct {
 	Height    int32

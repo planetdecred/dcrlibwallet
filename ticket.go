@@ -11,23 +11,29 @@ import (
 	"time"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrd/dcrutil"
-	"github.com/decred/dcrd/rpcclient"
+	"github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/dcrd/wire"
-	"github.com/decred/dcrwallet/chain"
 	"github.com/decred/dcrwallet/errors"
-	"github.com/decred/dcrwallet/wallet"
-	"github.com/decred/dcrwallet/wallet/txrules"
+	"github.com/decred/dcrwallet/rpc/client/dcrd"
+	wallet "github.com/decred/dcrwallet/wallet/v3"
+	"github.com/decred/dcrwallet/wallet/v3/txrules"
 	"github.com/raedahgroup/dcrlibwallet/addresshelper"
 )
 
 // StakeInfo returns information about wallet stakes, tickets and their statuses.
 func (lw *LibWallet) StakeInfo() (*wallet.StakeInfoData, error) {
 	if n, err := lw.wallet.NetworkBackend(); err == nil {
-		chainClient, _ := chain.RPCClientFromBackend(n)
-		if chainClient != nil {
-			return lw.wallet.StakeInfoPrecise(chainClient)
+
+		var rpc *dcrd.RPC
+		if client, ok := n.(*dcrd.RPC); ok {
+			rpc = client
 		}
+
+		if rpc != nil {
+			ctx, _ := lw.contextWithShutdownCancel()
+			return lw.wallet.StakeInfoPrecise(ctx, rpc)
+		}
+
 	}
 
 	return lw.wallet.StakeInfo()
@@ -126,12 +132,16 @@ func (lw *LibWallet) getTickets(req *GetTicketsRequest) (ticketInfos []*TicketIn
 		return (targetTicketCount > 0) && (len(ticketInfos) >= targetTicketCount), nil
 	}
 
-	var chainClient *rpcclient.Client
+	var rpc *dcrd.RPC
 	if n, err := lw.wallet.NetworkBackend(); err == nil {
-		chainClient, _ = chain.RPCClientFromBackend(n)
+		if client, ok := n.(*dcrd.RPC); ok {
+			rpc = client
+		}
 	}
-	if chainClient != nil {
-		err = lw.wallet.GetTicketsPrecise(rangeFn, chainClient, startBlock, endBlock)
+
+	if rpc != nil {
+		ctx, _ := lw.contextWithShutdownCancel()
+		err = lw.wallet.GetTicketsPrecise(ctx, rpc, rangeFn, startBlock, endBlock)
 	} else {
 		err = lw.wallet.GetTickets(rangeFn, startBlock, endBlock)
 	}
@@ -156,23 +166,16 @@ func (lw *LibWallet) TicketPrice(ctx context.Context) (*TicketPriceResponse, err
 	if err != nil {
 		return nil, err
 	}
-	chainClient, err := chain.RPCClientFromBackend(n)
-	if err != nil {
-		return nil, translateError(err)
-	}
 
 	ticketPrice, err := n.StakeDifficulty(ctx)
 	if err != nil {
 		return nil, translateError(err)
 	}
-	_, blockHeight, err := chainClient.GetBestBlock()
-	if err != nil {
-		return nil, translateError(err)
-	}
 
+	_, tipHeight := lw.wallet.MainChainTip()
 	return &TicketPriceResponse{
 		TicketPrice: int64(ticketPrice),
-		Height:      int32(blockHeight),
+		Height:      int32(tipHeight),
 	}, nil
 }
 
@@ -255,8 +258,8 @@ func (lw *LibWallet) PurchaseTickets(ctx context.Context, request *PurchaseTicke
 		return nil, translateError(err)
 	}
 
-	purchasedTickets, err := lw.wallet.PurchaseTickets(0, spendLimit, minConf, ticketAddr, request.Account, numTickets, poolAddr,
-		request.PoolFees, expiry, txFee, ticketFee)
+	purchasedTickets, err := lw.wallet.PurchaseTickets(ctx, 0, spendLimit, minConf, ticketAddr, request.Account, numTickets, poolAddr, request.PoolFees,
+		expiry, txFee, ticketFee)
 	if err != nil {
 		return nil, fmt.Errorf("unable to purchase tickets: %s", err.Error())
 	}
@@ -295,7 +298,8 @@ func (lw *LibWallet) updateTicketPurchaseRequestWithVSPInfo(vspHost string, requ
 	// unlock wallet and import the decoded script
 	lock := make(chan time.Time, 1)
 	lw.wallet.Unlock(request.Passphrase, lock)
-	err = lw.wallet.ImportScript(rs)
+	ctx, _ := lw.contextWithShutdownCancel()
+	err = lw.wallet.ImportScript(ctx, rs)
 	lock <- time.Time{}
 	if err != nil && !errors.Is(errors.Exist, err) {
 		return fmt.Errorf("error importing vsp redeem script: %s", err.Error())

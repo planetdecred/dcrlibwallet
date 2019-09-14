@@ -4,9 +4,9 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/decred/dcrwallet/wallet/v3/udb"
 	"github.com/decred/dcrd/dcrutil/v2"
 	wallet "github.com/decred/dcrwallet/wallet/v3"
+	"github.com/decred/dcrwallet/wallet/v3/udb"
 	"github.com/raedahgroup/dcrlibwallet/addresshelper"
 )
 
