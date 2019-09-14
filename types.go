@@ -36,6 +36,7 @@ type Balance struct {
 }
 
 type Account struct {
+	WalletID         int
 	Number           int32
 	Name             string
 	Balance          *Balance

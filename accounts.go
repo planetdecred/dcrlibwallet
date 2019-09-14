@@ -34,6 +34,7 @@ func (lw *LibWallet) GetAccountsRaw(requiredConfirmations int32) (*Accounts, err
 		}
 
 		accounts[i] = &Account{
+			WalletID:         lw.WalletID,
 			Number:           int32(account.AccountNumber),
 			Name:             account.AccountName,
 			TotalBalance:     int64(account.TotalBalance),
