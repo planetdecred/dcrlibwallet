@@ -75,6 +75,5 @@ func (db *DB) prepareTxQuery(txFilter int32) (query storm.Query) {
 		)
 	}
 
-	query = query.OrderBy("Timestamp").Reverse()
 	return
 }

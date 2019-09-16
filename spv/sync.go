@@ -977,7 +977,9 @@ FilterLoop:
 			if b == nil {
 				continue
 			}
+			s.rescanningWalletID = walletID
 			matches, fadded := s.rescanBlock(b)
+			s.rescanningWalletID = -1
 			found[*chain[i].Hash] = matches
 			if len(fadded) != 0 {
 				idx = i + 1

@@ -40,7 +40,6 @@ func (lw *LibWallet) GetTransaction(txHash []byte) (string, error) {
 	}
 
 	result, err := json.Marshal(transaction)
-
 	if err != nil {
 		return "", err
 	}
@@ -64,8 +63,8 @@ func (lw *LibWallet) GetTransactionRaw(txHash []byte) (*Transaction, error) {
 	return lw.decodeTransactionWithTxSummary(txSummary, blockHash)
 }
 
-func (lw *LibWallet) GetTransactions(offset, limit, txFilter int32) (string, error) {
-	transactions, err := lw.GetTransactionsRaw(offset, limit, txFilter)
+func (lw *LibWallet) GetTransactions(offset, limit, txFilter int32, newestFirst bool) (string, error) {
+	transactions, err := lw.GetTransactionsRaw(offset, limit, txFilter, newestFirst)
 	if err != nil {
 		return "", err
 	}
@@ -78,15 +77,15 @@ func (lw *LibWallet) GetTransactions(offset, limit, txFilter int32) (string, err
 	return string(jsonEncodedTransactions), nil
 }
 
-func (lw *LibWallet) GetTransactionsRaw(offset, limit, txFilter int32) (transactions []Transaction, err error) {
-	err = lw.txDB.Read(offset, limit, txFilter, &transactions)
+func (lw *LibWallet) GetTransactionsRaw(offset, limit, txFilter int32, newestFirst bool) (transactions []Transaction, err error) {
+	err = lw.txDB.Read(offset, limit, txFilter, newestFirst, &transactions)
 	return
 }
 
-func (mw *MultiWallet) GetTransactions(offset, limit, txFilter int32) (string, error) {
+func (mw *MultiWallet) GetTransactions(offset, limit, txFilter int32, newestFirst bool) (string, error) {
 	transactions := make([]Transaction, 0)
 	for _, w := range mw.wallets {
-		walletTransactions, err := w.GetTransactionsRaw(offset, limit, txFilter)
+		walletTransactions, err := w.GetTransactionsRaw(offset, limit, txFilter, newestFirst)
 		if err != nil {
 			return "", nil
 		}

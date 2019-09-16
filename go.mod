@@ -15,6 +15,7 @@ require (
 	github.com/decred/dcrd/dcrutil/v2 v2.0.0
 	github.com/decred/dcrd/hdkeychain v1.1.1
 	github.com/decred/dcrd/rpcclient v1.1.0
+	github.com/decred/dcrd/txscript v1.1.0
 	github.com/decred/dcrd/txscript/v2 v2.0.0
 	github.com/decred/dcrd/wire v1.2.0
 	github.com/decred/dcrdata/txhelpers v1.1.0
@@ -23,9 +24,9 @@ require (
 	github.com/decred/dcrwallet/chain/v3 v3.0.0
 	github.com/decred/dcrwallet/errors v1.1.0
 	github.com/decred/dcrwallet/p2p/v2 v2.0.0
+	github.com/decred/dcrwallet/rpc/client/dcrd v0.0.0-00010101000000-000000000000
 	github.com/decred/dcrwallet/ticketbuyer v1.0.2
 	github.com/decred/dcrwallet/ticketbuyer/v2 v2.0.1
-	github.com/decred/dcrwallet/wallet v1.1.0
 	github.com/decred/dcrwallet/wallet/v3 v3.0.0
 	github.com/decred/dcrwallet/walletseed v1.0.1
 	github.com/decred/slog v1.0.0

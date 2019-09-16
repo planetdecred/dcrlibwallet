@@ -171,7 +171,8 @@ func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	txHash, err := tx.lw.wallet.PublishTransaction(&msgTx, serializedTransaction.Bytes(), n)
+	ctx, _ := tx.lw.contextWithShutdownCancel()
+	txHash, err := tx.lw.wallet.PublishTransaction(ctx, &msgTx, serializedTransaction.Bytes(), n)
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -200,7 +201,7 @@ func (tx *TxAuthor) constructTransaction() (*txauthor.AuthoredTx, error) {
 			outputSelectionAlgorithm = wallet.OutputSelectionAlgorithmAll
 
 			// Use this destination address to make a changeSource rather than a tx output.
-			changeSource, err = txhelper.MakeTxChangeSource(destination.Address)
+			changeSource, err = txhelper.MakeTxChangeSource(destination.Address, tx.lw.activeNet.Params)
 			if err != nil {
 				log.Errorf("constructTransaction: error preparing change source: %v", err)
 				return nil, fmt.Errorf("max amount change source error: %v", err)
@@ -209,7 +210,7 @@ func (tx *TxAuthor) constructTransaction() (*txauthor.AuthoredTx, error) {
 			continue // do not prepare a tx output for this destination
 		}
 
-		output, err := txhelper.MakeTxOutput(destination.Address, destination.AtomAmount)
+		output, err := txhelper.MakeTxOutput(destination.Address, destination.AtomAmount, tx.lw.activeNet.Params)
 		if err != nil {
 			log.Errorf("constructTransaction: error preparing tx output: %v", err)
 			return nil, fmt.Errorf("make tx output error: %v", err)
