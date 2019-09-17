@@ -7,6 +7,7 @@ import (
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrwallet/wallet/txrules"
+	"github.com/raedahgroup/dcrlibwallet/txhelper/internal/txsizes"
 )
 
 type GenerateAddressFunc func() (address string, err error)
@@ -22,7 +23,7 @@ func NewUnsignedTx(inputs []*wire.TxIn, sendDestinations, changeDestinations []T
 	scriptSizes := make([]int, 0, len(inputs))
 	for _, txIn := range inputs {
 		totalInputAmount += txIn.ValueIn
-		scriptSizes = append(scriptSizes, RedeemP2PKHSigScriptSize)
+		scriptSizes = append(scriptSizes, txsizes.RedeemP2PKHSigScriptSize)
 	}
 
 	outputs, totalSendAmount, maxChangeDestinations, err := TxOutputsExtractMaxChangeDestination(len(inputs), totalInputAmount, sendDestinations)
@@ -68,7 +69,7 @@ func NewUnsignedTx(inputs []*wire.TxIn, sendDestinations, changeDestinations []T
 		return nil, fmt.Errorf("error processing change outputs: %s", err.Error())
 	}
 
-	maxSignedSize := EstimateSerializeSize(scriptSizes, outputs, totalChangeScriptSize)
+	maxSignedSize := txsizes.EstimateSerializeSize(scriptSizes, outputs, totalChangeScriptSize)
 	maxRequiredFee := txrules.FeeForSerializeSize(txrules.DefaultRelayFeePerKb, maxSignedSize)
 	changeAmount := totalInputAmount - totalSendAmount - int64(maxRequiredFee)
 

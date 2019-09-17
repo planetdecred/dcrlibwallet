@@ -8,6 +8,7 @@ import (
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrwallet/wallet/txrules"
+	"github.com/raedahgroup/dcrlibwallet/txhelper/internal/txsizes"
 )
 
 func EstimateChangeWithOutputs(numberOfInputs int, totalInputAmount int64, outputs []*wire.TxOut, totalSendAmount int64, changeAddresses []string) (int64, error) {
@@ -23,11 +24,11 @@ func EstimateChangeWithOutputs(numberOfInputs int, totalInputAmount int64, outpu
 
 	scriptSizes := make([]int, numberOfInputs)
 	for i := 0; i < numberOfInputs; i++ {
-		scriptSizes[i] = RedeemP2PKHSigScriptSize
+		scriptSizes[i] = txsizes.RedeemP2PKHSigScriptSize
 	}
 
 	relayFeePerKb := txrules.DefaultRelayFeePerKb
-	maxSignedSize := EstimateSerializeSize(scriptSizes, outputs, totalChangeScriptSize)
+	maxSignedSize := txsizes.EstimateSerializeSize(scriptSizes, outputs, totalChangeScriptSize)
 	maxRequiredFee := txrules.FeeForSerializeSize(relayFeePerKb, maxSignedSize)
 	changeAmount := totalInputAmount - totalSendAmount - int64(maxRequiredFee)
 
