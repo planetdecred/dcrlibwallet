@@ -22,10 +22,11 @@ type TxAuthor struct {
 	lw                    *LibWallet
 }
 
-func (lw *LibWallet) NewUnsignedTx(requiredConfirmations int32) *TxAuthor {
+func (lw *LibWallet) NewUnsignedTx(sourceAccountNumber, requiredConfirmations int32) *TxAuthor {
 	return &TxAuthor{
-		requiredConfirmations: requiredConfirmations,
+		sendFromAccount:       uint32(sourceAccountNumber),
 		destinations:          make([]TransactionDestination, 0),
+		requiredConfirmations: requiredConfirmations,
 		lw:                    lw,
 	}
 }
@@ -51,34 +52,13 @@ func (tx *TxAuthor) UpdateSendDestination(index int, address string, atomAmount 
 }
 
 func (tx *TxAuthor) RemoveSendDestination(index int) {
-	tx.destinations = append(tx.destinations[:index], tx.destinations[index+1:]...)
+	if len(tx.destinations) > index {
+		tx.destinations = append(tx.destinations[:index], tx.destinations[index+1:]...)
+	}
 }
 
-func (tx *TxAuthor) EstimateMaxSendAmount(destinations []TransactionDestination, fromAccount int32,
-	requiredConfirmations int32) (*Amount, error) {
-
-	txFeeAndSize, err := tx.CalculateNewTxFeeAndSize(destinations, fromAccount, requiredConfirmations)
-	if err != nil {
-		return nil, err
-	}
-
-	spendableAccountBalance, err := tx.lw.SpendableForAccount(fromAccount, requiredConfirmations)
-	if err != nil {
-		return nil, err
-	}
-
-	maxSendableAmount := spendableAccountBalance - txFeeAndSize.Fee.AtomValue
-
-	return &Amount{
-		AtomValue: maxSendableAmount,
-		DcrValue:  dcrutil.Amount(maxSendableAmount).ToCoin(),
-	}, nil
-}
-
-func (tx *TxAuthor) CalculateNewTxFeeAndSize(destinations []TransactionDestination, fromAccount int32,
-	requiredConfirmations int32) (*TxFeeAndSize, error) {
-
-	unsignedTx, err := tx.constructTransaction(destinations, fromAccount, requiredConfirmations)
+func (tx *TxAuthor) EstimateFeeAndSize() (*TxFeeAndSize, error) {
+	unsignedTx, err := tx.constructTransaction()
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -95,9 +75,26 @@ func (tx *TxAuthor) CalculateNewTxFeeAndSize(destinations []TransactionDestinati
 	}, nil
 }
 
-func (tx *TxAuthor) SendTransaction(destinations []TransactionDestination, fromAccount int32,
-	requiredConfirmations int32, privatePassphrase []byte) ([]byte, error) {
+func (tx *TxAuthor) EstimateMaxSendAmount() (*Amount, error) {
+	txFeeAndSize, err := tx.EstimateFeeAndSize()
+	if err != nil {
+		return nil, err
+	}
 
+	spendableAccountBalance, err := tx.lw.SpendableForAccount(int32(tx.sendFromAccount), tx.requiredConfirmations)
+	if err != nil {
+		return nil, err
+	}
+
+	maxSendableAmount := spendableAccountBalance - txFeeAndSize.Fee.AtomValue
+
+	return &Amount{
+		AtomValue: maxSendableAmount,
+		DcrValue:  dcrutil.Amount(maxSendableAmount).ToCoin(),
+	}, nil
+}
+
+func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
 	defer func() {
 		for i := range privatePassphrase {
 			privatePassphrase[i] = 0
@@ -110,7 +107,7 @@ func (tx *TxAuthor) SendTransaction(destinations []TransactionDestination, fromA
 		return nil, err
 	}
 
-	unsignedTx, err := tx.constructTransaction(destinations, fromAccount, requiredConfirmations)
+	unsignedTx, err := tx.constructTransaction()
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -181,15 +178,13 @@ func (tx *TxAuthor) SendTransaction(destinations []TransactionDestination, fromA
 	return txHash[:], nil
 }
 
-func (tx *TxAuthor) constructTransaction(destinations []TransactionDestination, fromAccount int32,
-	requiredConfirmations int32) (*txauthor.AuthoredTx, error) {
-
+func (tx *TxAuthor) constructTransaction() (*txauthor.AuthoredTx, error) {
 	var err error
 	var outputs = make([]*wire.TxOut, 0)
 	var outputSelectionAlgorithm wallet.OutputSelectionAlgorithm = wallet.OutputSelectionAlgorithmDefault
 	var changeSource txauthor.ChangeSource
 
-	for _, destination := range destinations {
+	for _, destination := range tx.destinations {
 		// validate the amount to send to this destination address
 		if !destination.SendMax && (destination.AtomAmount <= 0 || destination.AtomAmount > MaxAmountAtom) {
 			return nil, errors.E(errors.Invalid, "invalid amount")
@@ -223,6 +218,6 @@ func (tx *TxAuthor) constructTransaction(destinations []TransactionDestination, 
 		outputs = append(outputs, output)
 	}
 
-	return tx.lw.wallet.NewUnsignedTransaction(outputs, txrules.DefaultRelayFeePerKb, uint32(fromAccount),
-		requiredConfirmations, outputSelectionAlgorithm, changeSource)
+	return tx.lw.wallet.NewUnsignedTransaction(outputs, txrules.DefaultRelayFeePerKb, tx.sendFromAccount,
+		tx.requiredConfirmations, outputSelectionAlgorithm, changeSource)
 }
