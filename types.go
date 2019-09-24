@@ -103,48 +103,48 @@ type DebugInfo struct {
 // Transaction is used with storm for tx indexing operations.
 // For faster queries, the `Hash`, `Type` and `Direction` fields are indexed.
 type Transaction struct {
-	Hash        string `storm:"id,unique"`
-	Type        string `storm:"index"`
-	Hex         string
-	Timestamp   int64
-	BlockHeight int32
+	Hash        string `storm:"id,unique" json:"hash"`
+	Type        string `storm:"index" json:"type"`
+	Hex         string `json:"hex"`
+	Timestamp   int64  `json:"timestamp"`
+	BlockHeight int32  `json:"block_height"`
 
-	Version  int32
-	LockTime int32
-	Expiry   int32
-	Fee      int64
-	FeeRate  int64
-	Size     int
+	Version  int32 `json:"version"`
+	LockTime int32 `json:"lock_time"`
+	Expiry   int32 `json:"expiry"`
+	Fee      int64 `json:"fee"`
+	FeeRate  int64 `json:"fee_rate"`
+	Size     int   `json:"size"`
 
-	Direction int32
-	Amount    int64
-	Inputs    []*TxInput
-	Outputs   []*TxOutput
+	Direction int32       `storm:"index" json:"direction"`
+	Amount    int64       `json:"amount"`
+	Inputs    []*TxInput  `json:"inputs"`
+	Outputs   []*TxOutput `json:"outputs"`
 
 	// Vote Info
-	VoteVersion    int32
-	LastBlockValid bool
-	VoteBits       string
+	VoteVersion    int32  `json:"vote_version"`
+	LastBlockValid bool   `json:"last_block_valid"`
+	VoteBits       string `json:"vote_bits"`
 }
 
 type TxInput struct {
-	PreviousTransactionHash  string
-	PreviousTransactionIndex int32
-	PreviousOutpoint         string
-	Amount                   int64
-	AccountName              string
-	AccountNumber            int32
+	PreviousTransactionHash  string `json:"previous_transaction_hash"`
+	PreviousTransactionIndex int32  `json:"previous_transaction_index"`
+	PreviousOutpoint         string `json:"previous_outpoint"`
+	Amount                   int64  `json:"amount"`
+	AccountName              string `json:"account_name"`
+	AccountNumber            int32  `json:"previous_account"`
 }
 
 type TxOutput struct {
-	Index         int32
-	Amount        int64
-	Version       int32
-	ScriptType    string
-	Address       string
-	Internal      bool
-	AccountName   string
-	AccountNumber int32
+	Index         int32  `json:"index"`
+	Amount        int64  `json:"amount"`
+	Version       int32  `json:"version"`
+	ScriptType    string `json:"script_type"`
+	Address       string `json:"address"`
+	Internal      bool   `json:"internal"`
+	AccountName   string `json:"account_name"`
+	AccountNumber int32  `json:"previous_account"`
 }
 
 // TxInfoFromWallet contains tx data that relates to the querying wallet.
@@ -158,22 +158,22 @@ type TxInfoFromWallet struct {
 }
 
 type WalletInput struct {
-	Index    int32
-	AmountIn int64
+	Index    int32 `json:"index"`
+	AmountIn int64 `json:"amount_in"`
 	*WalletAccount
 }
 
 type WalletOutput struct {
-	Index     int32
-	AmountOut int64
-	Internal  bool
-	Address   string
+	Index     int32  `json:"index"`
+	AmountOut int64  `json:"amount"`
+	Internal  bool   `json:"internal"`
+	Address   string `json:"address"`
 	*WalletAccount
 }
 
 type WalletAccount struct {
-	AccountNumber int32
-	AccountName   string
+	AccountNumber int32  `json:"account_number"`
+	AccountName   string `json:"account_name"`
 }
 
 type TransactionDestination struct {
