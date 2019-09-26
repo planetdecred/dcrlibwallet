@@ -29,6 +29,11 @@ const (
 
 	MaxAmountAtom = dcrutil.MaxAmount
 	MaxAmountDcr  = dcrutil.MaxAmount / dcrutil.AtomsPerCoin
+
+	TestnetHDPath = "m / 44' / 1' / "
+	MainnetHDPath = "m / 44' / 42' / "
+
+	DefaultRequiredConfirmations = 2
 )
 
 func (lw *LibWallet) listenForShutdown() {
@@ -127,12 +132,37 @@ func DecodeBase64(base64Text string) ([]byte, error) {
 	return b, nil
 }
 
-func calculateTotalTimeRemaining(timeRemainingInSeconds int64) string {
+func TransactionDirectionName(direction int32) string {
+	switch direction {
+	case TxDirectionSent:
+		return "Sent"
+	case TxDirectionReceived:
+		return "Received"
+	case TxDirectionTransferred:
+		return "Yourself"
+	default:
+		return "invalid"
+	}
+}
+
+func CalculateTotalTimeRemaining(timeRemainingInSeconds int64) string {
 	minutes := timeRemainingInSeconds / 60
 	if minutes > 0 {
 		return fmt.Sprintf("%d min", minutes)
 	}
 	return fmt.Sprintf("%d sec", timeRemainingInSeconds)
+}
+
+func CalculateDaysBehind(lastHeaderTime int64) string {
+	hoursBehind := float64(time.Now().Unix()-lastHeaderTime) / 60
+	daysBehind := int(math.Round(hoursBehind / 24))
+	if daysBehind < 1 {
+		return "<1 day"
+	} else if daysBehind == 1 {
+		return "1 day"
+	} else {
+		return fmt.Sprintf("%d days", daysBehind)
+	}
 }
 
 func roundUp(n float64) int32 {
