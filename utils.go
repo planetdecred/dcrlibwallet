@@ -38,7 +38,6 @@ const (
 )
 
 func (lw *LibWallet) listenForShutdown() {
-
 	lw.cancelFuncs = make([]context.CancelFunc, 0)
 	lw.shuttingDown = make(chan bool)
 	go func() {
