@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/decred/dcrd/dcrutil"
@@ -130,6 +131,19 @@ func DecodeBase64(base64Text string) ([]byte, error) {
 	}
 
 	return b, nil
+}
+
+func ShannonEntropy(text string) (entropy float64) {
+	if text == "" {
+		return 0
+	}
+	for i := 0; i < 256; i++ {
+		px := float64(strings.Count(text, string(byte(i)))) / float64(len(text))
+		if px > 0 {
+			entropy += -px * math.Log2(px)
+		}
+	}
+	return entropy
 }
 
 func TransactionDirectionName(direction int32) string {
