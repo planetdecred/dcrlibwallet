@@ -2,10 +2,8 @@ package dcrlibwallet
 
 import (
 	"encoding/json"
-	"fmt"
 	"time"
 
-	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrwallet/errors"
 )
 
@@ -123,8 +121,4 @@ func (lw *LibWallet) AccountNameRaw(accountNumber uint32) (string, error) {
 
 func (lw *LibWallet) AccountNumber(accountName string) (uint32, error) {
 	return lw.wallet.AccountNumber(accountName)
-}
-
-func (account *Account) String() string {
-	return fmt.Sprintf("%s [%s]", account.Name, dcrutil.Amount(account.Balance.Spendable).String())
 }
