@@ -101,9 +101,9 @@ func (lw *LibWallet) IsWatchingOnlyWallet() bool {
 }
 
 func (lw *LibWallet) OpenWallet(pubPass []byte) error {
-	if lw.ReadBoolConfigValueForKey(IsStartupSecuritySetConfigKey) && pubPass == nil {
-		return fmt.Errorf("public passphrase is required")
-	}
+	// if lw.ReadBoolConfigValueForKey(IsStartupSecuritySetConfigKey) && pubPass == nil {
+	// 	return fmt.Errorf("public passphrase is required")
+	// }
 	if pubPass == nil {
 		pubPass = []byte("public")
 	}

@@ -26,6 +26,7 @@ type MultiWallet struct {
 	dbDriver string
 	rootDir  string
 	db       *storm.DB
+	configDB *storm.DB
 
 	activeNet *netparams.Params
 	wallets   map[int]*LibWallet
@@ -45,6 +46,16 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 	}
 
 	rootDir = filepath.Join(rootDir, netType)
+
+	configDbPath := filepath.Join(rootDir, userConfigDbFilename)
+	configDB, err := storm.Open(configDbPath)
+	if err != nil {
+		if err == bolt.ErrTimeout {
+			// timeout error occurs if storm fails to acquire a lock on the database file
+			return nil, fmt.Errorf("settings db is in use by another process")
+		}
+		return nil, fmt.Errorf("error opening settings db store: %s", err.Error())
+	}
 
 	initLogRotator(filepath.Join(rootDir, logFileName))
 
@@ -74,6 +85,7 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 		dbDriver:  dbDriver,
 		rootDir:   rootDir,
 		db:        db,
+		configDB:  configDB,
 		activeNet: activeNet,
 		wallets:   make(map[int]*LibWallet),
 		syncData:  syncData,

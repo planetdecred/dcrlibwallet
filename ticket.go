@@ -184,12 +184,12 @@ func (lw *LibWallet) PurchaseTickets(ctx context.Context, request *PurchaseTicke
 	var err error
 
 	// fetch redeem script, ticket address, pool address and pool fee if vsp host is configured
-	vspHost := lw.ReadStringConfigValueForKey(VSPHostConfigKey)
-	if vspHost != "" {
-		if err = lw.updateTicketPurchaseRequestWithVSPInfo(vspHost, request); err != nil {
-			return nil, err
-		}
-	}
+	// vspHost := lw.ReadStringConfigValueForKey(VSPHostConfigKey)
+	// if vspHost != "" {
+	// 	if err = lw.updateTicketPurchaseRequestWithVSPInfo(vspHost, request); err != nil {
+	// 		return nil, err
+	// 	}
+	// }
 
 	// Unmarshall the received data and prepare it as input for the ticket purchase request.
 	ticketPriceResponse, err := lw.TicketPrice(ctx)

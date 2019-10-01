@@ -2,17 +2,14 @@ package dcrlibwallet
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 
-	"github.com/asdine/storm"
 	"github.com/decred/dcrwallet/errors"
 	"github.com/decred/dcrwallet/netparams"
 	wallet "github.com/decred/dcrwallet/wallet/v3"
 	"github.com/decred/dcrwallet/wallet/v3/txrules"
 	"github.com/raedahgroup/dcrlibwallet/txindex"
 	"github.com/raedahgroup/dcrlibwallet/utils"
-	bolt "go.etcd.io/bbolt"
 )
 
 const (
@@ -37,7 +34,6 @@ type LibWallet struct {
 	walletLoader *WalletLoader
 	wallet       *wallet.Wallet
 	txDB         *txindex.DB
-	configDB     *storm.DB
 
 	synced     bool
 	syncing    bool
