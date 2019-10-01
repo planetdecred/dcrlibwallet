@@ -8,6 +8,8 @@ import (
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrwallet/errors"
 	"github.com/decred/dcrwallet/wallet"
+	"github.com/raedahgroup/dcrlibwallet/addresshelper"
+	"strings"
 )
 
 func (lw *LibWallet) GetAccounts(requiredConfirmations int32) (string, error) {
@@ -78,9 +80,9 @@ func (lw *LibWallet) SpendableForAccount(account int32, requiredConfirmations in
 	return int64(bals.Spendable), nil
 }
 
-func (lw *LibWallet) AllUnspentOutputs(account uint32, requiredConfirmations int32) ([]*UnspentOutput, error) {
+func (lw *LibWallet) AllUnspentOutputs(account int32, requiredConfirmations int32) ([]*UnspentOutput, error) {
 	policy := wallet.OutputSelectionPolicy{
-		Account:               account,
+		Account:               uint32(account),
 		RequiredConfirmations: requiredConfirmations,
 	}
 
@@ -103,6 +105,21 @@ func (lw *LibWallet) AllUnspentOutputs(account uint32, requiredConfirmations int
 		// unique key to identify utxo
 		outputKey := fmt.Sprintf("%s:%d", input.PreviousOutPoint.Hash, input.PreviousOutPoint.Index)
 
+		addresses, err := addresshelper.PkScriptAddresses(lw.activeNet.Params, inputDetail.Scripts[i])
+		if err != nil {
+			return nil, fmt.Errorf("error reading address details for unspent output: %v", err)
+		}
+
+		previousTx, err := lw.GetTransactionRaw(input.PreviousOutPoint.Hash[:])
+		if err != nil {
+			return nil, fmt.Errorf("error reading tx details for unspent output: %v", err)
+		}
+
+		var confirmations int32 = 0
+		if previousTx.BlockHeight != -1 {
+			confirmations = lw.GetBestBlock() - previousTx.BlockHeight + 1
+		}
+
 		unspentOutputs[i] = &UnspentOutput{
 			TransactionHash: input.PreviousOutPoint.Hash[:],
 			OutputIndex:     input.PreviousOutPoint.Index,
@@ -112,6 +129,8 @@ func (lw *LibWallet) AllUnspentOutputs(account uint32, requiredConfirmations int
 			PkScript:        inputDetail.Scripts[i],
 			ReceiveTime:     outputInfo.Received.Unix(),
 			FromCoinbase:    outputInfo.FromCoinbase,
+			Address:         strings.Join(addresses, ", "),
+			Confirmations:   confirmations,
 		}
 	}
 

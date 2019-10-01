@@ -135,7 +135,7 @@ func (tx *TxAuthor) UseInputs(utxoKeys []string) error {
 	// so that an outdated set of inputs isn't used if an error occurs from this function
 	tx.inputs = nil
 
-	accountUtxos, err := tx.lw.AllUnspentOutputs(tx.sendFromAccount, tx.requiredConfirmations)
+	accountUtxos, err := tx.lw.AllUnspentOutputs(int32(tx.sendFromAccount), tx.requiredConfirmations)
 	if err != nil {
 		return fmt.Errorf("error reading unspent outputs in account: %v", err)
 	}

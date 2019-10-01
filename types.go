@@ -231,4 +231,6 @@ type UnspentOutput struct {
 	FromCoinbase    bool
 	Tree            int32
 	PkScript        []byte
+	Address         string
+	Confirmations   int32
 }
