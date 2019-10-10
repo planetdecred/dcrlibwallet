@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/decred/dcrd/addrmgr"
-	chain "github.com/decred/dcrwallet/chain/v3"
 	"github.com/decred/dcrwallet/errors"
 	p2p "github.com/decred/dcrwallet/p2p/v2"
 	spv "github.com/decred/dcrwallet/spv/v3"
@@ -18,7 +17,6 @@ import (
 
 type syncData struct {
 	mu sync.Mutex
-	// rpcClient *chain.Syncer
 
 	syncProgressListeners map[string]SyncProgressListener
 	showLogs              bool
@@ -212,7 +210,7 @@ func (mw *MultiWallet) SpvSync(peerAddresses string) error {
 
 	mw.setNetworkBackend(syncer)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := mw.contextWithShutdownCancel()
 	mw.cancelSync = cancel
 
 	// syncer.Run uses a wait group to block the thread until sync completes or an error occurs
@@ -252,75 +250,6 @@ func (mw *MultiWallet) RestartSpvSync(peerAddresses string) error {
 
 	mw.CancelSync() // necessary to unset the network backend.
 	return mw.SpvSync(peerAddresses)
-}
-
-func (mw *MultiWallet) RpcSync(networkAddress string, username string, password string, cert []byte) error {
-	networkAddress, err := NormalizeAddress(networkAddress, mw.activeNet.JSONRPCClientPort)
-	if err != nil {
-		return errors.New(ErrInvalidAddress)
-	}
-	// Unset this flag as the invocation of this method implies that any request to restart sync has been fulfilled.
-	mw.syncData.restartSyncRequested = false
-
-	defaultWallet := mw.wallets[0] // TODO
-	loadedWallet, walletLoaded := defaultWallet.walletLoader.LoadedWallet()
-	if !walletLoaded {
-		return errors.New(ErrWalletNotLoaded)
-	}
-
-	// Error if the wallet is already syncing with the network.
-	currentNetworkBackend, _ := loadedWallet.NetworkBackend()
-	if currentNetworkBackend != nil {
-		return errors.New(ErrSyncAlreadyInProgress)
-	}
-
-	// init activeSyncData to be used to hold data used
-	// to calculate sync estimates only during sync
-	mw.initActiveSyncData()
-
-	syncer := chain.NewSyncer(loadedWallet, &chain.RPCOptions{
-		Address:     networkAddress,
-		DefaultPort: mw.activeNet.JSONRPCClientPort,
-		User:        username,
-		Pass:        password,
-		CA:          cert,
-		Insecure:    false,
-	})
-	// syncer.SetCallbacks(mw.generalSyncNotificationCallbacks())
-
-	// notify sync progress listeners that connected peer count will not be reported because we're using rpc
-	for _, syncProgressListener := range mw.syncProgressListeners {
-		syncProgressListener.OnPeerConnectedOrDisconnected(-1)
-	}
-
-	// syncer.Run uses a wait group to block the thread until sync completes or an error occurs
-	go func() {
-		mw.syncing = true
-		defer func() {
-			mw.syncing = false
-		}()
-		ctx, cancel := mw.contextWithShutdownCancel()
-		mw.cancelSync = cancel
-		err := syncer.Run(ctx)
-		if err != nil {
-			if err == context.Canceled {
-				mw.notifySyncCanceled()
-				mw.syncCanceled <- true
-			} else if err == context.DeadlineExceeded {
-				mw.notifySyncError(ErrorCodeDeadlineExceeded, errors.E("RPC synchronization deadline exceeded: %v", err))
-			} else {
-				mw.notifySyncError(ErrorCodeUnexpectedError, err)
-			}
-		}
-	}()
-
-	return nil
-}
-
-func (mw *MultiWallet) RestartRpcSync(networkAddress string, username string, password string, cert []byte) error {
-	mw.syncData.restartSyncRequested = true
-	// mw.CancelSync() // necessary to unset the network backend.
-	return mw.RpcSync(networkAddress, username, password, cert)
 }
 
 func (mw *MultiWallet) CancelSync() {

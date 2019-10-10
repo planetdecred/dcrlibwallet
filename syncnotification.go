@@ -34,27 +34,8 @@ func (mw *MultiWallet) spvSyncNotificationCallbacks() *spv.Notifications {
 		RescanStarted:                mw.rescanStarted,
 		RescanProgress:               mw.rescanProgress,
 		RescanFinished:               mw.rescanFinished,
-
-		// MempoolTxs: mw.MempoolTxs,
 	}
 }
-
-// func (mw *LibWallet) generalSyncNotificationCallbacks() *chain.Callbacks {
-// 	return &chain.Callbacks{
-// 		FetchMissingCFiltersStarted:  func() {},
-// 		FetchMissingCFiltersProgress: func(missingCFitlersStart, missingCFitlersEnd int32) {},
-// 		FetchMissingCFiltersFinished: func() {},
-// 		FetchHeadersStarted:          mw.fetchHeadersStarted,
-// 		FetchHeadersProgress:         mw.fetchHeadersProgress,
-// 		FetchHeadersFinished:         mw.fetchHeadersFinished,
-// 		DiscoverAddressesStarted:     mw.discoverAddressesStarted,
-// 		DiscoverAddressesFinished:    mw.discoverAddressesFinished,
-// 		RescanStarted:                mw.rescanStarted,
-// 		RescanProgress:               mw.rescanProgress,
-// 		RescanFinished:               mw.rescanFinished,
-// 		Synced:                       mw.synced,
-// 	}
-// }
 
 func (mw *MultiWallet) handlePeerCountUpdate(peerCount int32) {
 	mw.syncData.mu.Lock()

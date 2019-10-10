@@ -185,8 +185,6 @@ github.com/decred/dcrdata/semver v1.0.0 h1:DBqYU/x+4LqHq/3r4xKdF6xG5ewktG2KDC+g/
 github.com/decred/dcrdata/semver v1.0.0/go.mod h1:z+nQqiAd9fYkHhBLbejysZ2FPHtgkrErWDgMf+JlZWE=
 github.com/decred/dcrdata/txhelpers v1.1.0 h1:xKK+1/OASkSxMe/KDLaLJeJjJdopgC+FV8+EFPpJAGk=
 github.com/decred/dcrdata/txhelpers v1.1.0/go.mod h1:IyxuqUxIPrHnOmRy9DCl90oqw7FxYHde/fkIkF21B7w=
-github.com/decred/dcrwallet v1.2.2 h1:NdI13wxP+OsWKXPqjWQQ9VSGAl4VoSLBfAunzFreeJg=
-github.com/decred/dcrwallet v1.2.2/go.mod h1:BrSus0F+Rx8UhvPNBfuRMIjRJBNrW2sLspN9iQR5hm8=
 github.com/decred/dcrwallet v1.2.3-0.20190820143957-746bab522803 h1:tO6zD1UNSAAsIa1LJa8D+QcSJFm65E/fIICQ4JZzFXo=
 github.com/decred/dcrwallet v1.2.3-0.20190820143957-746bab522803/go.mod h1:HpOjKBWoCspIAbbzCpMtXY9/smZxP56HpS6G2eVUOYg=
 github.com/decred/dcrwallet/chain v1.0.0 h1:wiFXzRwdsTykIrpIFdhXCFUu0RQafsuUiPfop6RKscc=

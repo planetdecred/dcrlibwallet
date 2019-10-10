@@ -21,7 +21,6 @@ require (
 	github.com/decred/dcrdata/txhelpers v1.1.0
 	github.com/decred/dcrwallet v1.2.2
 	github.com/decred/dcrwallet/chain v1.0.0
-	github.com/decred/dcrwallet/chain/v3 v3.0.0
 	github.com/decred/dcrwallet/errors v1.1.0
 	github.com/decred/dcrwallet/p2p/v2 v2.0.0
 	github.com/decred/dcrwallet/rpc/client/dcrd v0.0.0-00010101000000-000000000000
