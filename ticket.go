@@ -191,15 +191,6 @@ func (lw *LibWallet) PurchaseTickets(ctx context.Context, request *PurchaseTicke
 	// 	}
 	// }
 
-	// Unmarshall the received data and prepare it as input for the ticket purchase request.
-	ticketPriceResponse, err := lw.TicketPrice(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("could not determine ticket price, %s", err.Error())
-	}
-
-	// Use current ticket price as spend limit
-	spendLimit := dcrutil.Amount(ticketPriceResponse.TicketPrice)
-
 	minConf := int32(request.RequiredConfirmations)
 	params := lw.activeNet.Params
 
@@ -258,8 +249,20 @@ func (lw *LibWallet) PurchaseTickets(ctx context.Context, request *PurchaseTicke
 		return nil, translateError(err)
 	}
 
-	purchasedTickets, err := lw.wallet.PurchaseTickets(ctx, 0, spendLimit, minConf, ticketAddr, request.Account, numTickets, poolAddr, request.PoolFees,
-		expiry, txFee, ticketFee)
+	purchaseTicketsRequest := &wallet.PurchaseTicketsRequest{
+		Count:         numTickets,
+		SourceAccount: request.Account,
+		VotingAddress: ticketAddr,
+		MinConf:       minConf,
+		Expiry:        expiry,
+	}
+
+	netBackend, err := lw.wallet.NetworkBackend()
+	if err != nil {
+		return nil, err
+	}
+
+	purchasedTickets, err := lw.wallet.PurchaseTicketsContext(ctx, netBackend, purchaseTicketsRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to purchase tickets: %s", err.Error())
 	}
@@ -272,7 +275,7 @@ func (lw *LibWallet) PurchaseTickets(ctx context.Context, request *PurchaseTicke
 	return hashes, nil
 }
 
-func (lw *LibWallet) updateTicketPurchaseRequestWithVSPInfo(vspHost string, request *PurchaseTicketsRequest) error {
+func (lw *LibWallet) UpdateTicketPurchaseRequestWithVSPInfo(vspHost string, request *PurchaseTicketsRequest) error {
 	// generate an address and get the pubkeyaddr
 	address, err := lw.CurrentAddress(0)
 	if err != nil {
