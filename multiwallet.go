@@ -3,10 +3,10 @@ package dcrlibwallet
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/asdine/storm"
 	"github.com/asdine/storm/q"
@@ -37,36 +37,38 @@ type MultiWallet struct {
 }
 
 func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
-
+	rootDir = filepath.Join(rootDir, netType)
+	initLogRotator(filepath.Join(rootDir, logFileName))
 	errors.Separator = ":: "
 
 	activeNet := utils.NetParams(netType)
 	if activeNet == nil {
-		return nil, fmt.Errorf("unsupported network type: %s", netType)
+		return nil, errors.E("unsupported network type: %s", netType)
 	}
 
-	rootDir = filepath.Join(rootDir, netType)
+	err := os.MkdirAll(rootDir, 0700)
+	if err != nil {
+		return nil, errors.E("failed to create wallet db directory: %v", err)
+	}
 
 	configDbPath := filepath.Join(rootDir, userConfigDbFilename)
 	configDB, err := storm.Open(configDbPath)
 	if err != nil {
 		if err == bolt.ErrTimeout {
 			// timeout error occurs if storm fails to acquire a lock on the database file
-			return nil, fmt.Errorf("settings db is in use by another process")
+			return nil, errors.E("settings db is in use by another process")
 		}
-		return nil, fmt.Errorf("error opening settings db store: %s", err.Error())
+		return nil, errors.E("error opening settings db store: %s", err.Error())
 	}
-
-	initLogRotator(filepath.Join(rootDir, logFileName))
 
 	db, err := storm.Open(filepath.Join(rootDir, walletsDbName))
 	if err != nil {
 		log.Errorf("Error opening wallet database: %s", err.Error())
 		if err == bolt.ErrTimeout {
 			// timeout error occurs if storm fails to acquire a lock on the database file
-			return nil, fmt.Errorf("wallet database is in use by another process")
+			return nil, errors.E("wallet database is in use by another process")
 		}
-		return nil, fmt.Errorf("error opening wallet index database: %s", err.Error())
+		return nil, errors.E("error opening wallet index database: %s", err.Error())
 	}
 
 	// init database for saving/reading wallet objects
@@ -200,7 +202,7 @@ func (mw *MultiWallet) SyncedWalletCount() int32 {
 	return syncedWallet
 }
 
-func (mw *MultiWallet) CreateNewWallet(passphrase string, spendingPassphraseType int32) (*LibWallet, error) {
+func (mw *MultiWallet) CreateNewWallet(privatePassphrase string, spendingPassphraseType int32) (*LibWallet, error) {
 
 	if mw.activeSyncData != nil {
 		return nil, errors.New(ErrSyncAlreadyInProgress)
@@ -218,10 +220,70 @@ func (mw *MultiWallet) CreateNewWallet(passphrase string, spendingPassphraseType
 		DefaultAccount:         0,
 	}
 
-	return mw.createWallet(properties, seed, passphrase)
+	return mw.createWallet(properties, seed, privatePassphrase)
 }
 
-func (mw *MultiWallet) RestoreWallet(seedMnemonic, passphrase string, spendingPassphraseType int32) (*LibWallet, error) {
+func (mw *MultiWallet) CreateWatchOnlyWallet(walletName string, extendedPublicKey string) (*LibWallet, error) {
+
+	exists, err := mw.WalletNameExists(walletName)
+	if err != nil {
+		return nil, err
+	} else if exists {
+		return nil, errors.New(ErrWalletNotLoaded)
+	}
+
+	properties := WalletProperties{
+		WalletName:         walletName,
+		DiscoveredAccounts: true,
+		DefaultAccount:     0,
+	}
+
+	lw := &LibWallet{
+		WalletProperties: properties,
+	}
+
+	err = mw.db.Save(lw)
+	if err != nil {
+		return nil, err
+	}
+
+	walletID := lw.WalletID
+
+	homeDir := filepath.Join(mw.rootDir, strconv.Itoa(walletID))
+	os.MkdirAll(homeDir, os.ModePerm) // create wallet dir
+
+	lw.WalletDataDir = homeDir
+	err = mw.db.Save(lw) // update database with complete wallet information
+	if err != nil {
+		return nil, err
+	}
+
+	// delete from database if not created successfully
+	defer func() {
+		if err != nil {
+			mw.db.DeleteStruct(lw)
+		}
+	}()
+
+	libWallet, err := NewLibWallet(homeDir, mw.dbDriver, mw.activeNet.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	libWallet.WalletProperties = lw.WalletProperties
+	mw.wallets[walletID] = libWallet
+
+	err = libWallet.CreateWatchingOnlyWallet(wallet.InsecurePubPassphrase, extendedPublicKey)
+	if err != nil {
+		return nil, err
+	}
+
+	go mw.listenForTransactions(libWallet)
+
+	return libWallet, nil
+}
+
+func (mw *MultiWallet) RestoreWallet(seedMnemonic, privatePassphrase string, spendingPassphraseType int32) (*LibWallet, error) {
 	if mw.activeSyncData != nil {
 		return nil, errors.New(ErrSyncAlreadyInProgress)
 	}
@@ -232,10 +294,10 @@ func (mw *MultiWallet) RestoreWallet(seedMnemonic, passphrase string, spendingPa
 		DefaultAccount:         0,
 	}
 
-	return mw.createWallet(properties, seedMnemonic, passphrase)
+	return mw.createWallet(properties, seedMnemonic, privatePassphrase)
 }
 
-func (mw *MultiWallet) createWallet(properties WalletProperties, seedMnemonic, passphrase string) (*LibWallet, error) {
+func (mw *MultiWallet) createWallet(properties WalletProperties, seedMnemonic, privatePassphrase string) (*LibWallet, error) {
 	lw := &LibWallet{
 		WalletProperties: properties,
 	}
@@ -254,16 +316,16 @@ func (mw *MultiWallet) createWallet(properties WalletProperties, seedMnemonic, p
 	// update database wallet data dir
 	lw.WalletDataDir = homeDir
 	lw.WalletName = walletName
-	err = mw.db.Save(lw) // updating database with new complete wallet information
+	err = mw.db.Save(lw) // update database with complete wallet information
 	if err != nil {
 		return nil, err
 	}
 
+	// delete from database if not created successfully
 	defer func() {
 		if err != nil {
 			mw.db.DeleteStruct(lw)
 		}
-
 	}()
 
 	libWallet, err := NewLibWallet(homeDir, mw.dbDriver, mw.activeNet.Name)
@@ -274,7 +336,7 @@ func (mw *MultiWallet) createWallet(properties WalletProperties, seedMnemonic, p
 	libWallet.WalletProperties = lw.WalletProperties
 	mw.wallets[walletID] = libWallet
 
-	err = libWallet.CreateWallet(passphrase, seedMnemonic)
+	err = libWallet.CreateWallet(privatePassphrase, seedMnemonic)
 	if err != nil {
 		return nil, err
 	}
@@ -282,6 +344,22 @@ func (mw *MultiWallet) createWallet(properties WalletProperties, seedMnemonic, p
 	go mw.listenForTransactions(libWallet)
 
 	return libWallet, nil
+}
+
+func (mw *MultiWallet) WalletNameExists(walletName string) (bool, error) {
+
+	if strings.HasPrefix(walletName, "wallet-") {
+		return false, errors.E(ErrReservedWalletName)
+	}
+
+	err := mw.db.One("WalletName", walletName, &LibWallet{})
+	if err == nil {
+		return true, nil
+	} else if err != storm.ErrNotFound {
+		return false, err
+	}
+
+	return false, nil
 }
 
 func (mw *MultiWallet) GetWallet(walletID int) *LibWallet {

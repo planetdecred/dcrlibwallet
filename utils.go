@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"github.com/decred/dcrwallet/errors"
 	"math"
 	"net"
 	"strings"
@@ -199,4 +200,17 @@ func CalculateDaysBehind(lastHeaderTime int64) string {
 
 func roundUp(n float64) int32 {
 	return int32(math.Round(n))
+}
+
+func ValidateExPubKey(extendedPubKey string) error {
+	_, err := hdkeychain.NewKeyFromString(extendedPubKey)
+	if err != nil {
+		if err == hdkeychain.ErrInvalidChild {
+			return errors.New(ErrUnusableSeed)
+		}
+
+		return errors.New(ErrInvalid)
+	}
+
+	return nil
 }

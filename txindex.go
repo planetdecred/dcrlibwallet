@@ -31,7 +31,7 @@ func (lw *LibWallet) IndexTransactions(waitGroup *sync.WaitGroup) error {
 
 			err = lw.txDB.SaveOrUpdate(&Transaction{}, tx)
 			if err != nil {
-				log.Errorf("Index tx replace tx err :%v", err)
+				log.Errorf("[%d] Index tx replace tx err :%v", lw.WalletID, err)
 				return false, err
 			}
 
@@ -42,11 +42,11 @@ func (lw *LibWallet) IndexTransactions(waitGroup *sync.WaitGroup) error {
 			txEndHeight = block.Header.Height
 			err := lw.txDB.SaveLastIndexPoint(int32(txEndHeight))
 			if err != nil {
-				log.Errorf("Set tx index end block height error: ", err)
+				log.Errorf("[%d] Set tx index end block height error: ", lw.WalletID, err)
 				return false, err
 			}
 
-			log.Infof("Index saved for transactions in block %d", txEndHeight)
+			log.Infof("[%d] Index saved for transactions in block %d", lw.WalletID, txEndHeight)
 		}
 
 		select {
@@ -59,7 +59,7 @@ func (lw *LibWallet) IndexTransactions(waitGroup *sync.WaitGroup) error {
 
 	beginHeight, err := lw.txDB.ReadIndexingStartBlock()
 	if err != nil {
-		log.Errorf("Get tx indexing start point error: %v", err)
+		log.Errorf("[%d] Get tx indexing start point error: %v", lw.WalletID, err)
 		return err
 	}
 
@@ -72,13 +72,14 @@ func (lw *LibWallet) IndexTransactions(waitGroup *sync.WaitGroup) error {
 		waitGroup.Done()
 		count, err := lw.txDB.Count(txindex.TxFilterAll, &Transaction{})
 		if err != nil {
-			log.Errorf("Post-indexing tx count error :%v", err)
+			log.Errorf("[%d] Post-indexing tx count error :%v", lw.WalletID, err)
 			return
 		}
-		log.Infof("Transaction index finished at %d, %d transaction(s) indexed in total", txEndHeight, count)
+		log.Infof("[%d] Transaction index finished at %d, %d transaction(s) indexed in total", lw.WalletID, txEndHeight, count)
 	}()
 
 	waitGroup.Add(1)
-	log.Infof("Indexing transactions start height: %d, end height: %d", beginHeight, endHeight)
-	return lw.wallet.GetTransactions(rangeFn, startBlock, endBlock)
+	log.Infof("[%d] Indexing transactions start height: %d, end height: %d", lw.WalletID, beginHeight, endHeight)
+	go lw.wallet.GetTransactions(rangeFn, startBlock, endBlock)
+	return nil
 }

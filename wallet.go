@@ -53,13 +53,13 @@ func (mw *MultiWallet) VerifySeed(walletID int, seedMnemonic string) error {
 	return errors.New(ErrInvalid)
 }
 
-func (lw *LibWallet) CreateWallet(passphrase string, seedMnemonic string) error {
+func (lw *LibWallet) CreateWallet(privatePassphrase string, seedMnemonic string) error {
 	log.Info("Creating Wallet")
 	if len(seedMnemonic) == 0 {
 		return errors.New(ErrEmptySeed)
 	}
 	pubPass := []byte(wallet.InsecurePubPassphrase)
-	privPass := []byte(passphrase)
+	privPass := []byte(privatePassphrase)
 	seed, err := walletseed.DecodeUserInput(seedMnemonic)
 	if err != nil {
 		log.Error(err)
@@ -225,7 +225,7 @@ func (lw *LibWallet) DeleteWallet(privatePassphrase []byte) error {
 
 func (mw *MultiWallet) RenameWallet(walletID int, newName string) error {
 	if strings.HasPrefix(newName, "wallet-") {
-		return errors.New("'wallet-' is a reserved prefix")
+		return errors.E(ErrReservedWalletName)
 	}
 
 	w, ok := mw.wallets[walletID]

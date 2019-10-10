@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	chain "github.com/decred/dcrwallet/chain/v3"
 	spv "github.com/raedahgroup/dcrlibwallet/spv"
 )
 
@@ -40,22 +39,22 @@ func (mw *MultiWallet) spvSyncNotificationCallbacks() *spv.Notifications {
 	}
 }
 
-func (mw *LibWallet) generalSyncNotificationCallbacks() *chain.Callbacks {
-	return &chain.Callbacks{
-		// FetchMissingCFiltersStarted:  func() {},
-		// FetchMissingCFiltersProgress: func(missingCFitlersStart, missingCFitlersEnd int32) {},
-		// FetchMissingCFiltersFinished: func() {},
-		// FetchHeadersStarted:          mw.fetchHeadersStarted,
-		// FetchHeadersProgress:         mw.fetchHeadersProgress,
-		// FetchHeadersFinished:         mw.fetchHeadersFinished,
-		// DiscoverAddressesStarted:     mw.discoverAddressesStarted,
-		// DiscoverAddressesFinished:    mw.discoverAddressesFinished,
-		// RescanStarted:                mw.rescanStarted,
-		// RescanProgress:               mw.rescanProgress,
-		// RescanFinished:               mw.rescanFinished,
-		// Synced:                       mw.synced,
-	}
-}
+// func (mw *LibWallet) generalSyncNotificationCallbacks() *chain.Callbacks {
+// 	return &chain.Callbacks{
+// 		FetchMissingCFiltersStarted:  func() {},
+// 		FetchMissingCFiltersProgress: func(missingCFitlersStart, missingCFitlersEnd int32) {},
+// 		FetchMissingCFiltersFinished: func() {},
+// 		FetchHeadersStarted:          mw.fetchHeadersStarted,
+// 		FetchHeadersProgress:         mw.fetchHeadersProgress,
+// 		FetchHeadersFinished:         mw.fetchHeadersFinished,
+// 		DiscoverAddressesStarted:     mw.discoverAddressesStarted,
+// 		DiscoverAddressesFinished:    mw.discoverAddressesFinished,
+// 		RescanStarted:                mw.rescanStarted,
+// 		RescanProgress:               mw.rescanProgress,
+// 		RescanFinished:               mw.rescanFinished,
+// 		Synced:                       mw.synced,
+// 	}
+// }
 
 func (mw *MultiWallet) handlePeerCountUpdate(peerCount int32) {
 	mw.syncData.mu.Lock()
@@ -567,7 +566,7 @@ func (mw *MultiWallet) synced(walletID int, synced bool) {
 		var waitForIndexing sync.WaitGroup
 		waitForIndexing.Add(len(mw.wallets))
 		for _, w := range mw.wallets {
-			go w.IndexTransactions(&waitForIndexing)
+			w.IndexTransactions(&waitForIndexing)
 		}
 
 		go func() {

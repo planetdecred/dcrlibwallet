@@ -17,8 +17,8 @@ import (
 )
 
 type syncData struct {
-	mu        sync.Mutex
-	rpcClient *chain.Syncer
+	mu sync.Mutex
+	// rpcClient *chain.Syncer
 
 	syncProgressListeners map[string]SyncProgressListener
 	showLogs              bool

@@ -18,8 +18,8 @@ const (
 )
 
 type WalletProperties struct {
-	WalletID               int `storm:"id,increment"`
-	WalletName             string
+	WalletID               int    `storm:"id,increment"`
+	WalletName             string `storm:"unique"`
 	WalletDataDir          string
 	WalletSeed             string
 	DefaultAccount         int32
