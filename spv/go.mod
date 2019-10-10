@@ -1,1 +1,1 @@
-module github.com/raedahgroup/dcrlibwallet/spv
+module github.com/decred/dcrwallet/spv/v3
