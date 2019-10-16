@@ -163,7 +163,7 @@ func (mw *MultiWallet) SyncInactiveForPeriod(totalInactiveSeconds int64) {
 	}
 }
 
-func (mw *MultiWallet) SpvSync(peerAddresses string) error {
+func (mw *MultiWallet) SpvSync() error {
 	mw.syncData.mu.Lock()
 	defer mw.syncData.mu.Unlock()
 
@@ -175,12 +175,13 @@ func (mw *MultiWallet) SpvSync(peerAddresses string) error {
 	lp := p2p.NewLocalPeer(mw.activeNet.Params, addr, addrManager)
 
 	var validPeerAddresses []string
+	peerAddresses := mw.ReadStringConfigValueForKey(SpvPersistentPeerAddressesConfigKey)
 	if peerAddresses != "" {
 		addresses := strings.Split(peerAddresses, ";")
 		for _, address := range addresses {
 			peerAddress, err := NormalizeAddress(address, mw.activeNet.Params.DefaultPort)
 			if err != nil {
-				log.Errorf("SPV peer address invalid: %v", err)
+				log.Errorf("SPV peer address(%s) is invalid: %v", peerAddress, err)
 			} else {
 				validPeerAddresses = append(validPeerAddresses, peerAddress)
 			}
@@ -243,13 +244,13 @@ func (mw *MultiWallet) SpvSync(peerAddresses string) error {
 	return nil
 }
 
-func (mw *MultiWallet) RestartSpvSync(peerAddresses string) error {
+func (mw *MultiWallet) RestartSpvSync() error {
 	mw.syncData.mu.Lock()
 	mw.syncData.restartSyncRequested = true
 	mw.syncData.mu.Unlock()
 
 	mw.CancelSync() // necessary to unset the network backend.
-	return mw.SpvSync(peerAddresses)
+	return mw.SpvSync()
 }
 
 func (mw *MultiWallet) CancelSync() {
