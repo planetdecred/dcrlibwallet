@@ -18,15 +18,6 @@ func PkScript(address string, net dcrutil.AddressParams) ([]byte, error) {
 	return txscript.PayToAddrScript(addr)
 }
 
-func DecodeForNetwork(address string, params *chaincfg.Params) (dcrutil.Address, error) {
-	addr, err := dcrutil.DecodeAddress(address, params)
-	if err != nil {
-		return nil, err
-	}
-
-	return addr, nil
-}
-
 func PkScriptAddresses(params *chaincfg.Params, pkScript []byte) ([]string, error) {
 	_, addresses, _, err := txscript.ExtractPkScriptAddrs(scriptVersion, pkScript, params)
 	if err != nil {

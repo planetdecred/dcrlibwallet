@@ -123,15 +123,6 @@ func (lw *LibWallet) SpendableForAccount(account int32, requiredConfirmations in
 }
 
 func (lw *LibWallet) NextAccount(accountName string, privPass []byte) (int32, error) {
-	accountNumber, err := lw.NextAccountRaw(accountName, privPass)
-	if err != nil {
-		log.Error(err)
-		return -1, err
-	}
-	return int32(accountNumber), nil
-}
-
-func (lw *LibWallet) NextAccountRaw(accountName string, privPass []byte) (uint32, error) {
 	lock := make(chan time.Time, 1)
 	defer func() {
 		for i := range privPass {
@@ -146,8 +137,9 @@ func (lw *LibWallet) NextAccountRaw(accountName string, privPass []byte) (uint32
 	}
 
 	ctx, _ := lw.contextWithShutdownCancel()
+	accountNumber, err := lw.wallet.NextAccount(ctx, accountName)
 
-	return lw.wallet.NextAccount(ctx, accountName)
+	return int32(accountNumber), err
 }
 
 func (lw *LibWallet) RenameAccount(accountNumber int32, newName string) error {

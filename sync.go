@@ -16,7 +16,7 @@ import (
 )
 
 type syncData struct {
-	mu sync.Mutex
+	mu sync.RWMutex
 
 	syncProgressListeners map[string]SyncProgressListener
 	showLogs              bool
@@ -119,8 +119,7 @@ func (mw *MultiWallet) AddSyncProgressListener(syncProgressListener SyncProgress
 }
 
 func (mw *MultiWallet) RemoveSyncProgressListener(uniqueIdentifier string) {
-	_, k := mw.syncProgressListeners[uniqueIdentifier]
-	if k {
+	if _, exists := mw.syncProgressListeners[uniqueIdentifier]; exists {
 		delete(mw.syncProgressListeners, uniqueIdentifier)
 	}
 }
@@ -164,8 +163,8 @@ func (mw *MultiWallet) SyncInactiveForPeriod(totalInactiveSeconds int64) {
 }
 
 func (mw *MultiWallet) SpvSync() error {
-	mw.syncData.mu.Lock()
-	defer mw.syncData.mu.Unlock()
+	mw.syncData.mu.RLock()
+	defer mw.syncData.mu.RUnlock()
 
 	// Unset this flag as the invocation of this method implies that any request to restart sync has been fulfilled.
 	mw.syncData.restartSyncRequested = false
@@ -216,14 +215,14 @@ func (mw *MultiWallet) SpvSync() error {
 
 	// syncer.Run uses a wait group to block the thread until sync completes or an error occurs
 	go func() {
-		mw.syncData.mu.Lock()
+		mw.syncData.mu.RLock()
 		mw.syncing = true
-		mw.syncData.mu.Unlock()
+		mw.syncData.mu.RUnlock()
 
 		defer func() {
-			mw.syncData.mu.Lock()
+			mw.syncData.mu.RLock()
 			mw.syncing = false
-			mw.syncData.mu.Unlock()
+			mw.syncData.mu.RUnlock()
 		}()
 
 		for _, listener := range mw.syncData.syncProgressListeners {
@@ -245,9 +244,9 @@ func (mw *MultiWallet) SpvSync() error {
 }
 
 func (mw *MultiWallet) RestartSpvSync() error {
-	mw.syncData.mu.Lock()
+	mw.syncData.mu.RLock()
 	mw.syncData.restartSyncRequested = true
-	mw.syncData.mu.Unlock()
+	mw.syncData.mu.RUnlock()
 
 	mw.CancelSync() // necessary to unset the network backend.
 	return mw.SpvSync()
@@ -255,14 +254,14 @@ func (mw *MultiWallet) RestartSpvSync() error {
 
 func (mw *MultiWallet) CancelSync() {
 	if mw.cancelSync != nil {
-		mw.syncData.mu.Lock()
+		mw.syncData.mu.RLock()
 		log.Info("Canceling sync. May take a while for sync to fully cancel.")
 
 		// Cancel the context used for syncer.Run in rpcSync() or spvSync().
 		mw.cancelSync()
 		mw.cancelSync = nil
 
-		mw.syncData.mu.Unlock()
+		mw.syncData.mu.RUnlock()
 
 		// syncer.Run may not immediately return, following code blocks this function
 		// and waits for the syncer.Run to return `err == context.Canceled`.
@@ -286,21 +285,21 @@ func (lw *LibWallet) IsWaiting() bool {
 }
 
 func (mw *MultiWallet) IsSynced() bool {
-	mw.syncData.mu.Lock()
-	defer mw.syncData.mu.Unlock()
+	mw.syncData.mu.RLock()
+	defer mw.syncData.mu.RUnlock()
 
 	return mw.syncData.synced
 }
 
 func (mw *MultiWallet) IsSyncing() bool {
-	mw.syncData.mu.Lock()
-	defer mw.syncData.mu.Unlock()
+	mw.syncData.mu.RLock()
+	defer mw.syncData.mu.RUnlock()
 	return mw.syncData.syncing
 }
 
 func (mw *MultiWallet) ConnectedPeers() int32 {
-	mw.syncData.mu.Lock()
-	defer mw.syncData.mu.Unlock()
+	mw.syncData.mu.RLock()
+	defer mw.syncData.mu.RUnlock()
 
 	return mw.syncData.connectedPeers
 }
@@ -435,10 +434,6 @@ func (lw *LibWallet) GetBestBlockTimeStamp() int64 {
 		return 0
 	}
 	return info.Timestamp
-}
-
-func (mw *MultiWallet) GetConnectedPeersCount() int32 {
-	return mw.connectedPeers
 }
 
 func (mw *MultiWallet) GetLowestBlockTimestamp() int64 {

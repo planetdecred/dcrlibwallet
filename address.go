@@ -7,7 +7,6 @@ import (
 	"github.com/decred/dcrd/dcrutil/v2"
 	wallet "github.com/decred/dcrwallet/wallet/v3"
 	"github.com/decred/dcrwallet/wallet/v3/udb"
-	"github.com/raedahgroup/dcrlibwallet/addresshelper"
 )
 
 // AddressInfo holds information about an address
@@ -20,12 +19,12 @@ type AddressInfo struct {
 }
 
 func (lw *LibWallet) IsAddressValid(address string) bool {
-	_, err := addresshelper.DecodeForNetwork(address, lw.activeNet.Params)
+	_, err := dcrutil.DecodeAddress(address, lw.activeNet.Params)
 	return err == nil
 }
 
 func (lw *LibWallet) HaveAddress(address string) bool {
-	addr, err := addresshelper.DecodeForNetwork(address, lw.activeNet.Params)
+	addr, err := dcrutil.DecodeAddress(address, lw.activeNet.Params)
 	if err != nil {
 		return false
 	}
@@ -88,7 +87,7 @@ func (lw *LibWallet) NextAddress(account int32) (string, error) {
 }
 
 func (lw *LibWallet) AddressPubKey(address string) (string, error) {
-	addr, err := addresshelper.DecodeForNetwork(address, lw.activeNet.Params)
+	addr, err := dcrutil.DecodeAddress(address, lw.activeNet.Params)
 	if err != nil {
 		return "", err
 	}

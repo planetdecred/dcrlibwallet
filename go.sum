@@ -189,6 +189,8 @@ github.com/decred/dcrwallet v1.2.3-0.20190820143957-746bab522803 h1:tO6zD1UNSAAs
 github.com/decred/dcrwallet v1.2.3-0.20190820143957-746bab522803/go.mod h1:HpOjKBWoCspIAbbzCpMtXY9/smZxP56HpS6G2eVUOYg=
 github.com/decred/dcrwallet/chain v1.0.0 h1:wiFXzRwdsTykIrpIFdhXCFUu0RQafsuUiPfop6RKscc=
 github.com/decred/dcrwallet/chain v1.0.0/go.mod h1:KpZFaKlKajfUZt36+RmBn2HKwTbwoa3yt9HPALqlShI=
+github.com/decred/dcrwallet/chain v1.1.1 h1:YUJ1ArUaN/WuMnTP1PvfirNaqIQO9+UUNDifhnJ8QQQ=
+github.com/decred/dcrwallet/chain v1.1.1/go.mod h1:2kA82rBDkCKOSYFV+Q14RZNCuYwdaQ9uO/c+RixqRNs=
 github.com/decred/dcrwallet/chain/v3 v3.0.0-20190820143957-746bab522803 h1:QESDfYDG5CX6FGi5mXQ7VMxXFzOuftos6GyS3CL890s=
 github.com/decred/dcrwallet/chain/v3 v3.0.0-20190820143957-746bab522803/go.mod h1:GZkQFIqlMdRg/FLkxwwsax1aBwxPdhKzVkAEitp/Q1A=
 github.com/decred/dcrwallet/deployments v1.0.0/go.mod h1:0bWER/DAYoGbzkWzbUf6k2agW4YkSyvNLZDhBGThz/4=
@@ -216,6 +218,8 @@ github.com/decred/dcrwallet/p2p/v2 v2.0.0-20190820143957-746bab522803 h1:30SMw7L
 github.com/decred/dcrwallet/p2p/v2 v2.0.0-20190820143957-746bab522803/go.mod h1:DKDusk6lxtZ3PhISaFOmi6MtBDj5IdwnCmP8kiHPs+I=
 github.com/decred/dcrwallet/pgpwordlist v1.0.0 h1:H7Y3+yRZq7PXMPfpKLMnY5TKTjTWhc0oJmyN7v8tC/M=
 github.com/decred/dcrwallet/pgpwordlist v1.0.0/go.mod h1:Fek3uYn+9DnEFIreA/8PnTIXUl2lBO64JpEBkL9BXtk=
+github.com/decred/dcrwallet/rpc/client/dcrd v0.0.0-20190801203644-52c3adc96d9b h1:Loi+1WWXpQIdpy5LbGZHv4gqEOJ+CaEBiWs7U0x8U90=
+github.com/decred/dcrwallet/rpc/client/dcrd v0.0.0-20190801203644-52c3adc96d9b/go.mod h1:r1qZ4Dk/sB8tOgelTCuipLio9SL+pdyoYkPvUS1V3ug=
 github.com/decred/dcrwallet/rpc/client/dcrd v0.0.0-20190820143957-746bab522803 h1:hGR1JSWCtKExgj+LYgr5dZOL7H4FR3J4uqwwdaLq3Nw=
 github.com/decred/dcrwallet/rpc/client/dcrd v0.0.0-20190820143957-746bab522803/go.mod h1:r1qZ4Dk/sB8tOgelTCuipLio9SL+pdyoYkPvUS1V3ug=
 github.com/decred/dcrwallet/rpc/jsonrpc/types v1.0.0 h1:FPVohgxZHHwi7qTOBki/Dw9j5cgGsZYiktGSfgqHR0w=

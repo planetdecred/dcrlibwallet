@@ -17,7 +17,6 @@ import (
 	"github.com/decred/dcrwallet/rpc/client/dcrd"
 	wallet "github.com/decred/dcrwallet/wallet/v3"
 	"github.com/decred/dcrwallet/wallet/v3/txrules"
-	"github.com/raedahgroup/dcrlibwallet/addresshelper"
 )
 
 // StakeInfo returns information about wallet stakes, tickets and their statuses.
@@ -196,7 +195,7 @@ func (lw *LibWallet) PurchaseTickets(ctx context.Context, request *PurchaseTicke
 
 	var ticketAddr dcrutil.Address
 	if request.TicketAddress != "" {
-		ticketAddr, err = addresshelper.DecodeForNetwork(request.TicketAddress, params)
+		ticketAddr, err = dcrutil.DecodeAddress(request.TicketAddress, params)
 		if err != nil {
 			return nil, errors.New("Invalid ticket address")
 		}
@@ -204,7 +203,7 @@ func (lw *LibWallet) PurchaseTickets(ctx context.Context, request *PurchaseTicke
 
 	var poolAddr dcrutil.Address
 	if request.PoolAddress != "" {
-		poolAddr, err = addresshelper.DecodeForNetwork(request.PoolAddress, params)
+		poolAddr, err = dcrutil.DecodeAddress(request.PoolAddress, params)
 		if err != nil {
 			return nil, errors.New("Invalid pool address")
 		}

@@ -24,7 +24,7 @@ const (
 	StartupSecurityTypeConfigKey            = "startup_security_type"
 
 	IncomingTxNotificationsConfigKey = "tx_notification_enabled"
-	BeepNewBlocksConfigKey           = "beep_bop"
+	BeepNewBlocksConfigKey           = "beep_new_blocks"
 	UseBiometricAuthConfigKey        = "use_biometric_auth" // temp
 
 	SyncOnCellularConfigKey             = "always_sync"

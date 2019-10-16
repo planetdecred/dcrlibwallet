@@ -7,7 +7,6 @@ import (
 	dcrutil "github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/dcrwallet/errors"
 	wallet "github.com/decred/dcrwallet/wallet/v3"
-	"github.com/raedahgroup/dcrlibwallet/addresshelper"
 )
 
 func (lw *LibWallet) SignMessage(passphrase []byte, address string, message string) ([]byte, error) {
@@ -20,7 +19,7 @@ func (lw *LibWallet) SignMessage(passphrase []byte, address string, message stri
 		return nil, translateError(err)
 	}
 
-	addr, err := addresshelper.DecodeForNetwork(address, lw.wallet.ChainParams())
+	addr, err := dcrutil.DecodeAddress(address, lw.activeNet.Params)
 	if err != nil {
 		return nil, translateError(err)
 	}

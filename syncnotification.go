@@ -38,8 +38,8 @@ func (mw *MultiWallet) spvSyncNotificationCallbacks() *spv.Notifications {
 }
 
 func (mw *MultiWallet) handlePeerCountUpdate(peerCount int32) {
-	mw.syncData.mu.Lock()
-	defer mw.syncData.mu.Unlock()
+	mw.syncData.mu.RLock()
+	defer mw.syncData.mu.RUnlock()
 	mw.connectedPeers = peerCount
 	for _, syncProgressListener := range mw.syncProgressListeners {
 		syncProgressListener.OnPeerConnectedOrDisconnected(peerCount)
@@ -57,8 +57,8 @@ func (mw *MultiWallet) handlePeerCountUpdate(peerCount int32) {
 // Fetch Headers Callbacks
 
 func (mw *MultiWallet) fetchHeadersStarted(peerInitialHeight int32) {
-	mw.syncData.mu.Lock()
-	defer mw.syncData.mu.Unlock()
+	mw.syncData.mu.RLock()
+	defer mw.syncData.mu.RUnlock()
 	if !mw.syncData.syncing || mw.beginFetchTimeStamp != -1 {
 		// ignore if sync is not in progress i.e. !mw.syncData.syncing
 		// or already started headers fetching i.e. mw.beginFetchTimeStamp != -1
@@ -82,8 +82,8 @@ func (mw *MultiWallet) fetchHeadersStarted(peerInitialHeight int32) {
 }
 
 func (mw *MultiWallet) fetchHeadersProgress(fetchedHeadersCount int32, lastHeaderTime int64) {
-	mw.syncData.mu.Lock()
-	defer mw.syncData.mu.Unlock()
+	mw.syncData.mu.RLock()
+	defer mw.syncData.mu.RUnlock()
 
 	if !mw.syncData.syncing || mw.activeSyncData.headersFetchTimeSpent != -1 {
 		// Ignore this call because this function gets called for each peer and
@@ -158,8 +158,8 @@ func (mw *MultiWallet) publishFetchHeadersProgress() {
 }
 
 func (mw *MultiWallet) fetchHeadersFinished() {
-	mw.syncData.mu.Lock()
-	defer mw.syncData.mu.Unlock()
+	mw.syncData.mu.RLock()
+	defer mw.syncData.mu.RUnlock()
 
 	if !mw.syncData.syncing {
 		// ignore if sync is not in progress
@@ -187,8 +187,8 @@ func (mw *MultiWallet) fetchHeadersFinished() {
 // Address/Account Discovery Callbacks
 
 func (mw *MultiWallet) discoverAddressesStarted(walletID int) {
-	mw.syncData.mu.Lock()
-	defer mw.syncData.mu.Unlock()
+	mw.syncData.mu.RLock()
+	defer mw.syncData.mu.RUnlock()
 
 	if !mw.syncData.syncing || mw.activeSyncData.addressDiscoveryCompleted != nil {
 		// ignore if sync is not in progress i.e. !mw.syncData.syncing
@@ -225,20 +225,20 @@ func (mw *MultiWallet) updateAddressDiscoveryProgress() {
 	go func() {
 		for {
 
-			mw.syncData.mu.Lock()
+			mw.syncData.mu.RLock()
 			// If there was some period of inactivity,
 			// assume that this process started at some point in the future,
 			// thereby accounting for the total reported time of inactivity.
 			mw.addressDiscoveryStartTime += mw.totalInactiveSeconds
 			mw.totalInactiveSeconds = 0
-			mw.syncData.mu.Unlock()
+			mw.syncData.mu.RUnlock()
 
 			select {
 			case <-everySecondTickerChannel:
-				mw.syncData.mu.Lock()
+				mw.syncData.mu.RLock()
 
 				if mw.activeSyncData == nil {
-					mw.syncData.mu.Unlock()
+					mw.syncData.mu.RUnlock()
 					return
 				}
 
@@ -289,7 +289,7 @@ func (mw *MultiWallet) updateAddressDiscoveryProgress() {
 						lastTimeRemaining = totalTimeRemainingSeconds
 					}
 				}
-				mw.syncData.mu.Unlock()
+				mw.syncData.mu.RUnlock()
 			case <-mw.addressDiscoveryCompleted:
 				// stop updating time taken and progress for address discovery
 				everySecondTicker.Stop()
@@ -316,8 +316,8 @@ func (mw *MultiWallet) publishAddressDiscoveryProgress() {
 }
 
 func (mw *MultiWallet) discoverAddressesFinished(walletID int) {
-	mw.syncData.mu.Lock()
-	defer mw.syncData.mu.Unlock()
+	mw.syncData.mu.RLock()
+	defer mw.syncData.mu.RUnlock()
 	if !mw.syncData.syncing {
 		// ignore if sync is not in progress
 		return
@@ -346,8 +346,8 @@ func (mw *MultiWallet) discoverAddressesFinished(walletID int) {
 // Blocks Scan Callbacks
 
 func (mw *MultiWallet) rescanStarted(walletID int) {
-	mw.syncData.mu.Lock()
-	defer mw.syncData.mu.Unlock()
+	mw.syncData.mu.RLock()
+	defer mw.syncData.mu.RUnlock()
 
 	if !mw.syncData.syncing {
 		// ignore if sync is not in progress
@@ -373,8 +373,8 @@ func (mw *MultiWallet) rescanStarted(walletID int) {
 }
 
 func (mw *MultiWallet) rescanProgress(walletID int, rescannedThrough int32) {
-	mw.syncData.mu.Lock()
-	defer mw.syncData.mu.Unlock()
+	mw.syncData.mu.RLock()
+	defer mw.syncData.mu.RUnlock()
 
 	if !mw.syncData.syncing {
 		// ignore if sync is not in progress
@@ -442,8 +442,8 @@ func (mw *MultiWallet) publishHeadersRescanProgress() {
 }
 
 func (mw *MultiWallet) rescanFinished(walletID int) {
-	mw.syncData.mu.Lock()
-	defer mw.syncData.mu.Unlock()
+	mw.syncData.mu.RLock()
+	defer mw.syncData.mu.RUnlock()
 
 	if !mw.syncData.syncing {
 		// ignore if sync is not in progress
@@ -490,8 +490,8 @@ func (mw *MultiWallet) estimateBlockHeadersCountAfter(lastHeaderTime int64) int3
 func (mw *MultiWallet) notifySyncError(code SyncErrorCode, err error) {
 	mw.resetSyncData()
 
-	mw.syncData.mu.Lock()
-	defer mw.syncData.mu.Unlock()
+	mw.syncData.mu.RLock()
+	defer mw.syncData.mu.RUnlock()
 
 	for _, syncProgressListener := range mw.syncData.syncProgressListeners {
 		syncProgressListener.OnSyncEndedWithError(err)
@@ -501,8 +501,8 @@ func (mw *MultiWallet) notifySyncError(code SyncErrorCode, err error) {
 func (mw *MultiWallet) notifySyncCanceled() {
 	mw.resetSyncData()
 
-	mw.syncData.mu.Lock()
-	defer mw.syncData.mu.Unlock()
+	mw.syncData.mu.RLock()
+	defer mw.syncData.mu.RUnlock()
 
 	for _, syncProgressListener := range mw.syncData.syncProgressListeners {
 		syncProgressListener.OnSyncCanceled(mw.syncData.restartSyncRequested)
@@ -510,8 +510,8 @@ func (mw *MultiWallet) notifySyncCanceled() {
 }
 
 func (mw *MultiWallet) resetSyncData() {
-	mw.syncData.mu.Lock()
-	defer mw.syncData.mu.Unlock()
+	mw.syncData.mu.RLock()
+	defer mw.syncData.mu.RUnlock()
 
 	mw.syncData.syncing = false
 	mw.syncData.synced = false
@@ -523,8 +523,8 @@ func (mw *MultiWallet) resetSyncData() {
 }
 
 func (mw *MultiWallet) synced(walletID int, synced bool) {
-	mw.syncData.mu.Lock()
-	defer mw.syncData.mu.Unlock()
+	mw.syncData.mu.RLock()
+	defer mw.syncData.mu.RUnlock()
 
 	w := mw.wallets[walletID]
 	w.synced = synced

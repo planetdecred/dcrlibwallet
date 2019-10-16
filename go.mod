@@ -11,16 +11,14 @@ require (
 	github.com/decred/dcrd/connmgr v1.0.2
 	github.com/decred/dcrd/dcrec v1.0.0
 	github.com/decred/dcrd/dcrjson v1.2.0 // indirect
-	github.com/decred/dcrd/dcrutil v1.4.0
 	github.com/decred/dcrd/dcrutil/v2 v2.0.0
 	github.com/decred/dcrd/hdkeychain v1.1.1
 	github.com/decred/dcrd/rpcclient v1.1.0
-	github.com/decred/dcrd/txscript v1.1.0
 	github.com/decred/dcrd/txscript/v2 v2.0.0
 	github.com/decred/dcrd/wire v1.2.0
 	github.com/decred/dcrdata/txhelpers v1.1.0
 	github.com/decred/dcrwallet v1.2.2
-	github.com/decred/dcrwallet/chain v1.0.0
+	github.com/decred/dcrwallet/chain v1.1.1
 	github.com/decred/dcrwallet/errors v1.1.0
 	github.com/decred/dcrwallet/p2p/v2 v2.0.0
 	github.com/decred/dcrwallet/rpc/client/dcrd v0.0.0-00010101000000-000000000000
@@ -48,7 +46,7 @@ replace (
 	github.com/decred/dcrwallet/chain/v3 => github.com/decred/dcrwallet/chain/v3 v3.0.0-20190820143957-746bab522803
 	github.com/decred/dcrwallet/deployments/v2 => github.com/decred/dcrwallet/deployments/v2 v2.0.0-20190820143957-746bab522803
 	github.com/decred/dcrwallet/p2p/v2 => github.com/decred/dcrwallet/p2p/v2 v2.0.0-20190820143957-746bab522803
-	github.com/decred/dcrwallet/rpc/client/dcrd => github.com/decred/dcrwallet/rpc/client/dcrd v0.0.0-20190820143957-746bab522803
+	github.com/decred/dcrwallet/rpc/client/dcrd => github.com/decred/dcrwallet/rpc/client/dcrd v0.0.0-20190801203644-52c3adc96d9b
 	github.com/decred/dcrwallet/spv/v3 => ./spv
 	github.com/decred/dcrwallet/ticketbuyer/v4 => github.com/decred/dcrwallet/ticketbuyer/v4 v4.0.0-20190820143957-746bab522803
 	github.com/decred/dcrwallet/wallet/v3 => github.com/decred/dcrwallet/wallet/v3 v3.0.0-20190820143957-746bab522803

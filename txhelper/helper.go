@@ -3,7 +3,7 @@ package txhelper
 import (
 	"math"
 
-	"github.com/decred/dcrd/dcrutil"
+	"github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrdata/txhelpers"
 	wallet "github.com/decred/dcrwallet/wallet/v3"
