@@ -107,6 +107,7 @@ func (mw *MultiWallet) initActiveSyncData() {
 }
 
 func (mw *MultiWallet) AddSyncProgressListener(syncProgressListener SyncProgressListener, uniqueIdentifier string) error {
+	log.Infof("Map adding %s", uniqueIdentifier)
 	_, ok := mw.syncProgressListeners[uniqueIdentifier]
 	if ok {
 		return errors.New(ErrListenerAlreadyExist)
@@ -119,9 +120,7 @@ func (mw *MultiWallet) AddSyncProgressListener(syncProgressListener SyncProgress
 }
 
 func (mw *MultiWallet) RemoveSyncProgressListener(uniqueIdentifier string) {
-	if _, exists := mw.syncProgressListeners[uniqueIdentifier]; exists {
-		delete(mw.syncProgressListeners, uniqueIdentifier)
-	}
+	delete(mw.syncProgressListeners, uniqueIdentifier)
 }
 
 func (mw *MultiWallet) PublishLastSyncProgress(uniqueIdentifier string) error {
