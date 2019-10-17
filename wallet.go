@@ -211,11 +211,13 @@ func (lw *LibWallet) DeleteWallet(privatePassphrase []byte) error {
 		return errors.New(ErrWalletNotLoaded)
 	}
 
-	err := wallet.Unlock(privatePassphrase, nil)
-	if err != nil {
-		return translateError(err)
+	if !lw.IsWatchingOnlyWallet() {
+		err := wallet.Unlock(privatePassphrase, nil)
+		if err != nil {
+			return translateError(err)
+		}
+		wallet.Lock()
 	}
-	wallet.Lock()
 
 	lw.Shutdown()
 
