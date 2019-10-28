@@ -28,7 +28,9 @@ func (lw *LibWallet) HaveAddress(address string) bool {
 	if err != nil {
 		return false
 	}
-	have, err := lw.wallet.HaveAddress(addr)
+
+	ctx, _ := lw.contextWithShutdownCancel()
+	have, err := lw.wallet.HaveAddress(ctx, addr)
 	if err != nil {
 		return false
 	}
@@ -41,7 +43,9 @@ func (lw *LibWallet) AccountOfAddress(address string) string {
 	if err != nil {
 		return err.Error()
 	}
-	info, _ := lw.wallet.AddressInfo(addr)
+
+	ctx, _ := lw.contextWithShutdownCancel()
+	info, _ := lw.wallet.AddressInfo(ctx, addr)
 	return lw.AccountName(int32(info.Account()))
 }
 
@@ -56,7 +60,8 @@ func (lw *LibWallet) AddressInfo(address string) (*AddressInfo, error) {
 		Address: address,
 	}
 
-	info, _ := lw.wallet.AddressInfo(addr)
+	ctx, _ := lw.contextWithShutdownCancel()
+	info, _ := lw.wallet.AddressInfo(ctx, addr)
 	if info != nil {
 		addressInfo.IsMine = true
 		addressInfo.AccountNumber = info.Account()
@@ -91,7 +96,9 @@ func (lw *LibWallet) AddressPubKey(address string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	ainfo, err := lw.wallet.AddressInfo(addr)
+
+	ctx, _ := lw.contextWithShutdownCancel()
+	ainfo, err := lw.wallet.AddressInfo(ctx, addr)
 	if err != nil {
 		return "", err
 	}

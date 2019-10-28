@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/decred/dcrd/addrmgr"
-	"github.com/decred/dcrwallet/errors"
+	"github.com/decred/dcrwallet/errors/v2"
 	p2p "github.com/decred/dcrwallet/p2p/v2"
 	spv "github.com/decred/dcrwallet/spv/v3"
 	wallet "github.com/decred/dcrwallet/wallet/v3"
@@ -273,7 +273,6 @@ func (mw *MultiWallet) CancelSync() {
 			continue
 		}
 
-		libWallet.walletLoader.SetNetworkBackend(nil)
 		loadedWallet.SetNetworkBackend(nil)
 	}
 }
@@ -413,7 +412,8 @@ func (lw *LibWallet) GetBestBlock() int32 {
 		return 0
 	}
 
-	_, height := lw.wallet.MainChainTip()
+	ctx, _ := lw.contextWithShutdownCancel()
+	_, height := lw.wallet.MainChainTip(ctx)
 	return height
 }
 
@@ -424,9 +424,10 @@ func (lw *LibWallet) GetBestBlockTimeStamp() int64 {
 		return 0
 	}
 
-	_, height := lw.wallet.MainChainTip()
+	ctx, _ := lw.contextWithShutdownCancel()
+	_, height := lw.wallet.MainChainTip(ctx)
 	identifier := wallet.NewBlockIdentifierFromHeight(height)
-	info, err := lw.wallet.BlockInfo(identifier)
+	info, err := lw.wallet.BlockInfo(ctx, identifier)
 	if err != nil {
 		log.Error(err)
 		return 0

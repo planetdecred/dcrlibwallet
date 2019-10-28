@@ -11,7 +11,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/decred/dcrwallet/errors"
+	"github.com/decred/dcrwallet/errors/v2"
 	"github.com/decred/dcrwallet/wallet/v3/walletdb"
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"

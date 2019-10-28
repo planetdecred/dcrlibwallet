@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/asdine/storm"
-	"github.com/decred/dcrwallet/errors"
+	"github.com/decred/dcrwallet/errors/v2"
 	wallet "github.com/decred/dcrwallet/wallet/v3"
 	"github.com/decred/dcrwallet/walletseed"
 )
@@ -66,7 +66,8 @@ func (lw *LibWallet) CreateWallet(privatePassphrase string, seedMnemonic string)
 		return err
 	}
 
-	w, err := lw.walletLoader.CreateNewWallet(pubPass, privPass, seed)
+	ctx, _ := lw.contextWithShutdownCancel()
+	w, err := lw.walletLoader.CreateNewWallet(ctx, pubPass, privPass, seed)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -81,7 +82,8 @@ func (lw *LibWallet) CreateWatchingOnlyWallet(publicPassphrase, extendedPublicKe
 
 	pubPass := []byte(publicPassphrase)
 
-	w, err := lw.walletLoader.CreateWatchingOnlyWallet(extendedPublicKey, pubPass)
+	ctx, _ := lw.contextWithShutdownCancel()
+	w, err := lw.walletLoader.CreateWatchingOnlyWallet(ctx, extendedPublicKey, pubPass)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -108,7 +110,8 @@ func (lw *LibWallet) OpenWallet(pubPass []byte) error {
 		pubPass = []byte("public")
 	}
 
-	w, err := lw.walletLoader.OpenExistingWallet(pubPass)
+	ctx, _ := lw.contextWithShutdownCancel()
+	w, err := lw.walletLoader.OpenExistingWallet(ctx, pubPass)
 	if err != nil {
 		log.Error(err)
 		return translateError(err)
@@ -133,7 +136,8 @@ func (lw *LibWallet) UnlockWallet(privPass []byte) error {
 		}
 	}()
 
-	err := loadedWallet.Unlock(privPass, nil)
+	ctx, _ := lw.contextWithShutdownCancel()
+	err := loadedWallet.Unlock(ctx, privPass, nil)
 	if err != nil {
 		return translateError(err)
 	}
@@ -162,7 +166,8 @@ func (lw *LibWallet) ChangePrivatePassphrase(oldPass []byte, newPass []byte) err
 		}
 	}()
 
-	err := lw.wallet.ChangePrivatePassphrase(oldPass, newPass)
+	ctx, _ := lw.contextWithShutdownCancel()
+	err := lw.wallet.ChangePrivatePassphrase(ctx, oldPass, newPass)
 	if err != nil {
 		return translateError(err)
 	}
@@ -187,7 +192,8 @@ func (lw *LibWallet) ChangePublicPassphrase(oldPass []byte, newPass []byte) erro
 		newPass = []byte(wallet.InsecurePubPassphrase)
 	}
 
-	err := lw.wallet.ChangePublicPassphrase(oldPass, newPass)
+	ctx, _ := lw.contextWithShutdownCancel()
+	err := lw.wallet.ChangePublicPassphrase(ctx, oldPass, newPass)
 	if err != nil {
 		return translateError(err)
 	}
@@ -212,7 +218,8 @@ func (lw *LibWallet) DeleteWallet(privatePassphrase []byte) error {
 	}
 
 	if !lw.IsWatchingOnlyWallet() {
-		err := wallet.Unlock(privatePassphrase, nil)
+		ctx, _ := lw.contextWithShutdownCancel()
+		err := wallet.Unlock(ctx, privatePassphrase, nil)
 		if err != nil {
 			return translateError(err)
 		}

@@ -5,14 +5,14 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"github.com/decred/dcrwallet/errors"
+	"github.com/decred/dcrwallet/errors/v2"
 	"math"
 	"net"
 	"strings"
 	"time"
 
 	"github.com/decred/dcrd/dcrutil/v2"
-	"github.com/decred/dcrd/hdkeychain"
+	"github.com/decred/dcrd/hdkeychain/v2"
 	"github.com/decred/dcrwallet/walletseed"
 )
 
@@ -202,8 +202,8 @@ func roundUp(n float64) int32 {
 	return int32(math.Round(n))
 }
 
-func ValidateExPubKey(extendedPubKey string) error {
-	_, err := hdkeychain.NewKeyFromString(extendedPubKey)
+func (mw *MultiWallet)ValidateExPubKey(extendedPubKey string) error {
+	_, err := hdkeychain.NewKeyFromString(extendedPubKey, mw.activeNet.Params)
 	if err != nil {
 		if err == hdkeychain.ErrInvalidChild {
 			return errors.New(ErrUnusableSeed)

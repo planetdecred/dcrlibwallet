@@ -54,7 +54,8 @@ func (lw *LibWallet) GetTransactionRaw(txHash []byte) (*Transaction, error) {
 		return nil, err
 	}
 
-	txSummary, _, blockHash, err := lw.wallet.TransactionSummary(hash)
+	ctx, _ := lw.contextWithShutdownCancel()
+	txSummary, _, blockHash, err := lw.wallet.TransactionSummary(ctx, hash)
 	if err != nil {
 		log.Error(err)
 		return nil, err

@@ -3,7 +3,7 @@ package utils
 import (
 	"strings"
 
-	"github.com/decred/dcrwallet/netparams"
+	"github.com/raedahgroup/dcrlibwallet/internal/netparams"
 )
 
 func NetParams(netType string) *netparams.Params {

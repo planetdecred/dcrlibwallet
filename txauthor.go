@@ -8,7 +8,7 @@ import (
 	"github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/dcrd/txscript/v2"
 	"github.com/decred/dcrd/wire"
-	"github.com/decred/dcrwallet/errors"
+	"github.com/decred/dcrwallet/errors/v2"
 	wallet "github.com/decred/dcrwallet/wallet/v3"
 	txauthor "github.com/decred/dcrwallet/wallet/v3/txauthor"
 	txrules "github.com/decred/dcrwallet/wallet/v3/txrules"
@@ -137,7 +137,8 @@ func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
 		lock <- time.Time{}
 	}()
 
-	err = tx.lw.wallet.Unlock(privatePassphrase, lock)
+	ctx, _ := tx.lw.contextWithShutdownCancel()
+	err = tx.lw.wallet.Unlock(ctx, privatePassphrase, lock)
 	if err != nil {
 		log.Error(err)
 		return nil, errors.New(ErrInvalidPassphrase)
@@ -145,7 +146,7 @@ func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
 
 	var additionalPkScripts map[wire.OutPoint][]byte
 
-	invalidSigs, err := tx.lw.wallet.SignTransaction(&msgTx, txscript.SigHashAll, additionalPkScripts, nil, nil)
+	invalidSigs, err := tx.lw.wallet.SignTransaction(ctx, &msgTx, txscript.SigHashAll, additionalPkScripts, nil, nil)
 	if err != nil {
 		log.Error(err)
 		return nil, err
@@ -171,7 +172,6 @@ func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	ctx, _ := tx.lw.contextWithShutdownCancel()
 	txHash, err := tx.lw.wallet.PublishTransaction(ctx, &msgTx, serializedTransaction.Bytes(), n)
 	if err != nil {
 		return nil, translateError(err)
@@ -219,6 +219,7 @@ func (tx *TxAuthor) constructTransaction() (*txauthor.AuthoredTx, error) {
 		outputs = append(outputs, output)
 	}
 
-	return tx.lw.wallet.NewUnsignedTransaction(outputs, txrules.DefaultRelayFeePerKb, tx.sendFromAccount,
+	ctx, _ := tx.lw.contextWithShutdownCancel()
+	return tx.lw.wallet.NewUnsignedTransaction(ctx, outputs, txrules.DefaultRelayFeePerKb, tx.sendFromAccount,
 		tx.requiredConfirmations, outputSelectionAlgorithm, changeSource)
 }

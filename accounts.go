@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/decred/dcrwallet/errors"
+	"github.com/decred/dcrwallet/errors/v2"
 )
 
 func (lw *LibWallet) HasDiscoveredAccounts() bool {
@@ -22,7 +22,8 @@ func (lw *LibWallet) GetAccounts(requiredConfirmations int32) (string, error) {
 }
 
 func (lw *LibWallet) GetAccountsRaw(requiredConfirmations int32) (*Accounts, error) {
-	resp, err := lw.wallet.Accounts()
+	ctx, _ := lw.contextWithShutdownCancel()
+	resp, err := lw.wallet.Accounts(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +98,8 @@ func (accountsInterator *AccountsIterator) Reset() {
 }
 
 func (lw *LibWallet) GetAccountBalance(accountNumber int32, requiredConfirmations int32) (*Balance, error) {
-	balance, err := lw.wallet.CalculateAccountBalance(uint32(accountNumber), requiredConfirmations)
+	ctx, _ := lw.contextWithShutdownCancel()
+	balance, err := lw.wallet.CalculateAccountBalance(ctx, uint32(accountNumber), requiredConfirmations)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +116,8 @@ func (lw *LibWallet) GetAccountBalance(accountNumber int32, requiredConfirmation
 }
 
 func (lw *LibWallet) SpendableForAccount(account int32, requiredConfirmations int32) (int64, error) {
-	bals, err := lw.wallet.CalculateAccountBalance(uint32(account), requiredConfirmations)
+	ctx, _ := lw.contextWithShutdownCancel()
+	bals, err := lw.wallet.CalculateAccountBalance(ctx, uint32(account), requiredConfirmations)
 	if err != nil {
 		log.Error(err)
 		return 0, translateError(err)
@@ -130,20 +133,22 @@ func (lw *LibWallet) NextAccount(accountName string, privPass []byte) (int32, er
 		}
 		lock <- time.Time{} // send matters, not the value
 	}()
-	err := lw.wallet.Unlock(privPass, lock)
+
+	ctx, _ := lw.contextWithShutdownCancel()
+	err := lw.wallet.Unlock(ctx, privPass, lock)
 	if err != nil {
 		log.Error(err)
 		return 0, errors.New(ErrInvalidPassphrase)
 	}
 
-	ctx, _ := lw.contextWithShutdownCancel()
 	accountNumber, err := lw.wallet.NextAccount(ctx, accountName)
 
 	return int32(accountNumber), err
 }
 
 func (lw *LibWallet) RenameAccount(accountNumber int32, newName string) error {
-	err := lw.wallet.RenameAccount(uint32(accountNumber), newName)
+	ctx, _ := lw.contextWithShutdownCancel()
+	err := lw.wallet.RenameAccount(ctx, uint32(accountNumber), newName)
 	if err != nil {
 		return translateError(err)
 	}
@@ -161,11 +166,13 @@ func (lw *LibWallet) AccountName(accountNumber int32) string {
 }
 
 func (lw *LibWallet) AccountNameRaw(accountNumber uint32) (string, error) {
-	return lw.wallet.AccountName(accountNumber)
+	ctx, _ := lw.contextWithShutdownCancel()
+	return lw.wallet.AccountName(ctx, accountNumber)
 }
 
 func (lw *LibWallet) AccountNumber(accountName string) (uint32, error) {
-	return lw.wallet.AccountNumber(accountName)
+	ctx, _ := lw.contextWithShutdownCancel()
+	return lw.wallet.AccountNumber(ctx, accountName)
 }
 
 func (mw *MultiWallet) SetDefaultAccount(walletID int, accountNumber int32) error {

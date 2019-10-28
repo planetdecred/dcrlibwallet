@@ -5,7 +5,7 @@ import (
 
 	"github.com/decred/dcrd/dcrec"
 	dcrutil "github.com/decred/dcrd/dcrutil/v2"
-	"github.com/decred/dcrwallet/errors"
+	"github.com/decred/dcrwallet/errors/v2"
 	wallet "github.com/decred/dcrwallet/wallet/v3"
 )
 
@@ -14,7 +14,9 @@ func (lw *LibWallet) SignMessage(passphrase []byte, address string, message stri
 	defer func() {
 		lock <- time.Time{}
 	}()
-	err := lw.wallet.Unlock(passphrase, lock)
+	
+	ctx, _ := lw.contextWithShutdownCancel()
+	err := lw.wallet.Unlock(ctx, passphrase, lock)
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -35,7 +37,7 @@ func (lw *LibWallet) SignMessage(passphrase []byte, address string, message stri
 		return nil, errors.New(ErrInvalidAddress)
 	}
 
-	sig, err = lw.wallet.SignMessage(message, addr)
+	sig, err = lw.wallet.SignMessage(ctx, message, addr)
 	if err != nil {
 		return nil, translateError(err)
 	}

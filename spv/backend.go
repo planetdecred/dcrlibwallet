@@ -15,7 +15,7 @@ import (
 	"github.com/decred/dcrd/gcs/blockcf"
 	"github.com/decred/dcrd/txscript/v2"
 	"github.com/decred/dcrd/wire"
-	"github.com/decred/dcrwallet/errors"
+	"github.com/decred/dcrwallet/errors/v2"
 	"github.com/decred/dcrwallet/p2p/v2"
 	"github.com/decred/dcrwallet/validate"
 	"github.com/decred/dcrwallet/wallet/v3"
@@ -150,7 +150,7 @@ func (s *Syncer) Rescan(ctx context.Context, blockHashes []chainhash.Hash, save 
 
 	cfilters := make([]*gcs.Filter, 0, len(blockHashes))
 	for i := 0; i < len(blockHashes); i++ {
-		f, err := w.CFilter(&blockHashes[i])
+		f, err := w.CFilter(ctx, &blockHashes[i])
 		if err != nil {
 			return err
 		}
@@ -233,6 +233,9 @@ FilterLoop:
 					// and failure to fetch the block.
 					i := fmatchidx[j]
 					err = validate.MerkleRoots(b)
+					if err != nil {
+						err = validate.DCP0005MerkleRoot(b)
+					}
 					if err != nil {
 						err := errors.E(op, err)
 						rp.Disconnect(err)
