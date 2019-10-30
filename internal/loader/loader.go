@@ -67,6 +67,7 @@ func NewLoader(chainParams *chaincfg.Params, dbDirPath string, stakeOptions *Sta
 	return &Loader{
 		chainParams:             chainParams,
 		dbDirPath:               dbDirPath,
+		dbDriver:                defaultDbDriver,
 		stakeOptions:            stakeOptions,
 		gapLimit:                gapLimit,
 		accountGapLimit:         accountGapLimit,

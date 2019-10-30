@@ -11,8 +11,8 @@ import (
 	"github.com/asdine/storm"
 	"github.com/asdine/storm/q"
 	"github.com/decred/dcrwallet/errors/v2"
-	"github.com/raedahgroup/dcrlibwallet/internal/netparams"
 	wallet "github.com/decred/dcrwallet/wallet/v3"
+	"github.com/raedahgroup/dcrlibwallet/internal/netparams"
 	"github.com/raedahgroup/dcrlibwallet/utils"
 	bolt "go.etcd.io/bbolt"
 )

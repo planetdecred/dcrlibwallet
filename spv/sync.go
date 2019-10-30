@@ -291,7 +291,7 @@ func (s *Syncer) highestChainTip(ctx context.Context) (chainhash.Hash, int32, *w
 // context is cancelled.
 func (s *Syncer) Run(ctx context.Context) error {
 	tipHash, tipHeight, w := s.lowestChainTip(ctx)
-	rescanPoint, err := w.RescanPoint(ctx, )
+	rescanPoint, err := w.RescanPoint(ctx)
 	if err != nil {
 		return err
 	}

@@ -202,7 +202,7 @@ func roundUp(n float64) int32 {
 	return int32(math.Round(n))
 }
 
-func (mw *MultiWallet)ValidateExPubKey(extendedPubKey string) error {
+func (mw *MultiWallet) ValidateExPubKey(extendedPubKey string) error {
 	_, err := hdkeychain.NewKeyFromString(extendedPubKey, mw.activeNet.Params)
 	if err != nil {
 		if err == hdkeychain.ErrInvalidChild {
