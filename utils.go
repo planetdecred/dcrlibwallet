@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"github.com/decred/dcrwallet/errors/v2"
 	"math"
 	"net"
 	"strings"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/dcrd/hdkeychain/v2"
+	"github.com/decred/dcrwallet/errors/v2"
 	"github.com/decred/dcrwallet/walletseed"
 )
 
@@ -50,13 +50,13 @@ func (lw *LibWallet) listenForShutdown() {
 	}()
 }
 
-func (lw *MultiWallet) listenForShutdown() {
+func (mw *MultiWallet) listenForShutdown() {
 
-	lw.cancelFuncs = make([]context.CancelFunc, 0)
-	lw.shuttingDown = make(chan bool)
+	mw.cancelFuncs = make([]context.CancelFunc, 0)
+	mw.shuttingDown = make(chan bool)
 	go func() {
-		<-lw.shuttingDown
-		for _, cancel := range lw.cancelFuncs {
+		<-mw.shuttingDown
+		for _, cancel := range mw.cancelFuncs {
 			cancel()
 		}
 	}()
@@ -202,7 +202,7 @@ func roundUp(n float64) int32 {
 	return int32(math.Round(n))
 }
 
-func (mw *MultiWallet) ValidateExPubKey(extendedPubKey string) error {
+func (mw *MultiWallet) ValidateExtPubKey(extendedPubKey string) error {
 	_, err := hdkeychain.NewKeyFromString(extendedPubKey, mw.activeNet.Params)
 	if err != nil {
 		if err == hdkeychain.ErrInvalidChild {

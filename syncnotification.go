@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	spv "github.com/decred/dcrwallet/spv/v3"
+	spv "github.com/raedahgroup/dcrlibwallet/spv"
 )
 
 const (

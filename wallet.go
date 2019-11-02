@@ -27,10 +27,6 @@ func (lw *LibWallet) GetWalletID() int {
 	return lw.WalletID
 }
 
-func (lw *LibWallet) GetDefaultAccount() int32 {
-	return lw.DefaultAccount
-}
-
 func (lw *LibWallet) GetSpendingPassphraseType() int32 {
 	return lw.SpendingPassphraseType
 }

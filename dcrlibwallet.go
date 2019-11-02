@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 
 	"github.com/decred/dcrwallet/errors/v2"
-	wallet "github.com/decred/dcrwallet/wallet/v3"
+	"github.com/decred/dcrwallet/wallet/v3"
 	"github.com/decred/dcrwallet/wallet/v3/txrules"
-	l "github.com/raedahgroup/dcrlibwallet/internal/loader"
+	"github.com/raedahgroup/dcrlibwallet/internal/loader"
 	"github.com/raedahgroup/dcrlibwallet/internal/netparams"
 	"github.com/raedahgroup/dcrlibwallet/txindex"
 	"github.com/raedahgroup/dcrlibwallet/utils"
@@ -23,7 +23,6 @@ type WalletProperties struct {
 	WalletName             string `storm:"unique"`
 	WalletDataDir          string
 	WalletSeed             string
-	DefaultAccount         int32
 	SpendingPassphraseType int32
 	DiscoveredAccounts     bool
 }
@@ -32,7 +31,7 @@ type LibWallet struct {
 	WalletProperties `storm:"inline"`
 
 	activeNet    *netparams.Params
-	walletLoader *l.Loader
+	walletLoader *loader.Loader
 	wallet       *wallet.Wallet
 	txDB         *txindex.DB
 
@@ -68,14 +67,14 @@ func NewLibWallet(walletDataDir, walletDbDriver string, netType string) (*LibWal
 	// init walletLoader
 	defaultFees := txrules.DefaultRelayFeePerKb.ToCoin()
 
-	stakeOptions := &l.StakeOptions{
+	stakeOptions := &loader.StakeOptions{
 		VotingEnabled: false,
 		AddressReuse:  false,
 		VotingAddress: nil,
 		TicketFee:     defaultFees,
 	}
 
-	lw.walletLoader = l.NewLoader(activeNet.Params, walletDataDir, stakeOptions, 20, false,
+	lw.walletLoader = loader.NewLoader(activeNet.Params, walletDataDir, stakeOptions, 20, false,
 		defaultFees, wallet.DefaultAccountGapLimit, false)
 	if walletDbDriver != "" {
 		lw.walletLoader.SetDatabaseDriver(walletDbDriver)

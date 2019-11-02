@@ -217,7 +217,6 @@ func (mw *MultiWallet) CreateNewWallet(privatePassphrase string, spendingPassphr
 		WalletSeed:             seed,
 		SpendingPassphraseType: spendingPassphraseType,
 		DiscoveredAccounts:     true,
-		DefaultAccount:         0,
 	}
 
 	return mw.createWallet(properties, seed, privatePassphrase)
@@ -235,7 +234,6 @@ func (mw *MultiWallet) CreateWatchOnlyWallet(walletName string, extendedPublicKe
 	properties := WalletProperties{
 		WalletName:         walletName,
 		DiscoveredAccounts: true,
-		DefaultAccount:     0,
 	}
 
 	lw := &LibWallet{
@@ -291,7 +289,6 @@ func (mw *MultiWallet) RestoreWallet(seedMnemonic, privatePassphrase string, spe
 	properties := WalletProperties{
 		SpendingPassphraseType: spendingPassphraseType,
 		DiscoveredAccounts:     false,
-		DefaultAccount:         0,
 	}
 
 	return mw.createWallet(properties, seedMnemonic, privatePassphrase)

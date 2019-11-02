@@ -11,8 +11,8 @@ import (
 	"github.com/decred/dcrd/addrmgr"
 	"github.com/decred/dcrwallet/errors/v2"
 	p2p "github.com/decred/dcrwallet/p2p/v2"
-	spv "github.com/decred/dcrwallet/spv/v3"
 	wallet "github.com/decred/dcrwallet/wallet/v3"
+	spv "github.com/raedahgroup/dcrlibwallet/spv"
 )
 
 type syncData struct {

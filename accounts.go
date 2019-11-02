@@ -174,23 +174,3 @@ func (lw *LibWallet) AccountNumber(accountName string) (uint32, error) {
 	ctx, _ := lw.contextWithShutdownCancel()
 	return lw.wallet.AccountNumber(ctx, accountName)
 }
-
-func (mw *MultiWallet) SetDefaultAccount(walletID int, accountNumber int32) error {
-	w, ok := mw.wallets[walletID]
-	if !ok {
-		return errors.New(ErrNotExist)
-	}
-
-	_, err := w.AccountNameRaw(uint32(accountNumber))
-	if err != nil {
-		return translateError(err)
-	}
-
-	w.DefaultAccount = accountNumber
-	err = mw.db.Save(w)
-	if err != nil {
-		return translateError(err)
-	}
-
-	return nil
-}
