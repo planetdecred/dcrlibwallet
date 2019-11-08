@@ -19,12 +19,12 @@ func (lw *LibWallet) WalletExists() (bool, error) {
 	return lw.walletLoader.WalletExists()
 }
 
-func (lw *LibWallet) GetWalletName() string {
-	return lw.WalletName
+func (lw *LibWallet) GetName() string {
+	return lw.Name
 }
 
 func (lw *LibWallet) GetWalletID() int {
-	return lw.WalletID
+	return lw.ID
 }
 
 func (lw *LibWallet) GetSpendingPassphraseType() int32 {
@@ -32,7 +32,7 @@ func (lw *LibWallet) GetSpendingPassphraseType() int32 {
 }
 
 func (lw *LibWallet) GetWalletSeed() string {
-	return lw.WalletSeed
+	return lw.Seed
 }
 
 func (mw *MultiWallet) VerifySeed(walletID int, seedMnemonic string) error {
@@ -41,9 +41,9 @@ func (mw *MultiWallet) VerifySeed(walletID int, seedMnemonic string) error {
 		return errors.New(ErrNotExist)
 	}
 
-	if w.WalletSeed == seedMnemonic {
-		w.WalletSeed = ""
-		return translateError(mw.db.Save(w))
+	if w.Seed == seedMnemonic {
+		w.Seed = ""
+		return translateError(mw.db.Save(w.Properties))
 	}
 
 	return errors.New(ErrInvalid)
@@ -225,7 +225,7 @@ func (lw *LibWallet) DeleteWallet(privatePassphrase []byte) error {
 	lw.Shutdown()
 
 	log.Info("Deleting Wallet")
-	return os.RemoveAll(lw.WalletDataDir)
+	return os.RemoveAll(lw.DataDir)
 }
 
 func (mw *MultiWallet) RenameWallet(walletID int, newName string) error {
@@ -235,7 +235,7 @@ func (mw *MultiWallet) RenameWallet(walletID int, newName string) error {
 
 	w, ok := mw.wallets[walletID]
 	if ok {
-		err := mw.db.One("WalletName", newName, &LibWallet{})
+		err := mw.db.One("Name", newName, &Properties{})
 		if err != nil {
 			if err != storm.ErrNotFound {
 				return translateError(err)
@@ -244,8 +244,8 @@ func (mw *MultiWallet) RenameWallet(walletID int, newName string) error {
 			return errors.New(ErrExist)
 		}
 
-		w.WalletName = newName
-		return mw.db.Save(w) // update WalletName field
+		w.Name = newName
+		return mw.db.Save(w.Properties) // update WalletName field
 	}
 
 	return errors.New(ErrNotExist)
@@ -263,7 +263,7 @@ func (mw *MultiWallet) DeleteWallet(walletID int, privPass []byte) error {
 			return translateError(err)
 		}
 
-		err = mw.db.DeleteStruct(w)
+		err = mw.db.DeleteStruct(w.Properties)
 		if err != nil {
 			return translateError(err)
 		}

@@ -36,6 +36,9 @@ const (
 	LastTxHashConfigKey = "last_tx_hash"
 
 	VSPHostConfigKey = "vsp_host"
+
+	SpendingPassphraseTypePin  int32 = 0
+	SpendingPassphraseTypePass int32 = 1
 )
 
 func (mw *MultiWallet) SaveUserConfigValue(key string, value interface{}) {

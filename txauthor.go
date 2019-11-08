@@ -137,7 +137,7 @@ func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
 		lock <- time.Time{}
 	}()
 
-	ctx, _ := tx.lw.contextWithShutdownCancel()
+	ctx := tx.lw.shutdownContext()
 	err = tx.lw.wallet.Unlock(ctx, privatePassphrase, lock)
 	if err != nil {
 		log.Error(err)
@@ -219,7 +219,7 @@ func (tx *TxAuthor) constructTransaction() (*txauthor.AuthoredTx, error) {
 		outputs = append(outputs, output)
 	}
 
-	ctx, _ := tx.lw.contextWithShutdownCancel()
+	ctx := tx.lw.shutdownContext()
 	return tx.lw.wallet.NewUnsignedTransaction(ctx, outputs, txrules.DefaultRelayFeePerKb, tx.sendFromAccount,
 		tx.requiredConfirmations, outputSelectionAlgorithm, changeSource)
 }

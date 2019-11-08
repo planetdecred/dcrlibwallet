@@ -15,7 +15,7 @@ func (lw *LibWallet) SignMessage(passphrase []byte, address string, message stri
 		lock <- time.Time{}
 	}()
 
-	ctx, _ := lw.contextWithShutdownCancel()
+	ctx := lw.shutdownContext()
 	err := lw.wallet.Unlock(ctx, passphrase, lock)
 	if err != nil {
 		return nil, translateError(err)

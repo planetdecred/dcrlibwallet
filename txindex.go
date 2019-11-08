@@ -9,7 +9,7 @@ import (
 )
 
 func (lw *LibWallet) IndexTransactions(waitGroup *sync.WaitGroup) error {
-	ctx, _ := lw.contextWithShutdownCancel()
+	ctx := lw.shutdownContext()
 
 	var totalIndex int32
 	var txEndHeight uint32
@@ -31,7 +31,7 @@ func (lw *LibWallet) IndexTransactions(waitGroup *sync.WaitGroup) error {
 
 			_, err = lw.txDB.SaveOrUpdate(&Transaction{}, tx)
 			if err != nil {
-				log.Errorf("[%d] Index tx replace tx err : %v", lw.WalletID, err)
+				log.Errorf("[%d] Index tx replace tx err : %v", lw.ID, err)
 				return false, err
 			}
 
@@ -42,11 +42,11 @@ func (lw *LibWallet) IndexTransactions(waitGroup *sync.WaitGroup) error {
 			txEndHeight = block.Header.Height
 			err := lw.txDB.SaveLastIndexPoint(int32(txEndHeight))
 			if err != nil {
-				log.Errorf("[%d] Set tx index end block height error: ", lw.WalletID, err)
+				log.Errorf("[%d] Set tx index end block height error: ", lw.ID, err)
 				return false, err
 			}
 
-			log.Tracef("[%d] Index saved for transactions in block %d", lw.WalletID, txEndHeight)
+			log.Tracef("[%d] Index saved for transactions in block %d", lw.ID, txEndHeight)
 		}
 
 		select {
@@ -59,7 +59,7 @@ func (lw *LibWallet) IndexTransactions(waitGroup *sync.WaitGroup) error {
 
 	beginHeight, err := lw.txDB.ReadIndexingStartBlock()
 	if err != nil {
-		log.Errorf("[%d] Get tx indexing start point error: %v", lw.WalletID, err)
+		log.Errorf("[%d] Get tx indexing start point error: %v", lw.ID, err)
 		return err
 	}
 
@@ -72,14 +72,14 @@ func (lw *LibWallet) IndexTransactions(waitGroup *sync.WaitGroup) error {
 		waitGroup.Done()
 		count, err := lw.txDB.Count(txindex.TxFilterAll, &Transaction{})
 		if err != nil {
-			log.Errorf("[%d] Post-indexing tx count error :%v", lw.WalletID, err)
+			log.Errorf("[%d] Post-indexing tx count error :%v", lw.ID, err)
 			return
 		}
-		log.Tracef("[%d] Transaction index finished at %d, %d transaction(s) indexed in total", lw.WalletID, txEndHeight, count)
+		log.Tracef("[%d] Transaction index finished at %d, %d transaction(s) indexed in total", lw.ID, txEndHeight, count)
 	}()
 
 	waitGroup.Add(1)
-	log.Tracef("[%d] Indexing transactions start height: %d, end height: %d", lw.WalletID, beginHeight, endHeight)
+	log.Tracef("[%d] Indexing transactions start height: %d, end height: %d", lw.ID, beginHeight, endHeight)
 	go lw.wallet.GetTransactions(ctx, rangeFn, startBlock, endBlock)
 	return nil
 }

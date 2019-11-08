@@ -14,18 +14,18 @@ func (mw *MultiWallet) listenForTransactions(lw *LibWallet) {
 		for _, transaction := range v.UnminedTransactions {
 			tempTransaction, err := lw.decodeTransactionWithTxSummary(&transaction, nil)
 			if err != nil {
-				log.Errorf("[%d] Error ntfn parse tx: %v", lw.WalletID, err)
+				log.Errorf("[%d] Error ntfn parse tx: %v", lw.ID, err)
 				return
 			}
 
 			overwritten, err := lw.txDB.SaveOrUpdate(&Transaction{}, tempTransaction)
 			if err != nil {
-				log.Errorf("[%d] New Tx save err: %v", lw.WalletID, err)
+				log.Errorf("[%d] New Tx save err: %v", lw.ID, err)
 				return
 			}
 
 			if !overwritten {
-				log.Infof("[%d] New Transaction %s", lw.WalletID, tempTransaction.Hash)
+				log.Infof("[%d] New Transaction %s", lw.ID, tempTransaction.Hash)
 
 				result, err := json.Marshal(tempTransaction)
 				if err != nil {
@@ -41,16 +41,16 @@ func (mw *MultiWallet) listenForTransactions(lw *LibWallet) {
 			for _, transaction := range block.Transactions {
 				tempTransaction, err := lw.decodeTransactionWithTxSummary(&transaction, &blockHash)
 				if err != nil {
-					log.Errorf("[%d] Error ntfn parse tx: %v", lw.WalletID, err)
+					log.Errorf("[%d] Error ntfn parse tx: %v", lw.ID, err)
 					return
 				}
 
 				_, err = lw.txDB.SaveOrUpdate(&Transaction{}, tempTransaction)
 				if err != nil {
-					log.Errorf("[%d] Incoming block replace tx error :%v", lw.WalletID, err)
+					log.Errorf("[%d] Incoming block replace tx error :%v", lw.ID, err)
 					return
 				}
-				mw.publishTransactionConfirmed(lw.WalletID, transaction.Hash.String(), int32(block.Header.Height))
+				mw.publishTransactionConfirmed(lw.ID, transaction.Hash.String(), int32(block.Header.Height))
 			}
 		}
 	}

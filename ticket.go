@@ -21,21 +21,18 @@ import (
 
 // StakeInfo returns information about wallet stakes, tickets and their statuses.
 func (lw *LibWallet) StakeInfo() (*wallet.StakeInfoData, error) {
+	ctx := lw.shutdownContext()
 	if n, err := lw.wallet.NetworkBackend(); err == nil {
-
 		var rpc *dcrd.RPC
 		if client, ok := n.(*dcrd.RPC); ok {
 			rpc = client
 		}
 
 		if rpc != nil {
-			ctx, _ := lw.contextWithShutdownCancel()
 			return lw.wallet.StakeInfoPrecise(ctx, rpc)
 		}
-
 	}
 
-	ctx, _ := lw.contextWithShutdownCancel()
 	return lw.wallet.StakeInfo(ctx)
 }
 
@@ -139,7 +136,7 @@ func (lw *LibWallet) getTickets(req *GetTicketsRequest) (ticketInfos []*TicketIn
 		}
 	}
 
-	ctx, _ := lw.contextWithShutdownCancel()
+	ctx := lw.shutdownContext()
 	if rpc != nil {
 		err = lw.wallet.GetTicketsPrecise(ctx, rpc, rangeFn, startBlock, endBlock)
 	} else {
@@ -298,7 +295,7 @@ func (lw *LibWallet) UpdateTicketPurchaseRequestWithVSPInfo(vspHost string, requ
 		return fmt.Errorf("invalid vsp purchase ticket response: %s", err.Error())
 	}
 
-	ctx, _ := lw.contextWithShutdownCancel()
+	ctx := lw.shutdownContext()
 
 	// unlock wallet and import the decoded script
 	lock := make(chan time.Time, 1)

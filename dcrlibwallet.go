@@ -13,22 +13,17 @@ import (
 	"github.com/raedahgroup/dcrlibwallet/utils"
 )
 
-const (
-	SpendingPassphraseTypePin  int32 = 0
-	SpendingPassphraseTypePass int32 = 1
-)
-
-type WalletProperties struct {
-	WalletID               int    `storm:"id,increment"`
-	WalletName             string `storm:"unique"`
-	WalletDataDir          string
-	WalletSeed             string
+type Properties struct {
+	ID                     int    `storm:"id,increment"`
+	Name                   string `storm:"unique"`
+	DataDir                string
+	Seed                   string
 	SpendingPassphraseType int32
 	DiscoveredAccounts     bool
 }
 
 type LibWallet struct {
-	WalletProperties `storm:"inline"`
+	*Properties `storm:"inline"`
 
 	activeNet    *netparams.Params
 	walletLoader *loader.Loader
@@ -44,7 +39,7 @@ type LibWallet struct {
 	cancelFuncs  []context.CancelFunc
 }
 
-func NewLibWallet(walletDataDir, walletDbDriver string, netType string) (*LibWallet, error) {
+func NewLibWallet(props *Properties, walletDbDriver, netType string) (*LibWallet, error) {
 
 	activeNet := utils.NetParams(netType)
 	if activeNet == nil {
@@ -52,11 +47,12 @@ func NewLibWallet(walletDataDir, walletDbDriver string, netType string) (*LibWal
 	}
 
 	lw := &LibWallet{
-		activeNet: activeNet,
+		Properties: props,
+		activeNet:  activeNet,
 	}
 
 	// open database for indexing transactions for faster loading
-	txDBPath := filepath.Join(walletDataDir, txindex.DbName)
+	txDBPath := filepath.Join(props.DataDir, txindex.DbName)
 	var err error
 	lw.txDB, err = txindex.Initialize(txDBPath, &Transaction{})
 	if err != nil {
@@ -74,7 +70,7 @@ func NewLibWallet(walletDataDir, walletDbDriver string, netType string) (*LibWal
 		TicketFee:     defaultFees,
 	}
 
-	lw.walletLoader = loader.NewLoader(activeNet.Params, walletDataDir, stakeOptions, 20, false,
+	lw.walletLoader = loader.NewLoader(activeNet.Params, props.DataDir, stakeOptions, 20, false,
 		defaultFees, wallet.DefaultAccountGapLimit, false)
 	if walletDbDriver != "" {
 		lw.walletLoader.SetDatabaseDriver(walletDbDriver)

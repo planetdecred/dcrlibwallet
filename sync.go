@@ -317,7 +317,7 @@ func (lw *LibWallet) RescanBlocks() error {
 		}()
 
 		lw.rescanning = true
-		ctx, _ := lw.contextWithShutdownCancel()
+		ctx := lw.shutdownContext()
 
 		progress := make(chan wallet.RescanProgress, 1)
 		go lw.wallet.RescanProgressFromHeight(ctx, netBackend, 0, progress)
@@ -412,7 +412,7 @@ func (lw *LibWallet) GetBestBlock() int32 {
 		return 0
 	}
 
-	ctx, _ := lw.contextWithShutdownCancel()
+	ctx := lw.shutdownContext()
 	_, height := lw.wallet.MainChainTip(ctx)
 	return height
 }
@@ -424,7 +424,7 @@ func (lw *LibWallet) GetBestBlockTimeStamp() int64 {
 		return 0
 	}
 
-	ctx, _ := lw.contextWithShutdownCancel()
+	ctx := lw.shutdownContext()
 	_, height := lw.wallet.MainChainTip(ctx)
 	identifier := wallet.NewBlockIdentifierFromHeight(height)
 	info, err := lw.wallet.BlockInfo(ctx, identifier)
