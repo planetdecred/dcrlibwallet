@@ -18,18 +18,21 @@ func (mw *MultiWallet) listenForTransactions(lw *LibWallet) {
 				return
 			}
 
-			err = lw.txDB.SaveOrUpdate(&Transaction{}, tempTransaction)
+			overwritten, err := lw.txDB.SaveOrUpdate(&Transaction{}, tempTransaction)
 			if err != nil {
-				log.Errorf("[%d] Tx ntfn replace tx err: %v", lw.WalletID, err)
+				log.Errorf("[%d] New Tx save err: %v", lw.WalletID, err)
+				return
 			}
 
-			log.Infof("[%d] New Transaction", lw.WalletID)
+			if !overwritten {
+				log.Infof("[%d] New Transaction %s", lw.WalletID, tempTransaction.Hash)
 
-			result, err := json.Marshal(tempTransaction)
-			if err != nil {
-				log.Error(err)
-			} else {
-				mw.mempoolTransactionNotification(string(result))
+				result, err := json.Marshal(tempTransaction)
+				if err != nil {
+					log.Error(err)
+				} else {
+					mw.mempoolTransactionNotification(string(result))
+				}
 			}
 		}
 
@@ -42,7 +45,7 @@ func (mw *MultiWallet) listenForTransactions(lw *LibWallet) {
 					return
 				}
 
-				err = lw.txDB.SaveOrUpdate(&Transaction{}, tempTransaction)
+				_, err = lw.txDB.SaveOrUpdate(&Transaction{}, tempTransaction)
 				if err != nil {
 					log.Errorf("[%d] Incoming block replace tx error :%v", lw.WalletID, err)
 					return

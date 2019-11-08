@@ -267,7 +267,7 @@ FilterLoop:
 				return err
 			}
 
-			matchedTxs, fadded := s.rescanBlock(b)
+			matchedTxs, fadded := s.rescanBlock(b, s.rescanningWalletID)
 			if len(matchedTxs) != 0 {
 				err := save(&blockHashes[i], matchedTxs)
 				if err != nil {

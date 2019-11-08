@@ -19,7 +19,7 @@ import (
 // added to fadded.
 //
 // This function may only be called with the filter mutex held.
-func (s *Syncer) rescanCheckTransactions(matches *[]*wire.MsgTx, fadded *blockcf.Entries, txs []*wire.MsgTx, tree int8) {
+func (s *Syncer) rescanCheckTransactions(matches *[]*wire.MsgTx, fadded *blockcf.Entries, txs []*wire.MsgTx, tree int8, walletID int) {
 	for i, tx := range txs {
 		// Keep track of whether the transaction has already been added
 		// to the result.  It shouldn't be added twice.
@@ -42,7 +42,7 @@ func (s *Syncer) rescanCheckTransactions(matches *[]*wire.MsgTx, fadded *blockcf
 		}
 
 		for _, input := range inputs {
-			if !s.rescanFilter[s.rescanningWalletID].ExistsUnspentOutPoint(&input.PreviousOutPoint) {
+			if !s.rescanFilter[walletID].ExistsUnspentOutPoint(&input.PreviousOutPoint) {
 				continue
 			}
 			if !added {
@@ -60,7 +60,7 @@ func (s *Syncer) rescanCheckTransactions(matches *[]*wire.MsgTx, fadded *blockcf
 				continue
 			}
 			for _, a := range addrs {
-				if !s.rescanFilter[s.rescanningWalletID].ExistsAddress(a) {
+				if !s.rescanFilter[walletID].ExistsAddress(a) {
 					continue
 				}
 
@@ -69,9 +69,9 @@ func (s *Syncer) rescanCheckTransactions(matches *[]*wire.MsgTx, fadded *blockcf
 					Index: uint32(i),
 					Tree:  tree,
 				}
-				if !s.rescanFilter[s.rescanningWalletID].ExistsUnspentOutPoint(&op) {
-					s.rescanFilter[s.rescanningWalletID].AddUnspentOutPoint(&op)
-					s.filterData[s.rescanningWalletID].AddOutPoint(&op)
+				if !s.rescanFilter[walletID].ExistsUnspentOutPoint(&op) {
+					s.rescanFilter[walletID].AddUnspentOutPoint(&op)
+					s.filterData[walletID].AddOutPoint(&op)
 					fadded.AddOutPoint(&op)
 				}
 
@@ -87,10 +87,10 @@ func (s *Syncer) rescanCheckTransactions(matches *[]*wire.MsgTx, fadded *blockcf
 // rescanBlock rescans a block for any relevant transactions for the passed
 // lookup keys.  Returns any discovered transactions and any new data added to
 // the filter.
-func (s *Syncer) rescanBlock(block *wire.MsgBlock) (matches []*wire.MsgTx, fadded blockcf.Entries) {
+func (s *Syncer) rescanBlock(block *wire.MsgBlock, walletID int) (matches []*wire.MsgTx, fadded blockcf.Entries) {
 	s.filterMu.Lock()
-	s.rescanCheckTransactions(&matches, &fadded, block.STransactions, wire.TxTreeStake)
-	s.rescanCheckTransactions(&matches, &fadded, block.Transactions, wire.TxTreeRegular)
+	s.rescanCheckTransactions(&matches, &fadded, block.STransactions, wire.TxTreeStake, walletID)
+	s.rescanCheckTransactions(&matches, &fadded, block.Transactions, wire.TxTreeRegular, walletID)
 	s.filterMu.Unlock()
 	return matches, fadded
 }

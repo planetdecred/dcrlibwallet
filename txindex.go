@@ -4,7 +4,7 @@ import (
 	"sync"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	wallet "github.com/decred/dcrwallet/wallet/v3"
+	"github.com/decred/dcrwallet/wallet/v3"
 	"github.com/raedahgroup/dcrlibwallet/txindex"
 )
 
@@ -29,9 +29,9 @@ func (lw *LibWallet) IndexTransactions(waitGroup *sync.WaitGroup) error {
 				return false, err
 			}
 
-			err = lw.txDB.SaveOrUpdate(&Transaction{}, tx)
+			_, err = lw.txDB.SaveOrUpdate(&Transaction{}, tx)
 			if err != nil {
-				log.Errorf("[%d] Index tx replace tx err :%v", lw.WalletID, err)
+				log.Errorf("[%d] Index tx replace tx err : %v", lw.WalletID, err)
 				return false, err
 			}
 
@@ -46,7 +46,7 @@ func (lw *LibWallet) IndexTransactions(waitGroup *sync.WaitGroup) error {
 				return false, err
 			}
 
-			log.Infof("[%d] Index saved for transactions in block %d", lw.WalletID, txEndHeight)
+			log.Tracef("[%d] Index saved for transactions in block %d", lw.WalletID, txEndHeight)
 		}
 
 		select {
@@ -75,11 +75,11 @@ func (lw *LibWallet) IndexTransactions(waitGroup *sync.WaitGroup) error {
 			log.Errorf("[%d] Post-indexing tx count error :%v", lw.WalletID, err)
 			return
 		}
-		log.Infof("[%d] Transaction index finished at %d, %d transaction(s) indexed in total", lw.WalletID, txEndHeight, count)
+		log.Tracef("[%d] Transaction index finished at %d, %d transaction(s) indexed in total", lw.WalletID, txEndHeight, count)
 	}()
 
 	waitGroup.Add(1)
-	log.Infof("[%d] Indexing transactions start height: %d, end height: %d", lw.WalletID, beginHeight, endHeight)
+	log.Tracef("[%d] Indexing transactions start height: %d, end height: %d", lw.WalletID, beginHeight, endHeight)
 	go lw.wallet.GetTransactions(ctx, rangeFn, startBlock, endBlock)
 	return nil
 }

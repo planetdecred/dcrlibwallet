@@ -129,6 +129,7 @@ func NewSyncer(wallets map[int]*wallet.Wallet, chainParams *chaincfg.Params, lp 
 		remotes:                    make(map[string]*p2p.RemotePeer),
 		rescanFilter:               rescanFilter,
 		filterData:                 filterData,
+		filterWalletID:             -1,
 		seenTxs:                    lru.NewCache(2000),
 		lp:                         lp,
 	}
@@ -556,13 +557,13 @@ func (s *Syncer) getTransactionsByHashes(ctx context.Context, txHashes []*chainh
 	var notFound []*wire.InvVect
 	var foundTxs []*wire.MsgTx
 
-	for _, w := range s.wallets {
+	for walletID, w := range s.wallets {
 		var missingWalletTxs []*wire.InvVect
 		var foundWalletTxs []*wire.MsgTx
 		var err error
 		foundWalletTxs, missingWalletTxs, err = w.GetTransactionsByHashes(ctx, txHashes)
 		if err != nil && !errors.Is(errors.NotExist, err) {
-			return nil, nil, errors.E("Failed to look up transactions for getdata reply to peer: %v", err)
+			return nil, nil, errors.E("[%d] Failed to look up transactions for getdata reply to peer: %v", walletID, err)
 		}
 		if len(missingWalletTxs) != 0 {
 			notFound = append(notFound, missingWalletTxs...)
@@ -833,16 +834,16 @@ func (s *Syncer) handleTxInvs(ctx context.Context, rp *p2p.RemotePeer, hashes []
 
 	// Save any relevant transaction.
 	for walletID, w := range s.wallets {
-		s.filterWalletID = walletID
 		relevant := s.filterRelevant(txs, walletID)
 		for _, tx := range relevant {
+			s.filterWalletID = walletID
 			err := w.AcceptMempoolTx(ctx, tx)
+			s.filterWalletID = -1
 			if err != nil {
 				op := errors.Opf(opf, rp.RemoteAddr())
 				log.Warn(errors.E(op, err))
 			}
 		}
-		s.filterWalletID = -1
 
 		if len(relevant) > 0 {
 			s.mempoolTxs(walletID, relevant)
@@ -980,9 +981,7 @@ FilterLoop:
 			if b == nil {
 				continue
 			}
-			s.rescanningWalletID = walletID
-			matches, fadded := s.rescanBlock(b)
-			s.rescanningWalletID = -1
+			matches, fadded := s.rescanBlock(b, walletID)
 			found[*chain[i].Hash] = matches
 			if len(fadded) != 0 {
 				idx = i + 1
@@ -1340,11 +1339,11 @@ func (s *Syncer) startupSync(ctx context.Context, rp *p2p.RemotePeer) error {
 					if !s.loadedFilters[key] {
 						s.filterWalletID = key
 						err = w.LoadActiveDataFilters(ctx, s, true)
+						s.filterWalletID = -1
 						if err != nil {
 							return err
 						}
 						s.loadedFilters[key] = true
-						s.filterWalletID = -1
 					}
 
 					s.synced(key)
@@ -1364,11 +1363,11 @@ func (s *Syncer) startupSync(ctx context.Context, rp *p2p.RemotePeer) error {
 
 				s.filterWalletID = key
 				err = w.LoadActiveDataFilters(ctx, s, true)
+				s.filterWalletID = -1
 				if err != nil {
 					return err
 				}
 				s.loadedFilters[key] = true
-				s.filterWalletID = -1
 
 				s.rescanningWalletID = key
 				s.rescanStart(key)
