@@ -48,15 +48,15 @@ func (mw *MultiWallet) SaveUserConfigValue(key string, value interface{}) {
 	}
 }
 
-func (mw *MultiWallet) ReadUserConfigValue(key string, valueOut interface{}, defaultValue interface{}) (interface{}, error) {
+func (mw *MultiWallet) ReadUserConfigValue(key string, valueOut interface{}, defaultValue interface{}) interface{} {
 	err := mw.configDB.Get(userConfigBucketName, key, valueOut)
 	if err == storm.ErrNotFound {
-		return defaultValue, nil
+		return defaultValue
 	} else if err != nil {
 		log.Errorf("error reading config key: %s, value: %v", key, err)
-		return nil, err
+		return nil
 	}
-	return valueOut, nil
+	return valueOut
 }
 
 func (mw *MultiWallet) SetBoolConfigValueForKey(key string, value bool) {
@@ -84,31 +84,25 @@ func (mw *MultiWallet) SetStringConfigValueForKey(key, value string) {
 }
 
 func (mw *MultiWallet) ReadBoolConfigValueForKey(key string, defaultValue bool) (valueOut bool) {
-	mw.ReadUserConfigValue(key, &valueOut, defaultValue)
-	return
+	return (mw.ReadUserConfigValue(key, &valueOut, defaultValue)).(bool)
 }
 
 func (mw *MultiWallet) ReadDoubleConfigValueForKey(key string, defaultValue float64) (valueOut float64) {
-	mw.ReadUserConfigValue(key, &valueOut, defaultValue)
-	return
+	return (mw.ReadUserConfigValue(key, &valueOut, defaultValue)).(float64)
 }
 
 func (mw *MultiWallet) ReadIntConfigValueForKey(key string, defaultValue int) (valueOut int) {
-	mw.ReadUserConfigValue(key, &valueOut, defaultValue)
-	return
+	return (mw.ReadUserConfigValue(key, &valueOut, defaultValue)).(int)
 }
 
 func (mw *MultiWallet) ReadInt32ConfigValueForKey(key string, defaultValue int32) (valueOut int32) {
-	mw.ReadUserConfigValue(key, &valueOut, defaultValue)
-	return
+	return (mw.ReadUserConfigValue(key, &valueOut, defaultValue)).(int32)
 }
 
 func (mw *MultiWallet) ReadLongConfigValueForKey(key string, defaultValue int64) (valueOut int64) {
-	mw.ReadUserConfigValue(key, &valueOut, defaultValue)
-	return
+	return (mw.ReadUserConfigValue(key, &valueOut, defaultValue)).(int64)
 }
 
 func (mw *MultiWallet) ReadStringConfigValueForKey(key string) (valueOut string) {
-	mw.ReadUserConfigValue(key, &valueOut, "")
-	return
+	return *(mw.ReadUserConfigValue(key, &valueOut, "")).(*string)
 }

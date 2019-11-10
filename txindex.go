@@ -80,6 +80,6 @@ func (lw *LibWallet) IndexTransactions(waitGroup *sync.WaitGroup) error {
 
 	waitGroup.Add(1)
 	log.Tracef("[%d] Indexing transactions start height: %d, end height: %d", lw.ID, beginHeight, endHeight)
-	go lw.wallet.GetTransactions(ctx, rangeFn, startBlock, endBlock)
+	go lw.Wallet.GetTransactions(ctx, rangeFn, startBlock, endBlock)
 	return nil
 }

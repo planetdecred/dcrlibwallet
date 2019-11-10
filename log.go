@@ -13,14 +13,13 @@ import (
 	"github.com/decred/dcrd/addrmgr"
 	"github.com/decred/dcrd/connmgr/v2"
 	"github.com/decred/dcrwallet/loader"
-	p2p "github.com/decred/dcrwallet/p2p/v2"
-	"github.com/decred/dcrwallet/ticketbuyer"
-	ticketbuyerv4 "github.com/decred/dcrwallet/ticketbuyer/v4"
-	wallet "github.com/decred/dcrwallet/wallet/v3"
+	"github.com/decred/dcrwallet/p2p/v2"
+	"github.com/decred/dcrwallet/ticketbuyer/v4"
+	"github.com/decred/dcrwallet/wallet/v3"
 	"github.com/decred/dcrwallet/wallet/v3/udb"
 	"github.com/decred/slog"
 	"github.com/jrick/logrotate/rotator"
-	spv "github.com/raedahgroup/dcrlibwallet/spv"
+	"github.com/raedahgroup/dcrlibwallet/spv"
 )
 
 // logWriter implements an io.Writer that outputs to both standard output and
@@ -68,7 +67,6 @@ func init() {
 	wallet.UseLogger(walletLog)
 	udb.UseLogger(walletLog)
 	ticketbuyer.UseLogger(tkbyLog)
-	ticketbuyerv4.UseLogger(tkbyLog)
 	spv.UseLogger(syncLog)
 	p2p.UseLogger(syncLog)
 	connmgr.UseLogger(cmgrLog)

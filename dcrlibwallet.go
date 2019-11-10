@@ -13,7 +13,11 @@ import (
 	"github.com/raedahgroup/dcrlibwallet/utils"
 )
 
-type Properties struct {
+type Wallet struct {
+	*wallet.Wallet `json:"-"`
+	netType        string
+	walletDbDriver string
+
 	ID                     int    `storm:"id,increment"`
 	Name                   string `storm:"unique"`
 	DataDir                string
@@ -23,11 +27,10 @@ type Properties struct {
 }
 
 type LibWallet struct {
-	*Properties `storm:"inline"`
+	*Wallet
 
 	activeNet    *netparams.Params
 	walletLoader *loader.Loader
-	wallet       *wallet.Wallet
 	txDB         *txindex.DB
 
 	synced     bool
@@ -39,20 +42,20 @@ type LibWallet struct {
 	cancelFuncs  []context.CancelFunc
 }
 
-func NewLibWallet(props *Properties, walletDbDriver, netType string) (*LibWallet, error) {
+func NewLibWallet(w *Wallet) (*LibWallet, error) {
 
-	activeNet := utils.NetParams(netType)
+	activeNet := utils.NetParams(w.netType)
 	if activeNet == nil {
-		return nil, errors.E("unsupported network type: %s", netType)
+		return nil, errors.E("unsupported network type: %s", w.netType)
 	}
 
 	lw := &LibWallet{
-		Properties: props,
-		activeNet:  activeNet,
+		Wallet:    w,
+		activeNet: activeNet,
 	}
 
 	// open database for indexing transactions for faster loading
-	txDBPath := filepath.Join(props.DataDir, txindex.DbName)
+	txDBPath := filepath.Join(w.DataDir, txindex.DbName)
 	var err error
 	lw.txDB, err = txindex.Initialize(txDBPath, &Transaction{})
 	if err != nil {
@@ -70,10 +73,10 @@ func NewLibWallet(props *Properties, walletDbDriver, netType string) (*LibWallet
 		TicketFee:     defaultFees,
 	}
 
-	lw.walletLoader = loader.NewLoader(activeNet.Params, props.DataDir, stakeOptions, 20, false,
+	lw.walletLoader = loader.NewLoader(activeNet.Params, w.DataDir, stakeOptions, 20, false,
 		defaultFees, wallet.DefaultAccountGapLimit, false)
-	if walletDbDriver != "" {
-		lw.walletLoader.SetDatabaseDriver(walletDbDriver)
+	if w.walletDbDriver != "" {
+		lw.walletLoader.SetDatabaseDriver(w.walletDbDriver)
 	}
 
 	// todo add interrupt listener

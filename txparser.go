@@ -12,8 +12,7 @@ func (lw *LibWallet) decodeTransactionWithTxSummary(txSummary *wallet.Transactio
 	var blockHeight int32 = BlockHeightInvalid
 	if blockHash != nil {
 		blockIdentifier := wallet.NewBlockIdentifierFromHash(blockHash)
-		ctx := lw.shutdownContext()
-		blockInfo, err := lw.wallet.BlockInfo(ctx, blockIdentifier)
+		blockInfo, err := lw.Wallet.BlockInfo(lw.shutdownContext(), blockIdentifier)
 		if err != nil {
 			log.Error(err)
 		} else {

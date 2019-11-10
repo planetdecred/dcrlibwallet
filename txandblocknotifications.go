@@ -5,7 +5,7 @@ import (
 )
 
 func (mw *MultiWallet) listenForTransactions(lw *LibWallet) {
-	n := lw.wallet.NtfnServer.TransactionNotifications()
+	n := lw.Wallet.NtfnServer.TransactionNotifications()
 	defer n.Done() // disassociate this notification client from server when this goroutine exits.
 
 	for {

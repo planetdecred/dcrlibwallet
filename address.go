@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/decred/dcrd/dcrutil/v2"
-	wallet "github.com/decred/dcrwallet/wallet/v3"
+	"github.com/decred/dcrwallet/wallet/v3"
 	"github.com/decred/dcrwallet/wallet/v3/udb"
 )
 
@@ -29,8 +29,7 @@ func (lw *LibWallet) HaveAddress(address string) bool {
 		return false
 	}
 
-	ctx := lw.shutdownContext()
-	have, err := lw.wallet.HaveAddress(ctx, addr)
+	have, err := lw.Wallet.HaveAddress(lw.shutdownContext(), addr)
 	if err != nil {
 		return false
 	}
@@ -44,8 +43,7 @@ func (lw *LibWallet) AccountOfAddress(address string) string {
 		return err.Error()
 	}
 
-	ctx := lw.shutdownContext()
-	info, _ := lw.wallet.AddressInfo(ctx, addr)
+	info, _ := lw.Wallet.AddressInfo(lw.shutdownContext(), addr)
 	return lw.AccountName(int32(info.Account()))
 }
 
@@ -60,8 +58,7 @@ func (lw *LibWallet) AddressInfo(address string) (*AddressInfo, error) {
 		Address: address,
 	}
 
-	ctx := lw.shutdownContext()
-	info, _ := lw.wallet.AddressInfo(ctx, addr)
+	info, _ := lw.Wallet.AddressInfo(lw.shutdownContext(), addr)
 	if info != nil {
 		addressInfo.IsMine = true
 		addressInfo.AccountNumber = info.Account()
@@ -72,7 +69,7 @@ func (lw *LibWallet) AddressInfo(address string) (*AddressInfo, error) {
 }
 
 func (lw *LibWallet) CurrentAddress(account int32) (string, error) {
-	addr, err := lw.wallet.CurrentAddress(uint32(account))
+	addr, err := lw.Wallet.CurrentAddress(uint32(account))
 	if err != nil {
 		log.Error(err)
 		return "", err
@@ -81,9 +78,7 @@ func (lw *LibWallet) CurrentAddress(account int32) (string, error) {
 }
 
 func (lw *LibWallet) NextAddress(account int32) (string, error) {
-	ctx := lw.shutdownContext()
-
-	addr, err := lw.wallet.NewExternalAddress(ctx, uint32(account), wallet.WithGapPolicyWrap())
+	addr, err := lw.Wallet.NewExternalAddress(lw.shutdownContext(), uint32(account), wallet.WithGapPolicyWrap())
 	if err != nil {
 		log.Error(err)
 		return "", err
@@ -97,8 +92,7 @@ func (lw *LibWallet) AddressPubKey(address string) (string, error) {
 		return "", err
 	}
 
-	ctx := lw.shutdownContext()
-	ainfo, err := lw.wallet.AddressInfo(ctx, addr)
+	ainfo, err := lw.Wallet.AddressInfo(lw.shutdownContext(), addr)
 	if err != nil {
 		return "", err
 	}

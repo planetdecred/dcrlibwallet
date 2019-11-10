@@ -101,7 +101,7 @@ func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
 		}
 	}()
 
-	n, err := tx.lw.wallet.NetworkBackend()
+	n, err := tx.lw.Wallet.NetworkBackend()
 	if err != nil {
 		log.Error(err)
 		return nil, err
@@ -138,7 +138,7 @@ func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
 	}()
 
 	ctx := tx.lw.shutdownContext()
-	err = tx.lw.wallet.Unlock(ctx, privatePassphrase, lock)
+	err = tx.lw.Wallet.Unlock(ctx, privatePassphrase, lock)
 	if err != nil {
 		log.Error(err)
 		return nil, errors.New(ErrInvalidPassphrase)
@@ -146,7 +146,7 @@ func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
 
 	var additionalPkScripts map[wire.OutPoint][]byte
 
-	invalidSigs, err := tx.lw.wallet.SignTransaction(ctx, &msgTx, txscript.SigHashAll, additionalPkScripts, nil, nil)
+	invalidSigs, err := tx.lw.Wallet.SignTransaction(ctx, &msgTx, txscript.SigHashAll, additionalPkScripts, nil, nil)
 	if err != nil {
 		log.Error(err)
 		return nil, err
@@ -172,7 +172,7 @@ func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	txHash, err := tx.lw.wallet.PublishTransaction(ctx, &msgTx, serializedTransaction.Bytes(), n)
+	txHash, err := tx.lw.Wallet.PublishTransaction(ctx, &msgTx, serializedTransaction.Bytes(), n)
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -219,7 +219,6 @@ func (tx *TxAuthor) constructTransaction() (*txauthor.AuthoredTx, error) {
 		outputs = append(outputs, output)
 	}
 
-	ctx := tx.lw.shutdownContext()
-	return tx.lw.wallet.NewUnsignedTransaction(ctx, outputs, txrules.DefaultRelayFeePerKb, tx.sendFromAccount,
+	return tx.lw.Wallet.NewUnsignedTransaction(tx.lw.shutdownContext(), outputs, txrules.DefaultRelayFeePerKb, tx.sendFromAccount,
 		tx.requiredConfirmations, outputSelectionAlgorithm, changeSource)
 }

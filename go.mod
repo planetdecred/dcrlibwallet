@@ -25,7 +25,7 @@ require (
 	github.com/decred/dcrwallet/errors/v2 v2.0.0
 	github.com/decred/dcrwallet/p2p/v2 v2.0.0
 	github.com/decred/dcrwallet/rpc/client/dcrd v1.0.0
-	github.com/decred/dcrwallet/ticketbuyer v1.0.2
+	github.com/decred/dcrwallet/ticketbuyer v1.0.2 // indirect
 	github.com/decred/dcrwallet/ticketbuyer/v4 v4.0.0
 	github.com/decred/dcrwallet/wallet/v3 v3.0.0
 	github.com/decred/dcrwallet/walletseed v1.0.1

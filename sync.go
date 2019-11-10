@@ -160,6 +160,10 @@ func (mw *MultiWallet) SyncInactiveForPeriod(totalInactiveSeconds int64) {
 	}
 }
 
+func asWallet(val interface{}) *wallet.Wallet {
+	return val.(*wallet.Wallet)
+}
+
 func (mw *MultiWallet) SpvSync() error {
 	mw.syncData.mu.RLock()
 	defer mw.syncData.mu.RUnlock()
@@ -194,10 +198,8 @@ func (mw *MultiWallet) SpvSync() error {
 	mw.initActiveSyncData()
 
 	wallets := make(map[int]*wallet.Wallet)
-	for id, wallet := range mw.wallets {
-		if wallet.WalletOpened() {
-			wallets[id] = wallet.wallet
-		}
+	for id, w := range mw.wallets {
+		wallets[id] = asWallet(w.Wallet.Wallet)
 	}
 
 	syncer := spv.NewSyncer(wallets, mw.activeNet.Params, lp, true)
@@ -302,7 +304,7 @@ func (mw *MultiWallet) ConnectedPeers() int32 {
 }
 
 func (lw *LibWallet) RescanBlocks() error {
-	netBackend, err := lw.wallet.NetworkBackend()
+	netBackend, err := lw.Wallet.NetworkBackend()
 	if err != nil {
 		return errors.E(ErrNotConnected)
 	}
@@ -320,7 +322,7 @@ func (lw *LibWallet) RescanBlocks() error {
 		ctx := lw.shutdownContext()
 
 		progress := make(chan wallet.RescanProgress, 1)
-		go lw.wallet.RescanProgressFromHeight(ctx, netBackend, 0, progress)
+		go lw.Wallet.RescanProgressFromHeight(ctx, netBackend, 0, progress)
 
 		rescanStartTime := time.Now().Unix()
 
@@ -406,28 +408,27 @@ func (mw *MultiWallet) GetLowestBlock() *BlockInfo {
 }
 
 func (lw *LibWallet) GetBestBlock() int32 {
-	if lw.wallet == nil {
+	if lw.Wallet == nil {
 		// This method is sometimes called after a wallet is deleted and causes crash.
 		log.Error("Attempting to read best block height without a loaded wallet.")
 		return 0
 	}
 
-	ctx := lw.shutdownContext()
-	_, height := lw.wallet.MainChainTip(ctx)
+	_, height := lw.Wallet.MainChainTip(lw.shutdownContext())
 	return height
 }
 
 func (lw *LibWallet) GetBestBlockTimeStamp() int64 {
-	if lw.wallet == nil {
+	if lw.Wallet == nil {
 		// This method is sometimes called after a wallet is deleted and causes crash.
 		log.Error("Attempting to read best block timestamp without a loaded wallet.")
 		return 0
 	}
 
 	ctx := lw.shutdownContext()
-	_, height := lw.wallet.MainChainTip(ctx)
+	_, height := lw.Wallet.MainChainTip(ctx)
 	identifier := wallet.NewBlockIdentifierFromHeight(height)
-	info, err := lw.wallet.BlockInfo(ctx, identifier)
+	info, err := lw.Wallet.BlockInfo(ctx, identifier)
 	if err != nil {
 		log.Error(err)
 		return 0

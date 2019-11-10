@@ -71,8 +71,8 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 		return nil, errors.E("error opening wallet index database: %s", err.Error())
 	}
 
-	// init database for saving/reading wallet properties objects
-	err = db.Init(&Properties{})
+	// init database for saving/reading wallet objects
+	err = db.Init(&Wallet{})
 	if err != nil {
 		log.Errorf("Error initializing wallet database: %s", err.Error())
 		return nil, err
@@ -134,23 +134,25 @@ func (mw *MultiWallet) Shutdown() {
 
 func (mw *MultiWallet) loadWallets() (int, error) {
 	query := mw.db.Select(q.True()).OrderBy("ID")
-	var propertiesArray []Properties
-	err := query.Find(&propertiesArray)
+	var wallets []Wallet
+	err := query.Find(&wallets)
 	if err != nil && err != storm.ErrNotFound {
 		return 0, err
 	}
 
 	mw.wallets = make(map[int]*LibWallet)
-	for _, p := range propertiesArray {
-		libWallet, err := NewLibWallet(&p, mw.dbDriver, mw.activeNet.Name)
+	for _, w := range wallets {
+		w.walletDbDriver = mw.dbDriver
+		w.netType = mw.activeNet.Name
+		libWallet, err := NewLibWallet(&w)
 		if err != nil {
 			return 0, err
 		}
 
-		mw.wallets[p.ID] = libWallet
+		mw.wallets[w.ID] = libWallet
 	}
 
-	return len(propertiesArray), nil
+	return len(wallets), nil
 }
 
 func (mw *MultiWallet) GetBackupsNeeded() int32 {
@@ -212,7 +214,7 @@ func (mw *MultiWallet) CreateNewWallet(privatePassphrase string, spendingPassphr
 		return nil, err
 	}
 
-	properties := &Properties{
+	properties := &Wallet{
 		Seed:                   seed,
 		SpendingPassphraseType: spendingPassphraseType,
 		DiscoveredAccounts:     true,
@@ -230,21 +232,21 @@ func (mw *MultiWallet) CreateWatchOnlyWallet(walletName string, extendedPublicKe
 		return nil, errors.New(ErrWalletNotLoaded)
 	}
 
-	props := &Properties{
+	w := &Wallet{
 		Name:               walletName,
 		DiscoveredAccounts: true,
 	}
 
-	err = mw.db.Save(props)
+	err = mw.db.Save(w)
 	if err != nil {
 		return nil, err
 	}
 
-	homeDir := filepath.Join(mw.rootDir, strconv.Itoa(props.ID))
+	homeDir := filepath.Join(mw.rootDir, strconv.Itoa(w.ID))
 	os.MkdirAll(homeDir, os.ModePerm) // create wallet dir
 
-	props.DataDir = homeDir
-	err = mw.db.Save(props) // update database with complete wallet information
+	w.DataDir = homeDir
+	err = mw.db.Save(w) // update database with complete wallet information
 	if err != nil {
 		return nil, err
 	}
@@ -252,16 +254,18 @@ func (mw *MultiWallet) CreateWatchOnlyWallet(walletName string, extendedPublicKe
 	// delete from database if not created successfully
 	defer func() {
 		if err != nil {
-			mw.db.DeleteStruct(props)
+			mw.db.DeleteStruct(w)
 		}
 	}()
 
-	libWallet, err := NewLibWallet(props, mw.dbDriver, mw.activeNet.Name)
+	w.walletDbDriver = mw.dbDriver
+	w.netType = mw.activeNet.Name
+	libWallet, err := NewLibWallet(w)
 	if err != nil {
 		return nil, err
 	}
 
-	mw.wallets[props.ID] = libWallet
+	mw.wallets[w.ID] = libWallet
 
 	err = libWallet.CreateWatchingOnlyWallet(wallet.InsecurePubPassphrase, extendedPublicKey)
 	if err != nil {
@@ -278,7 +282,7 @@ func (mw *MultiWallet) RestoreWallet(seedMnemonic, privatePassphrase string, spe
 		return nil, errors.New(ErrSyncAlreadyInProgress)
 	}
 
-	properties := &Properties{
+	properties := &Wallet{
 		SpendingPassphraseType: spendingPassphraseType,
 		DiscoveredAccounts:     false,
 	}
@@ -286,22 +290,22 @@ func (mw *MultiWallet) RestoreWallet(seedMnemonic, privatePassphrase string, spe
 	return mw.createWallet(properties, seedMnemonic, privatePassphrase)
 }
 
-func (mw *MultiWallet) createWallet(properties *Properties, seedMnemonic, privatePassphrase string) (*LibWallet, error) {
+func (mw *MultiWallet) createWallet(w *Wallet, seedMnemonic, privatePassphrase string) (*LibWallet, error) {
 
-	err := mw.db.Save(properties)
+	err := mw.db.Save(w)
 	if err != nil {
 		return nil, err
 	}
 
-	walletName := "wallet-" + strconv.Itoa(properties.ID) // wallet-#
+	walletName := "wallet-" + strconv.Itoa(w.ID) // wallet-#
 
-	homeDir := filepath.Join(mw.rootDir, strconv.Itoa(properties.ID))
+	homeDir := filepath.Join(mw.rootDir, strconv.Itoa(w.ID))
 	os.MkdirAll(homeDir, os.ModePerm) // create wallet dir
 
 	// update database wallet data dir
-	properties.DataDir = homeDir
-	properties.Name = walletName
-	err = mw.db.Save(properties) // update database with complete wallet information
+	w.DataDir = homeDir
+	w.Name = walletName
+	err = mw.db.Save(w) // update database with complete wallet information
 	if err != nil {
 		return nil, err
 	}
@@ -309,17 +313,19 @@ func (mw *MultiWallet) createWallet(properties *Properties, seedMnemonic, privat
 	// delete from database if not created successfully
 	defer func() {
 		if err != nil {
-			mw.db.DeleteStruct(properties)
+			mw.db.DeleteStruct(w)
 		}
 	}()
 
-	libWallet, err := NewLibWallet(properties, mw.dbDriver, mw.activeNet.Name)
+	w.walletDbDriver = mw.dbDriver
+	w.netType = mw.activeNet.Name
+	libWallet, err := NewLibWallet(w)
 	if err != nil {
 		return nil, err
 	}
 
-	libWallet.Properties = properties
-	mw.wallets[properties.ID] = libWallet
+	libWallet.Wallet = w
+	mw.wallets[w.ID] = libWallet
 
 	err = libWallet.CreateWallet(privatePassphrase, seedMnemonic)
 	if err != nil {
@@ -337,7 +343,7 @@ func (mw *MultiWallet) WalletNameExists(walletName string) (bool, error) {
 		return false, errors.E(ErrReservedWalletName)
 	}
 
-	err := mw.db.One("Name", walletName, &Properties{})
+	err := mw.db.One("Name", walletName, &Wallet{})
 	if err == nil {
 		return true, nil
 	} else if err != storm.ErrNotFound {
@@ -416,7 +422,7 @@ func (mw *MultiWallet) discoveredAccounts(walletID int) error {
 func (mw *MultiWallet) setNetworkBackend(netBakend wallet.NetworkBackend) {
 	for _, w := range mw.wallets {
 		if w.WalletOpened() {
-			w.wallet.SetNetworkBackend(netBakend)
+			w.Wallet.SetNetworkBackend(netBakend)
 		}
 	}
 }

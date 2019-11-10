@@ -43,7 +43,7 @@ func (mw *MultiWallet) VerifySeed(walletID int, seedMnemonic string) error {
 
 	if w.Seed == seedMnemonic {
 		w.Seed = ""
-		return translateError(mw.db.Save(w.Properties))
+		return translateError(mw.db.Save(w.Wallet))
 	}
 
 	return errors.New(ErrInvalid)
@@ -68,7 +68,7 @@ func (lw *LibWallet) CreateWallet(privatePassphrase string, seedMnemonic string)
 		log.Error(err)
 		return err
 	}
-	lw.wallet = w
+	lw.Wallet.Wallet = w
 
 	log.Info("Created Wallet")
 	return nil
@@ -84,7 +84,7 @@ func (lw *LibWallet) CreateWatchingOnlyWallet(publicPassphrase, extendedPublicKe
 		log.Error(err)
 		return err
 	}
-	lw.wallet = w
+	lw.Wallet.Wallet = w
 
 	log.Info("Created Watching Only Wallet")
 	return nil
@@ -112,12 +112,12 @@ func (lw *LibWallet) OpenWallet(pubPass []byte) error {
 		log.Error(err)
 		return translateError(err)
 	}
-	lw.wallet = w
+	lw.Wallet.Wallet = w
 	return nil
 }
 
 func (lw *LibWallet) WalletOpened() bool {
-	return lw.wallet != nil
+	return lw.Wallet != nil
 }
 
 func (lw *LibWallet) UnlockWallet(privPass []byte) error {
@@ -142,13 +142,13 @@ func (lw *LibWallet) UnlockWallet(privPass []byte) error {
 }
 
 func (lw *LibWallet) LockWallet() {
-	if !lw.wallet.Locked() {
-		lw.wallet.Lock()
+	if !lw.Wallet.Locked() {
+		lw.Wallet.Lock()
 	}
 }
 
 func (lw *LibWallet) IsLocked() bool {
-	return lw.wallet.Locked()
+	return lw.Wallet.Locked()
 }
 
 func (lw *LibWallet) ChangePrivatePassphrase(oldPass []byte, newPass []byte) error {
@@ -163,7 +163,7 @@ func (lw *LibWallet) ChangePrivatePassphrase(oldPass []byte, newPass []byte) err
 	}()
 
 	ctx, _ := lw.contextWithShutdownCancel()
-	err := lw.wallet.ChangePrivatePassphrase(ctx, oldPass, newPass)
+	err := lw.Wallet.ChangePrivatePassphrase(ctx, oldPass, newPass)
 	if err != nil {
 		return translateError(err)
 	}
@@ -189,7 +189,7 @@ func (lw *LibWallet) ChangePublicPassphrase(oldPass []byte, newPass []byte) erro
 	}
 
 	ctx, _ := lw.contextWithShutdownCancel()
-	err := lw.wallet.ChangePublicPassphrase(ctx, oldPass, newPass)
+	err := lw.Wallet.ChangePublicPassphrase(ctx, oldPass, newPass)
 	if err != nil {
 		return translateError(err)
 	}
@@ -235,7 +235,7 @@ func (mw *MultiWallet) RenameWallet(walletID int, newName string) error {
 
 	w, ok := mw.wallets[walletID]
 	if ok {
-		err := mw.db.One("Name", newName, &Properties{})
+		err := mw.db.One("Name", newName, &Wallet{})
 		if err != nil {
 			if err != storm.ErrNotFound {
 				return translateError(err)
@@ -245,7 +245,7 @@ func (mw *MultiWallet) RenameWallet(walletID int, newName string) error {
 		}
 
 		w.Name = newName
-		return mw.db.Save(w.Properties) // update WalletName field
+		return mw.db.Save(w.Wallet) // update WalletName field
 	}
 
 	return errors.New(ErrNotExist)
@@ -263,7 +263,7 @@ func (mw *MultiWallet) DeleteWallet(walletID int, privPass []byte) error {
 			return translateError(err)
 		}
 
-		err = mw.db.DeleteStruct(w.Properties)
+		err = mw.db.DeleteStruct(w.Wallet)
 		if err != nil {
 			return translateError(err)
 		}
