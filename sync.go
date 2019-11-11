@@ -199,7 +199,7 @@ func (mw *MultiWallet) SpvSync() error {
 
 	wallets := make(map[int]*wallet.Wallet)
 	for id, w := range mw.wallets {
-		wallets[id] = asWallet(w.Wallet.Wallet)
+		wallets[id] = asWallet(w.wallet.Wallet)
 	}
 
 	syncer := spv.NewSyncer(wallets, mw.activeNet.Params, lp, true)
@@ -304,7 +304,7 @@ func (mw *MultiWallet) ConnectedPeers() int32 {
 }
 
 func (lw *LibWallet) RescanBlocks() error {
-	netBackend, err := lw.Wallet.NetworkBackend()
+	netBackend, err := lw.wallet.NetworkBackend()
 	if err != nil {
 		return errors.E(ErrNotConnected)
 	}
@@ -322,7 +322,7 @@ func (lw *LibWallet) RescanBlocks() error {
 		ctx := lw.shutdownContext()
 
 		progress := make(chan wallet.RescanProgress, 1)
-		go lw.Wallet.RescanProgressFromHeight(ctx, netBackend, 0, progress)
+		go lw.wallet.RescanProgressFromHeight(ctx, netBackend, 0, progress)
 
 		rescanStartTime := time.Now().Unix()
 
@@ -408,27 +408,27 @@ func (mw *MultiWallet) GetLowestBlock() *BlockInfo {
 }
 
 func (lw *LibWallet) GetBestBlock() int32 {
-	if lw.Wallet == nil {
+	if lw.wallet == nil {
 		// This method is sometimes called after a wallet is deleted and causes crash.
 		log.Error("Attempting to read best block height without a loaded wallet.")
 		return 0
 	}
 
-	_, height := lw.Wallet.MainChainTip(lw.shutdownContext())
+	_, height := lw.wallet.MainChainTip(lw.shutdownContext())
 	return height
 }
 
 func (lw *LibWallet) GetBestBlockTimeStamp() int64 {
-	if lw.Wallet == nil {
+	if lw.wallet == nil {
 		// This method is sometimes called after a wallet is deleted and causes crash.
 		log.Error("Attempting to read best block timestamp without a loaded wallet.")
 		return 0
 	}
 
 	ctx := lw.shutdownContext()
-	_, height := lw.Wallet.MainChainTip(ctx)
+	_, height := lw.wallet.MainChainTip(ctx)
 	identifier := wallet.NewBlockIdentifierFromHeight(height)
-	info, err := lw.Wallet.BlockInfo(ctx, identifier)
+	info, err := lw.wallet.BlockInfo(ctx, identifier)
 	if err != nil {
 		log.Error(err)
 		return 0

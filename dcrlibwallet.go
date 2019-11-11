@@ -27,7 +27,7 @@ type Wallet struct {
 }
 
 type LibWallet struct {
-	*Wallet
+	wallet *Wallet
 
 	activeNet    *netparams.Params
 	walletLoader *loader.Loader
@@ -50,7 +50,7 @@ func NewLibWallet(w *Wallet) (*LibWallet, error) {
 	}
 
 	lw := &LibWallet{
-		Wallet:    w,
+		wallet:    w,
 		activeNet: activeNet,
 	}
 

@@ -16,7 +16,7 @@ func (lw *LibWallet) SignMessage(passphrase []byte, address string, message stri
 	}()
 
 	ctx := lw.shutdownContext()
-	err := lw.Wallet.Unlock(ctx, passphrase, lock)
+	err := lw.wallet.Unlock(ctx, passphrase, lock)
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -37,7 +37,7 @@ func (lw *LibWallet) SignMessage(passphrase []byte, address string, message stri
 		return nil, errors.New(ErrInvalidAddress)
 	}
 
-	sig, err = lw.Wallet.SignMessage(ctx, message, addr)
+	sig, err = lw.wallet.SignMessage(ctx, message, addr)
 	if err != nil {
 		return nil, translateError(err)
 	}

@@ -158,7 +158,7 @@ func (mw *MultiWallet) loadWallets() (int, error) {
 func (mw *MultiWallet) GetBackupsNeeded() int32 {
 	var backupsNeeded int32
 	for _, w := range mw.wallets {
-		if w.WalletOpened() && w.Seed != "" {
+		if w.WalletOpened() && w.wallet.Seed != "" {
 			backupsNeeded++
 		}
 	}
@@ -174,7 +174,7 @@ func (mw *MultiWallet) OpenedWalletsRaw() []int {
 	wallets := make([]int, 0)
 	for _, w := range mw.wallets {
 		if w.WalletOpened() {
-			wallets = append(wallets, w.ID)
+			wallets = append(wallets, w.wallet.ID)
 		}
 	}
 
@@ -324,7 +324,7 @@ func (mw *MultiWallet) createWallet(w *Wallet, seedMnemonic, privatePassphrase s
 		return nil, err
 	}
 
-	libWallet.Wallet = w
+	libWallet.wallet = w
 	mw.wallets[w.ID] = libWallet
 
 	err = libWallet.CreateWallet(privatePassphrase, seedMnemonic)
@@ -409,20 +409,20 @@ func (mw *MultiWallet) discoveredAccounts(walletID int) error {
 		return err
 	}
 
-	w.DiscoveredAccounts = true
+	w.wallet.DiscoveredAccounts = true
 	err = mw.db.Save(&w)
 	if err != nil {
 		return err
 	}
 
-	mw.wallets[walletID].DiscoveredAccounts = true
+	mw.wallets[walletID].wallet.DiscoveredAccounts = true
 	return nil
 }
 
 func (mw *MultiWallet) setNetworkBackend(netBakend wallet.NetworkBackend) {
 	for _, w := range mw.wallets {
 		if w.WalletOpened() {
-			w.Wallet.SetNetworkBackend(netBakend)
+			w.wallet.SetNetworkBackend(netBakend)
 		}
 	}
 }

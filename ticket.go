@@ -22,18 +22,18 @@ import (
 // StakeInfo returns information about wallet stakes, tickets and their statuses.
 func (lw *LibWallet) StakeInfo() (*wallet.StakeInfoData, error) {
 	ctx := lw.shutdownContext()
-	if n, err := lw.Wallet.NetworkBackend(); err == nil {
+	if n, err := lw.wallet.NetworkBackend(); err == nil {
 		var rpc *dcrd.RPC
 		if client, ok := n.(*dcrd.RPC); ok {
 			rpc = client
 		}
 
 		if rpc != nil {
-			return lw.Wallet.StakeInfoPrecise(ctx, rpc)
+			return lw.wallet.StakeInfoPrecise(ctx, rpc)
 		}
 	}
 
-	return lw.Wallet.StakeInfo(ctx)
+	return lw.wallet.StakeInfo(ctx)
 }
 
 func (lw *LibWallet) GetTickets(startingBlockHash, endingBlockHash []byte, targetCount int32) ([]*TicketInfo, error) {
@@ -130,7 +130,7 @@ func (lw *LibWallet) getTickets(req *GetTicketsRequest) (ticketInfos []*TicketIn
 	}
 
 	var rpc *dcrd.RPC
-	if n, err := lw.Wallet.NetworkBackend(); err == nil {
+	if n, err := lw.wallet.NetworkBackend(); err == nil {
 		if client, ok := n.(*dcrd.RPC); ok {
 			rpc = client
 		}
@@ -138,9 +138,9 @@ func (lw *LibWallet) getTickets(req *GetTicketsRequest) (ticketInfos []*TicketIn
 
 	ctx := lw.shutdownContext()
 	if rpc != nil {
-		err = lw.Wallet.GetTicketsPrecise(ctx, rpc, rangeFn, startBlock, endBlock)
+		err = lw.wallet.GetTicketsPrecise(ctx, rpc, rangeFn, startBlock, endBlock)
 	} else {
-		err = lw.Wallet.GetTickets(ctx, rangeFn, startBlock, endBlock)
+		err = lw.wallet.GetTickets(ctx, rangeFn, startBlock, endBlock)
 	}
 
 	return
@@ -149,9 +149,9 @@ func (lw *LibWallet) getTickets(req *GetTicketsRequest) (ticketInfos []*TicketIn
 // TicketPrice returns the price of a ticket for the next block, also known as the stake difficulty.
 // May be incorrect if blockchain sync is ongoing or if blockchain is not up-to-date.
 func (lw *LibWallet) TicketPrice(ctx context.Context) (*TicketPriceResponse, error) {
-	sdiff, err := lw.Wallet.NextStakeDifficulty(ctx)
+	sdiff, err := lw.wallet.NextStakeDifficulty(ctx)
 	if err == nil {
-		_, tipHeight := lw.Wallet.MainChainTip(ctx)
+		_, tipHeight := lw.wallet.MainChainTip(ctx)
 		resp := &TicketPriceResponse{
 			TicketPrice: int64(sdiff),
 			Height:      tipHeight,
@@ -159,7 +159,7 @@ func (lw *LibWallet) TicketPrice(ctx context.Context) (*TicketPriceResponse, err
 		return resp, nil
 	}
 
-	n, err := lw.Wallet.NetworkBackend()
+	n, err := lw.wallet.NetworkBackend()
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +169,7 @@ func (lw *LibWallet) TicketPrice(ctx context.Context) (*TicketPriceResponse, err
 		return nil, translateError(err)
 	}
 
-	_, tipHeight := lw.Wallet.MainChainTip(ctx)
+	_, tipHeight := lw.wallet.MainChainTip(ctx)
 	return &TicketPriceResponse{
 		TicketPrice: int64(ticketPrice),
 		Height:      int32(tipHeight),
@@ -226,7 +226,7 @@ func (lw *LibWallet) PurchaseTickets(ctx context.Context, request *PurchaseTicke
 
 	expiry := int32(request.Expiry)
 	txFee := dcrutil.Amount(request.TxFee)
-	ticketFee := lw.Wallet.TicketFeeIncrement()
+	ticketFee := lw.wallet.TicketFeeIncrement()
 
 	// Set the ticket fee if specified
 	if request.TicketFee > 0 {
@@ -241,7 +241,7 @@ func (lw *LibWallet) PurchaseTickets(ctx context.Context, request *PurchaseTicke
 	defer func() {
 		lock <- time.Time{} // send matters, not the value
 	}()
-	err = lw.Wallet.Unlock(ctx, request.Passphrase, lock)
+	err = lw.wallet.Unlock(ctx, request.Passphrase, lock)
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -254,12 +254,12 @@ func (lw *LibWallet) PurchaseTickets(ctx context.Context, request *PurchaseTicke
 		Expiry:        expiry,
 	}
 
-	netBackend, err := lw.Wallet.NetworkBackend()
+	netBackend, err := lw.wallet.NetworkBackend()
 	if err != nil {
 		return nil, err
 	}
 
-	purchasedTickets, err := lw.Wallet.PurchaseTicketsContext(ctx, netBackend, purchaseTicketsRequest)
+	purchasedTickets, err := lw.wallet.PurchaseTicketsContext(ctx, netBackend, purchaseTicketsRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to purchase tickets: %s", err.Error())
 	}
@@ -299,8 +299,8 @@ func (lw *LibWallet) UpdateTicketPurchaseRequestWithVSPInfo(vspHost string, requ
 
 	// unlock wallet and import the decoded script
 	lock := make(chan time.Time, 1)
-	lw.Wallet.Unlock(ctx, request.Passphrase, lock)
-	err = lw.Wallet.ImportScript(ctx, rs)
+	lw.wallet.Unlock(ctx, request.Passphrase, lock)
+	err = lw.wallet.ImportScript(ctx, rs)
 	lock <- time.Time{}
 	if err != nil && !errors.Is(errors.Exist, err) {
 		return fmt.Errorf("error importing vsp redeem script: %s", err.Error())
