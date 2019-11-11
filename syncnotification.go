@@ -65,8 +65,8 @@ func (mw *MultiWallet) fetchHeadersStarted(peerInitialHeight int32) {
 		return
 	}
 
-	for _, w := range mw.wallets {
-		w.waiting = true
+	for _, lw := range mw.libWallets {
+		lw.waiting = true
 	}
 
 	mw.activeSyncData.syncStage = HeadersFetchSyncStage
@@ -92,9 +92,9 @@ func (mw *MultiWallet) fetchHeadersProgress(fetchedHeadersCount int32, lastHeade
 		return
 	}
 
-	for _, w := range mw.wallets {
-		if w.GetBestBlock() <= fetchedHeadersCount {
-			w.waiting = false
+	for _, lw := range mw.libWallets {
+		if lw.GetBestBlock() <= fetchedHeadersCount {
+			lw.waiting = false
 		}
 	}
 
@@ -329,8 +329,8 @@ func (mw *MultiWallet) discoverAddressesFinished(walletID int) {
 	close(mw.activeSyncData.addressDiscoveryCompleted)
 	mw.activeSyncData.addressDiscoveryCompleted = nil
 
-	w := mw.wallets[walletID]
-	loadedWallet, loaded := w.walletLoader.LoadedWallet()
+	lw := mw.libWallets[walletID]
+	loadedWallet, loaded := lw.walletLoader.LoadedWallet()
 	if loaded { // loaded should always be through
 		if !loadedWallet.Locked() {
 			loadedWallet.Lock()
@@ -381,10 +381,10 @@ func (mw *MultiWallet) rescanProgress(walletID int, rescannedThrough int32) {
 		return
 	}
 
-	w := mw.wallets[walletID]
+	lw := mw.libWallets[walletID]
 
 	mw.activeSyncData.headersRescanProgress.WalletID = walletID
-	mw.activeSyncData.headersRescanProgress.TotalHeadersToScan = w.GetBestBlock()
+	mw.activeSyncData.headersRescanProgress.TotalHeadersToScan = lw.GetBestBlock()
 
 	rescanRate := float64(rescannedThrough) / float64(mw.activeSyncData.headersRescanProgress.TotalHeadersToScan)
 	mw.activeSyncData.headersRescanProgress.RescanProgress = int32(math.Round(rescanRate * 100))
@@ -517,8 +517,8 @@ func (mw *MultiWallet) resetSyncData() {
 	mw.syncData.synced = false
 	mw.activeSyncData = nil // to be reintialized on next sync
 
-	for _, w := range mw.wallets {
-		w.waiting = true
+	for _, lw := range mw.libWallets {
+		lw.waiting = true
 	}
 }
 
@@ -526,9 +526,9 @@ func (mw *MultiWallet) synced(walletID int, synced bool) {
 	mw.syncData.mu.RLock()
 	defer mw.syncData.mu.RUnlock()
 
-	w := mw.wallets[walletID]
-	w.synced = synced
-	w.syncing = false
+	lw := mw.libWallets[walletID]
+	lw.synced = synced
+	lw.syncing = false
 	if mw.OpenedWalletsCount() == mw.SyncedWalletsCount() {
 		mw.syncData.syncing = false
 		mw.syncData.synced = true
@@ -545,9 +545,9 @@ func (mw *MultiWallet) synced(walletID int, synced bool) {
 		// begin indexing transactions after sync is completed,
 		// syncProgressListeners.OnSynced() will be invoked after transactions are indexed
 		var waitForIndexing sync.WaitGroup
-		waitForIndexing.Add(len(mw.wallets))
-		for _, w := range mw.wallets {
-			w.IndexTransactions(&waitForIndexing)
+		waitForIndexing.Add(len(mw.libWallets))
+		for _, lw := range mw.libWallets {
+			lw.IndexTransactions(&waitForIndexing)
 		}
 
 		go func() {

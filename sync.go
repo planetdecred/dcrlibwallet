@@ -198,8 +198,8 @@ func (mw *MultiWallet) SpvSync() error {
 	mw.initActiveSyncData()
 
 	wallets := make(map[int]*wallet.Wallet)
-	for id, w := range mw.wallets {
-		wallets[id] = asWallet(w.wallet.Wallet)
+	for id, lw := range mw.libWallets {
+		wallets[id] = asWallet(lw.wallet.Wallet)
 	}
 
 	syncer := spv.NewSyncer(wallets, mw.activeNet.Params, lp, true)
@@ -269,7 +269,7 @@ func (mw *MultiWallet) CancelSync() {
 		log.Info("Sync fully canceled.")
 	}
 
-	for _, libWallet := range mw.wallets {
+	for _, libWallet := range mw.libWallets {
 		loadedWallet, walletLoaded := libWallet.walletLoader.LoadedWallet()
 		if !walletLoaded {
 			continue
@@ -375,15 +375,15 @@ func (mw *MultiWallet) IsScanning() bool {
 func (mw *MultiWallet) GetBestBlock() *BlockInfo {
 	var bestBlock int32 = -1
 	var blockInfo *BlockInfo
-	for _, w := range mw.wallets {
-		if !w.WalletOpened() {
+	for _, lw := range mw.libWallets {
+		if !lw.WalletOpened() {
 			continue
 		}
 
-		walletBestBLock := w.GetBestBlock()
+		walletBestBLock := lw.GetBestBlock()
 		if walletBestBLock > bestBlock || bestBlock == -1 {
 			bestBlock = walletBestBLock
-			blockInfo = &BlockInfo{Height: bestBlock, Timestamp: w.GetBestBlockTimeStamp()}
+			blockInfo = &BlockInfo{Height: bestBlock, Timestamp: lw.GetBestBlockTimeStamp()}
 		}
 	}
 
@@ -393,14 +393,14 @@ func (mw *MultiWallet) GetBestBlock() *BlockInfo {
 func (mw *MultiWallet) GetLowestBlock() *BlockInfo {
 	var lowestBlock int32 = -1
 	var blockInfo *BlockInfo
-	for _, w := range mw.wallets {
-		if !w.WalletOpened() {
+	for _, lw := range mw.libWallets {
+		if !lw.WalletOpened() {
 			continue
 		}
-		walletBestBLock := w.GetBestBlock()
+		walletBestBLock := lw.GetBestBlock()
 		if walletBestBLock < lowestBlock || lowestBlock == -1 {
 			lowestBlock = walletBestBLock
-			blockInfo = &BlockInfo{Height: lowestBlock, Timestamp: w.GetBestBlockTimeStamp()}
+			blockInfo = &BlockInfo{Height: lowestBlock, Timestamp: lw.GetBestBlockTimeStamp()}
 		}
 	}
 
@@ -438,8 +438,8 @@ func (lw *LibWallet) GetBestBlockTimeStamp() int64 {
 
 func (mw *MultiWallet) GetLowestBlockTimestamp() int64 {
 	var timestamp int64 = -1
-	for _, w := range mw.wallets {
-		bestBlockTimestamp := w.GetBestBlockTimeStamp()
+	for _, lw := range mw.libWallets {
+		bestBlockTimestamp := lw.GetBestBlockTimeStamp()
 		if bestBlockTimestamp < timestamp || timestamp == -1 {
 			timestamp = bestBlockTimestamp
 		}

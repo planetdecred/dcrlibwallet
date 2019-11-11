@@ -84,8 +84,8 @@ func (lw *LibWallet) GetTransactionsRaw(offset, limit, txFilter int32, newestFir
 
 func (mw *MultiWallet) GetTransactions(offset, limit, txFilter int32, newestFirst bool) (string, error) {
 	transactions := make([]Transaction, 0)
-	for _, w := range mw.wallets {
-		walletTransactions, err := w.GetTransactionsRaw(offset, limit, txFilter, newestFirst)
+	for _, lw := range mw.libWallets {
+		walletTransactions, err := lw.GetTransactionsRaw(offset, limit, txFilter, newestFirst)
 		if err != nil {
 			return "", nil
 		}

@@ -28,7 +28,7 @@ func (lw *LibWallet) GetWalletID() int {
 }
 
 func (lw *LibWallet) GetSpendingPassphraseType() int32 {
-	return lw.wallet.SpendingPassphraseType
+	return lw.wallet.PrivatePassphraseType
 }
 
 func (lw *LibWallet) GetWalletSeed() string {
@@ -36,14 +36,14 @@ func (lw *LibWallet) GetWalletSeed() string {
 }
 
 func (mw *MultiWallet) VerifySeed(walletID int, seedMnemonic string) error {
-	w, ok := mw.wallets[walletID]
+	lw, ok := mw.libWallets[walletID]
 	if !ok {
 		return errors.New(ErrNotExist)
 	}
 
-	if w.wallet.Seed == seedMnemonic {
-		w.wallet.Seed = ""
-		return translateError(mw.db.Save(w.wallet))
+	if lw.wallet.Seed == seedMnemonic {
+		lw.wallet.Seed = ""
+		return translateError(mw.db.Save(lw.wallet))
 	}
 
 	return errors.New(ErrInvalid)
@@ -233,7 +233,7 @@ func (mw *MultiWallet) RenameWallet(walletID int, newName string) error {
 		return errors.E(ErrReservedWalletName)
 	}
 
-	w, ok := mw.wallets[walletID]
+	lw, ok := mw.libWallets[walletID]
 	if ok {
 		err := mw.db.One("Name", newName, &Wallet{})
 		if err != nil {
@@ -244,8 +244,8 @@ func (mw *MultiWallet) RenameWallet(walletID int, newName string) error {
 			return errors.New(ErrExist)
 		}
 
-		w.wallet.Name = newName
-		return mw.db.Save(w.wallet) // update WalletName field
+		lw.wallet.Name = newName
+		return mw.db.Save(lw.wallet) // update WalletName field
 	}
 
 	return errors.New(ErrNotExist)
@@ -256,19 +256,19 @@ func (mw *MultiWallet) DeleteWallet(walletID int, privPass []byte) error {
 		return errors.New(ErrSyncAlreadyInProgress)
 	}
 
-	w, ok := mw.wallets[walletID]
+	lw, ok := mw.libWallets[walletID]
 	if ok {
-		err := w.DeleteWallet(privPass)
+		err := lw.DeleteWallet(privPass)
 		if err != nil {
 			return translateError(err)
 		}
 
-		err = mw.db.DeleteStruct(w.wallet)
+		err = mw.db.DeleteStruct(lw.wallet)
 		if err != nil {
 			return translateError(err)
 		}
 
-		delete(mw.wallets, walletID)
+		delete(mw.libWallets, walletID)
 		return nil
 	}
 

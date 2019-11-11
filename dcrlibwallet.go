@@ -18,12 +18,12 @@ type Wallet struct {
 	netType        string
 	walletDbDriver string
 
-	ID                     int    `storm:"id,increment"`
-	Name                   string `storm:"unique"`
-	DataDir                string
-	Seed                   string
-	SpendingPassphraseType int32
-	DiscoveredAccounts     bool
+	ID                    int    `storm:"id,increment"`
+	Name                  string `storm:"unique"`
+	DataDir               string
+	Seed                  string
+	PrivatePassphraseType int32
+	DiscoveredAccounts    bool
 }
 
 type LibWallet struct {
