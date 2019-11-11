@@ -44,15 +44,15 @@ const (
 func (mw *MultiWallet) SaveUserConfigValue(key string, value interface{}) {
 	err := mw.configDB.Set(userConfigBucketName, key, value)
 	if err != nil {
-		log.Errorf("error reading config key: %s, value: %v", key, err)
+		log.Errorf("error setting config value for key: %s, error: %v", key, err)
 	}
 }
 
-func (mw *MultiWallet) ReadUserConfigValue(key string, valueOut interface{}) (interface{}, error) {
+func (mw *MultiWallet) ReadUserConfigValue(key string, valueOut interface{}) (error) {
 	err := mw.configDB.Get(userConfigBucketName, key, valueOut)
 	if err != nil {
 		if err != storm.ErrNotFound {
-			log.Errorf("error reading config key: %s, value: %v", key, err)
+			log.Errorf("error reading config value for key: %s, error: %v", key, err)
 		}
 		return nil, err
 	}

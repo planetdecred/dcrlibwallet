@@ -192,8 +192,8 @@ func (mw *MultiWallet) OpenedWalletsCount() int32 {
 	return int32(len(mw.OpenedWalletsRaw()))
 }
 
-func (mw *MultiWallet) SyncedWalletCount() int32 {
-	var syncedWallet int32
+func (mw *MultiWallet) SyncedWalletsCount() int32 {
+	var syncedWallets int32
 	for _, w := range mw.wallets {
 		if w.WalletOpened() && w.synced {
 			syncedWallet++
@@ -242,7 +242,7 @@ func (mw *MultiWallet) CreateWatchOnlyWallet(walletName string, extendedPublicKe
 		return nil, err
 	}
 
-	homeDir := filepath.Join(mw.rootDir, strconv.Itoa(w.ID))
+	walletDataDir := filepath.Join(mw.rootDir, strconv.Itoa(w.ID))
 	os.MkdirAll(homeDir, os.ModePerm) // create wallet dir
 
 	w.DataDir = homeDir
