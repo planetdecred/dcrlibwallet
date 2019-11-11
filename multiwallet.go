@@ -196,11 +196,11 @@ func (mw *MultiWallet) SyncedWalletsCount() int32 {
 	var syncedWallets int32
 	for _, w := range mw.wallets {
 		if w.WalletOpened() && w.synced {
-			syncedWallet++
+			syncedWallets++
 		}
 	}
 
-	return syncedWallet
+	return syncedWallets
 }
 
 func (mw *MultiWallet) CreateNewWallet(privatePassphrase string, spendingPassphraseType int32) (*LibWallet, error) {
@@ -243,9 +243,9 @@ func (mw *MultiWallet) CreateWatchOnlyWallet(walletName string, extendedPublicKe
 	}
 
 	walletDataDir := filepath.Join(mw.rootDir, strconv.Itoa(w.ID))
-	os.MkdirAll(homeDir, os.ModePerm) // create wallet dir
+	os.MkdirAll(walletDataDir, os.ModePerm) // create wallet dir
 
-	w.DataDir = homeDir
+	w.DataDir = walletDataDir
 	err = mw.db.Save(w) // update database with complete wallet information
 	if err != nil {
 		return nil, err

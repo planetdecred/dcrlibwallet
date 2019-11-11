@@ -529,7 +529,7 @@ func (mw *MultiWallet) synced(walletID int, synced bool) {
 	w := mw.wallets[walletID]
 	w.synced = synced
 	w.syncing = false
-	if mw.OpenedWalletsCount() == mw.SyncedWalletCount() {
+	if mw.OpenedWalletsCount() == mw.SyncedWalletsCount() {
 		mw.syncData.syncing = false
 		mw.syncData.synced = true
 		mw.activeSyncData = nil // to be reintialized on next sync

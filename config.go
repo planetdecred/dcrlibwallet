@@ -48,15 +48,15 @@ func (mw *MultiWallet) SaveUserConfigValue(key string, value interface{}) {
 	}
 }
 
-func (mw *MultiWallet) ReadUserConfigValue(key string, valueOut interface{}) (error) {
+func (mw *MultiWallet) ReadUserConfigValue(key string, valueOut interface{}) error {
 	err := mw.configDB.Get(userConfigBucketName, key, valueOut)
 	if err != nil {
 		if err != storm.ErrNotFound {
 			log.Errorf("error reading config value for key: %s, error: %v", key, err)
 		}
-		return nil, err
+		return err
 	}
-	return valueOut, nil
+	return nil
 }
 
 func (mw *MultiWallet) SetBoolConfigValueForKey(key string, value bool) {
@@ -84,47 +84,37 @@ func (mw *MultiWallet) SetStringConfigValueForKey(key, value string) {
 }
 
 func (mw *MultiWallet) ReadBoolConfigValueForKey(key string, defaultValue bool) (valueOut bool) {
-	_, err := mw.ReadUserConfigValue(key, &valueOut)
-	if err == storm.ErrNotFound {
+	if err := mw.ReadUserConfigValue(key, &valueOut); err == storm.ErrNotFound {
 		valueOut = defaultValue
 	}
-
 	return
 }
 
 func (mw *MultiWallet) ReadDoubleConfigValueForKey(key string, defaultValue float64) (valueOut float64) {
-	_, err := mw.ReadUserConfigValue(key, &valueOut)
-	if err == storm.ErrNotFound {
+	if err := mw.ReadUserConfigValue(key, &valueOut); err == storm.ErrNotFound {
 		valueOut = defaultValue
 	}
-
 	return
 }
 
 func (mw *MultiWallet) ReadIntConfigValueForKey(key string, defaultValue int) (valueOut int) {
-	_, err := mw.ReadUserConfigValue(key, &valueOut)
-	if err == storm.ErrNotFound {
+	if err := mw.ReadUserConfigValue(key, &valueOut); err == storm.ErrNotFound {
 		valueOut = defaultValue
 	}
-
 	return
 }
 
 func (mw *MultiWallet) ReadInt32ConfigValueForKey(key string, defaultValue int32) (valueOut int32) {
-	_, err := mw.ReadUserConfigValue(key, &valueOut)
-	if err == storm.ErrNotFound {
+	if err := mw.ReadUserConfigValue(key, &valueOut); err == storm.ErrNotFound {
 		valueOut = defaultValue
 	}
-
 	return
 }
 
 func (mw *MultiWallet) ReadLongConfigValueForKey(key string, defaultValue int64) (valueOut int64) {
-	_, err := mw.ReadUserConfigValue(key, &valueOut)
-	if err == storm.ErrNotFound {
+	if err := mw.ReadUserConfigValue(key, &valueOut); err == storm.ErrNotFound {
 		valueOut = defaultValue
 	}
-
 	return
 }
 
