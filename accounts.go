@@ -49,6 +49,15 @@ func (lw *LibWallet) GetAccountsRaw(requiredConfirmations int32) (*Accounts, err
 	}, nil
 }
 
+func (accounts *Accounts) Next() *Account {
+	if accounts.Iter.CurrentIndex < len(accounts.Acc) {
+		account := accounts.Acc[accounts.Iter.CurrentIndex]
+		accounts.Iter.CurrentIndex++
+		return account
+	}
+	return nil
+}
+
 func (lw *LibWallet) GetAccountBalance(accountNumber int32, requiredConfirmations int32) (*Balance, error) {
 	balance, err := lw.wallet.CalculateAccountBalance(uint32(accountNumber), requiredConfirmations)
 	if err != nil {

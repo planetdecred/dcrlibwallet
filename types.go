@@ -40,6 +40,10 @@ type Account struct {
 	ImportedKeyCount int32
 }
 
+type AccountIterator struct {
+	CurrentIndex int
+}
+
 type Accounts struct {
 	Count              int
 	ErrorMessage       string
@@ -48,6 +52,7 @@ type Accounts struct {
 	Acc                []*Account
 	CurrentBlockHash   []byte
 	CurrentBlockHeight int32
+	Iter               *AccountIterator
 }
 
 /** begin sync-related types */
