@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	spv "github.com/raedahgroup/dcrlibwallet/spv"
+	"github.com/raedahgroup/dcrlibwallet/spv"
 )
 
 const (
@@ -47,9 +47,9 @@ func (mw *MultiWallet) handlePeerCountUpdate(peerCount int32) {
 
 	if mw.syncData.showLogs && mw.syncData.syncing {
 		if peerCount == 1 {
-			log.Infof("Connected to %d peer on %s.\n", peerCount, mw.activeNet.Name)
+			log.Infof("Connected to %d peer on %s.\n", peerCount, mw.chainParams.Name)
 		} else {
-			log.Infof("Connected to %d peers on %s.\n", peerCount, mw.activeNet.Name)
+			log.Infof("Connected to %d peers on %s.\n", peerCount, mw.chainParams.Name)
 		}
 	}
 }
@@ -65,8 +65,8 @@ func (mw *MultiWallet) fetchHeadersStarted(peerInitialHeight int32) {
 		return
 	}
 
-	for _, lw := range mw.libWallets {
-		lw.waiting = true
+	for _, wallet := range mw.wallets {
+		wallet.waiting = true
 	}
 
 	mw.activeSyncData.syncStage = HeadersFetchSyncStage
@@ -92,9 +92,9 @@ func (mw *MultiWallet) fetchHeadersProgress(fetchedHeadersCount int32, lastHeade
 		return
 	}
 
-	for _, lw := range mw.libWallets {
-		if lw.GetBestBlock() <= fetchedHeadersCount {
-			lw.waiting = false
+	for _, wallet := range mw.wallets {
+		if wallet.GetBestBlock() <= fetchedHeadersCount {
+			wallet.waiting = false
 		}
 	}
 
@@ -329,8 +329,7 @@ func (mw *MultiWallet) discoverAddressesFinished(walletID int) {
 	close(mw.activeSyncData.addressDiscoveryCompleted)
 	mw.activeSyncData.addressDiscoveryCompleted = nil
 
-	lw := mw.libWallets[walletID]
-	loadedWallet, loaded := lw.walletLoader.LoadedWallet()
+	loadedWallet, loaded := mw.wallets[walletID].loader.LoadedWallet()
 	if loaded { // loaded should always be through
 		if !loadedWallet.Locked() {
 			loadedWallet.Lock()
@@ -381,10 +380,10 @@ func (mw *MultiWallet) rescanProgress(walletID int, rescannedThrough int32) {
 		return
 	}
 
-	lw := mw.libWallets[walletID]
+	wallet := mw.wallets[walletID]
 
 	mw.activeSyncData.headersRescanProgress.WalletID = walletID
-	mw.activeSyncData.headersRescanProgress.TotalHeadersToScan = lw.GetBestBlock()
+	mw.activeSyncData.headersRescanProgress.TotalHeadersToScan = wallet.GetBestBlock()
 
 	rescanRate := float64(rescannedThrough) / float64(mw.activeSyncData.headersRescanProgress.TotalHeadersToScan)
 	mw.activeSyncData.headersRescanProgress.RescanProgress = int32(math.Round(rescanRate * 100))
@@ -517,8 +516,8 @@ func (mw *MultiWallet) resetSyncData() {
 	mw.syncData.synced = false
 	mw.activeSyncData = nil // to be reintialized on next sync
 
-	for _, lw := range mw.libWallets {
-		lw.waiting = true
+	for _, wallet := range mw.wallets {
+		wallet.waiting = true
 	}
 }
 
@@ -526,9 +525,9 @@ func (mw *MultiWallet) synced(walletID int, synced bool) {
 	mw.syncData.mu.RLock()
 	defer mw.syncData.mu.RUnlock()
 
-	lw := mw.libWallets[walletID]
-	lw.synced = synced
-	lw.syncing = false
+	wallet := mw.wallets[walletID]
+	wallet.synced = synced
+	wallet.syncing = false
 	if mw.OpenedWalletsCount() == mw.SyncedWalletsCount() {
 		mw.syncData.syncing = false
 		mw.syncData.synced = true
@@ -545,9 +544,9 @@ func (mw *MultiWallet) synced(walletID int, synced bool) {
 		// begin indexing transactions after sync is completed,
 		// syncProgressListeners.OnSynced() will be invoked after transactions are indexed
 		var waitForIndexing sync.WaitGroup
-		waitForIndexing.Add(len(mw.libWallets))
-		for _, lw := range mw.libWallets {
-			lw.IndexTransactions(&waitForIndexing)
+		waitForIndexing.Add(len(mw.wallets))
+		for _, wallet := range mw.wallets {
+			wallet.IndexTransactions(&waitForIndexing)
 		}
 
 		go func() {

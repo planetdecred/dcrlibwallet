@@ -32,8 +32,8 @@ const (
 	TxTypeRevocation     = txhelper.TxTypeRevocation
 )
 
-func (lw *LibWallet) GetTransaction(txHash []byte) (string, error) {
-	transaction, err := lw.GetTransactionRaw(txHash)
+func (wallet *Wallet) GetTransaction(txHash []byte) (string, error) {
+	transaction, err := wallet.GetTransactionRaw(txHash)
 	if err != nil {
 		log.Error(err)
 		return "", err
@@ -47,24 +47,24 @@ func (lw *LibWallet) GetTransaction(txHash []byte) (string, error) {
 	return string(result), nil
 }
 
-func (lw *LibWallet) GetTransactionRaw(txHash []byte) (*Transaction, error) {
+func (wallet *Wallet) GetTransactionRaw(txHash []byte) (*Transaction, error) {
 	hash, err := chainhash.NewHash(txHash)
 	if err != nil {
 		log.Error(err)
 		return nil, err
 	}
 
-	txSummary, _, blockHash, err := lw.wallet.TransactionSummary(lw.shutdownContext(), hash)
+	txSummary, _, blockHash, err := wallet.internal.TransactionSummary(wallet.shutdownContext(), hash)
 	if err != nil {
 		log.Error(err)
 		return nil, err
 	}
 
-	return lw.decodeTransactionWithTxSummary(txSummary, blockHash)
+	return wallet.decodeTransactionWithTxSummary(txSummary, blockHash)
 }
 
-func (lw *LibWallet) GetTransactions(offset, limit, txFilter int32, newestFirst bool) (string, error) {
-	transactions, err := lw.GetTransactionsRaw(offset, limit, txFilter, newestFirst)
+func (wallet *Wallet) GetTransactions(offset, limit, txFilter int32, newestFirst bool) (string, error) {
+	transactions, err := wallet.GetTransactionsRaw(offset, limit, txFilter, newestFirst)
 	if err != nil {
 		return "", err
 	}
@@ -77,15 +77,15 @@ func (lw *LibWallet) GetTransactions(offset, limit, txFilter int32, newestFirst 
 	return string(jsonEncodedTransactions), nil
 }
 
-func (lw *LibWallet) GetTransactionsRaw(offset, limit, txFilter int32, newestFirst bool) (transactions []Transaction, err error) {
-	err = lw.txDB.Read(offset, limit, txFilter, newestFirst, &transactions)
+func (wallet *Wallet) GetTransactionsRaw(offset, limit, txFilter int32, newestFirst bool) (transactions []Transaction, err error) {
+	err = wallet.txDB.Read(offset, limit, txFilter, newestFirst, &transactions)
 	return
 }
 
 func (mw *MultiWallet) GetTransactions(offset, limit, txFilter int32, newestFirst bool) (string, error) {
 	transactions := make([]Transaction, 0)
-	for _, lw := range mw.libWallets {
-		walletTransactions, err := lw.GetTransactionsRaw(offset, limit, txFilter, newestFirst)
+	for _, wallet := range mw.wallets {
+		walletTransactions, err := wallet.GetTransactionsRaw(offset, limit, txFilter, newestFirst)
 		if err != nil {
 			return "", nil
 		}
@@ -110,8 +110,8 @@ func (mw *MultiWallet) GetTransactions(offset, limit, txFilter int32, newestFirs
 	return string(jsonEncodedTransactions), nil
 }
 
-func (lw *LibWallet) CountTransactions(txFilter int32) (int, error) {
-	return lw.txDB.Count(txFilter, &Transaction{})
+func (wallet *Wallet) CountTransactions(txFilter int32) (int, error) {
+	return wallet.txDB.Count(txFilter, &Transaction{})
 }
 
 func CompareTxFilter(txFilter int32, txType string, txDirection int32) bool {

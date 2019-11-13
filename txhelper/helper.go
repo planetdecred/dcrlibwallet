@@ -6,7 +6,7 @@ import (
 	"github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrdata/txhelpers"
-	wallet "github.com/decred/dcrwallet/wallet/v3"
+	"github.com/decred/dcrwallet/wallet/v3"
 )
 
 func MsgTxFeeSizeRate(transactionHex string) (msgTx *wire.MsgTx, fee dcrutil.Amount, size int, feeRate dcrutil.Amount, err error) {

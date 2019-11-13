@@ -4,16 +4,16 @@ import (
 	"sync"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrwallet/wallet/v3"
+	w "github.com/decred/dcrwallet/wallet/v3"
 	"github.com/raedahgroup/dcrlibwallet/txindex"
 )
 
-func (lw *LibWallet) IndexTransactions(waitGroup *sync.WaitGroup) error {
-	ctx := lw.shutdownContext()
+func (wallet *Wallet) IndexTransactions(waitGroup *sync.WaitGroup) error {
+	ctx := wallet.shutdownContext()
 
 	var totalIndex int32
 	var txEndHeight uint32
-	rangeFn := func(block *wallet.Block) (bool, error) {
+	rangeFn := func(block *w.Block) (bool, error) {
 		for _, transaction := range block.Transactions {
 
 			var blockHash *chainhash.Hash
@@ -24,14 +24,14 @@ func (lw *LibWallet) IndexTransactions(waitGroup *sync.WaitGroup) error {
 				blockHash = nil
 			}
 
-			tx, err := lw.decodeTransactionWithTxSummary(&transaction, blockHash)
+			tx, err := wallet.decodeTransactionWithTxSummary(&transaction, blockHash)
 			if err != nil {
 				return false, err
 			}
 
-			_, err = lw.txDB.SaveOrUpdate(&Transaction{}, tx)
+			_, err = wallet.txDB.SaveOrUpdate(&Transaction{}, tx)
 			if err != nil {
-				log.Errorf("[%d] Index tx replace tx err : %v", lw.wallet.ID, err)
+				log.Errorf("[%d] Index tx replace tx err : %v", wallet.ID, err)
 				return false, err
 			}
 
@@ -40,13 +40,13 @@ func (lw *LibWallet) IndexTransactions(waitGroup *sync.WaitGroup) error {
 
 		if block.Header != nil {
 			txEndHeight = block.Header.Height
-			err := lw.txDB.SaveLastIndexPoint(int32(txEndHeight))
+			err := wallet.txDB.SaveLastIndexPoint(int32(txEndHeight))
 			if err != nil {
-				log.Errorf("[%d] Set tx index end block height error: ", lw.wallet.ID, err)
+				log.Errorf("[%d] Set tx index end block height error: ", wallet.ID, err)
 				return false, err
 			}
 
-			log.Tracef("[%d] Index saved for transactions in block %d", lw.wallet.ID, txEndHeight)
+			log.Tracef("[%d] Index saved for transactions in block %d", wallet.ID, txEndHeight)
 		}
 
 		select {
@@ -57,29 +57,29 @@ func (lw *LibWallet) IndexTransactions(waitGroup *sync.WaitGroup) error {
 		}
 	}
 
-	beginHeight, err := lw.txDB.ReadIndexingStartBlock()
+	beginHeight, err := wallet.txDB.ReadIndexingStartBlock()
 	if err != nil {
-		log.Errorf("[%d] Get tx indexing start point error: %v", lw.wallet.ID, err)
+		log.Errorf("[%d] Get tx indexing start point error: %v", wallet.ID, err)
 		return err
 	}
 
-	endHeight := lw.GetBestBlock()
+	endHeight := wallet.GetBestBlock()
 
-	startBlock := wallet.NewBlockIdentifierFromHeight(beginHeight)
-	endBlock := wallet.NewBlockIdentifierFromHeight(endHeight)
+	startBlock := w.NewBlockIdentifierFromHeight(beginHeight)
+	endBlock := w.NewBlockIdentifierFromHeight(endHeight)
 
 	defer func() {
 		waitGroup.Done()
-		count, err := lw.txDB.Count(txindex.TxFilterAll, &Transaction{})
+		count, err := wallet.txDB.Count(txindex.TxFilterAll, &Transaction{})
 		if err != nil {
-			log.Errorf("[%d] Post-indexing tx count error :%v", lw.wallet.ID, err)
+			log.Errorf("[%d] Post-indexing tx count error :%v", wallet.ID, err)
 			return
 		}
-		log.Tracef("[%d] Transaction index finished at %d, %d transaction(s) indexed in total", lw.wallet.ID, txEndHeight, count)
+		log.Tracef("[%d] Transaction index finished at %d, %d transaction(s) indexed in total", wallet.ID, txEndHeight, count)
 	}()
 
 	waitGroup.Add(1)
-	log.Tracef("[%d] Indexing transactions start height: %d, end height: %d", lw.wallet.ID, beginHeight, endHeight)
-	go lw.wallet.GetTransactions(ctx, rangeFn, startBlock, endBlock)
+	log.Tracef("[%d] Indexing transactions start height: %d, end height: %d", wallet.ID, beginHeight, endHeight)
+	go wallet.internal.GetTransactions(ctx, rangeFn, startBlock, endBlock)
 	return nil
 }

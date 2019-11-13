@@ -38,18 +38,6 @@ const (
 	DefaultRequiredConfirmations = 2
 )
 
-func (lw *LibWallet) listenForShutdown() {
-
-	lw.cancelFuncs = make([]context.CancelFunc, 0)
-	lw.shuttingDown = make(chan bool)
-	go func() {
-		<-lw.shuttingDown
-		for _, cancel := range lw.cancelFuncs {
-			cancel()
-		}
-	}()
-}
-
 func (mw *MultiWallet) listenForShutdown() {
 
 	mw.cancelFuncs = make([]context.CancelFunc, 0)
@@ -62,14 +50,14 @@ func (mw *MultiWallet) listenForShutdown() {
 	}()
 }
 
-func (lw *LibWallet) contextWithShutdownCancel() (context.Context, context.CancelFunc) {
+func (wallet *Wallet) shutdownContextWithCancel() (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(context.Background())
-	lw.cancelFuncs = append(lw.cancelFuncs, cancel)
+	wallet.cancelFuncs = append(wallet.cancelFuncs, cancel)
 	return ctx, cancel
 }
 
-func (lw *LibWallet) shutdownContext() (ctx context.Context) {
-	ctx, _ = lw.contextWithShutdownCancel()
+func (wallet *Wallet) shutdownContext() (ctx context.Context) {
+	ctx, _ = wallet.shutdownContextWithCancel()
 	return
 }
 
@@ -208,7 +196,7 @@ func roundUp(n float64) int32 {
 }
 
 func (mw *MultiWallet) ValidateExtPubKey(extendedPubKey string) error {
-	_, err := hdkeychain.NewKeyFromString(extendedPubKey, mw.activeNet.Params)
+	_, err := hdkeychain.NewKeyFromString(extendedPubKey, mw.chainParams)
 	if err != nil {
 		if err == hdkeychain.ErrInvalidChild {
 			return errors.New(ErrUnusableSeed)

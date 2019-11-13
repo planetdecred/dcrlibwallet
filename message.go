@@ -6,22 +6,22 @@ import (
 	"github.com/decred/dcrd/dcrec"
 	"github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/dcrwallet/errors/v2"
-	"github.com/decred/dcrwallet/wallet/v3"
+	w "github.com/decred/dcrwallet/wallet/v3"
 )
 
-func (lw *LibWallet) SignMessage(passphrase []byte, address string, message string) ([]byte, error) {
+func (wallet *Wallet) SignMessage(passphrase []byte, address string, message string) ([]byte, error) {
 	lock := make(chan time.Time, 1)
 	defer func() {
 		lock <- time.Time{}
 	}()
 
-	ctx := lw.shutdownContext()
-	err := lw.wallet.Unlock(ctx, passphrase, lock)
+	ctx := wallet.shutdownContext()
+	err := wallet.internal.Unlock(ctx, passphrase, lock)
 	if err != nil {
 		return nil, translateError(err)
 	}
 
-	addr, err := dcrutil.DecodeAddress(address, lw.activeNet.Params)
+	addr, err := dcrutil.DecodeAddress(address, wallet.chainParams)
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -37,7 +37,7 @@ func (lw *LibWallet) SignMessage(passphrase []byte, address string, message stri
 		return nil, errors.New(ErrInvalidAddress)
 	}
 
-	sig, err = lw.wallet.SignMessage(ctx, message, addr)
+	sig, err = wallet.internal.SignMessage(ctx, message, addr)
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -45,10 +45,10 @@ func (lw *LibWallet) SignMessage(passphrase []byte, address string, message stri
 	return sig, nil
 }
 
-func (lw *LibWallet) VerifyMessage(address string, message string, signatureBase64 string) (bool, error) {
+func (wallet *Wallet) VerifyMessage(address string, message string, signatureBase64 string) (bool, error) {
 	var valid bool
 
-	addr, err := dcrutil.DecodeAddress(address, lw.activeNet.Params)
+	addr, err := dcrutil.DecodeAddress(address, wallet.chainParams)
 	if err != nil {
 		return false, translateError(err)
 	}
@@ -70,7 +70,7 @@ func (lw *LibWallet) VerifyMessage(address string, message string, signatureBase
 		return false, errors.New(ErrInvalidAddress)
 	}
 
-	valid, err = wallet.VerifyMessage(message, addr, signature, lw.activeNet.Params)
+	valid, err = w.VerifyMessage(message, addr, signature, wallet.chainParams)
 	if err != nil {
 		return false, translateError(err)
 	}

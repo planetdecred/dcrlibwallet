@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/decred/dcrd/dcrutil/v2"
-	"github.com/decred/dcrwallet/wallet/v3"
+	w "github.com/decred/dcrwallet/wallet/v3"
 	"github.com/decred/dcrwallet/wallet/v3/udb"
 )
 
@@ -18,18 +18,18 @@ type AddressInfo struct {
 	AccountName   string
 }
 
-func (lw *LibWallet) IsAddressValid(address string) bool {
-	_, err := dcrutil.DecodeAddress(address, lw.activeNet.Params)
+func (wallet *Wallet) IsAddressValid(address string) bool {
+	_, err := dcrutil.DecodeAddress(address, wallet.chainParams)
 	return err == nil
 }
 
-func (lw *LibWallet) HaveAddress(address string) bool {
-	addr, err := dcrutil.DecodeAddress(address, lw.activeNet.Params)
+func (wallet *Wallet) HaveAddress(address string) bool {
+	addr, err := dcrutil.DecodeAddress(address, wallet.chainParams)
 	if err != nil {
 		return false
 	}
 
-	have, err := lw.wallet.HaveAddress(lw.shutdownContext(), addr)
+	have, err := wallet.internal.HaveAddress(wallet.shutdownContext(), addr)
 	if err != nil {
 		return false
 	}
@@ -37,18 +37,18 @@ func (lw *LibWallet) HaveAddress(address string) bool {
 	return have
 }
 
-func (lw *LibWallet) AccountOfAddress(address string) string {
-	addr, err := dcrutil.DecodeAddress(address, lw.activeNet.Params)
+func (wallet *Wallet) AccountOfAddress(address string) string {
+	addr, err := dcrutil.DecodeAddress(address, wallet.chainParams)
 	if err != nil {
 		return err.Error()
 	}
 
-	info, _ := lw.wallet.AddressInfo(lw.shutdownContext(), addr)
-	return lw.AccountName(int32(info.Account()))
+	info, _ := wallet.internal.AddressInfo(wallet.shutdownContext(), addr)
+	return wallet.AccountName(int32(info.Account()))
 }
 
-func (lw *LibWallet) AddressInfo(address string) (*AddressInfo, error) {
-	addr, err := dcrutil.DecodeAddress(address, lw.activeNet.Params)
+func (wallet *Wallet) AddressInfo(address string) (*AddressInfo, error) {
+	addr, err := dcrutil.DecodeAddress(address, wallet.chainParams)
 	if err != nil {
 		log.Error(err)
 		return nil, err
@@ -58,18 +58,18 @@ func (lw *LibWallet) AddressInfo(address string) (*AddressInfo, error) {
 		Address: address,
 	}
 
-	info, _ := lw.wallet.AddressInfo(lw.shutdownContext(), addr)
+	info, _ := wallet.internal.AddressInfo(wallet.shutdownContext(), addr)
 	if info != nil {
 		addressInfo.IsMine = true
 		addressInfo.AccountNumber = info.Account()
-		addressInfo.AccountName = lw.AccountName(int32(info.Account()))
+		addressInfo.AccountName = wallet.AccountName(int32(info.Account()))
 	}
 
 	return addressInfo, nil
 }
 
-func (lw *LibWallet) CurrentAddress(account int32) (string, error) {
-	addr, err := lw.wallet.CurrentAddress(uint32(account))
+func (wallet *Wallet) CurrentAddress(account int32) (string, error) {
+	addr, err := wallet.internal.CurrentAddress(uint32(account))
 	if err != nil {
 		log.Error(err)
 		return "", err
@@ -77,8 +77,8 @@ func (lw *LibWallet) CurrentAddress(account int32) (string, error) {
 	return addr.Address(), nil
 }
 
-func (lw *LibWallet) NextAddress(account int32) (string, error) {
-	addr, err := lw.wallet.NewExternalAddress(lw.shutdownContext(), uint32(account), wallet.WithGapPolicyWrap())
+func (wallet *Wallet) NextAddress(account int32) (string, error) {
+	addr, err := wallet.internal.NewExternalAddress(wallet.shutdownContext(), uint32(account), w.WithGapPolicyWrap())
 	if err != nil {
 		log.Error(err)
 		return "", err
@@ -86,13 +86,13 @@ func (lw *LibWallet) NextAddress(account int32) (string, error) {
 	return addr.Address(), nil
 }
 
-func (lw *LibWallet) AddressPubKey(address string) (string, error) {
-	addr, err := dcrutil.DecodeAddress(address, lw.activeNet.Params)
+func (wallet *Wallet) AddressPubKey(address string) (string, error) {
+	addr, err := dcrutil.DecodeAddress(address, wallet.chainParams)
 	if err != nil {
 		return "", err
 	}
 
-	ainfo, err := lw.wallet.AddressInfo(lw.shutdownContext(), addr)
+	ainfo, err := wallet.internal.AddressInfo(wallet.shutdownContext(), addr)
 	if err != nil {
 		return "", err
 	}
@@ -103,7 +103,7 @@ func (lw *LibWallet) AddressPubKey(address string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		pubKeyAddr, err := dcrutil.NewAddressSecpPubKey(pubKeyBytes, lw.activeNet.Params)
+		pubKeyAddr, err := dcrutil.NewAddressSecpPubKey(pubKeyBytes, wallet.chainParams)
 		if err != nil {
 			return "", err
 		}

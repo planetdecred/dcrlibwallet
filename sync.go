@@ -10,9 +10,9 @@ import (
 
 	"github.com/decred/dcrd/addrmgr"
 	"github.com/decred/dcrwallet/errors/v2"
-	p2p "github.com/decred/dcrwallet/p2p/v2"
-	wallet "github.com/decred/dcrwallet/wallet/v3"
-	spv "github.com/raedahgroup/dcrlibwallet/spv"
+	"github.com/decred/dcrwallet/p2p/v2"
+	w "github.com/decred/dcrwallet/wallet/v3"
+	"github.com/raedahgroup/dcrlibwallet/spv"
 )
 
 type syncData struct {
@@ -85,7 +85,7 @@ func (mw *MultiWallet) initActiveSyncData() {
 	headersRescanProgress.GeneralSyncProgress = &GeneralSyncProgress{}
 
 	var targetTimePerBlock int32
-	if mw.activeNet.Name == "mainnet" {
+	if mw.chainParams.Name == "mainnet" {
 		targetTimePerBlock = MainNetTargetTimePerBlock
 	} else {
 		targetTimePerBlock = TestNetTargetTimePerBlock
@@ -160,10 +160,6 @@ func (mw *MultiWallet) SyncInactiveForPeriod(totalInactiveSeconds int64) {
 	}
 }
 
-func asWallet(val interface{}) *wallet.Wallet {
-	return val.(*wallet.Wallet)
-}
-
 func (mw *MultiWallet) SpvSync() error {
 	mw.syncData.mu.RLock()
 	defer mw.syncData.mu.RUnlock()
@@ -173,14 +169,14 @@ func (mw *MultiWallet) SpvSync() error {
 
 	addr := &net.TCPAddr{IP: net.ParseIP("::1"), Port: 0}
 	addrManager := addrmgr.New(mw.rootDir, net.LookupIP) // TODO: be mindful of tor
-	lp := p2p.NewLocalPeer(mw.activeNet.Params, addr, addrManager)
+	lp := p2p.NewLocalPeer(mw.chainParams, addr, addrManager)
 
 	var validPeerAddresses []string
 	peerAddresses := mw.ReadStringConfigValueForKey(SpvPersistentPeerAddressesConfigKey)
 	if peerAddresses != "" {
 		addresses := strings.Split(peerAddresses, ";")
 		for _, address := range addresses {
-			peerAddress, err := NormalizeAddress(address, mw.activeNet.Params.DefaultPort)
+			peerAddress, err := NormalizeAddress(address, mw.chainParams.DefaultPort)
 			if err != nil {
 				log.Errorf("SPV peer address(%s) is invalid: %v", peerAddress, err)
 			} else {
@@ -197,12 +193,12 @@ func (mw *MultiWallet) SpvSync() error {
 	// to calculate sync estimates only during sync
 	mw.initActiveSyncData()
 
-	wallets := make(map[int]*wallet.Wallet)
-	for id, lw := range mw.libWallets {
-		wallets[id] = asWallet(lw.wallet.Wallet)
+	wallets := make(map[int]*w.Wallet)
+	for id, wallet := range mw.wallets {
+		wallets[id] = wallet.internal
 	}
 
-	syncer := spv.NewSyncer(wallets, mw.activeNet.Params, lp, true)
+	syncer := spv.NewSyncer(wallets, mw.chainParams, lp, true)
 	syncer.SetNotifications(mw.spvSyncNotificationCallbacks())
 	if len(validPeerAddresses) > 0 {
 		syncer.SetPersistentPeers(validPeerAddresses)
@@ -269,8 +265,8 @@ func (mw *MultiWallet) CancelSync() {
 		log.Info("Sync fully canceled.")
 	}
 
-	for _, libWallet := range mw.libWallets {
-		loadedWallet, walletLoaded := libWallet.walletLoader.LoadedWallet()
+	for _, libWallet := range mw.wallets {
+		loadedWallet, walletLoaded := libWallet.loader.LoadedWallet()
 		if !walletLoaded {
 			continue
 		}
@@ -279,8 +275,8 @@ func (mw *MultiWallet) CancelSync() {
 	}
 }
 
-func (lw *LibWallet) IsWaiting() bool {
-	return lw.waiting
+func (wallet *Wallet) IsWaiting() bool {
+	return wallet.waiting
 }
 
 func (mw *MultiWallet) IsSynced() bool {
@@ -303,26 +299,26 @@ func (mw *MultiWallet) ConnectedPeers() int32 {
 	return mw.syncData.connectedPeers
 }
 
-func (lw *LibWallet) RescanBlocks() error {
-	netBackend, err := lw.wallet.NetworkBackend()
+func (wallet *Wallet) RescanBlocks() error {
+	netBackend, err := wallet.internal.NetworkBackend()
 	if err != nil {
 		return errors.E(ErrNotConnected)
 	}
 
-	if lw.rescanning {
+	if wallet.rescanning {
 		return errors.E(ErrInvalid)
 	}
 
 	go func() {
 		defer func() {
-			lw.rescanning = false
+			wallet.rescanning = false
 		}()
 
-		lw.rescanning = true
-		ctx := lw.shutdownContext()
+		wallet.rescanning = true
+		ctx := wallet.shutdownContext()
 
-		progress := make(chan wallet.RescanProgress, 1)
-		go lw.wallet.RescanProgressFromHeight(ctx, netBackend, 0, progress)
+		progress := make(chan w.RescanProgress, 1)
+		go wallet.internal.RescanProgressFromHeight(ctx, netBackend, 0, progress)
 
 		rescanStartTime := time.Now().Unix()
 
@@ -334,7 +330,7 @@ func (lw *LibWallet) RescanBlocks() error {
 
 			rescanProgressReport := &HeadersRescanProgressReport{
 				CurrentRescanHeight: p.ScannedThrough,
-				TotalHeadersToScan:  lw.GetBestBlock(),
+				TotalHeadersToScan:  wallet.GetBestBlock(),
 			}
 
 			elapsedRescanTime := time.Now().Unix() - rescanStartTime
@@ -360,7 +356,7 @@ func (lw *LibWallet) RescanBlocks() error {
 		// Trigger sync completed callback.
 		// todo: probably best to have a dedicated rescan listener
 		// with callbacks for rescanStarted, rescanCompleted, rescanError and rescanCancel
-		// for _, syncProgressListener := range lw.syncProgressListeners {
+		// for _, syncProgressListener := range wallet.syncProgressListeners {
 		// 	syncProgressListener.OnSyncCompleted()
 		// }
 	}()
@@ -375,15 +371,15 @@ func (mw *MultiWallet) IsScanning() bool {
 func (mw *MultiWallet) GetBestBlock() *BlockInfo {
 	var bestBlock int32 = -1
 	var blockInfo *BlockInfo
-	for _, lw := range mw.libWallets {
-		if !lw.WalletOpened() {
+	for _, wallet := range mw.wallets {
+		if !wallet.WalletOpened() {
 			continue
 		}
 
-		walletBestBLock := lw.GetBestBlock()
+		walletBestBLock := wallet.GetBestBlock()
 		if walletBestBLock > bestBlock || bestBlock == -1 {
 			bestBlock = walletBestBLock
-			blockInfo = &BlockInfo{Height: bestBlock, Timestamp: lw.GetBestBlockTimeStamp()}
+			blockInfo = &BlockInfo{Height: bestBlock, Timestamp: wallet.GetBestBlockTimeStamp()}
 		}
 	}
 
@@ -393,42 +389,42 @@ func (mw *MultiWallet) GetBestBlock() *BlockInfo {
 func (mw *MultiWallet) GetLowestBlock() *BlockInfo {
 	var lowestBlock int32 = -1
 	var blockInfo *BlockInfo
-	for _, lw := range mw.libWallets {
-		if !lw.WalletOpened() {
+	for _, wallet := range mw.wallets {
+		if !wallet.WalletOpened() {
 			continue
 		}
-		walletBestBLock := lw.GetBestBlock()
+		walletBestBLock := wallet.GetBestBlock()
 		if walletBestBLock < lowestBlock || lowestBlock == -1 {
 			lowestBlock = walletBestBLock
-			blockInfo = &BlockInfo{Height: lowestBlock, Timestamp: lw.GetBestBlockTimeStamp()}
+			blockInfo = &BlockInfo{Height: lowestBlock, Timestamp: wallet.GetBestBlockTimeStamp()}
 		}
 	}
 
 	return blockInfo
 }
 
-func (lw *LibWallet) GetBestBlock() int32 {
-	if lw.wallet == nil {
+func (wallet *Wallet) GetBestBlock() int32 {
+	if wallet.internal == nil {
 		// This method is sometimes called after a wallet is deleted and causes crash.
 		log.Error("Attempting to read best block height without a loaded wallet.")
 		return 0
 	}
 
-	_, height := lw.wallet.MainChainTip(lw.shutdownContext())
+	_, height := wallet.internal.MainChainTip(wallet.shutdownContext())
 	return height
 }
 
-func (lw *LibWallet) GetBestBlockTimeStamp() int64 {
-	if lw.wallet == nil {
+func (wallet *Wallet) GetBestBlockTimeStamp() int64 {
+	if wallet.internal == nil {
 		// This method is sometimes called after a wallet is deleted and causes crash.
 		log.Error("Attempting to read best block timestamp without a loaded wallet.")
 		return 0
 	}
 
-	ctx := lw.shutdownContext()
-	_, height := lw.wallet.MainChainTip(ctx)
-	identifier := wallet.NewBlockIdentifierFromHeight(height)
-	info, err := lw.wallet.BlockInfo(ctx, identifier)
+	ctx := wallet.shutdownContext()
+	_, height := wallet.internal.MainChainTip(ctx)
+	identifier := w.NewBlockIdentifierFromHeight(height)
+	info, err := wallet.internal.BlockInfo(ctx, identifier)
 	if err != nil {
 		log.Error(err)
 		return 0
@@ -438,8 +434,8 @@ func (lw *LibWallet) GetBestBlockTimeStamp() int64 {
 
 func (mw *MultiWallet) GetLowestBlockTimestamp() int64 {
 	var timestamp int64 = -1
-	for _, lw := range mw.libWallets {
-		bestBlockTimestamp := lw.GetBestBlockTimeStamp()
+	for _, wallet := range mw.wallets {
+		bestBlockTimestamp := wallet.GetBestBlockTimeStamp()
 		if bestBlockTimestamp < timestamp || timestamp == -1 {
 			timestamp = bestBlockTimestamp
 		}
