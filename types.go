@@ -40,9 +40,9 @@ type Account struct {
 	ImportedKeyCount int32
 }
 
-type AccountIterator struct {
-	CurrentIndex int
-	Acc          []*Account
+type AccountsIterator struct {
+	currentIndex int
+	accounts     []*Account
 }
 
 type Accounts struct {
