@@ -49,10 +49,17 @@ func (lw *LibWallet) GetAccountsRaw(requiredConfirmations int32) (*Accounts, err
 	}, nil
 }
 
-func (accounts *Accounts) Next() *Account {
-	if accounts.Iter.CurrentIndex < len(accounts.Acc) {
-		account := accounts.Acc[accounts.Iter.CurrentIndex]
-		accounts.Iter.CurrentIndex++
+func (accounts *Accounts) GetAccountIterator() *AccountIterator {
+	return &AccountIterator{
+		CurrentIndex: 0,
+		Acc:          accounts.Acc,
+	}
+}
+
+func (iter *AccountIterator) Next() *Account {
+	if iter.CurrentIndex < len(iter.Acc) {
+		account := iter.Acc[iter.CurrentIndex]
+		iter.CurrentIndex++
 		return account
 	}
 	return nil

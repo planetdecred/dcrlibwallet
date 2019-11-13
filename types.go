@@ -42,6 +42,7 @@ type Account struct {
 
 type AccountIterator struct {
 	CurrentIndex int
+	Acc          []*Account
 }
 
 type Accounts struct {
@@ -52,7 +53,6 @@ type Accounts struct {
 	Acc                []*Account
 	CurrentBlockHash   []byte
 	CurrentBlockHeight int32
-	Iter               *AccountIterator
 }
 
 /** begin sync-related types */
