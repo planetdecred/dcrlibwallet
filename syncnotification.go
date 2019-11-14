@@ -522,6 +522,10 @@ func (mw *MultiWallet) resetSyncData() {
 }
 
 func (mw *MultiWallet) synced(walletID int, synced bool) {
+	if (mw.syncData.synced == synced) && (synced == true) {
+		return
+	}
+
 	mw.syncData.mu.RLock()
 	defer mw.syncData.mu.RUnlock()
 
@@ -546,7 +550,7 @@ func (mw *MultiWallet) synced(walletID int, synced bool) {
 		var waitForIndexing sync.WaitGroup
 		waitForIndexing.Add(len(mw.wallets))
 		for _, wallet := range mw.wallets {
-			wallet.IndexTransactions(&waitForIndexing)
+			go wallet.IndexTransactions(&waitForIndexing)
 		}
 
 		go func() {

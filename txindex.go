@@ -46,7 +46,7 @@ func (wallet *Wallet) IndexTransactions(waitGroup *sync.WaitGroup) error {
 				return false, err
 			}
 
-			log.Tracef("[%d] Index saved for transactions in block %d", wallet.ID, txEndHeight)
+			log.Debugf("[%d] Index saved for transactions in block %d", wallet.ID, txEndHeight)
 		}
 
 		select {
@@ -75,11 +75,11 @@ func (wallet *Wallet) IndexTransactions(waitGroup *sync.WaitGroup) error {
 			log.Errorf("[%d] Post-indexing tx count error :%v", wallet.ID, err)
 			return
 		}
-		log.Tracef("[%d] Transaction index finished at %d, %d transaction(s) indexed in total", wallet.ID, txEndHeight, count)
+		log.Debugf("[%d] Transaction index finished at %d, %d transaction(s) indexed in total", wallet.ID, txEndHeight, count)
 	}()
 
 	waitGroup.Add(1)
-	log.Tracef("[%d] Indexing transactions start height: %d, end height: %d", wallet.ID, beginHeight, endHeight)
-	go wallet.internal.GetTransactions(ctx, rangeFn, startBlock, endBlock)
+	log.Debugf("[%d] Indexing transactions start height: %d, end height: %d", wallet.ID, beginHeight, endHeight)
+	wallet.internal.GetTransactions(ctx, rangeFn, startBlock, endBlock)
 	return nil
 }

@@ -66,8 +66,6 @@ func (wallet *Wallet) prepare(chainParams *chaincfg.Params) (err error) {
 		wallet.loader.SetDatabaseDriver(wallet.DbDriver)
 	}
 
-	// todo add interrupt listener
-
 	// init cancelFuncs slice to hold cancel functions for long running
 	// operations and start go routine to listen for shutdown signal
 	wallet.cancelFuncs = make([]context.CancelFunc, 0)

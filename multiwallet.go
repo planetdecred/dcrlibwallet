@@ -347,6 +347,7 @@ func (mw *MultiWallet) saveWalletToDatabase(wallet *Wallet) (*Wallet, error) {
 	walletDataDir := filepath.Join(mw.rootDir, strconv.Itoa(wallet.ID))
 	os.MkdirAll(walletDataDir, os.ModePerm) // create wallet dir
 
+	wallet.Name = "wallet-" + strconv.Itoa(wallet.ID) // wallet-#
 	wallet.DataDir = walletDataDir
 	wallet.DbDriver = mw.dbDriver
 
