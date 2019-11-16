@@ -96,7 +96,7 @@ func (b *Bucket) badgerCursor() *Cursor {
 	//Key-only iteration for faster search. Value gets fetched when item.Value() is called.
 	reverseOptions.PrefetchValues = false
 	reverseOptions.Reverse = true
-	txn := b.dbTransaction.db.NewTransaction(false)
+	txn := b.dbTransaction.dbw.db.NewTransaction(false)
 	reverseIterator := txn.NewIterator(reverseOptions)
 	cursor := &Cursor{iterator: b.iterator(), reverseIterator: reverseIterator, txn: b.txn, prefix: b.prefix, dbTransaction: b.dbTransaction}
 	return cursor
@@ -161,7 +161,7 @@ func (b *Bucket) dropBucket(key []byte) error {
 		return errors.E(errors.Invalid, "key is not associated with a bucket")
 	}
 	b.txn.Delete(item.Key()[:])
-	txn := b.dbTransaction.db.NewTransaction(false)
+	txn := b.dbTransaction.dbw.db.NewTransaction(false)
 	it := txn.NewIterator(badger.DefaultIteratorOptions)
 
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
@@ -235,7 +235,7 @@ func (b *Bucket) delete(key []byte) error {
 }
 
 func (b *Bucket) forEach(fn func(k, v []byte) error) error {
-	txn := b.dbTransaction.db.NewTransaction(false)
+	txn := b.dbTransaction.dbw.db.NewTransaction(false)
 	it := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer func() {
 		it.Close()
