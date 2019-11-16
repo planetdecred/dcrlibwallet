@@ -25,7 +25,6 @@ const (
 
 	IncomingTxNotificationsConfigKey = "tx_notification_enabled"
 	BeepNewBlocksConfigKey           = "beep_new_blocks"
-	UseBiometricAuthConfigKey        = "use_biometric_auth" // temp
 
 	SyncOnCellularConfigKey             = "always_sync"
 	NetworkModeConfigKey                = "network_mode" // TODO: remove
@@ -50,13 +49,10 @@ func (mw *MultiWallet) SaveUserConfigValue(key string, value interface{}) {
 
 func (mw *MultiWallet) ReadUserConfigValue(key string, valueOut interface{}) error {
 	err := mw.configDB.Get(userConfigBucketName, key, valueOut)
-	if err != nil {
-		if err != storm.ErrNotFound {
-			log.Errorf("error reading config value for key: %s, error: %v", key, err)
-		}
-		return err
+	if err != nil && err != storm.ErrNotFound {
+		log.Errorf("error reading config value for key: %s, error: %v", key, err)
 	}
-	return nil
+	return err
 }
 
 func (mw *MultiWallet) SetBoolConfigValueForKey(key string, value bool) {

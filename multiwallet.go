@@ -30,7 +30,7 @@ type MultiWallet struct {
 
 	chainParams *chaincfg.Params
 	wallets     map[int]*Wallet
-	*syncData
+	syncData    *syncData
 
 	shuttingDown chan bool
 	cancelFuncs  []context.CancelFunc
@@ -58,18 +58,18 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 
 	walletsDb, err := storm.Open(filepath.Join(rootDir, walletsDbName))
 	if err != nil {
-		log.Errorf("Error opening wallet database: %s", err.Error())
+		log.Errorf("Error opening wallets database: %s", err.Error())
 		if err == bolt.ErrTimeout {
 			// timeout error occurs if storm fails to acquire a lock on the database file
-			return nil, errors.E("wallet database is in use by another process")
+			return nil, errors.E("wallets database is in use by another process")
 		}
-		return nil, errors.E("error opening wallet index database: %s", err.Error())
+		return nil, errors.E("error opening wallet database: %s", err.Error())
 	}
 
 	// init database for saving/reading wallet objects
 	err = walletsDb.Init(&Wallet{})
 	if err != nil {
-		log.Errorf("Error initializing wallet database: %s", err.Error())
+		log.Errorf("Error initializing wallets database: %s", err.Error())
 		return nil, err
 	}
 
@@ -179,7 +179,7 @@ func (mw *MultiWallet) RenameWallet(walletID int, newName string) error {
 }
 
 func (mw *MultiWallet) DeleteWallet(walletID int, privPass []byte) error {
-	if mw.activeSyncData != nil {
+	if mw.syncData.activeSyncData != nil {
 		return errors.New(ErrSyncAlreadyInProgress)
 	}
 
@@ -254,7 +254,7 @@ func (mw *MultiWallet) CreateWatchOnlyWallet(walletName string, extendedPublicKe
 	if err != nil {
 		return nil, err
 	} else if exists {
-		return nil, errors.New(ErrNotExist)
+		return nil, errors.New(ErrExist)
 	}
 
 	wallet, err := mw.saveWalletToDatabase(&Wallet{
@@ -271,13 +271,13 @@ func (mw *MultiWallet) CreateWatchOnlyWallet(walletName string, extendedPublicKe
 		return nil, err
 	}
 
-	go mw.listenForTransactions(wallet)
+	go mw.listenForTransactions(wallet.ID)
 
 	return wallet, nil
 }
 
 func (mw *MultiWallet) CreateNewWallet(privatePassphrase string, privatePassphraseType int32) (*Wallet, error) {
-	if mw.activeSyncData != nil {
+	if mw.syncData.activeSyncData != nil {
 		return nil, errors.New(ErrSyncAlreadyInProgress)
 	}
 
@@ -301,13 +301,13 @@ func (mw *MultiWallet) CreateNewWallet(privatePassphrase string, privatePassphra
 		return nil, err
 	}
 
-	go mw.listenForTransactions(wallet)
+	go mw.listenForTransactions(wallet.ID)
 
 	return wallet, nil
 }
 
 func (mw *MultiWallet) RestoreWallet(seedMnemonic, privatePassphrase string, privatePassphraseType int32) (*Wallet, error) {
-	if mw.activeSyncData != nil {
+	if mw.syncData.activeSyncData != nil {
 		return nil, errors.New(ErrSyncAlreadyInProgress)
 	}
 
@@ -325,7 +325,7 @@ func (mw *MultiWallet) RestoreWallet(seedMnemonic, privatePassphrase string, pri
 		return nil, err
 	}
 
-	go mw.listenForTransactions(wallet)
+	go mw.listenForTransactions(wallet.ID)
 
 	return wallet, nil
 }
@@ -381,7 +381,7 @@ func (mw *MultiWallet) WalletNameExists(walletName string) (bool, error) {
 }
 
 func (mw *MultiWallet) OpenWallets(pubPass []byte) error {
-	if mw.activeSyncData != nil {
+	if mw.syncData.activeSyncData != nil {
 		return errors.New(ErrSyncAlreadyInProgress)
 	}
 
@@ -391,14 +391,14 @@ func (mw *MultiWallet) OpenWallets(pubPass []byte) error {
 			return err
 		}
 
-		go mw.listenForTransactions(wallet)
+		go mw.listenForTransactions(wallet.ID)
 	}
 
 	return nil
 }
 
 func (mw *MultiWallet) OpenWallet(walletID int, pubPass []byte) error {
-	if mw.activeSyncData != nil {
+	if mw.syncData.activeSyncData != nil {
 		return errors.New(ErrSyncAlreadyInProgress)
 	}
 
@@ -412,7 +412,7 @@ func (mw *MultiWallet) OpenWallet(walletID int, pubPass []byte) error {
 		return err
 	}
 
-	go mw.listenForTransactions(wallet)
+	go mw.listenForTransactions(wallet.ID)
 	return nil
 }
 
@@ -425,7 +425,7 @@ func (mw *MultiWallet) UnlockWallet(walletID int, privPass []byte) error {
 	return wallet.UnlockWallet(privPass)
 }
 
-func (mw *MultiWallet) discoveredAccounts(walletID int) error {
+func (mw *MultiWallet) markWalletAsDiscoveredAccounts(walletID int) error {
 	wallet := mw.WalletWithID(walletID)
 	if wallet == nil {
 		return errors.New(ErrNotExist)

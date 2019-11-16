@@ -177,16 +177,15 @@ func (wallet *Wallet) TicketPrice(ctx context.Context) (*TicketPriceResponse, er
 }
 
 // PurchaseTickets purchases tickets from the wallet. Returns a slice of hashes for tickets purchased
-func (wallet *Wallet) PurchaseTickets(ctx context.Context, request *PurchaseTicketsRequest) ([]string, error) {
+func (wallet *Wallet) PurchaseTickets(ctx context.Context, request *PurchaseTicketsRequest, vspHost string) ([]string, error) {
 	var err error
 
-	// fetch redeem script, ticket address, pool address and pool fee if vsp host is configured
-	// vspHost := wallet.ReadStringConfigValueForKey(VSPHostConfigKey)
-	// if vspHost != "" {
-	// 	if err = wallet.updateTicketPurchaseRequestWithVSPInfo(vspHost, request); err != nil {
-	// 		return nil, err
-	// 	}
-	// }
+	// fetch redeem script, ticket address, pool address and pool fee if vsp host isn't empty
+	if vspHost != "" {
+		if err = wallet.updateTicketPurchaseRequestWithVSPInfo(vspHost, request); err != nil {
+			return nil, err
+		}
+	}
 
 	minConf := int32(request.RequiredConfirmations)
 	params := wallet.chainParams
@@ -272,7 +271,7 @@ func (wallet *Wallet) PurchaseTickets(ctx context.Context, request *PurchaseTick
 	return hashes, nil
 }
 
-func (wallet *Wallet) UpdateTicketPurchaseRequestWithVSPInfo(vspHost string, request *PurchaseTicketsRequest) error {
+func (wallet *Wallet) updateTicketPurchaseRequestWithVSPInfo(vspHost string, request *PurchaseTicketsRequest) error {
 	// generate an address and get the pubkeyaddr
 	address, err := wallet.CurrentAddress(0)
 	if err != nil {

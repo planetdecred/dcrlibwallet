@@ -107,35 +107,35 @@ func (mw *MultiWallet) initActiveSyncData() {
 }
 
 func (mw *MultiWallet) AddSyncProgressListener(syncProgressListener SyncProgressListener, uniqueIdentifier string) error {
-	_, ok := mw.syncProgressListeners[uniqueIdentifier]
+	_, ok := mw.syncData.syncProgressListeners[uniqueIdentifier]
 	if ok {
 		return errors.New(ErrListenerAlreadyExist)
 	}
 
-	mw.syncProgressListeners[uniqueIdentifier] = syncProgressListener
+	mw.syncData.syncProgressListeners[uniqueIdentifier] = syncProgressListener
 
 	// If sync is already on, notify this newly added listener of the current progress report.
 	return mw.PublishLastSyncProgress(uniqueIdentifier)
 }
 
 func (mw *MultiWallet) RemoveSyncProgressListener(uniqueIdentifier string) {
-	delete(mw.syncProgressListeners, uniqueIdentifier)
+	delete(mw.syncData.syncProgressListeners, uniqueIdentifier)
 }
 
 func (mw *MultiWallet) PublishLastSyncProgress(uniqueIdentifier string) error {
-	syncProgressListener, ok := mw.syncProgressListeners[uniqueIdentifier]
+	syncProgressListener, ok := mw.syncData.syncProgressListeners[uniqueIdentifier]
 	if !ok {
 		return errors.New(ErrInvalid)
 	}
 
-	if mw.syncData.syncing && mw.activeSyncData != nil {
-		switch mw.activeSyncData.syncStage {
+	if mw.syncData.syncing && mw.syncData.activeSyncData != nil {
+		switch mw.syncData.activeSyncData.syncStage {
 		case HeadersFetchSyncStage:
-			syncProgressListener.OnHeadersFetchProgress(&mw.headersFetchProgress)
+			syncProgressListener.OnHeadersFetchProgress(&mw.syncData.headersFetchProgress)
 		case AddressDiscoverySyncStage:
-			syncProgressListener.OnAddressDiscoveryProgress(&mw.activeSyncData.addressDiscoveryProgress)
+			syncProgressListener.OnAddressDiscoveryProgress(&mw.syncData.addressDiscoveryProgress)
 		case HeadersRescanSyncStage:
-			syncProgressListener.OnHeadersRescanProgress(&mw.activeSyncData.headersRescanProgress)
+			syncProgressListener.OnHeadersRescanProgress(&mw.syncData.headersRescanProgress)
 		}
 	}
 
@@ -148,7 +148,7 @@ func (mw *MultiWallet) EnableSyncLogs() {
 
 func (mw *MultiWallet) SyncInactiveForPeriod(totalInactiveSeconds int64) {
 
-	if !mw.syncing || mw.activeSyncData == nil {
+	if !mw.syncData.syncing || mw.syncData.activeSyncData == nil {
 		log.Debug("Not accounting for inactive time, wallet is not syncing.")
 		return
 	}
@@ -207,17 +207,17 @@ func (mw *MultiWallet) SpvSync() error {
 	mw.setNetworkBackend(syncer)
 
 	ctx, cancel := mw.contextWithShutdownCancel()
-	mw.cancelSync = cancel
+	mw.syncData.cancelSync = cancel
 
 	// syncer.Run uses a wait group to block the thread until sync completes or an error occurs
 	go func() {
 		mw.syncData.mu.RLock()
-		mw.syncing = true
+		mw.syncData.syncing = true
 		mw.syncData.mu.RUnlock()
 
 		defer func() {
 			mw.syncData.mu.RLock()
-			mw.syncing = false
+			mw.syncData.syncing = false
 			mw.syncData.mu.RUnlock()
 		}()
 
@@ -228,7 +228,7 @@ func (mw *MultiWallet) SpvSync() error {
 		if err != nil {
 			if err == context.Canceled {
 				mw.notifySyncCanceled()
-				mw.syncCanceled <- true
+				mw.syncData.syncCanceled <- true
 			} else if err == context.DeadlineExceeded {
 				mw.notifySyncError(ErrorCodeDeadlineExceeded, errors.E("SPV synchronization deadline exceeded: %v", err))
 			} else {
@@ -249,19 +249,19 @@ func (mw *MultiWallet) RestartSpvSync() error {
 }
 
 func (mw *MultiWallet) CancelSync() {
-	if mw.cancelSync != nil {
+	if mw.syncData.cancelSync != nil {
 		mw.syncData.mu.RLock()
 		log.Info("Canceling sync. May take a while for sync to fully cancel.")
 
 		// Cancel the context used for syncer.Run in rpcSync() or spvSync().
-		mw.cancelSync()
-		mw.cancelSync = nil
+		mw.syncData.cancelSync()
+		mw.syncData.cancelSync = nil
 
 		mw.syncData.mu.RUnlock()
 
 		// syncer.Run may not immediately return, following code blocks this function
 		// and waits for the syncer.Run to return `err == context.Canceled`.
-		<-mw.syncCanceled
+		<-mw.syncData.syncCanceled
 		log.Info("Sync fully canceled.")
 	}
 

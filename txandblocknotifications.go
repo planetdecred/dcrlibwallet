@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 )
 
-func (mw *MultiWallet) listenForTransactions(wallet *Wallet) {
+func (mw *MultiWallet) listenForTransactions(walletID int) {
+	wallet := mw.wallets[walletID]
 	n := wallet.internal.NtfnServer.TransactionNotifications()
-	defer n.Done() // disassociate this notification client from server when this goroutine exits.
+	defer n.Done() // disassociate this notification client from server when this function exits.
 
 	for {
 		v := <-n.C
