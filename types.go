@@ -72,7 +72,8 @@ type SyncProgressListener interface {
 	Debug(debugInfo *DebugInfo)
 
 	OnTransaction(transaction string)
-	OnTransactionConfirmed(walletID int, hash string)
+	OnBlockAttached(walletID int, blockHeight int32)
+	OnTransactionConfirmed(walletID int, hash string, blockHeight int32)
 }
 
 type GeneralSyncProgress struct {

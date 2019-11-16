@@ -53,6 +53,8 @@ func (mw *MultiWallet) listenForTransactions(walletID int) {
 				}
 				mw.publishTransactionConfirmed(wallet.ID, transaction.Hash.String(), int32(block.Header.Height))
 			}
+
+			mw.publishBlockAttached(wallet.ID, int32(block.Header.Height))
 		}
 	}
 }

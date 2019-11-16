@@ -437,7 +437,7 @@ func (mw *MultiWallet) markWalletAsDiscoveredAccounts(walletID int) error {
 	}
 
 	wallet.HasDiscoveredAccounts = true
-	err = mw.db.Save(&wallet)
+	err = mw.db.Save(wallet)
 	if err != nil {
 		return err
 	}

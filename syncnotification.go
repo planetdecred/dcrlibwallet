@@ -471,7 +471,13 @@ func (mw *MultiWallet) mempoolTransactionNotification(transaction string) {
 
 func (mw *MultiWallet) publishTransactionConfirmed(walletID int, transactionHash string, blockHeight int32) {
 	for _, syncProgressListener := range mw.syncData.syncProgressListeners {
-		syncProgressListener.OnTransactionConfirmed(walletID, transactionHash)
+		syncProgressListener.OnTransactionConfirmed(walletID, transactionHash, blockHeight)
+	}
+}
+
+func (mw *MultiWallet) publishBlockAttached(walletID int, blockHeight int32) {
+	for _, syncProgressListener := range mw.syncData.syncProgressListeners {
+		syncProgressListener.OnBlockAttached(walletID, blockHeight)
 	}
 }
 
