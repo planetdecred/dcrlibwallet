@@ -26,7 +26,6 @@ type MultiWallet struct {
 	dbDriver string
 	rootDir  string
 	db       *storm.DB
-	configDB *storm.DB
 
 	chainParams *chaincfg.Params
 	wallets     map[int]*Wallet
@@ -44,16 +43,6 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 	chainParams := utils.ChainParams(netType)
 	if chainParams == nil {
 		return nil, errors.E("unsupported network type: %s", netType)
-	}
-
-	configDbPath := filepath.Join(rootDir, userConfigDbFilename)
-	configDB, err := storm.Open(configDbPath)
-	if err != nil {
-		if err == bolt.ErrTimeout {
-			// timeout error occurs if storm fails to acquire a lock on the database file
-			return nil, errors.E("settings db is in use by another process")
-		}
-		return nil, errors.E("error opening settings db store: %s", err.Error())
 	}
 
 	walletsDb, err := storm.Open(filepath.Join(rootDir, walletsDbName))
@@ -95,7 +84,6 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 		dbDriver:    dbDriver,
 		rootDir:     rootDir,
 		db:          walletsDb,
-		configDB:    configDB,
 		chainParams: chainParams,
 		wallets:     walletsMap,
 		syncData: &syncData{

@@ -5,7 +5,6 @@ import (
 )
 
 const (
-	userConfigDbFilename = "config.db"
 	userConfigBucketName = "user_config"
 
 	LogLevelConfigKey = "log_level"
@@ -41,14 +40,14 @@ const (
 )
 
 func (mw *MultiWallet) SaveUserConfigValue(key string, value interface{}) {
-	err := mw.configDB.Set(userConfigBucketName, key, value)
+	err := mw.db.Set(userConfigBucketName, key, value)
 	if err != nil {
 		log.Errorf("error setting config value for key: %s, error: %v", key, err)
 	}
 }
 
 func (mw *MultiWallet) ReadUserConfigValue(key string, valueOut interface{}) error {
-	err := mw.configDB.Get(userConfigBucketName, key, valueOut)
+	err := mw.db.Get(userConfigBucketName, key, valueOut)
 	if err != nil && err != storm.ErrNotFound {
 		log.Errorf("error reading config value for key: %s, error: %v", key, err)
 	}
