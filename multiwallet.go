@@ -191,7 +191,7 @@ func (mw *MultiWallet) DeleteWallet(walletID int, privPass []byte) error {
 	return nil
 }
 
-func (mw *MultiWallet) GetNeededBackupCount() int32 {
+func (mw *MultiWallet) NumWalletsNeedingSeedBackup() int32 {
 	var backupsNeeded int32
 	for _, wallet := range mw.wallets {
 		if wallet.WalletOpened() && wallet.Seed != "" {
