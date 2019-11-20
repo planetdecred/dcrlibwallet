@@ -49,6 +49,31 @@ func (wallet *Wallet) GetAccountsRaw(requiredConfirmations int32) (*Accounts, er
 	}, nil
 }
 
+func (wallet *Wallet) GetAccount(accountNumber int32, requiredConfirmations int32) (*Account, error) {
+	props, err := wallet.internal.AccountProperties(wallet.shutdownContext(), uint32(accountNumber))
+	if err != nil {
+		return nil, err
+	}
+
+	balance, err := wallet.GetAccountBalance(accountNumber, requiredConfirmations)
+	if err != nil {
+		return nil, err
+	}
+
+	account := &Account{
+		WalletID:         wallet.ID,
+		Number:           accountNumber,
+		Name:             props.AccountName,
+		TotalBalance:     balance.Total,
+		Balance:          balance,
+		ExternalKeyCount: int32(props.LastUsedExternalIndex + 20),
+		InternalKeyCount: int32(props.LastUsedInternalIndex + 20),
+		ImportedKeyCount: int32(props.ImportedKeyCount),
+	}
+
+	return account, nil
+}
+
 func (wallet *Wallet) AccountsIterator(requiredConfirmations int32) (*AccountsIterator, error) {
 	resp, err := wallet.internal.Accounts(wallet.shutdownContext())
 	if err != nil {
