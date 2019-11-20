@@ -6,6 +6,8 @@ import (
 	w "github.com/decred/dcrwallet/wallet/v3"
 )
 
+const BlockHeightInvalid int32 = -1
+
 func (wallet *Wallet) decodeTransactionWithTxSummary(txSummary *w.TransactionSummary,
 	blockHash *chainhash.Hash) (*Transaction, error) {
 

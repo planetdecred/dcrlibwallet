@@ -12,10 +12,7 @@ import (
 	"github.com/raedahgroup/dcrlibwallet/txhelper"
 )
 
-const (
-	BlockHeightInvalid int32 = -1
-	BlockValid               = 1 << 0
-)
+const BlockValid = 1 << 0
 
 // DecodeTransaction uses `walletTx.Hex` to retrieve detailed information for a transaction.
 func DecodeTransaction(walletTx *TxInfoFromWallet, netParams *chaincfg.Params) (*Transaction, error) {

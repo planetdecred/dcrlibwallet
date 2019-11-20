@@ -40,20 +40,20 @@ func convertErr(err error) error {
 // provides a root bucket against which all read and writes occur.
 type transaction struct {
 	badgerTx *badger.Txn
-	dbw      *DBWrapper
+	db       *db
 	buckets  []*Bucket
 	writable bool
 }
 
 func (tx *transaction) ReadBucket(key []byte) walletdb.ReadBucket {
-	if tx.dbw.closed {
+	if tx.db.closed {
 		return nil
 	}
 	return tx.ReadWriteBucket(key)
 }
 
 func (tx *transaction) ReadWriteBucket(key []byte) walletdb.ReadWriteBucket {
-	if tx.dbw.closed {
+	if tx.db.closed {
 		return nil
 	}
 
@@ -70,7 +70,7 @@ func (tx *transaction) ReadWriteBucket(key []byte) walletdb.ReadWriteBucket {
 }
 
 func (tx *transaction) CreateTopLevelBucket(key []byte) (walletdb.ReadWriteBucket, error) {
-	if tx.dbw.closed {
+	if tx.db.closed {
 		return nil, errors.E(errors.Invalid)
 	}
 
@@ -83,7 +83,7 @@ func (tx *transaction) CreateTopLevelBucket(key []byte) (walletdb.ReadWriteBucke
 }
 
 func (tx *transaction) DeleteTopLevelBucket(key []byte) error {
-	if tx.dbw.closed {
+	if tx.db.closed {
 		return errors.E(errors.Invalid)
 	}
 
@@ -124,7 +124,7 @@ func (tx *transaction) DeleteTopLevelBucket(key []byte) error {
 //
 // This function is part of the walletdb.Tx interface implementation.
 func (tx *transaction) Commit() error {
-	if tx.dbw.closed {
+	if tx.db.closed {
 		return errors.E(errors.Invalid)
 	}
 
@@ -140,13 +140,13 @@ func (tx *transaction) Commit() error {
 //
 // This function is part of the walletdb.Tx interface implementation.
 func (tx *transaction) Rollback() error {
-	if tx.dbw.closed {
+	if tx.db.closed {
 		return errors.E(errors.Invalid)
 	}
 
 	writeable := tx.writable
 	tx.badgerTx.Discard()
-	tx.badgerTx = tx.dbw.db.NewTransaction(writeable)
+	tx.badgerTx = tx.db.NewTransaction(writeable)
 	for _, b := range tx.buckets {
 		b.setTx(tx.badgerTx)
 	}
@@ -161,7 +161,7 @@ var _ walletdb.ReadWriteBucket = (*Bucket)(nil)
 //
 // This function is part of the walletdb.ReadWriteBucket interface implementation.
 func (b *Bucket) NestedReadWriteBucket(key []byte) walletdb.ReadWriteBucket {
-	if b.dbTransaction.dbw.closed {
+	if b.dbTransaction.db.closed {
 		return nil
 	}
 
@@ -187,7 +187,7 @@ func (b *Bucket) NestedReadWriteBucket(key []byte) walletdb.ReadWriteBucket {
 }
 
 func (b *Bucket) NestedReadBucket(key []byte) walletdb.ReadBucket {
-	if b.dbTransaction.dbw.closed {
+	if b.dbTransaction.db.closed {
 		return nil
 	}
 	return b.NestedReadWriteBucket(key)
@@ -199,7 +199,7 @@ func (b *Bucket) NestedReadBucket(key []byte) walletdb.ReadBucket {
 //
 //This function is part of the walletdb.Bucket interface implementation.
 func (b *Bucket) CreateBucket(key []byte) (walletdb.ReadWriteBucket, error) {
-	if b.dbTransaction.dbw.closed {
+	if b.dbTransaction.db.closed {
 		return nil, errors.E(errors.Invalid)
 	}
 	bucket, err := b.bucket(key, true)
@@ -215,7 +215,7 @@ func (b *Bucket) CreateBucket(key []byte) (walletdb.ReadWriteBucket, error) {
 //
 //This function is part of the walletdb.Bucket interface implementation.
 func (b *Bucket) CreateBucketIfNotExists(key []byte) (walletdb.ReadWriteBucket, error) {
-	if b.dbTransaction.dbw.closed {
+	if b.dbTransaction.db.closed {
 		return nil, errors.E(errors.Invalid)
 	}
 	bucket, err := b.bucket(key, false)
@@ -229,7 +229,7 @@ func (b *Bucket) CreateBucketIfNotExists(key []byte) (walletdb.ReadWriteBucket, 
 //
 //This function is part of the walletdb.Bucket interface implementation.
 func (b *Bucket) DeleteNestedBucket(key []byte) error {
-	if b.dbTransaction.dbw.closed {
+	if b.dbTransaction.db.closed {
 		return errors.E(errors.Invalid)
 	}
 
@@ -246,7 +246,7 @@ func (b *Bucket) DeleteNestedBucket(key []byte) error {
 //
 // This function is part of the walletdb.Bucket interface implementation.
 func (b *Bucket) ForEach(fn func(k, v []byte) error) error {
-	if b.dbTransaction.dbw.closed {
+	if b.dbTransaction.db.closed {
 		return errors.E(errors.Invalid)
 	}
 
@@ -258,7 +258,7 @@ func (b *Bucket) ForEach(fn func(k, v []byte) error) error {
 //
 // This function is part of the walletdb.Bucket interface implementation.
 func (b *Bucket) Put(key, value []byte) error {
-	if b.dbTransaction.dbw.closed {
+	if b.dbTransaction.db.closed {
 		return errors.E(errors.Invalid)
 	}
 
@@ -274,7 +274,7 @@ func (b *Bucket) Put(key, value []byte) error {
 //
 // This function is part of the walletdb.Bucket interface implementation.
 func (b *Bucket) Get(key []byte) []byte {
-	if b.dbTransaction.dbw.closed {
+	if b.dbTransaction.db.closed {
 		return nil
 	}
 
@@ -286,7 +286,7 @@ func (b *Bucket) Get(key []byte) []byte {
 //
 // This function is part of the walletdb.Bucket interface implementation.
 func (b *Bucket) Delete(key []byte) error {
-	if b.dbTransaction.dbw.closed {
+	if b.dbTransaction.db.closed {
 		return errors.E(errors.Invalid)
 	}
 
@@ -294,14 +294,14 @@ func (b *Bucket) Delete(key []byte) error {
 }
 
 func (b *Bucket) ReadCursor() walletdb.ReadCursor {
-	if b.dbTransaction.dbw.closed {
+	if b.dbTransaction.db.closed {
 		return nil
 	}
 
 	// If transaction is read-only, create a new transaction and return a new cursor
 	// This will be changed when the next version of badger gets released.
 	if !b.dbTransaction.writable {
-		txn := b.dbTransaction.dbw.db.NewTransaction(false)
+		txn := b.dbTransaction.db.NewTransaction(false)
 		opts := badger.DefaultIteratorOptions
 		opts.PrefetchSize = 100
 		it := txn.NewIterator(opts)
@@ -309,7 +309,7 @@ func (b *Bucket) ReadCursor() walletdb.ReadCursor {
 		//Key-only iteration for faster search. Value gets fetched when item.Value() is called.
 		reverseOptions.PrefetchValues = false
 		reverseOptions.Reverse = true
-		txn = b.dbTransaction.dbw.db.NewTransaction(false)
+		txn = b.dbTransaction.db.NewTransaction(false)
 		reverseIterator := txn.NewIterator(reverseOptions)
 		return &Cursor{iterator: it, reverseIterator: reverseIterator, txn: txn, prefix: b.prefix, dbTransaction: b.dbTransaction}
 	}
@@ -321,7 +321,7 @@ func (b *Bucket) ReadCursor() walletdb.ReadCursor {
 //
 // This function is part of the walletdb.Bucket interface implementation.
 func (b *Bucket) ReadWriteCursor() walletdb.ReadWriteCursor {
-	if b.dbTransaction.dbw.closed {
+	if b.dbTransaction.db.closed {
 		return nil
 	}
 	return b.badgerCursor()
@@ -332,7 +332,7 @@ func (b *Bucket) ReadWriteCursor() walletdb.ReadWriteCursor {
 //
 // This function is part of the walletdb.Cursor interface implementation.
 func (c *Cursor) Delete() error {
-	if c.dbTransaction.dbw.closed {
+	if c.dbTransaction.db.closed {
 		return errors.E(errors.Invalid)
 	}
 
@@ -351,7 +351,7 @@ func (c *Cursor) Delete() error {
 //
 // This function is part of the walletdb.Cursor interface implementation.
 func (c *Cursor) First() (key, value []byte) {
-	if c.dbTransaction.dbw.closed {
+	if c.dbTransaction.db.closed {
 		return nil, nil
 	}
 
@@ -391,7 +391,7 @@ func (c *Cursor) First() (key, value []byte) {
 //
 // This function is part of the walletdb.Cursor interface implementation.
 func (c *Cursor) Last() (key, value []byte) {
-	if c.dbTransaction.dbw.closed {
+	if c.dbTransaction.db.closed {
 		return nil, nil
 	}
 
@@ -430,7 +430,7 @@ func (c *Cursor) Last() (key, value []byte) {
 //
 // This function is part of the walletdb.Cursor interface implementation.
 func (c *Cursor) Next() (key, value []byte) {
-	if c.dbTransaction.dbw.closed {
+	if c.dbTransaction.db.closed {
 		return nil, nil
 	}
 
@@ -472,7 +472,7 @@ func (c *Cursor) Next() (key, value []byte) {
 //
 // This function is part of the walletdb.Cursor interface implementation.
 func (c *Cursor) Prev() (key, value []byte) {
-	if c.dbTransaction.dbw.closed {
+	if c.dbTransaction.db.closed {
 		return nil, nil
 	}
 
@@ -522,7 +522,7 @@ func (c *Cursor) Prev() (key, value []byte) {
 //
 // This function is part of the walletdb.Cursor interface implementation.
 func (c *Cursor) Seek(seek []byte) (key, value []byte) {
-	if c.dbTransaction.dbw.closed {
+	if c.dbTransaction.db.closed {
 		return nil, nil
 	}
 
@@ -560,68 +560,68 @@ func (c *Cursor) Seek(seek []byte) (key, value []byte) {
 //
 // This function is part of the walletdb.Cursor interface implementation.
 func (c *Cursor) Close() {
-	if c.dbTransaction.dbw.closed {
+	if c.dbTransaction.db.closed {
 		return
 	}
 
 	c.iterator.Close()
 }
 
-// DBWrapper represents a collection of namespaces which are persisted and implements
-// the walletdb.Db interface.  All database access is performed through
+// dbrapper represents a collection of namespaces which are persisted and implements
+// the walletdb interface.  All database access is performed through
 // transactions which are obtained through the specific Namespace.
-type DBWrapper struct {
-	db     *badger.DB
+type db struct {
+	*badger.DB
 	closed bool
 	ticker *time.Ticker
 }
 
-// Enforce db implements the walletdb.Db interface.
-var _ walletdb.DB = (*DBWrapper)(nil)
+// Enforce db implements the walletdb interface.
+var _ walletdb.DB = (*db)(nil)
 
-func (dbw *DBWrapper) beginTx(writable bool) (*transaction, error) {
-	if dbw.closed {
+func (db *db) beginTx(writable bool) (*transaction, error) {
+	if db.closed {
 		return nil, errors.E(errors.Invalid)
 	}
 
-	tx := (*badger.DB)(dbw.db).NewTransaction(writable)
-	tran := &transaction{badgerTx: tx, writable: writable, dbw: dbw}
+	tx := (*badger.DB)(db.DB).NewTransaction(writable)
+	tran := &transaction{badgerTx: tx, writable: writable, db: db}
 	return tran, nil
 }
 
-func (dbw *DBWrapper) BeginReadTx() (walletdb.ReadTx, error) {
-	return dbw.beginTx(false)
+func (db *db) BeginReadTx() (walletdb.ReadTx, error) {
+	return db.beginTx(false)
 }
 
-func (dbw *DBWrapper) BeginReadWriteTx() (walletdb.ReadWriteTx, error) {
-	return dbw.beginTx(true)
+func (db *db) BeginReadWriteTx() (walletdb.ReadWriteTx, error) {
+	return db.beginTx(true)
 }
 
 // Copy writes a copy of the database to the provided writer.  This call will
 // start a read-only transaction to perform all operations.
 //
-// This function is part of the walletdb.Db interface implementation.
-func (dbw *DBWrapper) Copy(w io.Writer) error {
+// This function is part of the walletdb interface implementation.
+func (db *db) Copy(w io.Writer) error {
 	return errors.E(errors.Invalid, "method not implemented")
 }
 
 // Close cleanly shuts down the database and syncs all data.
 //
-// This function is part of the walletdb.Db interface implementation.
-func (dbw *DBWrapper) Close() error {
-	if dbw.closed {
+// This function is part of the walletdb interface implementation.
+func (db *db) Close() error {
+	if db.closed {
 		return errors.E(errors.Invalid, "database is already closed")
 	}
 
-	dbw.closed = true // setting this to true to pause all operations that will happen while db is closing
+	db.closed = true // setting this to true to pause all operations that will happen while db is closing
 
-	if dbw.ticker != nil {
-		dbw.ticker.Stop()
+	if db.ticker != nil {
+		db.ticker.Stop()
 	}
 
 	time.Sleep(2 * time.Second) // sleep for 2 seconds to ensure any db operation completes before proceeding
 
-	err := (*badger.DB)(dbw.db).Close()
+	err := (*badger.DB)(db.DB).Close()
 	if err != nil {
 		return convertErr(err)
 	}
@@ -657,17 +657,17 @@ func openDB(dbPath string, create bool) (walletdb.DB, error) {
 	opts.NumLevelZeroTables = 1
 	opts.NumLevelZeroTablesStall = 2
 
-	dbw := &DBWrapper{
+	d := &db{
 		closed: false,
 	}
-	db, err := badger.Open(opts)
+	badgerDB, err := badger.Open(opts)
 	if err == nil {
-		dbw.db = db
+		d.DB = badgerDB
 		go func() {
-			dbw.ticker = time.NewTicker(20 * time.Second)
-			for range dbw.ticker.C {
+			d.ticker = time.NewTicker(20 * time.Second)
+			for range d.ticker.C {
 			again:
-				err := dbw.db.RunValueLogGC(0.7)
+				err := d.RunValueLogGC(0.7)
 				if err == nil {
 					goto again
 				}
@@ -675,5 +675,5 @@ func openDB(dbPath string, create bool) (walletdb.DB, error) {
 		}()
 	}
 
-	return (*DBWrapper)(dbw), convertErr(err)
+	return (*db)(d), convertErr(err)
 }

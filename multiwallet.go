@@ -52,7 +52,7 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 			// timeout error occurs if storm fails to acquire a lock on the database file
 			return nil, errors.E("wallets database is in use by another process")
 		}
-		return nil, errors.E("error opening wallet database: %s", err.Error())
+		return nil, errors.E("error opening wallets database: %s", err.Error())
 	}
 
 	// init database for saving/reading wallet objects
