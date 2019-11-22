@@ -36,7 +36,7 @@ func convertErr(err error) error {
 }
 
 // transaction represents a database transaction.  It can either by read-only or
-// read-write and implements the walletdb Tx interfaces.  The transaction
+// read-write and implements the walletdb.DB Tx interfaces.  The transaction
 // provides a root bucket against which all read and writes occur.
 type transaction struct {
 	badgerTx *badger.Txn
@@ -153,7 +153,7 @@ func (tx *transaction) Rollback() error {
 	return nil
 }
 
-// Enforce bucket implements the walletdb Bucket interfaces.
+// Enforce bucket implements the walletdb.DB Bucket interfaces.
 var _ walletdb.ReadWriteBucket = (*Bucket)(nil)
 
 // NestedReadWriteBucket retrieves a nested bucket with the given key.  Returns
@@ -567,8 +567,8 @@ func (c *Cursor) Close() {
 	c.iterator.Close()
 }
 
-// dbrapper represents a collection of namespaces which are persisted and implements
-// the walletdb interface.  All database access is performed through
+// db represents a collection of namespaces which are persisted and implements
+// the walletdb.DB interface.  All database access is performed through
 // transactions which are obtained through the specific Namespace.
 type db struct {
 	*badger.DB
@@ -576,7 +576,7 @@ type db struct {
 	ticker *time.Ticker
 }
 
-// Enforce db implements the walletdb interface.
+// Enforce db implements the walletdb.DB interface.
 var _ walletdb.DB = (*db)(nil)
 
 func (db *db) beginTx(writable bool) (*transaction, error) {
@@ -600,14 +600,14 @@ func (db *db) BeginReadWriteTx() (walletdb.ReadWriteTx, error) {
 // Copy writes a copy of the database to the provided writer.  This call will
 // start a read-only transaction to perform all operations.
 //
-// This function is part of the walletdb interface implementation.
+// This function is part of the walletdb.DB interface implementation.
 func (db *db) Copy(w io.Writer) error {
 	return errors.E(errors.Invalid, "method not implemented")
 }
 
 // Close cleanly shuts down the database and syncs all data.
 //
-// This function is part of the walletdb interface implementation.
+// This function is part of the walletdb.DB interface implementation.
 func (db *db) Close() error {
 	if db.closed {
 		return errors.E(errors.Invalid, "database is already closed")

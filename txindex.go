@@ -72,9 +72,7 @@ func (wallet *Wallet) IndexTransactions(waitGroup *sync.WaitGroup) error {
 		count, err := wallet.txDB.Count(txindex.TxFilterAll, &Transaction{})
 		if err != nil {
 			log.Errorf("[%d] Post-indexing tx count error :%v", wallet.ID, err)
-			return
-		}
-		if count > 0 {
+		} else if count > 0 {
 			log.Debugf("[%d] Transaction index finished at %d, %d transaction(s) indexed in total", wallet.ID, txEndHeight, count)
 		}
 

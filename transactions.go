@@ -117,6 +117,6 @@ func (wallet *Wallet) CountTransactions(txFilter int32) (int, error) {
 	return wallet.txDB.Count(txFilter, &Transaction{})
 }
 
-func CompareTxFilter(txFilter int32, txType string, txDirection int32) bool {
-	return txindex.CompareTxFilter(txFilter, txType, txDirection)
+func TxMatchesFilter(txFilter int32, txType string, txDirection int32) bool {
+	return txindex.TxMatchesFilter(txFilter, txType, txDirection)
 }
