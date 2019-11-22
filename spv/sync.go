@@ -15,7 +15,6 @@ import (
 
 	"github.com/decred/dcrd/addrmgr"
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrd/chaincfg/v2"
 	"github.com/decred/dcrd/gcs/blockcf"
 	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrwallet/errors/v2"
@@ -35,16 +34,15 @@ const reqSvcs = wire.SFNodeNetwork | wire.SFNodeCF
 // protocol using Simplified Payment Verification (SPV) with compact filters.
 type Syncer struct {
 	// atomics
-	atomicCatchUpTryLock uint32 // CAS (entered=1) to perform discovery/rescan
+	atomicCatchUpTryLock uint32          // CAS (entered=1) to perform discovery/rescan
+	atomicWalletsSynced  map[int]*uint32 // CAS (synced=1) when wallet syncing complete
 
 	rescanningWalletID int
 	wallets            map[int]*wallet.Wallet
-	chainParams        *chaincfg.Params
 	lp                 *p2p.LocalPeer
 
 	// Protected by atomicCatchUpTryLock
-	discoverAccountsIfUnlocked bool
-	loadedFilters              map[int]bool
+	loadedFilters map[int]bool
 
 	persistentPeers []string
 
@@ -112,26 +110,30 @@ type Notifications struct {
 }
 
 // NewSyncer creates a Syncer that will sync the wallet using SPV.
-func NewSyncer(wallets map[int]*wallet.Wallet, chainParams *chaincfg.Params, lp *p2p.LocalPeer, discoverAccountsIfUnlocked bool) *Syncer {
+func NewSyncer(wallets map[int]*wallet.Wallet, lp *p2p.LocalPeer) *Syncer {
 	rescanFilter := make(map[int]*wallet.RescanFilter)
 	filterData := make(map[int]*blockcf.Entries)
+
+	atomicWalletsSynced := make(map[int]*uint32, len(wallets))
+
 	for walletID := range wallets {
 		rescanFilter[walletID] = wallet.NewRescanFilter(nil, nil)
 		filterData[walletID] = &blockcf.Entries{}
+
+		atomicWalletsSynced[walletID] = new(uint32)
 	}
 
 	return &Syncer{
-		chainParams:                chainParams,
-		wallets:                    wallets,
-		discoverAccountsIfUnlocked: discoverAccountsIfUnlocked,
-		loadedFilters:              make(map[int]bool, len(wallets)),
-		connectingRemotes:          make(map[string]struct{}),
-		remotes:                    make(map[string]*p2p.RemotePeer),
-		rescanFilter:               rescanFilter,
-		filterData:                 filterData,
-		filterWalletID:             -1,
-		seenTxs:                    lru.NewCache(2000),
-		lp:                         lp,
+		atomicWalletsSynced: atomicWalletsSynced,
+		wallets:             wallets,
+		loadedFilters:       make(map[int]bool, len(wallets)),
+		connectingRemotes:   make(map[string]struct{}),
+		remotes:             make(map[string]*p2p.RemotePeer),
+		rescanFilter:        rescanFilter,
+		filterData:          filterData,
+		filterWalletID:      -1,
+		seenTxs:             lru.NewCache(2000),
+		lp:                  lp,
 	}
 }
 
@@ -150,7 +152,9 @@ func (s *Syncer) SetNotifications(ntfns *Notifications) {
 // synced checks the atomic that controls wallet syncness and if previously
 // unsynced, updates to synced and notifies the callback, if set.
 func (s *Syncer) synced(walletID int) {
-	if s.notifications != nil && s.notifications.Synced != nil {
+	if atomic.CompareAndSwapUint32(s.atomicWalletsSynced[walletID], 0, 1) &&
+		s.notifications != nil &&
+		s.notifications.Synced != nil {
 		s.notifications.Synced(walletID, true)
 	}
 }
@@ -158,7 +162,9 @@ func (s *Syncer) synced(walletID int) {
 // unsynced checks the atomic that controls wallet syncness and if previously
 // synced, updates to unsynced and notifies the callback, if set.
 func (s *Syncer) unsynced(walletID int) {
-	if s.notifications != nil && s.notifications.Synced != nil {
+	if atomic.CompareAndSwapUint32(s.atomicWalletsSynced[walletID], 1, 0) &&
+		s.notifications != nil &&
+		s.notifications.Synced != nil {
 		s.notifications.Synced(walletID, false)
 	}
 }
@@ -291,14 +297,14 @@ func (s *Syncer) highestChainTip(ctx context.Context) (chainhash.Hash, int32, *w
 // Run synchronizes the wallet, returning when synchronization fails or the
 // context is cancelled.
 func (s *Syncer) Run(ctx context.Context) error {
-	tipHash, tipHeight, w := s.lowestChainTip(ctx)
-	rescanPoint, err := w.RescanPoint(ctx)
+	tipHash, tipHeight, lowestChainWallet := s.lowestChainTip(ctx)
+	rescanPoint, err := lowestChainWallet.RescanPoint(ctx)
 	if err != nil {
 		return err
 	}
 	log.Infof("Headers synced through block %v height %d", &tipHash, tipHeight)
 	if rescanPoint != nil {
-		h, err := w.BlockHeader(ctx, rescanPoint)
+		h, err := lowestChainWallet.BlockHeader(ctx, rescanPoint)
 		if err != nil {
 			return err
 		}
@@ -309,7 +315,7 @@ func (s *Syncer) Run(ctx context.Context) error {
 		log.Infof("Transactions synced through block %v height %d", &tipHash, tipHeight)
 	}
 
-	locators, err := w.BlockLocators(ctx, nil)
+	locators, err := lowestChainWallet.BlockLocators(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -558,36 +564,28 @@ func (s *Syncer) getTransactionsByHashes(ctx context.Context, txHashes []*chainh
 	var foundTxs []*wire.MsgTx
 
 	for walletID, w := range s.wallets {
-		var missingWalletTxs []*wire.InvVect
-		var foundWalletTxs []*wire.MsgTx
-		var err error
-		foundWalletTxs, missingWalletTxs, err = w.GetTransactionsByHashes(ctx, txHashes)
-		if err != nil && !errors.Is(errors.NotExist, err) {
+		walletFoundTxs, _, err := w.GetTransactionsByHashes(ctx, txHashes)
+		if err != nil && !errors.Is(err, errors.NotExist) {
 			return nil, nil, errors.E("[%d] Failed to look up transactions for getdata reply to peer: %v", walletID, err)
 		}
-		if len(missingWalletTxs) != 0 {
-			notFound = append(notFound, missingWalletTxs...)
+
+		if len(walletFoundTxs) != 0 {
+			foundTxs = append(foundTxs, walletFoundTxs...)
 		}
 
-		if len(foundWalletTxs) != 0 {
-			foundTxs = append(foundTxs, foundWalletTxs...)
-		}
-
-		for _, tx := range foundWalletTxs {
+		// remove hashes for found txs from the `txHashes` slice
+		// so that the next wallet does not attempt to find them.
+		for _, tx := range walletFoundTxs {
 			for index, hash := range txHashes {
 				if tx.TxHash() == *hash {
 					txHashes = append(txHashes[:index], txHashes[index+1:]...)
-					break
 				}
 			}
 
-			// delete the transactions that were not found by other wallets
-			for index, notFoundTx := range notFound {
-				if tx.TxHash() == notFoundTx.Hash {
-					notFound = append(notFound[:index], notFound[index+1:]...)
-					break
-				}
-			}
+		}
+
+		for _, hash := range txHashes {
+			notFound = append(notFound, wire.NewInvVect(wire.InvTypeTx, hash))
 		}
 
 		if len(txHashes) == 0 {
@@ -1306,27 +1304,27 @@ func (s *Syncer) fetchMissingCFilters(ctx context.Context, rp *p2p.RemotePeer) e
 func (s *Syncer) startupSync(ctx context.Context, rp *p2p.RemotePeer) error {
 	log.Infof("Syncing %d wallets", len(s.wallets))
 
-	_, _, highestChainWallet := s.highestChainTip(ctx)
+	_, tipHeight, _ := s.highestChainTip(ctx)
 
 	// Disconnect from the peer if their advertised block height is
-	// significantly behind the wallet's.
-	_, tipHeight := highestChainWallet.MainChainTip(ctx)
+	// significantly behind the highest block height recorded by all wallets.
 	if rp.InitialHeight() < tipHeight-6 {
 		return errors.E("peer is not synced")
 	}
 
-	s.fetchMissingCFilters(ctx, rp)
+	if err := s.fetchMissingCFilters(ctx, rp); err != nil {
+		return err
+	}
 
 	// Fetch any unseen headers from the peer.
 	s.fetchHeadersStart(rp.InitialHeight())
-	log.Infof("About to fetch headers")
 	log.Debugf("Fetching headers from %v", rp.RemoteAddr())
 	err := s.getHeaders(ctx, rp)
 	if err != nil {
 		return err
 	}
 	s.fetchHeadersFinished()
-	log.Infof("Finished Fetching Headers")
+	log.Debugf("Finished fetching headers from %v", rp.RemoteAddr())
 
 	if atomic.CompareAndSwapUint32(&s.atomicCatchUpTryLock, 0, 1) {
 		for key, w := range s.wallets {
@@ -1355,7 +1353,7 @@ func (s *Syncer) startupSync(ctx context.Context, rp *p2p.RemotePeer) error {
 				s.unsynced(key)
 
 				s.discoverAddressesStart(key)
-				err = w.DiscoverActiveAddresses(ctx, rp, rescanPoint, !w.Locked() && s.discoverAccountsIfUnlocked)
+				err = w.DiscoverActiveAddresses(ctx, rp, rescanPoint, !w.Locked())
 				if err != nil {
 					return err
 				}
@@ -1407,8 +1405,6 @@ func (s *Syncer) startupSync(ctx context.Context, rp *p2p.RemotePeer) error {
 				log.Errorf("Failed to resent one or more unmined transactions: %v", err)
 			}
 		}
-
-		s.discoverAccountsIfUnlocked = false
 
 		atomic.StoreUint32(&s.atomicCatchUpTryLock, 0)
 		if err != nil {

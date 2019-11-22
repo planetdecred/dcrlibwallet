@@ -55,7 +55,7 @@ func (s *Syncer) rescanCheckTransactions(matches *[]*wire.MsgTx, fadded *blockcf
 		for i, output := range tx.TxOut {
 			_, addrs, _, err := txscript.ExtractPkScriptAddrs(
 				output.Version, output.PkScript,
-				s.chainParams)
+				s.wallets[walletID].ChainParams())
 			if err != nil {
 				continue
 			}
@@ -112,7 +112,7 @@ Txs:
 		}
 		for _, out := range tx.TxOut {
 			_, addrs, _, err := txscript.ExtractPkScriptAddrs(out.Version,
-				out.PkScript, s.chainParams)
+				out.PkScript, s.wallets[walletID].ChainParams())
 			if err != nil {
 				continue
 			}
