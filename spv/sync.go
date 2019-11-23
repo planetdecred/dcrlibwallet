@@ -1252,7 +1252,6 @@ func (s *Syncer) getHeaders(ctx context.Context, rp *p2p.RemotePeer) error {
 				return err
 			}
 			if len(bestChain) == 0 {
-				s.sidechainMu.Unlock()
 				continue
 			}
 
@@ -1282,9 +1281,9 @@ func (s *Syncer) getHeaders(ctx context.Context, rp *p2p.RemotePeer) error {
 				log.Infof("[%d] Connected %d blocks, new tip %v, height %d, date %v",
 					walletID, len(bestChain), tip.Hash, tip.Header.Height, tip.Header.Timestamp)
 			}
-
-			s.sidechainMu.Unlock()
 		}
+
+		s.sidechainMu.Unlock()
 
 		// Generate new locators
 		s.locatorMu.Lock()
