@@ -1119,6 +1119,19 @@ func (s *Syncer) handleBlockAnnouncements(ctx context.Context, rp *p2p.RemotePee
 	return nil
 }
 
+func (s *Syncer) allWalletsHaveBlock(ctx context.Context, hash *chainhash.Hash) (bool, error) {
+	for _, w := range s.wallets {
+		haveBlock, _, err := w.BlockInMainChain(ctx, hash)
+		if err != nil {
+			return false, err
+		}
+		if !haveBlock {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
 // hashStop is a zero value stop hash for fetching all possible data using
 // locators.
 var hashStop chainhash.Hash
@@ -1194,41 +1207,45 @@ func (s *Syncer) getHeaders(ctx context.Context, rp *p2p.RemotePeer) error {
 			return err
 		}
 
-		for walletID, w := range s.wallets {
-			var added int
-			s.sidechainMu.Lock()
-			for _, n := range nodes {
-				haveBlock, _, _ := w.BlockInMainChain(ctx, n.Hash)
-				if haveBlock {
-					continue
-				}
-				if s.sidechains.AddBlockNode(n) {
-					added++
-				}
-			}
-			if added == 0 {
-				s.sidechainMu.Unlock()
-
-				s.locatorMu.Lock()
-				if s.locatorGeneration > generation {
-					locators = s.currentLocators
-				}
-				if len(locators) == 0 {
-					locators, err = w.BlockLocators(ctx, nil)
-					if err != nil {
-						s.locatorMu.Unlock()
-						return err
-					}
-					s.currentLocators = locators
-					s.locatorGeneration++
-					generation = s.locatorGeneration
-				}
-				s.locatorMu.Unlock()
+		// add new blocks (any block missing from any wallet) to the sidechain
+		var added int
+		s.sidechainMu.Lock()
+		for _, n := range nodes {
+			allWalletsHaveBlock, _ := s.allWalletsHaveBlock(ctx, n.Hash)
+			if allWalletsHaveBlock {
 				continue
 			}
-			log.Debugf("[%d] Fetched %d new header(s) ending at height %d from %v",
-				walletID, added, nodes[len(nodes)-1].Header.Height, rp)
+			if s.sidechains.AddBlockNode(n) {
+				added++
+			}
+		}
+		if added == 0 {
+			s.sidechainMu.Unlock()
 
+			s.locatorMu.Lock()
+			if s.locatorGeneration > generation {
+				locators = s.currentLocators
+			}
+			if len(locators) == 0 {
+				locators, err = lowestChainWallet.BlockLocators(ctx, nil)
+				if err != nil {
+					s.locatorMu.Unlock()
+					return err
+				}
+				s.currentLocators = locators
+				s.locatorGeneration++
+				generation = s.locatorGeneration
+			}
+			s.locatorMu.Unlock()
+			continue
+		}
+		s.fetchHeadersProgress(headers[len(headers)-1])
+		log.Debugf("Fetched %d new header(s) ending at height %d from %v",
+			added, nodes[len(nodes)-1].Header.Height, rp)
+
+		// check each wallet to see which block headers from the sidechain
+		// can be added to the wallet's mainchain
+		for walletID, w := range s.wallets {
 			bestChain, err := w.EvaluateBestChain(ctx, &s.sidechains)
 			if err != nil {
 				s.sidechainMu.Unlock()
@@ -1265,8 +1282,6 @@ func (s *Syncer) getHeaders(ctx context.Context, rp *p2p.RemotePeer) error {
 				log.Infof("[%d] Connected %d blocks, new tip %v, height %d, date %v",
 					walletID, len(bestChain), tip.Hash, tip.Header.Height, tip.Header.Timestamp)
 			}
-
-			s.fetchHeadersProgress(headers[len(headers)-1])
 
 			s.sidechainMu.Unlock()
 		}
