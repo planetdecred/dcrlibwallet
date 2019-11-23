@@ -185,6 +185,8 @@ func (tx *TxAuthor) constructTransaction() (*txauthor.AuthoredTx, error) {
 	var outputSelectionAlgorithm w.OutputSelectionAlgorithm = w.OutputSelectionAlgorithmDefault
 	var changeSource txauthor.ChangeSource
 
+	ctx := tx.wallet.shutdownContext()
+
 	for _, destination := range tx.destinations {
 		// validate the amount to send to this destination address
 		if !destination.SendMax && (destination.AtomAmount <= 0 || destination.AtomAmount > MaxAmountAtom) {
@@ -208,6 +210,17 @@ func (tx *TxAuthor) constructTransaction() (*txauthor.AuthoredTx, error) {
 			}
 
 			continue // do not prepare a tx output for this destination
+		} else {
+			address, err := tx.wallet.internal.NewChangeAddress(ctx, tx.sendFromAccount)
+			if err != nil {
+				return nil, fmt.Errorf("change address error: %v", err)
+			}
+
+			changeSource, err = txhelper.MakeTxChangeSource(address.String(), tx.wallet.chainParams)
+			if err != nil {
+				log.Errorf("constructTransaction: error preparing change source: %v", err)
+				return nil, fmt.Errorf("change source error: %v", err)
+			}
 		}
 
 		output, err := txhelper.MakeTxOutput(destination.Address, destination.AtomAmount, tx.wallet.chainParams)
@@ -219,6 +232,6 @@ func (tx *TxAuthor) constructTransaction() (*txauthor.AuthoredTx, error) {
 		outputs = append(outputs, output)
 	}
 
-	return tx.wallet.internal.NewUnsignedTransaction(tx.wallet.shutdownContext(), outputs, txrules.DefaultRelayFeePerKb, tx.sendFromAccount,
+	return tx.wallet.internal.NewUnsignedTransaction(ctx, outputs, txrules.DefaultRelayFeePerKb, tx.sendFromAccount,
 		tx.requiredConfirmations, outputSelectionAlgorithm, changeSource)
 }
