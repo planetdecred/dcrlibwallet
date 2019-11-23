@@ -37,9 +37,8 @@ type Syncer struct {
 	atomicCatchUpTryLock uint32          // CAS (entered=1) to perform discovery/rescan
 	atomicWalletsSynced  map[int]*uint32 // CAS (synced=1) when wallet syncing complete
 
-	rescanningWalletID int
-	wallets            map[int]*wallet.Wallet
-	lp                 *p2p.LocalPeer
+	wallets map[int]*wallet.Wallet
+	lp      *p2p.LocalPeer
 
 	// Protected by atomicCatchUpTryLock
 	loadedFilters map[int]bool
@@ -54,10 +53,9 @@ type Syncer struct {
 	//
 	// TODO: Replace precise rescan filter with wallet db accesses to avoid
 	// needing to keep all relevant data in memory.
-	rescanFilter   map[int]*wallet.RescanFilter
-	filterData     map[int]*blockcf.Entries
-	filterWalletID int
-	filterMu       sync.Mutex
+	rescanFilter map[int]*wallet.RescanFilter
+	filterData   map[int]*blockcf.Entries
+	filterMu     sync.Mutex
 
 	// seenTxs records hashes of received inventoried transactions.  Once a
 	// transaction is fetched and processed from one peer, the hash is added to
@@ -131,7 +129,6 @@ func NewSyncer(wallets map[int]*wallet.Wallet, lp *p2p.LocalPeer) *Syncer {
 		remotes:             make(map[string]*p2p.RemotePeer),
 		rescanFilter:        rescanFilter,
 		filterData:          filterData,
-		filterWalletID:      -1,
 		seenTxs:             lru.NewCache(2000),
 		lp:                  lp,
 	}
@@ -834,9 +831,7 @@ func (s *Syncer) handleTxInvs(ctx context.Context, rp *p2p.RemotePeer, hashes []
 	for walletID, w := range s.wallets {
 		relevant := s.filterRelevant(txs, walletID)
 		for _, tx := range relevant {
-			s.filterWalletID = walletID
 			err := w.AcceptMempoolTx(ctx, tx)
-			s.filterWalletID = -1
 			if err != nil {
 				op := errors.Opf(opf, rp.RemoteAddr())
 				log.Warn(errors.E(op, err))
@@ -1341,66 +1336,64 @@ func (s *Syncer) startupSync(ctx context.Context, rp *p2p.RemotePeer) error {
 	log.Debugf("Finished fetching headers from %v", rp.RemoteAddr())
 
 	if atomic.CompareAndSwapUint32(&s.atomicCatchUpTryLock, 0, 1) {
-		for key, w := range s.wallets {
+		for walletID, w := range s.wallets {
 			err = func() error {
 				rescanPoint, err := w.RescanPoint(ctx)
 				if err != nil {
 					return err
 				}
+				walletBackend := &WalletBackend{
+					Syncer:   s,
+					WalletID: walletID,
+				}
 				if rescanPoint == nil {
-					if !s.loadedFilters[key] {
-						s.filterWalletID = key
-						err = w.LoadActiveDataFilters(ctx, s, true)
-						s.filterWalletID = -1
+					if !s.loadedFilters[walletID] {
+						err = w.LoadActiveDataFilters(ctx, walletBackend, true)
 						if err != nil {
 							return err
 						}
-						s.loadedFilters[key] = true
+						s.loadedFilters[walletID] = true
 					}
 
-					s.synced(key)
+					s.synced(walletID)
 
 					return nil
 				}
 				// RescanPoint is != nil so we are not synced to the peer and
 				// check to see if it was previously synced
-				s.unsynced(key)
+				s.unsynced(walletID)
 
-				s.discoverAddressesStart(key)
+				s.discoverAddressesStart(walletID)
 				err = w.DiscoverActiveAddresses(ctx, rp, rescanPoint, !w.Locked())
 				if err != nil {
 					return err
 				}
-				s.discoverAddressesFinished(key)
+				s.discoverAddressesFinished(walletID)
 
-				s.filterWalletID = key
-				err = w.LoadActiveDataFilters(ctx, s, true)
-				s.filterWalletID = -1
+				err = w.LoadActiveDataFilters(ctx, walletBackend, true)
 				if err != nil {
 					return err
 				}
-				s.loadedFilters[key] = true
+				s.loadedFilters[walletID] = true
 
-				s.rescanningWalletID = key
-				s.rescanStart(key)
+				s.rescanStart(walletID)
 
 				rescanBlock, err := w.BlockHeader(ctx, rescanPoint)
 				if err != nil {
 					return err
 				}
 				progress := make(chan wallet.RescanProgress, 1)
-				go w.RescanProgressFromHeight(ctx, s, int32(rescanBlock.Height), progress)
+				go w.RescanProgressFromHeight(ctx, walletBackend, int32(rescanBlock.Height), progress)
 
 				for p := range progress {
 					if p.Err != nil {
 						return p.Err
 					}
-					s.rescanProgress(key, p.ScannedThrough)
+					s.rescanProgress(walletID, p.ScannedThrough)
 				}
-				s.rescanFinished(key)
-				s.rescanningWalletID = -1
+				s.rescanFinished(walletID)
 
-				s.synced(key)
+				s.synced(walletID)
 
 				return nil
 			}()

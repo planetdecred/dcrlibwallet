@@ -21,7 +21,12 @@ import (
 	"github.com/decred/dcrwallet/wallet/v3"
 )
 
-var _ wallet.NetworkBackend = (*Syncer)(nil)
+var _ wallet.NetworkBackend = (*WalletBackend)(nil)
+
+type WalletBackend struct {
+	*Syncer
+	WalletID int
+}
 
 // TODO: When using the Syncer as a NetworkBackend, keep track of in-flight
 // blocks and cfilters.  If one is already incoming, wait on that response.  If
@@ -31,12 +36,12 @@ var _ wallet.NetworkBackend = (*Syncer)(nil)
 func pickAny(*p2p.RemotePeer) bool { return true }
 
 // Blocks implements the Blocks method of the wallet.Peer interface.
-func (s *Syncer) Blocks(ctx context.Context, blockHashes []*chainhash.Hash) ([]*wire.MsgBlock, error) {
+func (wb *WalletBackend) Blocks(ctx context.Context, blockHashes []*chainhash.Hash) ([]*wire.MsgBlock, error) {
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		rp, err := s.pickRemote(pickAny)
+		rp, err := wb.pickRemote(pickAny)
 		if err != nil {
 			return nil, err
 		}
@@ -49,12 +54,12 @@ func (s *Syncer) Blocks(ctx context.Context, blockHashes []*chainhash.Hash) ([]*
 }
 
 // CFilters implements the CFilters method of the wallet.Peer interface.
-func (s *Syncer) CFilters(ctx context.Context, blockHashes []*chainhash.Hash) ([]*gcs.Filter, error) {
+func (wb *WalletBackend) CFilters(ctx context.Context, blockHashes []*chainhash.Hash) ([]*gcs.Filter, error) {
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		rp, err := s.pickRemote(pickAny)
+		rp, err := wb.pickRemote(pickAny)
 		if err != nil {
 			return nil, err
 		}
@@ -67,12 +72,12 @@ func (s *Syncer) CFilters(ctx context.Context, blockHashes []*chainhash.Hash) ([
 }
 
 // Headers implements the Headers method of the wallet.Peer interface.
-func (s *Syncer) Headers(ctx context.Context, blockLocators []*chainhash.Hash, hashStop *chainhash.Hash) ([]*wire.BlockHeader, error) {
+func (wb *WalletBackend) Headers(ctx context.Context, blockLocators []*chainhash.Hash, hashStop *chainhash.Hash) ([]*wire.BlockHeader, error) {
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		rp, err := s.pickRemote(pickAny)
+		rp, err := wb.pickRemote(pickAny)
 		if err != nil {
 			return nil, err
 		}
@@ -84,7 +89,7 @@ func (s *Syncer) Headers(ctx context.Context, blockLocators []*chainhash.Hash, h
 	}
 }
 
-func (s *Syncer) String() string {
+func (wb *WalletBackend) String() string {
 	// This method is part of the wallet.Peer interface and will typically
 	// specify the remote address of the peer.  Since the syncer can encompass
 	// multiple peers, just use the qualified type as the string.
@@ -93,11 +98,11 @@ func (s *Syncer) String() string {
 
 // LoadTxFilter implements the LoadTxFilter method of the wallet.NetworkBackend
 // interface.
-func (s *Syncer) LoadTxFilter(ctx context.Context, reload bool, addrs []dcrutil.Address, outpoints []wire.OutPoint) error {
-	s.filterMu.Lock()
-	if reload || s.rescanFilter[s.filterWalletID] == nil {
-		s.rescanFilter[s.filterWalletID] = wallet.NewRescanFilter(nil, nil)
-		s.filterData[s.filterWalletID] = &blockcf.Entries{}
+func (wb *WalletBackend) LoadTxFilter(ctx context.Context, reload bool, addrs []dcrutil.Address, outpoints []wire.OutPoint) error {
+	wb.filterMu.Lock()
+	if reload || wb.rescanFilter[wb.WalletID] == nil {
+		wb.rescanFilter[wb.WalletID] = wallet.NewRescanFilter(nil, nil)
+		wb.filterData[wb.WalletID] = &blockcf.Entries{}
 	}
 	for _, addr := range addrs {
 		var pkScript []byte
@@ -108,21 +113,21 @@ func (s *Syncer) LoadTxFilter(ctx context.Context, reload bool, addrs []dcrutil.
 			pkScript, _ = txscript.PayToAddrScript(addr)
 		}
 		if pkScript != nil {
-			s.rescanFilter[s.filterWalletID].AddAddress(addr)
-			s.filterData[s.filterWalletID].AddRegularPkScript(pkScript)
+			wb.rescanFilter[wb.WalletID].AddAddress(addr)
+			wb.filterData[wb.WalletID].AddRegularPkScript(pkScript)
 		}
 	}
 	for i := range outpoints {
-		s.rescanFilter[s.filterWalletID].AddUnspentOutPoint(&outpoints[i])
-		s.filterData[s.filterWalletID].AddOutPoint(&outpoints[i])
+		wb.rescanFilter[wb.WalletID].AddUnspentOutPoint(&outpoints[i])
+		wb.filterData[wb.WalletID].AddOutPoint(&outpoints[i])
 	}
-	s.filterMu.Unlock()
+	wb.filterMu.Unlock()
 	return nil
 }
 
 // PublishTransactions implements the PublishTransaction method of the
 // wallet.Peer interface.
-func (s *Syncer) PublishTransactions(ctx context.Context, txs ...*wire.MsgTx) error {
+func (wb *WalletBackend) PublishTransactions(ctx context.Context, txs ...*wire.MsgTx) error {
 	msg := wire.NewMsgInvSizeHint(uint(len(txs)))
 	for _, tx := range txs {
 		txHash := tx.TxHash()
@@ -131,7 +136,7 @@ func (s *Syncer) PublishTransactions(ctx context.Context, txs ...*wire.MsgTx) er
 			return errors.E(errors.Protocol, err)
 		}
 	}
-	return s.forRemotes(func(rp *p2p.RemotePeer) error {
+	return wb.forRemotes(func(rp *p2p.RemotePeer) error {
 		for _, inv := range msg.InvList {
 			rp.InvsSent().Add(inv.Hash)
 		}
@@ -140,10 +145,10 @@ func (s *Syncer) PublishTransactions(ctx context.Context, txs ...*wire.MsgTx) er
 }
 
 // Rescan implements the Rescan method of the wallet.NetworkBackend interface.
-func (s *Syncer) Rescan(ctx context.Context, blockHashes []chainhash.Hash, save func(*chainhash.Hash, []*wire.MsgTx) error) error {
+func (wb *WalletBackend) Rescan(ctx context.Context, blockHashes []chainhash.Hash, save func(*chainhash.Hash, []*wire.MsgTx) error) error {
 	const op errors.Op = "spv.Rescan"
 
-	w, ok := s.wallets[s.rescanningWalletID]
+	w, ok := wb.wallets[wb.WalletID]
 	if !ok {
 		return errors.E(op, errors.Invalid)
 	}
@@ -162,9 +167,9 @@ func (s *Syncer) Rescan(ctx context.Context, blockHashes []chainhash.Hash, save 
 	// Read current filter data.  filterData is reassinged to new data matches
 	// for subsequent filter checks, which improves filter matching performance
 	// by checking for less data.
-	s.filterMu.Lock()
-	filterData := *s.filterData[s.rescanningWalletID]
-	s.filterMu.Unlock()
+	wb.filterMu.Lock()
+	filterData := *wb.filterData[wb.WalletID]
+	wb.filterMu.Unlock()
 
 	idx := 0
 FilterLoop:
@@ -213,7 +218,7 @@ FilterLoop:
 				}
 				if rp == nil {
 					var err error
-					rp, err = s.pickRemote(pickAny)
+					rp, err = wb.pickRemote(pickAny)
 					if err != nil {
 						return err
 					}
@@ -267,7 +272,7 @@ FilterLoop:
 				return err
 			}
 
-			matchedTxs, fadded := s.rescanBlock(b, s.rescanningWalletID)
+			matchedTxs, fadded := wb.rescanBlock(b, wb.WalletID)
 			if len(matchedTxs) != 0 {
 				err := save(&blockHashes[i], matchedTxs)
 				if err != nil {
@@ -296,6 +301,6 @@ FilterLoop:
 // is not queryable over wire protocol, and when the next stake difficulty is
 // available in a header commitment, the wallet will be able to determine this
 // itself without requiring the NetworkBackend.
-func (s *Syncer) StakeDifficulty(ctx context.Context) (dcrutil.Amount, error) {
+func (wb *WalletBackend) StakeDifficulty(ctx context.Context) (dcrutil.Amount, error) {
 	return 0, errors.E(errors.Invalid, "stake difficulty is not queryable over wire protocol")
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/decred/dcrd/chaincfg/v2"
 	"github.com/decred/dcrwallet/errors/v2"
 	w "github.com/decred/dcrwallet/wallet/v3"
+	"github.com/raedahgroup/dcrlibwallet/spv"
 	"github.com/raedahgroup/dcrlibwallet/utils"
 	bolt "go.etcd.io/bbolt"
 )
@@ -485,10 +486,14 @@ func (mw *MultiWallet) markWalletAsDiscoveredAccounts(walletID int) error {
 	return nil
 }
 
-func (mw *MultiWallet) setNetworkBackend(netBackend w.NetworkBackend) {
-	for _, wallet := range mw.wallets {
+func (mw *MultiWallet) setNetworkBackend(syncer *spv.Syncer) {
+	for walletID, wallet := range mw.wallets {
 		if wallet.WalletOpened() {
-			wallet.internal.SetNetworkBackend(netBackend)
+			walletBackend := &spv.WalletBackend{
+				Syncer:   syncer,
+				WalletID: walletID,
+			}
+			wallet.internal.SetNetworkBackend(walletBackend)
 		}
 	}
 }
