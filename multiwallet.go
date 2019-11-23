@@ -237,7 +237,7 @@ func (mw *MultiWallet) SyncedWalletsCount() int32 {
 	return syncedWallets
 }
 
-func (mw *MultiWallet) CreateWatchOnlyWallet(walletName string, extendedPublicKey string) (*Wallet, error) {
+func (mw *MultiWallet) CreateWatchOnlyWallet(walletName, publicPassphrase, extendedPublicKey string) (*Wallet, error) {
 	exists, err := mw.WalletNameExists(walletName)
 	if err != nil {
 		return nil, err
@@ -253,7 +253,7 @@ func (mw *MultiWallet) CreateWatchOnlyWallet(walletName string, extendedPublicKe
 		return nil, err
 	}
 
-	err = wallet.CreateWatchingOnlyWallet(w.InsecurePubPassphrase, extendedPublicKey)
+	err = wallet.CreateWatchingOnlyWallet(publicPassphrase, extendedPublicKey)
 	if err != nil {
 		mw.db.DeleteStruct(wallet)
 		return nil, err
@@ -264,7 +264,7 @@ func (mw *MultiWallet) CreateWatchOnlyWallet(walletName string, extendedPublicKe
 	return wallet, nil
 }
 
-func (mw *MultiWallet) CreateNewWallet(privatePassphrase string, privatePassphraseType int32) (*Wallet, error) {
+func (mw *MultiWallet) CreateNewWallet(publicPassphrase, privatePassphrase string, privatePassphraseType int32) (*Wallet, error) {
 	if mw.syncData.activeSyncData != nil {
 		return nil, errors.New(ErrSyncAlreadyInProgress)
 	}
@@ -283,7 +283,7 @@ func (mw *MultiWallet) CreateNewWallet(privatePassphrase string, privatePassphra
 		return nil, err
 	}
 
-	err = wallet.CreateWallet(privatePassphrase, seed)
+	err = wallet.CreateWallet(publicPassphrase, privatePassphrase, seed)
 	if err != nil {
 		mw.db.DeleteStruct(wallet)
 		return nil, err
@@ -294,7 +294,7 @@ func (mw *MultiWallet) CreateNewWallet(privatePassphrase string, privatePassphra
 	return wallet, nil
 }
 
-func (mw *MultiWallet) RestoreWallet(seedMnemonic, privatePassphrase string, privatePassphraseType int32) (*Wallet, error) {
+func (mw *MultiWallet) RestoreWallet(seedMnemonic, publicPassphrase, privatePassphrase string, privatePassphraseType int32) (*Wallet, error) {
 	if mw.syncData.activeSyncData != nil {
 		return nil, errors.New(ErrSyncAlreadyInProgress)
 	}
@@ -307,7 +307,7 @@ func (mw *MultiWallet) RestoreWallet(seedMnemonic, privatePassphrase string, pri
 		return nil, err
 	}
 
-	err = wallet.CreateWallet(privatePassphrase, seedMnemonic)
+	err = wallet.CreateWallet(publicPassphrase, privatePassphrase, seedMnemonic)
 	if err != nil {
 		mw.db.DeleteStruct(wallet)
 		return nil, err
@@ -411,6 +411,46 @@ func (mw *MultiWallet) UnlockWallet(walletID int, privPass []byte) error {
 	}
 
 	return wallet.UnlockWallet(privPass)
+}
+
+func (mw *MultiWallet) ChangeStartupPassphrase(oldStartupPass, newStartupPass []byte) error {
+	defer func() {
+		for i := range oldStartupPass {
+			oldStartupPass[i] = 0
+		}
+
+		for i := range newStartupPass {
+			newStartupPass[i] = 0
+		}
+	}()
+
+	if len(oldStartupPass) == 0 {
+		oldStartupPass = []byte(w.InsecurePubPassphrase)
+	}
+	if len(newStartupPass) == 0 {
+		newStartupPass = []byte(w.InsecurePubPassphrase)
+	}
+
+	successfullyChangedWalletIDs := make([]int, 0)
+	var err error
+	for walletID, wallets := range mw.wallets {
+		ctx, _ := mw.contextWithShutdownCancel()
+		if err = wallets.internal.ChangePublicPassphrase(ctx, oldStartupPass, newStartupPass); err != nil {
+			log.Errorf("[%d] Error changing public passphrase: %v", walletID, err)
+			break
+		}
+		successfullyChangedWalletIDs = append(successfullyChangedWalletIDs, walletID)
+	}
+
+	if err != nil {
+		// Rollback changes
+		for walletID := range successfullyChangedWalletIDs {
+			ctx, _ := mw.contextWithShutdownCancel()
+			mw.wallets[walletID].internal.ChangePublicPassphrase(ctx, newStartupPass, oldStartupPass)
+		}
+	}
+
+	return translateError(err)
 }
 
 func (mw *MultiWallet) markWalletAsDiscoveredAccounts(walletID int) error {

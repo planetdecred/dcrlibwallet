@@ -17,18 +17,14 @@ const (
 	SpendUnconfirmedConfigKey   = "spend_unconfirmed"
 	CurrencyConversionConfigKey = "currency_conversion_option"
 
-	SpendingPassphraseSecurityTypeConfigKey = "spending_security_type"
-	IsStartupSecuritySetConfigKey           = "startup_security_set"
-	IsStartupSecurityCustom                 = "custom_startup_security"
-	StartupSecurityTypeConfigKey            = "startup_security_type"
+	IsStartupSecuritySetConfigKey = "startup_security_set"
+	StartupSecurityTypeConfigKey  = "startup_security_type"
 
 	IncomingTxNotificationsConfigKey = "tx_notification_enabled"
 	BeepNewBlocksConfigKey           = "beep_new_blocks"
 
 	SyncOnCellularConfigKey             = "always_sync"
-	NetworkModeConfigKey                = "network_mode" // TODO: remove
 	SpvPersistentPeerAddressesConfigKey = "spv_peer_addresses"
-	RemoteServerIPConfigKey             = "remote_server_ip" // TODO: remove
 	UserAgentConfigKey                  = "user_agent"
 
 	LastTxHashConfigKey = "last_tx_hash"

@@ -112,13 +112,13 @@ func (wallet *Wallet) WalletExists() (bool, error) {
 	return wallet.loader.WalletExists()
 }
 
-func (wallet *Wallet) CreateWallet(privatePassphrase string, seedMnemonic string) error {
+func (wallet *Wallet) CreateWallet(publicPassphrase, privatePassphrase, seedMnemonic string) error {
 	log.Info("Creating Wallet")
 	if len(seedMnemonic) == 0 {
 		return errors.New(ErrEmptySeed)
 	}
 
-	pubPass := []byte(w.InsecurePubPassphrase)
+	pubPass := []byte(publicPassphrase)
 	privPass := []byte(privatePassphrase)
 	seed, err := walletseed.DecodeUserInput(seedMnemonic)
 	if err != nil {
@@ -224,31 +224,6 @@ func (wallet *Wallet) ChangePrivatePassphrase(oldPass []byte, newPass []byte) er
 	}()
 
 	err := wallet.internal.ChangePrivatePassphrase(wallet.shutdownContext(), oldPass, newPass)
-	if err != nil {
-		return translateError(err)
-	}
-	return nil
-}
-
-func (wallet *Wallet) ChangePublicPassphrase(oldPass []byte, newPass []byte) error {
-	defer func() {
-		for i := range oldPass {
-			oldPass[i] = 0
-		}
-
-		for i := range newPass {
-			newPass[i] = 0
-		}
-	}()
-
-	if len(oldPass) == 0 {
-		oldPass = []byte(w.InsecurePubPassphrase)
-	}
-	if len(newPass) == 0 {
-		newPass = []byte(w.InsecurePubPassphrase)
-	}
-
-	err := wallet.internal.ChangePublicPassphrase(wallet.shutdownContext(), oldPass, newPass)
 	if err != nil {
 		return translateError(err)
 	}
