@@ -298,13 +298,13 @@ func (s *Syncer) highestChainTip(ctx context.Context) (chainhash.Hash, int32, *w
 // context is cancelled.
 func (s *Syncer) Run(ctx context.Context) error {
 	tipHash, tipHeight, lowestChainWallet := s.lowestChainTip(ctx)
-	rescanPoint, err := lowestChainWallet.RescanPoint(ctx)
+	lowestRescanPoint, err := s.lowestRescanPoint(ctx)
 	if err != nil {
 		return err
 	}
 	log.Infof("Headers synced through block %v height %d", &tipHash, tipHeight)
-	if rescanPoint != nil {
-		h, err := lowestChainWallet.BlockHeader(ctx, rescanPoint)
+	if lowestRescanPoint != nil {
+		h, err := lowestChainWallet.BlockHeader(ctx, lowestRescanPoint)
 		if err != nil {
 			return err
 		}

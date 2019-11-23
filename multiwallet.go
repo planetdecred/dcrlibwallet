@@ -253,6 +253,10 @@ func (mw *MultiWallet) CreateWatchOnlyWallet(walletName, publicPassphrase, exten
 		return nil, err
 	}
 
+	if publicPassphrase == "" {
+		publicPassphrase = w.InsecurePubPassphrase
+	}
+
 	err = wallet.CreateWatchingOnlyWallet(publicPassphrase, extendedPublicKey)
 	if err != nil {
 		mw.db.DeleteStruct(wallet)
@@ -283,6 +287,10 @@ func (mw *MultiWallet) CreateNewWallet(publicPassphrase, privatePassphrase strin
 		return nil, err
 	}
 
+	if publicPassphrase == "" {
+		publicPassphrase = w.InsecurePubPassphrase
+	}
+
 	err = wallet.CreateWallet(publicPassphrase, privatePassphrase, seed)
 	if err != nil {
 		mw.db.DeleteStruct(wallet)
@@ -305,6 +313,10 @@ func (mw *MultiWallet) RestoreWallet(seedMnemonic, publicPassphrase, privatePass
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	if publicPassphrase == "" {
+		publicPassphrase = w.InsecurePubPassphrase
 	}
 
 	err = wallet.CreateWallet(publicPassphrase, privatePassphrase, seedMnemonic)
@@ -433,9 +445,9 @@ func (mw *MultiWallet) ChangeStartupPassphrase(oldStartupPass, newStartupPass []
 
 	successfullyChangedWalletIDs := make([]int, 0)
 	var err error
-	for walletID, wallets := range mw.wallets {
+	for walletID, wallet := range mw.wallets {
 		ctx, _ := mw.contextWithShutdownCancel()
-		if err = wallets.internal.ChangePublicPassphrase(ctx, oldStartupPass, newStartupPass); err != nil {
+		if err = wallet.internal.ChangePublicPassphrase(ctx, oldStartupPass, newStartupPass); err != nil {
 			log.Errorf("[%d] Error changing public passphrase: %v", walletID, err)
 			break
 		}

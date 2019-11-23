@@ -16,7 +16,7 @@ const (
 	TxFilterRegular     int32 = 6
 )
 
-func TxMatchesFilter(txFilter int32, txType string, txDirection int32) bool {
+func TxMatchesFilter(txType string, txDirection, txFilter int32) bool {
 	switch txFilter {
 	case TxFilterSent:
 		return txType == txhelper.TxTypeRegular && txDirection == txhelper.TxDirectionSent
