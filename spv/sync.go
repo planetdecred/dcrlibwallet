@@ -1420,7 +1420,7 @@ func (s *Syncer) startupSync(ctx context.Context, rp *p2p.RemotePeer) error {
 		}
 	}
 
-	return rp.SendHeaders(ctx)
+	return nil
 }
 
 func (s *Syncer) nextWalletToRescan() (int, *wallet.Wallet) {
