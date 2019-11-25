@@ -34,8 +34,8 @@ const reqSvcs = wire.SFNodeNetwork | wire.SFNodeCF
 // protocol using Simplified Payment Verification (SPV) with compact filters.
 type Syncer struct {
 	// atomics
-	atomicCatchUpTryLock uint32          // CAS (entered=1) to perform discovery/rescan
-	atomicWalletsSynced  map[int]*uint32 // CAS (synced=1) when wallet syncing complete
+	atomicCatchUpTryLocks map[int]*uint32 // CAS (entered=1) to perform discovery/rescan
+	atomicWalletsSynced   map[int]*uint32 // CAS (synced=1) when wallet syncing complete
 
 	wallets map[int]*wallet.Wallet
 	lp      *p2p.LocalPeer
@@ -112,25 +112,22 @@ func NewSyncer(wallets map[int]*wallet.Wallet, lp *p2p.LocalPeer) *Syncer {
 	rescanFilter := make(map[int]*wallet.RescanFilter)
 	filterData := make(map[int]*blockcf.Entries)
 
-	atomicWalletsSynced := make(map[int]*uint32, len(wallets))
-
 	for walletID := range wallets {
 		rescanFilter[walletID] = wallet.NewRescanFilter(nil, nil)
 		filterData[walletID] = &blockcf.Entries{}
-
-		atomicWalletsSynced[walletID] = new(uint32)
 	}
 
 	return &Syncer{
-		atomicWalletsSynced: atomicWalletsSynced,
-		wallets:             wallets,
-		loadedFilters:       make(map[int]bool, len(wallets)),
-		connectingRemotes:   make(map[string]struct{}),
-		remotes:             make(map[string]*p2p.RemotePeer),
-		rescanFilter:        rescanFilter,
-		filterData:          filterData,
-		seenTxs:             lru.NewCache(2000),
-		lp:                  lp,
+		atomicCatchUpTryLocks: make(map[int]*uint32, len(wallets)),
+		atomicWalletsSynced:   make(map[int]*uint32, len(wallets)),
+		wallets:               wallets,
+		loadedFilters:         make(map[int]bool, len(wallets)),
+		connectingRemotes:     make(map[string]struct{}),
+		remotes:               make(map[string]*p2p.RemotePeer),
+		rescanFilter:          rescanFilter,
+		filterData:            filterData,
+		seenTxs:               lru.NewCache(2000),
+		lp:                    lp,
 	}
 }
 
@@ -1335,89 +1332,101 @@ func (s *Syncer) startupSync(ctx context.Context, rp *p2p.RemotePeer) error {
 	s.fetchHeadersFinished()
 	log.Debugf("Finished fetching headers from %v", rp.RemoteAddr())
 
-	if atomic.CompareAndSwapUint32(&s.atomicCatchUpTryLock, 0, 1) {
-		for walletID, w := range s.wallets {
-			err = func() error {
-				rescanPoint, err := w.RescanPoint(ctx)
-				if err != nil {
-					return err
-				}
-				walletBackend := &WalletBackend{
-					Syncer:   s,
-					WalletID: walletID,
-				}
-				if rescanPoint == nil {
-					if !s.loadedFilters[walletID] {
-						err = w.LoadActiveDataFilters(ctx, walletBackend, true)
-						if err != nil {
-							return err
-						}
-						s.loadedFilters[walletID] = true
+	for {
+		walletID, w := s.nextWalletToRescan()
+		if w == nil {
+			break
+		}
+
+		err = func() error {
+			rescanPoint, err := w.RescanPoint(ctx)
+			if err != nil {
+				return err
+			}
+			walletBackend := &WalletBackend{
+				Syncer:   s,
+				WalletID: walletID,
+			}
+			if rescanPoint == nil {
+				if !s.loadedFilters[walletID] {
+					err = w.LoadActiveDataFilters(ctx, walletBackend, true)
+					if err != nil {
+						return err
 					}
-
-					s.synced(walletID)
-
-					return nil
+					s.loadedFilters[walletID] = true
 				}
-				// RescanPoint is != nil so we are not synced to the peer and
-				// check to see if it was previously synced
-				s.unsynced(walletID)
-
-				s.discoverAddressesStart(walletID)
-				err = w.DiscoverActiveAddresses(ctx, rp, rescanPoint, !w.Locked())
-				if err != nil {
-					return err
-				}
-				s.discoverAddressesFinished(walletID)
-
-				err = w.LoadActiveDataFilters(ctx, walletBackend, true)
-				if err != nil {
-					return err
-				}
-				s.loadedFilters[walletID] = true
-
-				s.rescanStart(walletID)
-
-				rescanBlock, err := w.BlockHeader(ctx, rescanPoint)
-				if err != nil {
-					return err
-				}
-				progress := make(chan wallet.RescanProgress, 1)
-				go w.RescanProgressFromHeight(ctx, walletBackend, int32(rescanBlock.Height), progress)
-
-				for p := range progress {
-					if p.Err != nil {
-						return p.Err
-					}
-					s.rescanProgress(walletID, p.ScannedThrough)
-				}
-				s.rescanFinished(walletID)
 
 				s.synced(walletID)
 
 				return nil
-			}()
+			}
+			// RescanPoint is != nil so we are not synced to the peer and
+			// check to see if it was previously synced
+			s.unsynced(walletID)
 
-			unminedTxs, err := w.UnminedTransactions(ctx)
+			s.discoverAddressesStart(walletID)
+			err = w.DiscoverActiveAddresses(ctx, rp, rescanPoint, !w.Locked())
 			if err != nil {
-				log.Errorf("Cannot load unmined transactions for resending: %v", err)
-				continue
+				return err
 			}
-			if len(unminedTxs) == 0 {
-				continue
-			}
-			err = rp.PublishTransactions(ctx, unminedTxs...)
+			s.discoverAddressesFinished(walletID)
+
+			err = w.LoadActiveDataFilters(ctx, walletBackend, true)
 			if err != nil {
-				// TODO: Transactions should be removed if this is a double spend.
-				log.Errorf("Failed to resent one or more unmined transactions: %v", err)
+				return err
 			}
+			s.loadedFilters[walletID] = true
+
+			s.rescanStart(walletID)
+
+			rescanBlock, err := w.BlockHeader(ctx, rescanPoint)
+			if err != nil {
+				return err
+			}
+			progress := make(chan wallet.RescanProgress, 1)
+			go w.RescanProgressFromHeight(ctx, walletBackend, int32(rescanBlock.Height), progress)
+
+			for p := range progress {
+				if p.Err != nil {
+					return p.Err
+				}
+				s.rescanProgress(walletID, p.ScannedThrough)
+			}
+			s.rescanFinished(walletID)
+
+			s.synced(walletID)
+
+			return nil
+		}()
+
+		unminedTxs, err := w.UnminedTransactions(ctx)
+		if err != nil {
+			log.Errorf("Cannot load unmined transactions for resending: %v", err)
+			continue
+		}
+		if len(unminedTxs) == 0 {
+			continue
+		}
+		err = rp.PublishTransactions(ctx, unminedTxs...)
+		if err != nil {
+			// TODO: Transactions should be removed if this is a double spend.
+			log.Errorf("Failed to resent one or more unmined transactions: %v", err)
 		}
 
-		atomic.StoreUint32(&s.atomicCatchUpTryLock, 0)
+		atomic.StoreUint32(s.atomicCatchUpTryLocks[walletID], 0)
 		if err != nil {
 			return err
 		}
 	}
 
 	return rp.SendHeaders(ctx)
+}
+
+func (s *Syncer) nextWalletToRescan() (int, *wallet.Wallet) {
+	for walletID, w := range s.wallets {
+		if atomic.CompareAndSwapUint32(s.atomicCatchUpTryLocks[walletID], 0, 1) {
+			return walletID, w
+		}
+	}
+	return -1, nil
 }
