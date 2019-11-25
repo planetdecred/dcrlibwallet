@@ -1398,7 +1398,13 @@ func (s *Syncer) startupSync(ctx context.Context, rp *p2p.RemotePeer) error {
 
 			return nil
 		}()
+		atomic.StoreUint32(s.atomicCatchUpTryLocks[walletID], 0)
+		if err != nil {
+			return err
+		}
+	}
 
+	for _, w := range s.wallets {
 		unminedTxs, err := w.UnminedTransactions(ctx)
 		if err != nil {
 			log.Errorf("Cannot load unmined transactions for resending: %v", err)
@@ -1411,11 +1417,6 @@ func (s *Syncer) startupSync(ctx context.Context, rp *p2p.RemotePeer) error {
 		if err != nil {
 			// TODO: Transactions should be removed if this is a double spend.
 			log.Errorf("Failed to resent one or more unmined transactions: %v", err)
-		}
-
-		atomic.StoreUint32(s.atomicCatchUpTryLocks[walletID], 0)
-		if err != nil {
-			return err
 		}
 	}
 
