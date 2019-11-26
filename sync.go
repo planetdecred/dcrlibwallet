@@ -250,14 +250,14 @@ func (mw *MultiWallet) RestartSpvSync() error {
 
 func (mw *MultiWallet) CancelSync() {
 	if mw.syncData.cancelSync != nil {
-		mw.syncData.mu.RLock()
+		mw.syncData.mu.Lock()
 		log.Info("Canceling sync. May take a while for sync to fully cancel.")
 
 		// Cancel the context used for syncer.Run in rpcSync() or spvSync().
 		mw.syncData.cancelSync()
 		mw.syncData.cancelSync = nil
 
-		mw.syncData.mu.RUnlock()
+		mw.syncData.mu.Unlock()
 
 		// syncer.Run may not immediately return, following code blocks this function
 		// and waits for the syncer.Run to return `err == context.Canceled`.

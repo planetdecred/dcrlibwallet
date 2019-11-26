@@ -111,15 +111,19 @@ type Notifications struct {
 func NewSyncer(wallets map[int]*wallet.Wallet, lp *p2p.LocalPeer) *Syncer {
 	rescanFilter := make(map[int]*wallet.RescanFilter)
 	filterData := make(map[int]*blockcf.Entries)
+	atomicCatchUpTryLocks := make(map[int]*uint32, len(wallets))
+	atomicWalletsSynced := make(map[int]*uint32, len(wallets))
 
 	for walletID := range wallets {
 		rescanFilter[walletID] = wallet.NewRescanFilter(nil, nil)
 		filterData[walletID] = &blockcf.Entries{}
+		atomicCatchUpTryLocks[walletID] = new(uint32)
+		atomicWalletsSynced[walletID] = new(uint32)
 	}
 
 	return &Syncer{
-		atomicCatchUpTryLocks: make(map[int]*uint32, len(wallets)),
-		atomicWalletsSynced:   make(map[int]*uint32, len(wallets)),
+		atomicCatchUpTryLocks: atomicCatchUpTryLocks,
+		atomicWalletsSynced:   atomicWalletsSynced,
 		wallets:               wallets,
 		loadedFilters:         make(map[int]bool, len(wallets)),
 		connectingRemotes:     make(map[string]struct{}),
@@ -1332,10 +1336,10 @@ func (s *Syncer) startupSync(ctx context.Context, rp *p2p.RemotePeer) error {
 	s.fetchHeadersFinished()
 	log.Debugf("Finished fetching headers from %v", rp.RemoteAddr())
 
-	for {
-		walletID, w := s.nextWalletToRescan()
-		if w == nil {
-			break
+	for walletID, w := range s.wallets {
+
+		if !atomic.CompareAndSwapUint32(s.atomicCatchUpTryLocks[walletID], 0, 1) {
+			continue
 		}
 
 		err = func() error {
@@ -1421,13 +1425,4 @@ func (s *Syncer) startupSync(ctx context.Context, rp *p2p.RemotePeer) error {
 	}
 
 	return nil
-}
-
-func (s *Syncer) nextWalletToRescan() (int, *wallet.Wallet) {
-	for walletID, w := range s.wallets {
-		if atomic.CompareAndSwapUint32(s.atomicCatchUpTryLocks[walletID], 0, 1) {
-			return walletID, w
-		}
-	}
-	return -1, nil
 }
