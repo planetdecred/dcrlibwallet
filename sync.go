@@ -211,14 +211,14 @@ func (mw *MultiWallet) SpvSync() error {
 
 	// syncer.Run uses a wait group to block the thread until sync completes or an error occurs
 	go func() {
-		mw.syncData.mu.RLock()
+		mw.syncData.mu.Lock()
 		mw.syncData.syncing = true
-		mw.syncData.mu.RUnlock()
+		mw.syncData.mu.Unlock()
 
 		defer func() {
-			mw.syncData.mu.RLock()
+			mw.syncData.mu.Lock()
 			mw.syncData.syncing = false
-			mw.syncData.mu.RUnlock()
+			mw.syncData.mu.Unlock()
 		}()
 
 		for _, listener := range mw.syncData.syncProgressListeners {
@@ -240,9 +240,9 @@ func (mw *MultiWallet) SpvSync() error {
 }
 
 func (mw *MultiWallet) RestartSpvSync() error {
-	mw.syncData.mu.RLock()
+	mw.syncData.mu.Lock()
 	mw.syncData.restartSyncRequested = true
-	mw.syncData.mu.RUnlock()
+	mw.syncData.mu.Unlock()
 
 	mw.CancelSync() // necessary to unset the network backend.
 	return mw.SpvSync()
@@ -250,11 +250,11 @@ func (mw *MultiWallet) RestartSpvSync() error {
 
 func (mw *MultiWallet) CancelSync() {
 	if mw.syncData.cancelSync != nil {
-		mw.syncData.mu.Lock()
 		log.Info("Canceling sync. May take a while for sync to fully cancel.")
 
-		// Cancel the context used for syncer.Run in rpcSync() or spvSync().
+		// Cancel the context used for syncer.Run in spvSync().
 		mw.syncData.cancelSync()
+		mw.syncData.mu.Lock()
 		mw.syncData.cancelSync = nil
 
 		mw.syncData.mu.Unlock()
@@ -340,10 +340,6 @@ func (wallet *Wallet) RescanBlocks() error {
 			estimatedTotalRescanTime := int64(math.Round(float64(elapsedRescanTime) / rescanRate))
 			rescanProgressReport.RescanTimeRemaining = estimatedTotalRescanTime - elapsedRescanTime
 
-			// for _, syncProgressListener := range mw.syncProgressListeners {
-			// 	syncProgressListener.OnHeadersRescanProgress(rescanProgressReport)
-			// }
-
 			select {
 			case <-ctx.Done():
 				log.Info("Rescan cancelled through context")
@@ -356,15 +352,14 @@ func (wallet *Wallet) RescanBlocks() error {
 		// Trigger sync completed callback.
 		// todo: probably best to have a dedicated rescan listener
 		// with callbacks for rescanStarted, rescanCompleted, rescanError and rescanCancel
-		// for _, syncProgressListener := range wallet.syncProgressListeners {
-		// 	syncProgressListener.OnSyncCompleted()
-		// }
 	}()
 
 	return nil
 }
 
 func (mw *MultiWallet) IsScanning() bool {
+	mw.syncData.mu.RLock()
+	defer mw.syncData.mu.RUnlock()
 	return mw.syncData.rescanning
 }
 

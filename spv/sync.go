@@ -779,6 +779,22 @@ func (s *Syncer) lowestRescanPoint(ctx context.Context) (*chainhash.Hash, error)
 func (s *Syncer) handleTxInvs(ctx context.Context, rp *p2p.RemotePeer, hashes []*chainhash.Hash) {
 	const opf = "spv.handleTxInvs(%v)"
 
+	for _, wallet := range s.wallets {
+		rpt, err := wallet.RescanPoint(ctx)
+		if err != nil {
+			op := errors.Opf(opf, rp.RemoteAddr())
+			log.Warn(errors.E(op, err))
+			return
+		}
+
+		if rpt == nil {
+			goto ProcessTx
+		}
+	}
+
+	return
+
+ProcessTx:
 	rpt, err := s.lowestRescanPoint(ctx)
 	if err != nil {
 		op := errors.Opf(opf, rp.RemoteAddr())
@@ -839,9 +855,7 @@ func (s *Syncer) handleTxInvs(ctx context.Context, rp *p2p.RemotePeer, hashes []
 			}
 		}
 
-		if len(relevant) > 0 {
-			s.mempoolTxs(walletID, relevant)
-		}
+		s.mempoolTxs(walletID, relevant)
 	}
 }
 
@@ -1020,27 +1034,33 @@ func (s *Syncer) handleBlockAnnouncements(ctx context.Context, rp *p2p.RemotePee
 		return err
 	}
 
+	newBlocks := make([]*wallet.BlockNode, 0, len(headers))
+	s.sidechainMu.Lock()
+
+	for i := range headers {
+		haveBlock, err := s.allWalletsHaveBlock(ctx, blockHashes[i])
+		if err != nil {
+			s.sidechainMu.Unlock()
+			return err
+		}
+
+		if haveBlock {
+			continue
+		}
+
+		n := wallet.NewBlockNode(headers[i], blockHashes[i], filters[i])
+		if s.sidechains.AddBlockNode(n) {
+			newBlocks = append(newBlocks, n)
+		}
+	}
+	s.sidechainMu.Unlock()
+
 	for key, w := range s.wallets {
-		newBlocks := make([]*wallet.BlockNode, 0, len(headers))
 		var bestChain []*wallet.BlockNode
 		var matchingTxs map[chainhash.Hash][]*wire.MsgTx
 		err = func() error {
 			defer s.sidechainMu.Unlock()
 			s.sidechainMu.Lock()
-
-			for i := range headers {
-				haveBlock, _, err := w.BlockInMainChain(ctx, blockHashes[i])
-				if err != nil {
-					return err
-				}
-				if haveBlock {
-					continue
-				}
-				n := wallet.NewBlockNode(headers[i], blockHashes[i], filters[i])
-				if s.sidechains.AddBlockNode(n) {
-					newBlocks = append(newBlocks, n)
-				}
-			}
 
 			bestChain, err = w.EvaluateBestChain(ctx, &s.sidechains)
 			if err != nil {
