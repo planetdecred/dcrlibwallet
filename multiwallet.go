@@ -466,6 +466,25 @@ func (mw *MultiWallet) ChangeStartupPassphrase(oldStartupPass, newStartupPass []
 	return translateError(err)
 }
 
+func (mw *MultiWallet) ChangePrivatePassphrase(walletID int, oldPrivatePassphrase, newPrivatePassphrase []byte, privatePassphraseType int32) error {
+	if privatePassphraseType != PassphraseTypePin && privatePassphraseType != PassphraseTypePass {
+		return errors.New(ErrInvalid)
+	}
+
+	wallet := mw.WalletWithID(walletID)
+	if wallet == nil {
+		return errors.New(ErrInvalid)
+	}
+
+	err := wallet.changePrivatePassphrase(oldPrivatePassphrase, newPrivatePassphrase)
+	if err != nil {
+		return translateError(err)
+	}
+
+	wallet.PrivatePassphraseType = privatePassphraseType
+	return mw.db.Save(wallet)
+}
+
 func (mw *MultiWallet) markWalletAsDiscoveredAccounts(walletID int) error {
 	wallet := mw.WalletWithID(walletID)
 	if wallet == nil {

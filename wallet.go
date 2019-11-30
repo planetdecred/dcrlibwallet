@@ -212,7 +212,7 @@ func (wallet *Wallet) IsLocked() bool {
 	return wallet.internal.Locked()
 }
 
-func (wallet *Wallet) ChangePrivatePassphrase(oldPass []byte, newPass []byte) error {
+func (wallet *Wallet) changePrivatePassphrase(oldPass []byte, newPass []byte) error {
 	defer func() {
 		for i := range oldPass {
 			oldPass[i] = 0
