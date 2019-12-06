@@ -34,8 +34,8 @@ const reqSvcs = wire.SFNodeNetwork | wire.SFNodeCF
 // protocol using Simplified Payment Verification (SPV) with compact filters.
 type Syncer struct {
 	// atomics
-	atomicCatchUpTryLocks map[int]*uint32 // CAS (entered=1) to perform discovery/rescan
-	atomicWalletsSynced   map[int]*uint32 // CAS (synced=1) when wallet syncing complete
+	atomicCatchUpTryLock uint32          // CAS (entered=1) to perform discovery/rescan
+	atomicWalletsSynced  map[int]*uint32 // CAS (synced=1) when wallet syncing complete
 
 	wallets map[int]*wallet.Wallet
 	lp      *p2p.LocalPeer
@@ -111,27 +111,24 @@ type Notifications struct {
 func NewSyncer(wallets map[int]*wallet.Wallet, lp *p2p.LocalPeer) *Syncer {
 	rescanFilter := make(map[int]*wallet.RescanFilter)
 	filterData := make(map[int]*blockcf.Entries)
-	atomicCatchUpTryLocks := make(map[int]*uint32, len(wallets))
 	atomicWalletsSynced := make(map[int]*uint32, len(wallets))
 
 	for walletID := range wallets {
 		rescanFilter[walletID] = wallet.NewRescanFilter(nil, nil)
 		filterData[walletID] = &blockcf.Entries{}
-		atomicCatchUpTryLocks[walletID] = new(uint32)
 		atomicWalletsSynced[walletID] = new(uint32)
 	}
 
 	return &Syncer{
-		atomicCatchUpTryLocks: atomicCatchUpTryLocks,
-		atomicWalletsSynced:   atomicWalletsSynced,
-		wallets:               wallets,
-		loadedFilters:         make(map[int]bool, len(wallets)),
-		connectingRemotes:     make(map[string]struct{}),
-		remotes:               make(map[string]*p2p.RemotePeer),
-		rescanFilter:          rescanFilter,
-		filterData:            filterData,
-		seenTxs:               lru.NewCache(2000),
-		lp:                    lp,
+		atomicWalletsSynced: atomicWalletsSynced,
+		wallets:             wallets,
+		loadedFilters:       make(map[int]bool, len(wallets)),
+		connectingRemotes:   make(map[string]struct{}),
+		remotes:             make(map[string]*p2p.RemotePeer),
+		rescanFilter:        rescanFilter,
+		filterData:          filterData,
+		seenTxs:             lru.NewCache(2000),
+		lp:                  lp,
 	}
 }
 
@@ -579,16 +576,15 @@ func (s *Syncer) getTransactionsByHashes(ctx context.Context, txHashes []*chainh
 					txHashes = append(txHashes[:index], txHashes[index+1:]...)
 				}
 			}
-
-		}
-
-		for _, hash := range txHashes {
-			notFound = append(notFound, wire.NewInvVect(wire.InvTypeTx, hash))
 		}
 
 		if len(txHashes) == 0 {
 			break
 		}
+	}
+
+	for _, hash := range txHashes {
+		notFound = append(notFound, wire.NewInvVect(wire.InvTypeTx, hash))
 	}
 
 	return foundTxs, notFound, nil
@@ -631,7 +627,7 @@ func (s *Syncer) receiveGetData(ctx context.Context) error {
 				var missing []*wire.InvVect
 				var err error
 				foundTxs, missing, err = s.getTransactionsByHashes(ctx, txHashes)
-				if err != nil && !errors.Is(errors.NotExist, err) {
+				if err != nil && !errors.Is(err, errors.NotExist) {
 					log.Warnf("Failed to look up transactions for getdata reply to peer %v: %v",
 						rp.RemoteAddr(), err)
 					return
@@ -1141,11 +1137,9 @@ func (s *Syncer) getHeaders(ctx context.Context, rp *p2p.RemotePeer) error {
 	_, _, lowestChainWallet := s.lowestChainTip(ctx)
 
 	var locators []*chainhash.Hash
-	var generation uint
 	var err error
 	s.locatorMu.Lock()
 	locators = s.currentLocators
-	generation = s.locatorGeneration
 	if len(locators) == 0 {
 		locators, err = lowestChainWallet.BlockLocators(ctx, nil)
 		if err != nil {
@@ -1216,26 +1210,7 @@ func (s *Syncer) getHeaders(ctx context.Context, rp *p2p.RemotePeer) error {
 					added++
 				}
 			}
-			if added == 0 {
-				s.sidechainMu.Unlock()
 
-				s.locatorMu.Lock()
-				if s.locatorGeneration > generation {
-					locators = s.currentLocators
-				}
-				if len(locators) == 0 {
-					locators, err = w.BlockLocators(ctx, nil)
-					if err != nil {
-						s.locatorMu.Unlock()
-						return err
-					}
-					s.currentLocators = locators
-					s.locatorGeneration++
-					generation = s.locatorGeneration
-				}
-				s.locatorMu.Unlock()
-				continue
-			}
 			log.Debugf("[%d] Fetched %d new header(s) ending at height %d from %v",
 				walletID, added, nodes[len(nodes)-1].Header.Height, rp)
 
@@ -1336,73 +1311,72 @@ func (s *Syncer) startupSync(ctx context.Context, rp *p2p.RemotePeer) error {
 	s.fetchHeadersFinished()
 	log.Debugf("Finished fetching headers from %v", rp.RemoteAddr())
 
-	for walletID, w := range s.wallets {
-
-		if !atomic.CompareAndSwapUint32(s.atomicCatchUpTryLocks[walletID], 0, 1) {
-			continue
-		}
-
-		err = func() error {
-			rescanPoint, err := w.RescanPoint(ctx)
-			if err != nil {
-				return err
-			}
-			walletBackend := &WalletBackend{
-				Syncer:   s,
-				WalletID: walletID,
-			}
-			if rescanPoint == nil {
-				if !s.loadedFilters[walletID] {
-					err = w.LoadActiveDataFilters(ctx, walletBackend, true)
-					if err != nil {
-						return err
-					}
-					s.loadedFilters[walletID] = true
+	if atomic.CompareAndSwapUint32(&s.atomicCatchUpTryLock, 0, 1) {
+		for walletID, w := range s.wallets {
+			err = func() error {
+				rescanPoint, err := w.RescanPoint(ctx)
+				if err != nil {
+					return err
 				}
+				walletBackend := &WalletBackend{
+					Syncer:   s,
+					WalletID: walletID,
+				}
+				if rescanPoint == nil {
+					if !s.loadedFilters[walletID] {
+						err = w.LoadActiveDataFilters(ctx, walletBackend, true)
+						if err != nil {
+							return err
+						}
+						s.loadedFilters[walletID] = true
+					}
+
+					s.synced(walletID)
+
+					return nil
+				}
+				// RescanPoint is != nil so we are not synced to the peer and
+				// check to see if it was previously synced
+				s.unsynced(walletID)
+
+				s.discoverAddressesStart(walletID)
+				err = w.DiscoverActiveAddresses(ctx, rp, rescanPoint, !w.Locked())
+				if err != nil {
+					return err
+				}
+
+				s.discoverAddressesFinished(walletID)
+
+				err = w.LoadActiveDataFilters(ctx, walletBackend, true)
+				if err != nil {
+					return err
+				}
+				s.loadedFilters[walletID] = true
+
+				s.rescanStart(walletID)
+
+				rescanBlock, err := w.BlockHeader(ctx, rescanPoint)
+				if err != nil {
+					return err
+				}
+				progress := make(chan wallet.RescanProgress, 1)
+				go w.RescanProgressFromHeight(ctx, walletBackend, int32(rescanBlock.Height), progress)
+
+				for p := range progress {
+					if p.Err != nil {
+						return p.Err
+					}
+					s.rescanProgress(walletID, p.ScannedThrough)
+				}
+				s.rescanFinished(walletID)
 
 				s.synced(walletID)
 
 				return nil
-			}
-			// RescanPoint is != nil so we are not synced to the peer and
-			// check to see if it was previously synced
-			s.unsynced(walletID)
+			}()
+		}
 
-			s.discoverAddressesStart(walletID)
-			err = w.DiscoverActiveAddresses(ctx, rp, rescanPoint, !w.Locked())
-			if err != nil {
-				return err
-			}
-			s.discoverAddressesFinished(walletID)
-
-			err = w.LoadActiveDataFilters(ctx, walletBackend, true)
-			if err != nil {
-				return err
-			}
-			s.loadedFilters[walletID] = true
-
-			s.rescanStart(walletID)
-
-			rescanBlock, err := w.BlockHeader(ctx, rescanPoint)
-			if err != nil {
-				return err
-			}
-			progress := make(chan wallet.RescanProgress, 1)
-			go w.RescanProgressFromHeight(ctx, walletBackend, int32(rescanBlock.Height), progress)
-
-			for p := range progress {
-				if p.Err != nil {
-					return p.Err
-				}
-				s.rescanProgress(walletID, p.ScannedThrough)
-			}
-			s.rescanFinished(walletID)
-
-			s.synced(walletID)
-
-			return nil
-		}()
-		atomic.StoreUint32(s.atomicCatchUpTryLocks[walletID], 0)
+		atomic.StoreUint32(&s.atomicCatchUpTryLock, 0)
 		if err != nil {
 			return err
 		}

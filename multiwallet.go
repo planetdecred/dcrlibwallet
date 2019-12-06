@@ -112,17 +112,17 @@ func (mw *MultiWallet) Shutdown() {
 		wallet.Shutdown()
 	}
 
-	if logRotator != nil {
-		log.Info("Shutting down log rotator")
-		logRotator.Close()
-	}
-
 	if mw.db != nil {
 		if err := mw.db.Close(); err != nil {
 			log.Errorf("db closed with error: %v", err)
 		} else {
 			log.Info("db closed successfully")
 		}
+	}
+
+	if logRotator != nil {
+		log.Info("Shutting down log rotator")
+		logRotator.Close()
 	}
 }
 
@@ -189,7 +189,7 @@ func (mw *MultiWallet) DeleteWallet(walletID int, privPass []byte) error {
 
 	delete(mw.wallets, walletID)
 
-	return nil
+	return os.RemoveAll(wallet.DataDir)
 }
 
 func (mw *MultiWallet) NumWalletsNeedingSeedBackup() int32 {
@@ -260,6 +260,7 @@ func (mw *MultiWallet) CreateWatchOnlyWallet(walletName, publicPassphrase, exten
 
 	err = wallet.CreateWatchingOnlyWallet(publicPassphrase, extendedPublicKey)
 	if err != nil {
+		delete(mw.wallets, wallet.ID)
 		mw.db.DeleteStruct(wallet)
 		return nil, err
 	}
@@ -294,6 +295,7 @@ func (mw *MultiWallet) CreateNewWallet(publicPassphrase, privatePassphrase strin
 
 	err = wallet.CreateWallet(publicPassphrase, privatePassphrase, seed)
 	if err != nil {
+		delete(mw.wallets, wallet.ID)
 		mw.db.DeleteStruct(wallet)
 		return nil, err
 	}
@@ -322,6 +324,7 @@ func (mw *MultiWallet) RestoreWallet(seedMnemonic, publicPassphrase, privatePass
 
 	err = wallet.CreateWallet(publicPassphrase, privatePassphrase, seedMnemonic)
 	if err != nil {
+		delete(mw.wallets, wallet.ID)
 		mw.db.DeleteStruct(wallet)
 		return nil, err
 	}
@@ -426,7 +429,7 @@ func (mw *MultiWallet) UnlockWallet(walletID int, privPass []byte) error {
 	return wallet.UnlockWallet(privPass)
 }
 
-func (mw *MultiWallet) ChangeStartupPassphrase(oldStartupPass, newStartupPass []byte) error {
+func (mw *MultiWallet) ChangePublicPassphrase(oldStartupPass, newStartupPass []byte) error {
 	defer func() {
 		for i := range oldStartupPass {
 			oldStartupPass[i] = 0
@@ -466,7 +469,7 @@ func (mw *MultiWallet) ChangeStartupPassphrase(oldStartupPass, newStartupPass []
 	return translateError(err)
 }
 
-func (mw *MultiWallet) ChangePrivatePassphrase(walletID int, oldPrivatePassphrase, newPrivatePassphrase []byte, privatePassphraseType int32) error {
+func (mw *MultiWallet) ChangePrivatePassphraseForWallet(walletID int, oldPrivatePassphrase, newPrivatePassphrase []byte, privatePassphraseType int32) error {
 	if privatePassphraseType != PassphraseTypePin && privatePassphraseType != PassphraseTypePass {
 		return errors.New(ErrInvalid)
 	}
