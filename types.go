@@ -70,10 +70,6 @@ type SyncProgressListener interface {
 	OnSyncCanceled(willRestart bool)
 	OnSyncEndedWithError(err error)
 	Debug(debugInfo *DebugInfo)
-
-	OnTransaction(transaction string)
-	OnBlockAttached(walletID int, blockHeight int32)
-	OnTransactionConfirmed(walletID int, hash string, blockHeight int32)
 }
 
 type GeneralSyncProgress struct {
@@ -114,6 +110,12 @@ type DebugInfo struct {
 /** end sync-related types */
 
 /** begin tx-related types */
+
+type TxAndBlockNotificationListener interface {
+	OnTransaction(transaction string)
+	OnBlockAttached(walletID int, blockHeight int32)
+	OnTransactionConfirmed(walletID int, hash string, blockHeight int32)
+}
 
 // Transaction is used with storm for tx indexing operations.
 // For faster queries, the `Hash`, `Type` and `Direction` fields are indexed.

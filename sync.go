@@ -21,16 +21,17 @@ type syncData struct {
 	syncProgressListeners map[string]SyncProgressListener
 	showLogs              bool
 
+	// Protected by mutex.
 	synced       bool
 	syncing      bool
 	cancelSync   context.CancelFunc
 	syncCanceled chan bool
 
-	// Flag to notify syncCanceled callback if the sync was canceled so as to be restarted.
+	// Flag to notify syncCanceled callback if the sync was canceled so as to be restarted, also proctected by mutex.
 	restartSyncRequested bool
 
-	rescanning bool
-
+	// Protected by mutex.
+	rescanning     bool
 	connectedPeers int32
 
 	*activeSyncData

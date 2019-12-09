@@ -1251,10 +1251,10 @@ func (s *Syncer) getHeaders(ctx context.Context, rp *p2p.RemotePeer) error {
 					walletID, len(bestChain), tip.Hash, tip.Header.Height, tip.Header.Timestamp)
 			}
 
-			s.fetchHeadersProgress(headers[len(headers)-1])
-
 			s.sidechainMu.Unlock()
 		}
+
+		s.fetchHeadersProgress(headers[len(headers)-1])
 
 		// Generate new locators
 		s.locatorMu.Lock()

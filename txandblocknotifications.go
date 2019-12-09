@@ -2,6 +2,8 @@ package dcrlibwallet
 
 import (
 	"encoding/json"
+
+	"github.com/decred/dcrwallet/errors/v2"
 )
 
 func (mw *MultiWallet) listenForTransactions(walletID int) {
@@ -56,5 +58,38 @@ func (mw *MultiWallet) listenForTransactions(walletID int) {
 
 			mw.publishBlockAttached(wallet.ID, int32(block.Header.Height))
 		}
+	}
+}
+
+func (mw *MultiWallet) AddTxAndBlockNotificationListener(txAndBlockNotificationListener TxAndBlockNotificationListener, uniqueIdentifier string) error {
+	_, ok := mw.txAndBlockNotificationListeners[uniqueIdentifier]
+	if ok {
+		return errors.New(ErrListenerAlreadyExist)
+	}
+
+	mw.txAndBlockNotificationListeners[uniqueIdentifier] = txAndBlockNotificationListener
+
+	return nil
+}
+
+func (mw *MultiWallet) RemoveTxAndBlockNotificationListener(uniqueIdentifier string) {
+	delete(mw.txAndBlockNotificationListeners, uniqueIdentifier)
+}
+
+func (mw *MultiWallet) mempoolTransactionNotification(transaction string) {
+	for _, txAndBlockNotifcationListener := range mw.txAndBlockNotificationListeners {
+		txAndBlockNotifcationListener.OnTransaction(transaction)
+	}
+}
+
+func (mw *MultiWallet) publishTransactionConfirmed(walletID int, transactionHash string, blockHeight int32) {
+	for _, txAndBlockNotifcationListener := range mw.txAndBlockNotificationListeners {
+		txAndBlockNotifcationListener.OnTransactionConfirmed(walletID, transactionHash, blockHeight)
+	}
+}
+
+func (mw *MultiWallet) publishBlockAttached(walletID int, blockHeight int32) {
+	for _, txAndBlockNotifcationListener := range mw.txAndBlockNotificationListeners {
+		txAndBlockNotifcationListener.OnBlockAttached(walletID, blockHeight)
 	}
 }

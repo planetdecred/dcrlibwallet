@@ -32,6 +32,8 @@ type MultiWallet struct {
 	wallets     map[int]*Wallet
 	syncData    *syncData
 
+	txAndBlockNotificationListeners map[string]TxAndBlockNotificationListener
+
 	shuttingDown chan bool
 	cancelFuncs  []context.CancelFunc
 }
@@ -91,6 +93,7 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 			syncCanceled:          make(chan bool),
 			syncProgressListeners: make(map[string]SyncProgressListener),
 		},
+		txAndBlockNotificationListeners: make(map[string]TxAndBlockNotificationListener),
 	}
 
 	mw.listenForShutdown()
@@ -189,7 +192,7 @@ func (mw *MultiWallet) DeleteWallet(walletID int, privPass []byte) error {
 
 	delete(mw.wallets, walletID)
 
-	return os.RemoveAll(wallet.DataDir)
+	return nil
 }
 
 func (mw *MultiWallet) NumWalletsNeedingSeedBackup() int32 {
@@ -429,29 +432,29 @@ func (mw *MultiWallet) UnlockWallet(walletID int, privPass []byte) error {
 	return wallet.UnlockWallet(privPass)
 }
 
-func (mw *MultiWallet) ChangePublicPassphrase(oldStartupPass, newStartupPass []byte) error {
+func (mw *MultiWallet) ChangePublicPassphrase(oldPublicPass, newPublicPass []byte) error {
 	defer func() {
-		for i := range oldStartupPass {
-			oldStartupPass[i] = 0
+		for i := range oldPublicPass {
+			oldPublicPass[i] = 0
 		}
 
-		for i := range newStartupPass {
-			newStartupPass[i] = 0
+		for i := range newPublicPass {
+			newPublicPass[i] = 0
 		}
 	}()
 
-	if len(oldStartupPass) == 0 {
-		oldStartupPass = []byte(w.InsecurePubPassphrase)
+	if len(oldPublicPass) == 0 {
+		oldPublicPass = []byte(w.InsecurePubPassphrase)
 	}
-	if len(newStartupPass) == 0 {
-		newStartupPass = []byte(w.InsecurePubPassphrase)
+	if len(newPublicPass) == 0 {
+		newPublicPass = []byte(w.InsecurePubPassphrase)
 	}
 
 	successfullyChangedWalletIDs := make([]int, 0)
 	var err error
 	for walletID, wallet := range mw.wallets {
 		ctx, _ := mw.contextWithShutdownCancel()
-		if err = wallet.internal.ChangePublicPassphrase(ctx, oldStartupPass, newStartupPass); err != nil {
+		if err = wallet.internal.ChangePublicPassphrase(ctx, oldPublicPass, newPublicPass); err != nil {
 			log.Errorf("[%d] Error changing public passphrase: %v", walletID, err)
 			break
 		}
@@ -462,7 +465,7 @@ func (mw *MultiWallet) ChangePublicPassphrase(oldStartupPass, newStartupPass []b
 		// Rollback changes
 		for walletID := range successfullyChangedWalletIDs {
 			ctx, _ := mw.contextWithShutdownCancel()
-			mw.wallets[walletID].internal.ChangePublicPassphrase(ctx, newStartupPass, oldStartupPass)
+			mw.wallets[walletID].internal.ChangePublicPassphrase(ctx, newPublicPass, oldPublicPass)
 		}
 	}
 
