@@ -2,10 +2,10 @@ package dcrlibwallet
 
 import (
 	"math"
-	"sync"
 	"time"
 
 	"github.com/raedahgroup/dcrlibwallet/spv"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -512,7 +512,7 @@ func (mw *MultiWallet) resetSyncData() {
 func (mw *MultiWallet) synced(walletID int, synced bool) {
 	mw.syncData.mu.Lock()
 	defer mw.syncData.mu.Unlock()
-	if (mw.syncData.synced == synced) && synced {
+	if mw.syncData.synced && synced {
 		return
 	}
 
@@ -524,25 +524,19 @@ func (mw *MultiWallet) synced(walletID int, synced bool) {
 		mw.syncData.synced = true
 		mw.syncData.activeSyncData = nil // to be reintialized on next sync
 
-		for _, syncProgressListener := range mw.syncData.syncProgressListeners {
-			if synced {
-				syncProgressListener.OnSyncCompleted()
-			} else {
-				syncProgressListener.OnSyncCanceled(false)
-			}
-		}
-
 		// begin indexing transactions after sync is completed,
 		// syncProgressListeners.OnSynced() will be invoked after transactions are indexed
-		var waitForIndexing sync.WaitGroup
-		waitForIndexing.Add(len(mw.wallets))
+		var txIndexing errgroup.Group
 		for _, wallet := range mw.wallets {
-			go wallet.IndexTransactions(&waitForIndexing)
+			txIndexing.Go(wallet.IndexTransactions)
 		}
 
 		go func() {
-			waitForIndexing.Wait()
-			mw.syncData.mu.Lock()
+			err := txIndexing.Wait()
+			if err != nil {
+				log.Errorf("Tx Index Error: %v", err)
+			}
+
 			for _, syncProgressListener := range mw.syncData.syncProgressListeners {
 				if mw.IsSynced() {
 					syncProgressListener.OnSyncCompleted()
@@ -550,7 +544,6 @@ func (mw *MultiWallet) synced(walletID int, synced bool) {
 					syncProgressListener.OnSyncCanceled(false)
 				}
 			}
-			mw.syncData.mu.Unlock()
 		}()
 	}
 }

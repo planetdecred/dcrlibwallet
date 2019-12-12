@@ -15,28 +15,28 @@ import (
 	"github.com/raedahgroup/dcrlibwallet/spv"
 )
 
+// reading/writing of properties of this struct are protected by mutex.x
 type syncData struct {
 	mu sync.RWMutex
 
 	syncProgressListeners map[string]SyncProgressListener
 	showLogs              bool
 
-	// Protected by mutex.
 	synced       bool
 	syncing      bool
 	cancelSync   context.CancelFunc
 	syncCanceled chan bool
 
-	// Flag to notify syncCanceled callback if the sync was canceled so as to be restarted, also proctected by mutex.
+	// Flag to notify syncCanceled callback if the sync was canceled so as to be restarted.
 	restartSyncRequested bool
 
-	// Protected by mutex.
 	rescanning     bool
 	connectedPeers int32
 
 	*activeSyncData
 }
 
+// reading/writing of properties of this struct are protected by syncData.mu.
 type activeSyncData struct {
 	targetTimePerBlock int32
 
@@ -108,6 +108,8 @@ func (mw *MultiWallet) initActiveSyncData() {
 }
 
 func (mw *MultiWallet) AddSyncProgressListener(syncProgressListener SyncProgressListener, uniqueIdentifier string) error {
+	mw.syncData.mu.Lock()
+	defer mw.syncData.mu.Unlock()
 	_, ok := mw.syncData.syncProgressListeners[uniqueIdentifier]
 	if ok {
 		return errors.New(ErrListenerAlreadyExist)
@@ -120,9 +122,12 @@ func (mw *MultiWallet) AddSyncProgressListener(syncProgressListener SyncProgress
 }
 
 func (mw *MultiWallet) RemoveSyncProgressListener(uniqueIdentifier string) {
+	mw.syncData.mu.Lock()
 	delete(mw.syncData.syncProgressListeners, uniqueIdentifier)
+	mw.syncData.mu.Unlock()
 }
 
+// should be called with a writable lock.
 func (mw *MultiWallet) PublishLastSyncProgress(uniqueIdentifier string) error {
 	syncProgressListener, ok := mw.syncData.syncProgressListeners[uniqueIdentifier]
 	if !ok {
@@ -148,6 +153,8 @@ func (mw *MultiWallet) EnableSyncLogs() {
 }
 
 func (mw *MultiWallet) SyncInactiveForPeriod(totalInactiveSeconds int64) {
+	mw.syncData.mu.Lock()
+	defer mw.syncData.mu.Unlock()
 
 	if !mw.syncData.syncing || mw.syncData.activeSyncData == nil {
 		log.Debug("Not accounting for inactive time, wallet is not syncing.")
@@ -214,7 +221,6 @@ func (mw *MultiWallet) SpvSync() error {
 	go func() {
 		mw.syncData.mu.Lock()
 		mw.syncData.syncing = true
-		mw.syncData.mu.Unlock()
 
 		defer func() {
 			mw.syncData.mu.Lock()
@@ -225,6 +231,7 @@ func (mw *MultiWallet) SpvSync() error {
 		for _, listener := range mw.syncData.syncProgressListeners {
 			listener.OnSyncStarted()
 		}
+		mw.syncData.mu.Unlock()
 		err := syncer.Run(ctx)
 		if err != nil {
 			if err == context.Canceled {

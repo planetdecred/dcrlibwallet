@@ -1,14 +1,12 @@
 package dcrlibwallet
 
 import (
-	"sync"
-
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	w "github.com/decred/dcrwallet/wallet/v3"
 	"github.com/raedahgroup/dcrlibwallet/txindex"
 )
 
-func (wallet *Wallet) IndexTransactions(waitGroup *sync.WaitGroup) error {
+func (wallet *Wallet) IndexTransactions() error {
 	ctx := wallet.shutdownContext()
 
 	var totalIndex int32
@@ -75,12 +73,8 @@ func (wallet *Wallet) IndexTransactions(waitGroup *sync.WaitGroup) error {
 		} else if count > 0 {
 			log.Debugf("[%d] Transaction index finished at %d, %d transaction(s) indexed in total", wallet.ID, txEndHeight, count)
 		}
-
-		waitGroup.Done()
 	}()
 
-	waitGroup.Add(1)
 	log.Debugf("[%d] Indexing transactions start height: %d, end height: %d", wallet.ID, beginHeight, endHeight)
-	wallet.internal.GetTransactions(ctx, rangeFn, startBlock, endBlock)
-	return nil
+	return wallet.internal.GetTransactions(ctx, rangeFn, startBlock, endBlock)
 }
