@@ -80,7 +80,7 @@ func (wallet *Wallet) IndexTransactions() error {
 }
 
 func (wallet *Wallet) reindexTransactions() error {
-	err := wallet.txDB.ClearSavedData(&Transaction{})
+	err := wallet.txDB.ClearSavedTransactions(&Transaction{})
 	if err != nil {
 		return err
 	}

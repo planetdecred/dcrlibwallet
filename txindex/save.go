@@ -41,7 +41,7 @@ func (db *DB) SaveLastIndexPoint(endBlockHeight int32) error {
 	return nil
 }
 
-func (db *DB) ClearSavedData(emptyTxPointer interface{}) error {
+func (db *DB) ClearSavedTransactions(emptyTxPointer interface{}) error {
 	err := db.txDB.Drop(emptyTxPointer)
 	if err != nil {
 		return err

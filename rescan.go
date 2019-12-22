@@ -28,19 +28,22 @@ func (mw *MultiWallet) RescanBlocks(walletID int) error {
 		defer func() {
 			mw.syncData.mu.Lock()
 			mw.syncData.rescanning = false
+			mw.syncData.cancelRescan = nil
 			mw.syncData.mu.Unlock()
 		}()
 
 		mw.syncData.mu.Lock()
+
 		mw.syncData.rescanning = true
-		mw.syncData.mu.Unlock()
 
 		if mw.blocksRescanProgressListener != nil {
-			mw.blocksRescanProgressListener.OnBlocksRescanStarted()
+			mw.blocksRescanProgressListener.OnBlocksRescanStarted(walletID)
 		}
 
 		ctx, cancel := wallet.shutdownContextWithCancel()
 		mw.syncData.cancelRescan = cancel
+
+		mw.syncData.mu.Unlock()
 
 		progress := make(chan w.RescanProgress, 1)
 		go wallet.internal.RescanProgressFromHeight(ctx, netBackend, 0, progress)
@@ -51,7 +54,7 @@ func (mw *MultiWallet) RescanBlocks(walletID int) error {
 			if p.Err != nil {
 				log.Error(p.Err)
 				if mw.blocksRescanProgressListener != nil {
-					mw.blocksRescanProgressListener.OnBlocksRescanEnded(p.Err)
+					mw.blocksRescanProgressListener.OnBlocksRescanEnded(walletID, p.Err)
 				}
 				return
 			}
@@ -81,6 +84,7 @@ func (mw *MultiWallet) RescanBlocks(walletID int) error {
 			select {
 			case <-ctx.Done():
 				log.Info("Rescan canceled through context")
+				mw.blocksRescanProgressListener.OnBlocksRescanEnded(walletID, ctx.Err())
 				return
 			default:
 				continue
@@ -89,7 +93,7 @@ func (mw *MultiWallet) RescanBlocks(walletID int) error {
 
 		err := wallet.reindexTransactions()
 		if mw.blocksRescanProgressListener != nil {
-			mw.blocksRescanProgressListener.OnBlocksRescanEnded(err)
+			mw.blocksRescanProgressListener.OnBlocksRescanEnded(walletID, err)
 		}
 	}()
 
@@ -97,6 +101,8 @@ func (mw *MultiWallet) RescanBlocks(walletID int) error {
 }
 
 func (mw *MultiWallet) CancelRescan() {
+	mw.syncData.mu.Lock()
+	defer mw.syncData.mu.Unlock()
 	if mw.syncData.cancelRescan != nil {
 		mw.syncData.cancelRescan()
 		mw.syncData.cancelRescan = nil

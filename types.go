@@ -118,9 +118,9 @@ type TxAndBlockNotificationListener interface {
 }
 
 type BlocksRescanProgressListener interface {
-	OnBlocksRescanStarted()
+	OnBlocksRescanStarted(walletID int)
 	OnBlocksRescanProgress(*HeadersRescanProgressReport)
-	OnBlocksRescanEnded(error)
+	OnBlocksRescanEnded(walletID int, err error)
 }
 
 // Transaction is used with storm for tx indexing operations.
