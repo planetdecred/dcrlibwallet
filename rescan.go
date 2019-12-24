@@ -1,6 +1,7 @@
 package dcrlibwallet
 
 import (
+	"context"
 	"math"
 	"time"
 
@@ -33,17 +34,16 @@ func (mw *MultiWallet) RescanBlocks(walletID int) error {
 		}()
 
 		mw.syncData.mu.Lock()
-
 		mw.syncData.rescanning = true
-
-		if mw.blocksRescanProgressListener != nil {
-			mw.blocksRescanProgressListener.OnBlocksRescanStarted(walletID)
-		}
 
 		ctx, cancel := wallet.shutdownContextWithCancel()
 		mw.syncData.cancelRescan = cancel
 
 		mw.syncData.mu.Unlock()
+
+		if mw.blocksRescanProgressListener != nil {
+			mw.blocksRescanProgressListener.OnBlocksRescanStarted(walletID)
+		}
 
 		progress := make(chan w.RescanProgress, 1)
 		go wallet.internal.RescanProgressFromHeight(ctx, netBackend, 0, progress)
@@ -84,7 +84,13 @@ func (mw *MultiWallet) RescanBlocks(walletID int) error {
 			select {
 			case <-ctx.Done():
 				log.Info("Rescan canceled through context")
-				mw.blocksRescanProgressListener.OnBlocksRescanEnded(walletID, ctx.Err())
+
+				if ctx.Err() != nil && ctx.Err() != context.Canceled {
+					mw.blocksRescanProgressListener.OnBlocksRescanEnded(walletID, ctx.Err())
+				} else {
+					mw.blocksRescanProgressListener.OnBlocksRescanEnded(walletID, nil)
+				}
+
 				return
 			default:
 				continue
