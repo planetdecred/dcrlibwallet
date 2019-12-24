@@ -85,10 +85,12 @@ func (mw *MultiWallet) RescanBlocks(walletID int) error {
 			case <-ctx.Done():
 				log.Info("Rescan canceled through context")
 
-				if ctx.Err() != nil && ctx.Err() != context.Canceled {
-					mw.blocksRescanProgressListener.OnBlocksRescanEnded(walletID, ctx.Err())
-				} else {
-					mw.blocksRescanProgressListener.OnBlocksRescanEnded(walletID, nil)
+				if mw.blocksRescanProgressListener != nil {
+					if ctx.Err() != nil && ctx.Err() != context.Canceled {
+						mw.blocksRescanProgressListener.OnBlocksRescanEnded(walletID, ctx.Err())
+					} else {
+						mw.blocksRescanProgressListener.OnBlocksRescanEnded(walletID, nil)
+					}
 				}
 
 				return
