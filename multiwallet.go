@@ -14,6 +14,7 @@ import (
 	"github.com/decred/dcrwallet/errors/v2"
 	w "github.com/decred/dcrwallet/wallet/v3"
 	"github.com/raedahgroup/dcrlibwallet/internal/snacl"
+	"github.com/raedahgroup/dcrlibwallet/txindex"
 	"github.com/raedahgroup/dcrlibwallet/utils"
 	bolt "go.etcd.io/bbolt"
 )
@@ -184,6 +185,10 @@ func (mw *MultiWallet) OpenWallets(pubPass []byte) error {
 }
 
 func (mw *MultiWallet) CreateWatchOnlyWallet(walletName, publicPassphrase, extendedPublicKey string) (*Wallet, error) {
+	if publicPassphrase == "" {
+		publicPassphrase = w.InsecurePubPassphrase
+	}
+
 	return mw.addNewWallet(walletName, publicPassphrase, func(db storm.Node) error {
 		wallet, err := mw.saveWalletPropertiesToDatabase(db, &Wallet{Name: walletName, HasDiscoveredAccounts: true})
 		if err != nil {
@@ -195,6 +200,10 @@ func (mw *MultiWallet) CreateWatchOnlyWallet(walletName, publicPassphrase, exten
 }
 
 func (mw *MultiWallet) CreateNewWallet(publicPassphrase, privatePassphrase string, privatePassphraseType int32) (*Wallet, error) {
+	if publicPassphrase == "" {
+		publicPassphrase = w.InsecurePubPassphrase
+	}
+
 	return mw.addNewWallet("", publicPassphrase, func(db storm.Node) error {
 		seed, err := GenerateSeed()
 		if err != nil {
@@ -212,6 +221,10 @@ func (mw *MultiWallet) CreateNewWallet(publicPassphrase, privatePassphrase strin
 }
 
 func (mw *MultiWallet) RestoreWallet(seedMnemonic, publicPassphrase, privatePassphrase string, privatePassphraseType int32) (*Wallet, error) {
+	if publicPassphrase == "" {
+		publicPassphrase = w.InsecurePubPassphrase
+	}
+
 	return mw.addNewWallet("", publicPassphrase, func(db storm.Node) error {
 		wallet, err := mw.saveWalletPropertiesToDatabase(db,
 			&Wallet{PrivatePassphraseType: privatePassphraseType, HasDiscoveredAccounts: false})
@@ -220,6 +233,60 @@ func (mw *MultiWallet) RestoreWallet(seedMnemonic, publicPassphrase, privatePass
 		}
 
 		return wallet.createWallet(publicPassphrase, privatePassphrase, seedMnemonic)
+	})
+}
+
+func (mw *MultiWallet) LinkExistingWallet(walletDataDir, originalPubPass, multiwalletPubPass string,
+	privatePassphraseType int32) (*Wallet, error) {
+
+	// check if `walletDataDir` contains wallet.db
+	if !WalletExistsAt(walletDataDir, mw.chainParams.Name) {
+		return nil, errors.New(ErrNotExist)
+	}
+
+	walletDataDir = filepath.Join(walletDataDir, mw.chainParams.Name)
+
+	if originalPubPass == "" {
+		originalPubPass = w.InsecurePubPassphrase
+	}
+	if multiwalletPubPass == "" {
+		multiwalletPubPass = w.InsecurePubPassphrase
+	}
+
+	return mw.addNewWallet("", multiwalletPubPass, func(db storm.Node) error {
+		wallet, err := mw.saveWalletPropertiesToDatabase(db,
+			&Wallet{PrivatePassphraseType: privatePassphraseType, HasDiscoveredAccounts: false})
+		if err != nil {
+			return err
+		}
+
+		// move wallet.db and tx.db files to newly created dir for the wallet
+		currentWalletDbFilePath := filepath.Join(walletDataDir, walletDbName)
+		newWalletDbFilePath := filepath.Join(wallet.DataDir, walletDbName)
+		err = os.Rename(currentWalletDbFilePath, newWalletDbFilePath)
+		if err != nil {
+			return err
+		}
+
+		currentTxDbFilePath := filepath.Join(walletDataDir, txindex.DbName)
+		if exists, _ := fileExists(currentTxDbFilePath); exists {
+			newTxDbFilePath := filepath.Join(wallet.DataDir, txindex.DbName)
+			err = os.Rename(currentTxDbFilePath, newTxDbFilePath)
+			if err != nil {
+				return err
+			}
+		}
+
+		if originalPubPass != multiwalletPubPass {
+			// change public passphrase for newly copied wallet db
+			ctx, _ := mw.contextWithShutdownCancel()
+			err = wallet.internal.ChangePublicPassphrase(ctx, []byte(originalPubPass), []byte(multiwalletPubPass))
+			if err != nil {
+				return err
+			}
+		}
+
+		return wallet.openWallet([]byte(multiwalletPubPass))
 	})
 }
 
@@ -235,10 +302,6 @@ func (mw *MultiWallet) addNewWallet(walletName, publicPassphrase string,
 		return nil, err
 	} else if exists {
 		return nil, errors.New(ErrExist)
-	}
-
-	if publicPassphrase == "" {
-		publicPassphrase = w.InsecurePubPassphrase
 	}
 
 	var wallet *Wallet
@@ -297,7 +360,7 @@ func (mw *MultiWallet) saveWalletPropertiesToDatabase(db storm.Node, wallet *Wal
 	wallet.DataDir = walletDataDir
 	wallet.DbDriver = mw.dbDriver
 
-	err = mw.db.Save(wallet) // update database with complete wallet information
+	err = db.Save(wallet) // update database with complete wallet information
 	if err != nil {
 		return nil, err
 	}
@@ -353,6 +416,13 @@ func (mw *MultiWallet) DeleteWallet(walletID int, privPass []byte) error {
 
 	delete(mw.wallets, walletID)
 
+	return nil
+}
+
+func (mw *MultiWallet) DefaultWallet() *Wallet {
+	for _, wallet := range mw.wallets {
+		return wallet
+	}
 	return nil
 }
 
