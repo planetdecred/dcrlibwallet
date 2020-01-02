@@ -185,7 +185,7 @@ func (mw *MultiWallet) CreateWatchOnlyWallet(walletName, publicPassphrase, exten
 			return err
 		}
 
-		return wallet.CreateWatchingOnlyWallet(publicPassphrase, extendedPublicKey)
+		return wallet.createWatchingOnlyWallet(publicPassphrase, extendedPublicKey)
 	})
 }
 
@@ -202,7 +202,7 @@ func (mw *MultiWallet) CreateNewWallet(publicPassphrase, privatePassphrase strin
 			return err
 		}
 
-		return wallet.CreateWallet(publicPassphrase, privatePassphrase, seed)
+		return wallet.createWallet(publicPassphrase, privatePassphrase, seed)
 	})
 }
 
@@ -214,7 +214,7 @@ func (mw *MultiWallet) RestoreWallet(seedMnemonic, publicPassphrase, privatePass
 			return err
 		}
 
-		return wallet.CreateWallet(publicPassphrase, privatePassphrase, seedMnemonic)
+		return wallet.createWallet(publicPassphrase, privatePassphrase, seedMnemonic)
 	})
 }
 

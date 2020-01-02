@@ -111,7 +111,7 @@ func (wallet *Wallet) WalletExists() (bool, error) {
 	return wallet.loader.WalletExists()
 }
 
-func (wallet *Wallet) CreateWallet(publicPassphrase, privatePassphrase, seedMnemonic string) error {
+func (wallet *Wallet) createWallet(publicPassphrase, privatePassphrase, seedMnemonic string) error {
 	log.Info("Creating Wallet")
 	if len(seedMnemonic) == 0 {
 		return errors.New(ErrEmptySeed)
@@ -137,7 +137,7 @@ func (wallet *Wallet) CreateWallet(publicPassphrase, privatePassphrase, seedMnem
 	return nil
 }
 
-func (wallet *Wallet) CreateWatchingOnlyWallet(publicPassphrase, extendedPublicKey string) error {
+func (wallet *Wallet) createWatchingOnlyWallet(publicPassphrase, extendedPublicKey string) error {
 	pubPass := []byte(publicPassphrase)
 
 	createdWallet, err := wallet.loader.CreateWatchingOnlyWallet(wallet.shutdownContext(), extendedPublicKey, pubPass)
@@ -227,12 +227,6 @@ func (wallet *Wallet) changePrivatePassphrase(oldPass []byte, newPass []byte) er
 		return translateError(err)
 	}
 	return nil
-}
-
-func (wallet *Wallet) closeWallet() error {
-	err := wallet.loader.UnloadWallet()
-	wallet.internal = nil
-	return err
 }
 
 func (wallet *Wallet) deleteWallet(privatePassphrase []byte) error {
