@@ -4,6 +4,7 @@ import (
 	"github.com/asdine/storm"
 	"github.com/decred/dcrwallet/errors/v2"
 	"github.com/raedahgroup/dcrlibwallet/internal/snacl"
+	"github.com/raedahgroup/dcrlibwallet/spv"
 )
 
 const (
@@ -57,9 +58,11 @@ func (mw *MultiWallet) generateAndSavePubEncKey(pubPass []byte, dbNode storm.Nod
 		return errors.E("create public encryption key error: %v", err)
 	}
 
-	err = dbNode.Set(walletsMetadataBucketName, walletsMetadataMasterPubKeyParamsField,
-		publicEncryptionKey.Marshal())
+	mw.publicEncryptionKeyParams = publicEncryptionKey.Marshal()
+
+	err = dbNode.Set(walletsMetadataBucketName, walletsMetadataMasterPubKeyParamsField, mw.publicEncryptionKeyParams)
 	if err != nil {
+		mw.publicEncryptionKeyParams = nil
 		return errors.E("create public encryption key error: %v", err)
 	}
 
@@ -67,9 +70,17 @@ func (mw *MultiWallet) generateAndSavePubEncKey(pubPass []byte, dbNode storm.Nod
 	return nil
 }
 
-func (mw *MultiWallet) verifyPublicPassphrase(pubPass []byte) error {
-	mw.publicEncryptionKey.Zero()
-	return mw.publicEncryptionKey.DeriveKey(&pubPass)
+func verifyPublicPassphrase(pubPass, publicEncryptionKeyParams []byte) error {
+	// unmarshal public encryption key from params
+	var publicEncKey snacl.SecretKey
+	err := publicEncKey.Unmarshal(publicEncryptionKeyParams)
+	if err != nil {
+		return errors.E("error parsing public encryption key: %v", err)
+	}
+
+	defer publicEncKey.Zero()
+
+	return publicEncKey.DeriveKey(&pubPass)
 }
 
 func (mw *MultiWallet) markWalletAsDiscoveredAccounts(walletID int) error {

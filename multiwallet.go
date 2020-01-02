@@ -23,6 +23,10 @@ type MultiWallet struct {
 	rootDir  string
 	db       *storm.DB
 
+	// publicEncryptionKeyParams is used with the cross-wallet public
+	// passphrase to re-construct the publicEncryptionKey.
+	publicEncryptionKeyParams []byte
+
 	// publicEncryptionKey should be used to encrypt information
 	// that left exposed would present a privacy risk but cannot
 	// be used to move funds out of any of the wallets.
@@ -105,12 +109,13 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 	}
 
 	mw := &MultiWallet{
-		dbDriver:            dbDriver,
-		rootDir:             rootDir,
-		db:                  walletsDb,
-		publicEncryptionKey: &publicEncKey,
-		chainParams:         chainParams,
-		wallets:             walletsMap,
+		dbDriver:                  dbDriver,
+		rootDir:                   rootDir,
+		db:                        walletsDb,
+		publicEncryptionKeyParams: publicEncKeyParams,
+		publicEncryptionKey:       &publicEncKey,
+		chainParams:               chainParams,
+		wallets:                   walletsMap,
 		syncData: &syncData{
 			syncCanceled:          make(chan bool),
 			syncProgressListeners: make(map[string]SyncProgressListener),
@@ -245,7 +250,7 @@ func (mw *MultiWallet) addNewWallet(walletName, publicPassphrase string,
 		// is not the first wallet to be added to this multiwallet instance.
 		// If this is the first wallet, save this pub pass as cross-wallet pub pass.
 		if len(mw.wallets) > 0 {
-			err = mw.verifyPublicPassphrase([]byte(publicPassphrase))
+			err = verifyPublicPassphrase([]byte(publicPassphrase), mw.publicEncryptionKeyParams)
 			if err != nil {
 				return errors.New(ErrInvalidPassphrase)
 			}
@@ -269,6 +274,7 @@ func (mw *MultiWallet) addNewWallet(walletName, publicPassphrase string,
 	// If at the end of the entire op, there's still no wallet in this
 	// multiwallet instance, set the public encryption key to nil.
 	if len(mw.wallets) == 0 {
+		mw.publicEncryptionKeyParams = nil
 		mw.publicEncryptionKey = nil
 	}
 
@@ -463,7 +469,7 @@ func (mw *MultiWallet) ChangePublicPassphrase(oldPublicPass, newPublicPass []byt
 		newPublicPass = []byte(w.InsecurePubPassphrase)
 	}
 
-	err := mw.verifyPublicPassphrase(oldPublicPass)
+	err := verifyPublicPassphrase(oldPublicPass, mw.publicEncryptionKeyParams)
 	if err != nil {
 		return errors.E(ErrInvalidPassphrase)
 	}
@@ -478,19 +484,17 @@ func (mw *MultiWallet) ChangePublicPassphrase(oldPublicPass, newPublicPass []byt
 		successfullyChangedWalletIDs = append(successfullyChangedWalletIDs, walletID)
 	}
 
-	if err == nil {
-		// update cross-wallet public passphrase
-		err = mw.batchDbTransaction(func(db storm.Node) error {
-			return mw.generateAndSavePubEncKey(newPublicPass, db)
-		})
-	}
-
 	if err != nil {
 		// Rollback changes
 		for walletID := range successfullyChangedWalletIDs {
 			ctx, _ := mw.contextWithShutdownCancel()
 			mw.wallets[walletID].internal.ChangePublicPassphrase(ctx, newPublicPass, oldPublicPass)
 		}
+	} else {
+		// update cross-wallet public passphrase
+		err = mw.batchDbTransaction(func(db storm.Node) error {
+			return mw.generateAndSavePubEncKey(newPublicPass, db)
+		})
 	}
 
 	return translateError(err)
