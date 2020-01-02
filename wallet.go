@@ -160,7 +160,7 @@ func (wallet *Wallet) IsWatchingOnlyWallet() bool {
 	return false
 }
 
-func (wallet *Wallet) OpenWallet(pubPass []byte) error {
+func (wallet *Wallet) openWallet(pubPass []byte) error {
 	if pubPass == nil {
 		pubPass = []byte("public")
 	}
@@ -229,7 +229,7 @@ func (wallet *Wallet) changePrivatePassphrase(oldPass []byte, newPass []byte) er
 	return nil
 }
 
-func (wallet *Wallet) CloseWallet() error {
+func (wallet *Wallet) closeWallet() error {
 	err := wallet.loader.UnloadWallet()
 	wallet.internal = nil
 	return err

@@ -13,6 +13,7 @@ import (
 	"github.com/decred/dcrd/chaincfg/v2"
 	"github.com/decred/dcrwallet/errors/v2"
 	w "github.com/decred/dcrwallet/wallet/v3"
+	"github.com/raedahgroup/dcrlibwallet/internal/snacl"
 	"github.com/raedahgroup/dcrlibwallet/spv"
 	"github.com/raedahgroup/dcrlibwallet/utils"
 	bolt "go.etcd.io/bbolt"
@@ -21,12 +22,32 @@ import (
 const (
 	logFileName   = "dcrlibwallet.log"
 	walletsDbName = "wallets.db"
+
+	walletsMetadataBucketName               = "metadata"
+	walletsMetadataMasterPubKeyParamsField  = "masterpub-params"
+	walletsMetadataMasterPrivKeyParamsField = "masterpriv-params"
 )
+
+// ScryptOptions is used to hold the scrypt parameters needed when deriving new
+// passphrase keys.
+type ScryptOptions struct {
+	N, R, P int
+}
+
+// defaultScryptOptions is the default options used with scrypt.
+var defaultScryptOptions = ScryptOptions{
+	N: 262144, // 2^18
+	R: 8,
+	P: 1,
+}
 
 type MultiWallet struct {
 	dbDriver string
 	rootDir  string
 	db       *storm.DB
+
+	publicEncryptionKey  *snacl.SecretKey
+	privateEncryptionKey *snacl.SecretKey
 
 	chainParams *chaincfg.Params
 	wallets     map[int]*Wallet
@@ -59,6 +80,32 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 		return nil, errors.E("error opening wallets database: %s", err.Error())
 	}
 
+	// load encryption keys params from wallets db
+	var publicEncKeyParams, privateEncKeyParams []byte
+	err = walletsDb.Get(walletsMetadataBucketName, walletsMetadataMasterPubKeyParamsField, &publicEncKeyParams)
+	if err != nil && err != storm.ErrNotFound {
+		return nil, errors.E("error reading multiwallet metadata from db: %v", err)
+	}
+	err = walletsDb.Get(walletsMetadataBucketName, walletsMetadataMasterPrivKeyParamsField, &privateEncKeyParams)
+	if err != nil && err != storm.ErrNotFound {
+		return nil, errors.E("error reading multiwallet metadata from db: %v", err)
+	}
+
+	// unmarshal encryption keys from params
+	var publicEncKey, privateEncKey snacl.SecretKey
+	if publicEncKeyParams != nil {
+		err = publicEncKey.Unmarshal(publicEncKeyParams)
+		if err != nil {
+			return nil, errors.E("error parsing public encryption key: %v", err)
+		}
+	}
+	if privateEncKeyParams != nil {
+		err = privateEncKey.Unmarshal(privateEncKeyParams)
+		if err != nil {
+			return nil, errors.E("error parsing private encryption key: %v", err)
+		}
+	}
+
 	// init database for saving/reading wallet objects
 	err = walletsDb.Init(&Wallet{})
 	if err != nil {
@@ -85,11 +132,13 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 	}
 
 	mw := &MultiWallet{
-		dbDriver:    dbDriver,
-		rootDir:     rootDir,
-		db:          walletsDb,
-		chainParams: chainParams,
-		wallets:     walletsMap,
+		dbDriver:             dbDriver,
+		rootDir:              rootDir,
+		db:                   walletsDb,
+		publicEncryptionKey:  &publicEncKey,
+		privateEncryptionKey: &privateEncKey,
+		chainParams:          chainParams,
+		wallets:              walletsMap,
 		syncData: &syncData{
 			syncCanceled:          make(chan bool),
 			syncProgressListeners: make(map[string]SyncProgressListener),
@@ -251,16 +300,21 @@ func (mw *MultiWallet) CreateWatchOnlyWallet(walletName, publicPassphrase, exten
 		return nil, errors.New(ErrExist)
 	}
 
+	if publicPassphrase == "" {
+		publicPassphrase = w.InsecurePubPassphrase
+	}
+
+	err = mw.verifyPublicPassphrase([]byte(publicPassphrase))
+	if err != nil {
+		return nil, errors.New(ErrInvalidPassphrase)
+	}
+
 	wallet, err := mw.saveWalletToDatabase(&Wallet{
 		Name:                  walletName,
 		HasDiscoveredAccounts: true,
 	})
 	if err != nil {
 		return nil, err
-	}
-
-	if publicPassphrase == "" {
-		publicPassphrase = w.InsecurePubPassphrase
 	}
 
 	err = wallet.CreateWatchingOnlyWallet(publicPassphrase, extendedPublicKey)
@@ -280,6 +334,15 @@ func (mw *MultiWallet) CreateNewWallet(publicPassphrase, privatePassphrase strin
 		return nil, errors.New(ErrSyncAlreadyInProgress)
 	}
 
+	if publicPassphrase == "" {
+		publicPassphrase = w.InsecurePubPassphrase
+	}
+
+	err := mw.verifyPublicPassphrase([]byte(publicPassphrase))
+	if err != nil {
+		return nil, errors.New(ErrInvalidPassphrase)
+	}
+
 	seed, err := GenerateSeed()
 	if err != nil {
 		return nil, err
@@ -292,10 +355,6 @@ func (mw *MultiWallet) CreateNewWallet(publicPassphrase, privatePassphrase strin
 	})
 	if err != nil {
 		return nil, err
-	}
-
-	if publicPassphrase == "" {
-		publicPassphrase = w.InsecurePubPassphrase
 	}
 
 	err = wallet.CreateWallet(publicPassphrase, privatePassphrase, seed)
@@ -315,16 +374,21 @@ func (mw *MultiWallet) RestoreWallet(seedMnemonic, publicPassphrase, privatePass
 		return nil, errors.New(ErrSyncAlreadyInProgress)
 	}
 
+	if publicPassphrase == "" {
+		publicPassphrase = w.InsecurePubPassphrase
+	}
+
+	err := mw.verifyPublicPassphrase([]byte(publicPassphrase))
+	if err != nil {
+		return nil, errors.New(ErrInvalidPassphrase)
+	}
+
 	wallet, err := mw.saveWalletToDatabase(&Wallet{
 		PrivatePassphraseType: privatePassphraseType,
 		HasDiscoveredAccounts: false,
 	})
 	if err != nil {
 		return nil, err
-	}
-
-	if publicPassphrase == "" {
-		publicPassphrase = w.InsecurePubPassphrase
 	}
 
 	err = wallet.CreateWallet(publicPassphrase, privatePassphrase, seedMnemonic)
@@ -394,8 +458,16 @@ func (mw *MultiWallet) OpenWallets(pubPass []byte) error {
 		return errors.New(ErrSyncAlreadyInProgress)
 	}
 
+	// create master pub key if it doesn't exist already
+	if mw.publicEncryptionKey == nil {
+		err := mw.generateAndSavePubEncKey(pubPass)
+		if err != nil {
+			return err
+		}
+	}
+
 	for _, wallet := range mw.wallets {
-		err := wallet.OpenWallet(pubPass)
+		err := wallet.openWallet(pubPass)
 		if err != nil {
 			return err
 		}
@@ -406,23 +478,26 @@ func (mw *MultiWallet) OpenWallets(pubPass []byte) error {
 	return nil
 }
 
-func (mw *MultiWallet) OpenWallet(walletID int, pubPass []byte) error {
-	if mw.syncData.activeSyncData != nil {
-		return errors.New(ErrSyncAlreadyInProgress)
-	}
-
-	wallet := mw.WalletWithID(walletID)
-	if wallet == nil {
-		return errors.New(ErrNotExist)
-	}
-
-	err := wallet.OpenWallet(pubPass)
+func (mw *MultiWallet) generateAndSavePubEncKey(pubPass []byte) error {
+	publicEncryptionKey, err := snacl.NewSecretKey(&pubPass, defaultScryptOptions.N,
+		defaultScryptOptions.R, defaultScryptOptions.P)
 	if err != nil {
-		return err
+		return errors.E("create public encryption key error: %v", err)
 	}
 
-	go mw.listenForTransactions(wallet.ID)
+	err = mw.db.Set(walletsMetadataBucketName, walletsMetadataMasterPubKeyParamsField,
+		publicEncryptionKey.Marshal())
+	if err != nil {
+		return errors.E("create public encryption key error: %v", err)
+	}
+
+	mw.publicEncryptionKey = publicEncryptionKey
 	return nil
+}
+
+func (mw *MultiWallet) verifyPublicPassphrase(pubPass []byte) error {
+	mw.publicEncryptionKey.Zero()
+	return mw.publicEncryptionKey.DeriveKey(&pubPass)
 }
 
 func (mw *MultiWallet) UnlockWallet(walletID int, privPass []byte) error {
@@ -452,8 +527,17 @@ func (mw *MultiWallet) ChangePublicPassphrase(oldPublicPass, newPublicPass []byt
 		newPublicPass = []byte(w.InsecurePubPassphrase)
 	}
 
+	// verify old public passphrase
+	if mw.publicEncryptionKey == nil {
+		return errors.E("public passphrase not properly set up, open wallets to fix")
+	}
+
+	err := mw.verifyPublicPassphrase(oldPublicPass)
+	if err != nil {
+		return errors.E(ErrInvalidPassphrase)
+	}
+
 	successfullyChangedWalletIDs := make([]int, 0)
-	var err error
 	for walletID, wallet := range mw.wallets {
 		ctx, _ := mw.contextWithShutdownCancel()
 		if err = wallet.internal.ChangePublicPassphrase(ctx, oldPublicPass, newPublicPass); err != nil {
@@ -461,6 +545,10 @@ func (mw *MultiWallet) ChangePublicPassphrase(oldPublicPass, newPublicPass []byt
 			break
 		}
 		successfullyChangedWalletIDs = append(successfullyChangedWalletIDs, walletID)
+	}
+
+	if err == nil {
+		err = mw.generateAndSavePubEncKey(newPublicPass)
 	}
 
 	if err != nil {
