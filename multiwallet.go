@@ -13,7 +13,6 @@ import (
 	"github.com/decred/dcrd/chaincfg/v2"
 	"github.com/decred/dcrwallet/errors/v2"
 	w "github.com/decred/dcrwallet/wallet/v3"
-	"github.com/raedahgroup/dcrlibwallet/internal/snacl"
 	"github.com/raedahgroup/dcrlibwallet/txindex"
 	"github.com/raedahgroup/dcrlibwallet/utils"
 	bolt "go.etcd.io/bbolt"
@@ -23,19 +22,6 @@ type MultiWallet struct {
 	dbDriver string
 	rootDir  string
 	db       *storm.DB
-
-	// publicEncryptionKeyParams is used with the cross-wallet public
-	// passphrase to re-construct the publicEncryptionKey.
-	publicEncryptionKeyParams []byte
-
-	// publicEncryptionKey should be used to encrypt information
-	// that left exposed would present a privacy risk but cannot
-	// be used to move funds out of any of the wallets.
-	// The shared wallet public passphrase is required to derive
-	// this encryption key before it can be used for encryption and
-	// decryption.  This derivation is done when `OpenWallets` is
-	// called with a valid public passphrase.
-	publicEncryptionKey *snacl.SecretKey
 
 	chainParams *chaincfg.Params
 	wallets     map[int]*Wallet
@@ -68,22 +54,6 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 		return nil, errors.E("error opening wallets database: %s", err.Error())
 	}
 
-	// load public encryption key params from wallets db
-	var publicEncKeyParams []byte
-	err = walletsDb.Get(walletsMetadataBucketName, walletsMetadataMasterPubKeyParamsField, &publicEncKeyParams)
-	if err != nil && err != storm.ErrNotFound {
-		return nil, errors.E("error reading multiwallet metadata from db: %v", err)
-	}
-
-	// unmarshal public encryption key from params
-	var publicEncKey snacl.SecretKey
-	if publicEncKeyParams != nil {
-		err = publicEncKey.Unmarshal(publicEncKeyParams)
-		if err != nil {
-			return nil, errors.E("error parsing public encryption key: %v", err)
-		}
-	}
-
 	// init database for saving/reading wallet objects
 	err = walletsDb.Init(&Wallet{})
 	if err != nil {
@@ -110,13 +80,11 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 	}
 
 	mw := &MultiWallet{
-		dbDriver:                  dbDriver,
-		rootDir:                   rootDir,
-		db:                        walletsDb,
-		publicEncryptionKeyParams: publicEncKeyParams,
-		publicEncryptionKey:       &publicEncKey,
-		chainParams:               chainParams,
-		wallets:                   walletsMap,
+		dbDriver:    dbDriver,
+		rootDir:     rootDir,
+		db:          walletsDb,
+		chainParams: chainParams,
+		wallets:     walletsMap,
 		syncData: &syncData{
 			syncCanceled:          make(chan bool),
 			syncProgressListeners: make(map[string]SyncProgressListener),
@@ -158,22 +126,13 @@ func (mw *MultiWallet) Shutdown() {
 	}
 }
 
-func (mw *MultiWallet) OpenWallets(pubPass []byte) error {
+func (mw *MultiWallet) OpenWallets() error {
 	if mw.syncData.activeSyncData != nil {
 		return errors.New(ErrSyncAlreadyInProgress)
 	}
 
-	// Derive the master public encryption key for this multiwallet instance
-	// using this pubPass. This also serves to verify the pubPass as the derivation
-	// will only succeed if the pubPass is the correct shared public passphrase
-	// for all wallets.
-	err := mw.publicEncryptionKey.DeriveKey(&pubPass)
-	if err != nil {
-		return errors.New(ErrInvalidPassphrase)
-	}
-
 	for _, wallet := range mw.wallets {
-		err = wallet.openWallet(pubPass)
+		err := wallet.openWallet()
 		if err != nil {
 			return err
 		}
@@ -184,86 +143,63 @@ func (mw *MultiWallet) OpenWallets(pubPass []byte) error {
 	return nil
 }
 
-func (mw *MultiWallet) CreateWatchOnlyWallet(walletName, publicPassphrase, extendedPublicKey string) (*Wallet, error) {
-	if publicPassphrase == "" {
-		publicPassphrase = w.InsecurePubPassphrase
+func (mw *MultiWallet) CreateWatchOnlyWallet(walletName, extendedPublicKey string) (*Wallet, error) {
+	wallet := &Wallet{
+		Name:                  walletName,
+		HasDiscoveredAccounts: true,
 	}
 
-	return mw.addNewWallet(walletName, publicPassphrase, func(db storm.Node) error {
-		wallet, err := mw.saveWalletPropertiesToDatabase(db, &Wallet{Name: walletName, HasDiscoveredAccounts: true})
-		if err != nil {
-			return err
-		}
-
-		return wallet.createWatchingOnlyWallet(publicPassphrase, extendedPublicKey)
+	return mw.addNewWallet(wallet, func() error {
+		return wallet.createWatchingOnlyWallet(extendedPublicKey)
 	})
 }
 
-func (mw *MultiWallet) CreateNewWallet(publicPassphrase, privatePassphrase string, privatePassphraseType int32) (*Wallet, error) {
-	if publicPassphrase == "" {
-		publicPassphrase = w.InsecurePubPassphrase
+func (mw *MultiWallet) CreateNewWallet(privatePassphrase string, privatePassphraseType int32) (*Wallet, error) {
+	seed, err := GenerateSeed()
+	if err != nil {
+		return nil, err
 	}
 
-	return mw.addNewWallet("", publicPassphrase, func(db storm.Node) error {
-		seed, err := GenerateSeed()
-		if err != nil {
-			return err
-		}
+	wallet := &Wallet{
+		Seed:                  seed,
+		PrivatePassphraseType: privatePassphraseType,
+		HasDiscoveredAccounts: true,
+	}
 
-		wallet, err := mw.saveWalletPropertiesToDatabase(db,
-			&Wallet{Seed: seed, PrivatePassphraseType: privatePassphraseType, HasDiscoveredAccounts: true})
-		if err != nil {
-			return err
-		}
-
-		return wallet.createWallet(publicPassphrase, privatePassphrase, seed)
+	return mw.addNewWallet(wallet, func() error {
+		return wallet.createWallet(privatePassphrase, seed)
 	})
 }
 
-func (mw *MultiWallet) RestoreWallet(seedMnemonic, publicPassphrase, privatePassphrase string, privatePassphraseType int32) (*Wallet, error) {
-	if publicPassphrase == "" {
-		publicPassphrase = w.InsecurePubPassphrase
+func (mw *MultiWallet) RestoreWallet(seedMnemonic, privatePassphrase string, privatePassphraseType int32) (*Wallet, error) {
+	wallet := &Wallet{
+		PrivatePassphraseType: privatePassphraseType,
+		HasDiscoveredAccounts: false,
 	}
 
-	return mw.addNewWallet("", publicPassphrase, func(db storm.Node) error {
-		wallet, err := mw.saveWalletPropertiesToDatabase(db,
-			&Wallet{PrivatePassphraseType: privatePassphraseType, HasDiscoveredAccounts: false})
-		if err != nil {
-			return err
-		}
-
-		return wallet.createWallet(publicPassphrase, privatePassphrase, seedMnemonic)
+	return mw.addNewWallet(wallet, func() error {
+		return wallet.createWallet(privatePassphrase, seedMnemonic)
 	})
 }
 
-func (mw *MultiWallet) LinkExistingWallet(walletDataDir, originalPubPass, multiwalletPubPass string,
-	privatePassphraseType int32) (*Wallet, error) {
-
+func (mw *MultiWallet) LinkExistingWallet(walletDataDir, originalPubPass string, privatePassphraseType int32) (*Wallet, error) {
 	// check if `walletDataDir` contains wallet.db
 	if !WalletExistsAt(walletDataDir, mw.chainParams.Name) {
 		return nil, errors.New(ErrNotExist)
 	}
 
-	walletDataDir = filepath.Join(walletDataDir, mw.chainParams.Name)
-
-	if originalPubPass == "" {
-		originalPubPass = w.InsecurePubPassphrase
-	}
-	if multiwalletPubPass == "" {
-		multiwalletPubPass = w.InsecurePubPassphrase
+	wallet := &Wallet{
+		PrivatePassphraseType: privatePassphraseType,
+		HasDiscoveredAccounts: false, // assume that account discovery hasn't been done
 	}
 
-	return mw.addNewWallet("", multiwalletPubPass, func(db storm.Node) error {
-		wallet, err := mw.saveWalletPropertiesToDatabase(db,
-			&Wallet{PrivatePassphraseType: privatePassphraseType, HasDiscoveredAccounts: false})
-		if err != nil {
-			return err
-		}
+	return mw.addNewWallet(wallet, func() error {
+		walletDataDir = filepath.Join(walletDataDir, mw.chainParams.Name)
 
 		// move wallet.db and tx.db files to newly created dir for the wallet
 		currentWalletDbFilePath := filepath.Join(walletDataDir, walletDbName)
 		newWalletDbFilePath := filepath.Join(wallet.DataDir, walletDbName)
-		err = os.Rename(currentWalletDbFilePath, newWalletDbFilePath)
+		err := os.Rename(currentWalletDbFilePath, newWalletDbFilePath)
 		if err != nil {
 			return err
 		}
@@ -277,54 +213,62 @@ func (mw *MultiWallet) LinkExistingWallet(walletDataDir, originalPubPass, multiw
 			}
 		}
 
-		if originalPubPass != multiwalletPubPass {
-			// change public passphrase for newly copied wallet db
+		if originalPubPass != "" && originalPubPass != w.InsecurePubPassphrase {
+			// change public passphrase for newly copied wallet db to default
 			ctx, _ := mw.contextWithShutdownCancel()
-			err = wallet.internal.ChangePublicPassphrase(ctx, []byte(originalPubPass), []byte(multiwalletPubPass))
+			err = wallet.internal.ChangePublicPassphrase(ctx, []byte(originalPubPass), []byte(w.InsecurePubPassphrase))
 			if err != nil {
 				return err
 			}
 		}
 
-		return wallet.openWallet([]byte(multiwalletPubPass))
+		return wallet.openWallet()
 	})
 }
 
-func (mw *MultiWallet) addNewWallet(walletName, publicPassphrase string,
-	finalizeWalletSetup func(db storm.Node) error) (*Wallet, error) {
-
+func (mw *MultiWallet) addNewWallet(wallet *Wallet, finalizeWalletSetup func() error) (*Wallet, error) {
 	if mw.syncData.activeSyncData != nil {
 		return nil, errors.New(ErrSyncAlreadyInProgress)
 	}
 
-	exists, err := mw.WalletNameExists(walletName)
+	exists, err := mw.WalletNameExists(wallet.Name)
 	if err != nil {
 		return nil, err
 	} else if exists {
 		return nil, errors.New(ErrExist)
 	}
 
-	var wallet *Wallet
-
 	// Perform database save operations in batch transaction
 	// for automatic rollback if error occurs at any point.
 	err = mw.batchDbTransaction(func(db storm.Node) error {
-		// Verify this wallet's pub pass against cross-wallet pub pass if this
-		// is not the first wallet to be added to this multiwallet instance.
-		// If this is the first wallet, save this pub pass as cross-wallet pub pass.
-		if len(mw.wallets) > 0 {
-			err = verifyPublicPassphrase([]byte(publicPassphrase), mw.publicEncryptionKeyParams)
-			if err != nil {
-				return errors.New(ErrInvalidPassphrase)
-			}
-		} else {
-			err = mw.generateAndSavePubEncKey([]byte(publicPassphrase), db)
-			if err != nil {
-				return err
-			}
+		// saving struct to update ID property with an autogenerated value
+		err := db.Save(wallet)
+		if err != nil {
+			return err
 		}
 
-		return finalizeWalletSetup(db)
+		walletDataDir := filepath.Join(mw.rootDir, strconv.Itoa(wallet.ID))
+		os.MkdirAll(walletDataDir, os.ModePerm) // create wallet dir
+
+		if wallet.Name == "" {
+			wallet.Name = "wallet-" + strconv.Itoa(wallet.ID) // wallet-#
+		}
+		wallet.DataDir = walletDataDir
+		wallet.DbDriver = mw.dbDriver
+
+		err = db.Save(wallet) // update database with complete wallet information
+		if err != nil {
+			return err
+		}
+
+		err = wallet.prepare(mw.chainParams)
+		if err != nil {
+			return err
+		}
+
+		mw.wallets[wallet.ID] = wallet
+
+		return finalizeWalletSetup()
 	})
 
 	if err == nil {
@@ -334,44 +278,7 @@ func (mw *MultiWallet) addNewWallet(walletName, publicPassphrase string,
 		wallet = nil
 	}
 
-	// If at the end of the entire op, there's still no wallet in this
-	// multiwallet instance, set the public encryption key to nil.
-	if len(mw.wallets) == 0 {
-		mw.publicEncryptionKeyParams = nil
-		mw.publicEncryptionKey = nil
-	}
-
 	return wallet, err
-}
-
-func (mw *MultiWallet) saveWalletPropertiesToDatabase(db storm.Node, wallet *Wallet) (*Wallet, error) {
-	// saving struct to update ID property with an autogenerated value
-	err := db.Save(wallet)
-	if err != nil {
-		return nil, err
-	}
-
-	walletDataDir := filepath.Join(mw.rootDir, strconv.Itoa(wallet.ID))
-	os.MkdirAll(walletDataDir, os.ModePerm) // create wallet dir
-
-	if wallet.Name == "" {
-		wallet.Name = "wallet-" + strconv.Itoa(wallet.ID) // wallet-#
-	}
-	wallet.DataDir = walletDataDir
-	wallet.DbDriver = mw.dbDriver
-
-	err = db.Save(wallet) // update database with complete wallet information
-	if err != nil {
-		return nil, err
-	}
-
-	err = wallet.prepare(mw.chainParams)
-	if err != nil {
-		return nil, err
-	}
-
-	mw.wallets[wallet.ID] = wallet
-	return wallet, nil
 }
 
 func (mw *MultiWallet) RenameWallet(walletID int, newName string) error {
@@ -515,59 +422,6 @@ func (mw *MultiWallet) UnlockWallet(walletID int, privPass []byte) error {
 	}
 
 	return wallet.UnlockWallet(privPass)
-}
-
-func (mw *MultiWallet) ChangePublicPassphrase(oldPublicPass, newPublicPass []byte) error {
-	defer func() {
-		for i := range oldPublicPass {
-			oldPublicPass[i] = 0
-		}
-
-		for i := range newPublicPass {
-			newPublicPass[i] = 0
-		}
-	}()
-
-	if mw.publicEncryptionKey == nil {
-		return errors.E("cross-wallet public passphrase not set, add a wallet to fix")
-	}
-
-	if len(oldPublicPass) == 0 {
-		oldPublicPass = []byte(w.InsecurePubPassphrase)
-	}
-	if len(newPublicPass) == 0 {
-		newPublicPass = []byte(w.InsecurePubPassphrase)
-	}
-
-	err := verifyPublicPassphrase(oldPublicPass, mw.publicEncryptionKeyParams)
-	if err != nil {
-		return errors.E(ErrInvalidPassphrase)
-	}
-
-	successfullyChangedWalletIDs := make([]int, 0)
-	for walletID, wallet := range mw.wallets {
-		ctx, _ := mw.contextWithShutdownCancel()
-		if err = wallet.internal.ChangePublicPassphrase(ctx, oldPublicPass, newPublicPass); err != nil {
-			log.Errorf("[%d] Error changing public passphrase: %v", walletID, err)
-			break
-		}
-		successfullyChangedWalletIDs = append(successfullyChangedWalletIDs, walletID)
-	}
-
-	if err != nil {
-		// Rollback changes
-		for walletID := range successfullyChangedWalletIDs {
-			ctx, _ := mw.contextWithShutdownCancel()
-			mw.wallets[walletID].internal.ChangePublicPassphrase(ctx, newPublicPass, oldPublicPass)
-		}
-	} else {
-		// update cross-wallet public passphrase
-		err = mw.batchDbTransaction(func(db storm.Node) error {
-			return mw.generateAndSavePubEncKey(newPublicPass, db)
-		})
-	}
-
-	return translateError(err)
 }
 
 func (mw *MultiWallet) ChangePrivatePassphraseForWallet(walletID int, oldPrivatePassphrase, newPrivatePassphrase []byte, privatePassphraseType int32) error {

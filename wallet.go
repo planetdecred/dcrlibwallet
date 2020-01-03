@@ -111,13 +111,13 @@ func (wallet *Wallet) WalletExists() (bool, error) {
 	return wallet.loader.WalletExists()
 }
 
-func (wallet *Wallet) createWallet(publicPassphrase, privatePassphrase, seedMnemonic string) error {
+func (wallet *Wallet) createWallet(privatePassphrase, seedMnemonic string) error {
 	log.Info("Creating Wallet")
 	if len(seedMnemonic) == 0 {
 		return errors.New(ErrEmptySeed)
 	}
 
-	pubPass := []byte(publicPassphrase)
+	pubPass := []byte(w.InsecurePubPassphrase)
 	privPass := []byte(privatePassphrase)
 	seed, err := walletseed.DecodeUserInput(seedMnemonic)
 	if err != nil {
@@ -137,8 +137,8 @@ func (wallet *Wallet) createWallet(publicPassphrase, privatePassphrase, seedMnem
 	return nil
 }
 
-func (wallet *Wallet) createWatchingOnlyWallet(publicPassphrase, extendedPublicKey string) error {
-	pubPass := []byte(publicPassphrase)
+func (wallet *Wallet) createWatchingOnlyWallet(extendedPublicKey string) error {
+	pubPass := []byte(w.InsecurePubPassphrase)
 
 	createdWallet, err := wallet.loader.CreateWatchingOnlyWallet(wallet.shutdownContext(), extendedPublicKey, pubPass)
 	if err != nil {
@@ -160,10 +160,8 @@ func (wallet *Wallet) IsWatchingOnlyWallet() bool {
 	return false
 }
 
-func (wallet *Wallet) openWallet(pubPass []byte) error {
-	if pubPass == nil {
-		pubPass = []byte("public")
-	}
+func (wallet *Wallet) openWallet() error {
+	pubPass := []byte(w.InsecurePubPassphrase)
 
 	openedWallet, err := wallet.loader.OpenExistingWallet(wallet.shutdownContext(), pubPass)
 	if err != nil {
