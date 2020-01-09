@@ -4,11 +4,16 @@ import (
 	"github.com/asdine/storm"
 	"github.com/decred/dcrwallet/errors/v2"
 	"github.com/raedahgroup/dcrlibwallet/spv"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 const (
 	logFileName   = "dcrlibwallet.log"
 	walletsDbName = "wallets.db"
+
+	walletsMetadataBucketName    = "metadata"
+	walletstartupPassphraseField = "startup-passphrase"
 )
 
 func (mw *MultiWallet) batchDbTransaction(dbOp func(node storm.Node) error) (err error) {
@@ -64,4 +69,24 @@ func (mw *MultiWallet) setNetworkBackend(syncer *spv.Syncer) {
 			wallet.internal.SetNetworkBackend(walletBackend)
 		}
 	}
+}
+
+func (mw *MultiWallet) verifyStartupPassphrase(startupPassphrase []byte) error {
+	var startupPassphraseHash []byte
+	err := mw.db.Get(walletsMetadataBucketName, walletstartupPassphraseField, &startupPassphraseHash)
+	if err != nil {
+		return err
+	}
+
+	if startupPassphraseHash != nil {
+		// startup passphrase was set, verify
+		return bcrypt.CompareHashAndPassword(startupPassphraseHash, startupPassphrase)
+	}
+
+	// startup passphrase was not previously set
+	if len(startupPassphrase) > 0 {
+		return errors.E(ErrInvalidPassphrase)
+	}
+
+	return nil
 }

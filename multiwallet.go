@@ -16,6 +16,8 @@ import (
 	"github.com/raedahgroup/dcrlibwallet/txindex"
 	"github.com/raedahgroup/dcrlibwallet/utils"
 	bolt "go.etcd.io/bbolt"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 type MultiWallet struct {
@@ -126,13 +128,61 @@ func (mw *MultiWallet) Shutdown() {
 	}
 }
 
-func (mw *MultiWallet) OpenWallets() error {
+func (mw *MultiWallet) ChangeStartupPassphrase(oldPassphrase, newPassphrase []byte, passphraseType int32) error {
+	if len(newPassphrase) == 0 {
+		return mw.RemoveStartupPassphrase(oldPassphrase)
+	}
+
+	err := mw.verifyStartupPassphrase(oldPassphrase)
+	if err != nil {
+		return errors.E(ErrInvalidPassphrase)
+	}
+
+	startupPassphraseHash, err := bcrypt.GenerateFromPassword(newPassphrase, bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	err = mw.db.Set(walletsMetadataBucketName, walletstartupPassphraseField, startupPassphraseHash)
+	if err != nil {
+		return err
+	}
+
+	mw.SaveUserConfigValue(IsStartupSecuritySetConfigKey, true)
+	mw.SaveUserConfigValue(StartupSecurityTypeConfigKey, passphraseType)
+
+	return nil
+}
+
+func (mw *MultiWallet) RemoveStartupPassphrase(oldPassphrase []byte) error {
+	err := mw.verifyStartupPassphrase(oldPassphrase)
+	if err != nil {
+		return errors.E(ErrInvalidPassphrase)
+	}
+
+	err = mw.db.Delete(walletsMetadataBucketName, walletstartupPassphraseField)
+	if err != nil {
+		return err
+	}
+
+	mw.SaveUserConfigValue(IsStartupSecuritySetConfigKey, false)
+	mw.DeleteUserConfigValue(StartupSecurityTypeConfigKey)
+
+	return nil
+}
+
+func (mw *MultiWallet) OpenWallets(startupPassphrase []byte) error {
 	if mw.syncData.activeSyncData != nil {
 		return errors.New(ErrSyncAlreadyInProgress)
 	}
 
+	err := mw.verifyStartupPassphrase(startupPassphrase)
+	if err != nil {
+		return errors.E(ErrInvalidPassphrase)
+	}
+
 	for _, wallet := range mw.wallets {
-		err := wallet.openWallet()
+		err = wallet.openWallet()
 		if err != nil {
 			return err
 		}
@@ -326,7 +376,9 @@ func (mw *MultiWallet) DeleteWallet(walletID int, privPass []byte) error {
 	return nil
 }
 
-func (mw *MultiWallet) DefaultWallet() *Wallet {
+func (mw *MultiWallet) FirstOrDefaultWallet() *Wallet {
+	// todo consider implementing default wallet feature
+
 	for _, wallet := range mw.wallets {
 		return wallet
 	}
