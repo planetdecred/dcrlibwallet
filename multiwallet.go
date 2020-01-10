@@ -128,6 +128,10 @@ func (mw *MultiWallet) Shutdown() {
 	}
 }
 
+func (mw *MultiWallet) SetStartupPassphrase(passphrase []byte, passphraseType int32) error {
+	return mw.ChangeStartupPassphrase([]byte(""), passphrase, passphraseType)
+}
+
 func (mw *MultiWallet) ChangeStartupPassphrase(oldPassphrase, newPassphrase []byte, passphraseType int32) error {
 	if len(newPassphrase) == 0 {
 		return mw.RemoveStartupPassphrase(oldPassphrase)
