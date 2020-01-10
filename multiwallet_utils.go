@@ -74,7 +74,7 @@ func (mw *MultiWallet) setNetworkBackend(syncer *spv.Syncer) {
 func (mw *MultiWallet) verifyStartupPassphrase(startupPassphrase []byte) error {
 	var startupPassphraseHash []byte
 	err := mw.db.Get(walletsMetadataBucketName, walletstartupPassphraseField, &startupPassphraseHash)
-	if err != nil {
+	if err != nil && err != storm.ErrNotFound {
 		return err
 	}
 
