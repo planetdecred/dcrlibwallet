@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/decred/dcrd/chaincfg/v2"
 	"github.com/decred/dcrwallet/errors/v2"
@@ -18,7 +19,6 @@ import (
 type Wallet struct {
 	ID                    int    `storm:"id,increment"`
 	Name                  string `storm:"unique"`
-	DataDir               string
 	DbDriver              string
 	Seed                  string
 	PrivatePassphraseType int32
@@ -26,6 +26,7 @@ type Wallet struct {
 
 	internal    *w.Wallet
 	chainParams *chaincfg.Params
+	dataDir     string
 	loader      *loader.Loader
 	txDB        *txindex.DB
 
@@ -40,11 +41,12 @@ type Wallet struct {
 // prepare gets a wallet ready for use by opening the transactions index database
 // and initializing the wallet loader which can be used subsequently to create,
 // load and unload the wallet.
-func (wallet *Wallet) prepare(chainParams *chaincfg.Params) (err error) {
+func (wallet *Wallet) prepare(rootDir string, chainParams *chaincfg.Params) (err error) {
 	wallet.chainParams = chainParams
+	wallet.dataDir = filepath.Join(rootDir, strconv.Itoa(wallet.ID))
 
 	// open database for indexing transactions for faster loading
-	txDBPath := filepath.Join(wallet.DataDir, txindex.DbName)
+	txDBPath := filepath.Join(wallet.dataDir, txindex.DbName)
 	wallet.txDB, err = txindex.Initialize(txDBPath, &Transaction{})
 	if err != nil {
 		log.Error(err.Error())
@@ -59,7 +61,7 @@ func (wallet *Wallet) prepare(chainParams *chaincfg.Params) (err error) {
 		VotingAddress: nil,
 		TicketFee:     defaultFeePerKb,
 	}
-	wallet.loader = loader.NewLoader(wallet.chainParams, wallet.DataDir, stakeOptions, 20, false,
+	wallet.loader = loader.NewLoader(wallet.chainParams, wallet.dataDir, stakeOptions, 20, false,
 		defaultFeePerKb, w.DefaultAccountGapLimit, false)
 	if wallet.DbDriver != "" {
 		wallet.loader.SetDatabaseDriver(wallet.DbDriver)
@@ -249,5 +251,5 @@ func (wallet *Wallet) deleteWallet(privatePassphrase []byte) error {
 	wallet.Shutdown()
 
 	log.Info("Deleting Wallet")
-	return os.RemoveAll(wallet.DataDir)
+	return os.RemoveAll(wallet.dataDir)
 }

@@ -74,7 +74,7 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 	// prepare the wallets loaded from db for use
 	walletsMap := make(map[int]*Wallet)
 	for _, wallet := range wallets {
-		err = wallet.prepare(chainParams)
+		err = wallet.prepare(rootDir, chainParams)
 		if err != nil {
 			return nil, err
 		}
@@ -248,7 +248,7 @@ func (mw *MultiWallet) LinkExistingWallet(walletDataDir, originalPubPass string,
 
 		// move wallet.db and tx.db files to newly created dir for the wallet
 		currentWalletDbFilePath := filepath.Join(walletDataDir, walletDbName)
-		newWalletDbFilePath := filepath.Join(wallet.DataDir, walletDbName)
+		newWalletDbFilePath := filepath.Join(wallet.dataDir, walletDbName)
 		err := os.Rename(currentWalletDbFilePath, newWalletDbFilePath)
 		if err != nil {
 			return err
@@ -256,7 +256,7 @@ func (mw *MultiWallet) LinkExistingWallet(walletDataDir, originalPubPass string,
 
 		currentTxDbFilePath := filepath.Join(walletDataDir, txindex.DbName)
 		if exists, _ := fileExists(currentTxDbFilePath); exists {
-			newTxDbFilePath := filepath.Join(wallet.DataDir, txindex.DbName)
+			newTxDbFilePath := filepath.Join(wallet.dataDir, txindex.DbName)
 			err = os.Rename(currentTxDbFilePath, newTxDbFilePath)
 			if err != nil {
 				return err
@@ -303,7 +303,7 @@ func (mw *MultiWallet) addNewWallet(wallet *Wallet, finalizeWalletSetup func() e
 		if wallet.Name == "" {
 			wallet.Name = "wallet-" + strconv.Itoa(wallet.ID) // wallet-#
 		}
-		wallet.DataDir = walletDataDir
+		wallet.dataDir = walletDataDir
 		wallet.DbDriver = mw.dbDriver
 
 		err = db.Save(wallet) // update database with complete wallet information
@@ -311,7 +311,7 @@ func (mw *MultiWallet) addNewWallet(wallet *Wallet, finalizeWalletSetup func() e
 			return err
 		}
 
-		err = wallet.prepare(mw.chainParams)
+		err = wallet.prepare(mw.rootDir, mw.chainParams)
 		if err != nil {
 			return err
 		}
