@@ -132,14 +132,38 @@ func (mw *MultiWallet) SetStartupPassphrase(passphrase []byte, passphraseType in
 	return mw.ChangeStartupPassphrase([]byte(""), passphrase, passphraseType)
 }
 
+func (mw *MultiWallet) VerifyStartupPassphrase(startupPassphrase []byte) error {
+	var startupPassphraseHash []byte
+	err := mw.db.Get(walletsMetadataBucketName, walletstartupPassphraseField, &startupPassphraseHash)
+	if err != nil && err != storm.ErrNotFound {
+		return err
+	}
+
+	if startupPassphraseHash == nil {
+		// startup passphrase was not previously set
+		if len(startupPassphrase) > 0 {
+			return errors.E(ErrInvalidPassphrase)
+		}
+		return nil
+	}
+
+	// startup passphrase was set, verify
+	err = bcrypt.CompareHashAndPassword(startupPassphraseHash, startupPassphrase)
+	if err != nil {
+		return errors.E(ErrInvalidPassphrase)
+	}
+
+	return nil
+}
+
 func (mw *MultiWallet) ChangeStartupPassphrase(oldPassphrase, newPassphrase []byte, passphraseType int32) error {
 	if len(newPassphrase) == 0 {
 		return mw.RemoveStartupPassphrase(oldPassphrase)
 	}
 
-	err := mw.verifyStartupPassphrase(oldPassphrase)
+	err := mw.VerifyStartupPassphrase(oldPassphrase)
 	if err != nil {
-		return errors.E(ErrInvalidPassphrase)
+		return err
 	}
 
 	startupPassphraseHash, err := bcrypt.GenerateFromPassword(newPassphrase, bcrypt.DefaultCost)
@@ -159,9 +183,9 @@ func (mw *MultiWallet) ChangeStartupPassphrase(oldPassphrase, newPassphrase []by
 }
 
 func (mw *MultiWallet) RemoveStartupPassphrase(oldPassphrase []byte) error {
-	err := mw.verifyStartupPassphrase(oldPassphrase)
+	err := mw.VerifyStartupPassphrase(oldPassphrase)
 	if err != nil {
-		return errors.E(ErrInvalidPassphrase)
+		return err
 	}
 
 	err = mw.db.Delete(walletsMetadataBucketName, walletstartupPassphraseField)
@@ -180,9 +204,9 @@ func (mw *MultiWallet) OpenWallets(startupPassphrase []byte) error {
 		return errors.New(ErrSyncAlreadyInProgress)
 	}
 
-	err := mw.verifyStartupPassphrase(startupPassphrase)
+	err := mw.VerifyStartupPassphrase(startupPassphrase)
 	if err != nil {
-		return errors.E(ErrInvalidPassphrase)
+		return err
 	}
 
 	for _, wallet := range mw.wallets {
