@@ -1,5 +1,9 @@
 name: Docker Build
+<<<<<<< refs/remotes/raedahgroup/master
 on: [pull_request]
+=======
+on: [push, pull_request]
+>>>>>>> Add github actions
 
 jobs:
   build:
