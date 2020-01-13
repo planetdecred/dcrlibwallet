@@ -9,6 +9,3 @@ jobs:
       
     - name: Build the Docker image
       run: ./run_docker.sh setup
-      
-    - name: Run the tests
-      run: ./run_docker.sh build
