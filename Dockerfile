@@ -5,3 +5,5 @@ RUN curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.s
 ENV GO111MODULE on
 
 RUN go version
+
+ENTRYPOINT [ "./run_tests.sh", "lint"]
