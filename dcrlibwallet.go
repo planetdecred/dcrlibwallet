@@ -19,55 +19,57 @@ import (
 	"time"
 
 	"github.com/decred/dcrd/addrmgr"
-	"github.com/decred/dcrd/blockchain/stake"
-	"github.com/decred/dcrd/chaincfg"
+	"github.com/decred/dcrd/blockchain/stake/v2"
 	"github.com/decred/dcrd/chaincfg/chainhash"
+	"github.com/decred/dcrd/chaincfg/v2"
 	"github.com/decred/dcrd/dcrec"
-	"github.com/decred/dcrd/dcrjson"
-	"github.com/decred/dcrd/dcrutil"
-	"github.com/decred/dcrd/hdkeychain"
-	"github.com/decred/dcrd/rpcclient"
-	"github.com/decred/dcrd/txscript"
+	"github.com/decred/dcrd/dcrjson/v2"
+	"github.com/decred/dcrd/dcrutil/v2"
+	"github.com/decred/dcrd/hdkeychain/v2"
+	"github.com/decred/dcrd/txscript/v2"
 	"github.com/decred/dcrd/wire"
-	"github.com/decred/dcrwallet/chain"
-	"github.com/decred/dcrwallet/errors"
-	"github.com/decred/dcrwallet/netparams"
-	"github.com/decred/dcrwallet/p2p"
-	"github.com/decred/dcrwallet/spv"
-	"github.com/decred/dcrwallet/wallet"
-	"github.com/decred/dcrwallet/wallet/txauthor"
-	"github.com/decred/dcrwallet/wallet/txrules"
+	"github.com/decred/dcrwallet/chain/v3"
+	"github.com/decred/dcrwallet/errors/v2"
+	"github.com/decred/dcrwallet/p2p/v2"
+	"github.com/decred/dcrwallet/spv/v3"
+	"github.com/decred/dcrwallet/wallet/v3"
+	"github.com/decred/dcrwallet/wallet/v3/txauthor"
+	"github.com/decred/dcrwallet/wallet/v3/txrules"
 	"github.com/decred/dcrwallet/walletseed"
 	"github.com/decred/slog"
+	"github.com/raedahgroup/dcrlibwallet/internal/loader"
 )
 
 var shutdownRequestChannel = make(chan struct{})
 var shutdownSignaled = make(chan struct{})
 var signals = []os.Signal{os.Interrupt, syscall.SIGTERM}
 
-const BlockValid int = 1 << 0
+const (
+	BlockValid           int = 1 << 0
+	DefaultScriptVersion     = 0
+)
 
 type LibWallet struct {
 	dataDir       string
 	dbDriver      string
 	wallet        *wallet.Wallet
-	rpcClient     *chain.RPCClient
+	rpcClient     *chain.Syncer
 	cancelSync    context.CancelFunc
-	loader        *Loader
+	loader        *loader.Loader
 	mu            sync.Mutex
-	activeNet     *netparams.Params
+	activeNet     *chaincfg.Params
 	syncResponses []SpvSyncResponse
 	rescannning   bool
 }
 
 func NewLibWallet(homeDir string, dbDriver string, netType string) (*LibWallet, error) {
-	var activeNet *netparams.Params
+	var activeNet *chaincfg.Params
 
 	switch strings.ToLower(netType) {
-	case strings.ToLower(netparams.MainNetParams.Name):
-		activeNet = &netparams.MainNetParams
-	case strings.ToLower(netparams.TestNet3Params.Name):
-		activeNet = &netparams.TestNet3Params
+	case strings.ToLower(chaincfg.MainNetParams().Name):
+		activeNet = chaincfg.MainNetParams()
+	case strings.ToLower(chaincfg.TestNet3Params().Name):
+		activeNet = chaincfg.TestNet3Params()
 	default:
 		return nil, fmt.Errorf("unsupported network type: %s", netType)
 	}
@@ -121,7 +123,7 @@ func (lw *LibWallet) UnlockWallet(privPass []byte) error {
 		}
 	}()
 
-	err := wallet.Unlock(privPass, nil)
+	err := wallet.Unlock(shutdownContext(), privPass, nil)
 	return err
 }
 
@@ -142,7 +144,7 @@ func (lw *LibWallet) ChangePrivatePassphrase(oldPass []byte, newPass []byte) err
 		}
 	}()
 
-	err := lw.wallet.ChangePrivatePassphrase(oldPass, newPass)
+	err := lw.wallet.ChangePrivatePassphrase(shutdownContext(), oldPass, newPass)
 	if err != nil {
 		return translateError(err)
 	}
@@ -167,7 +169,7 @@ func (lw *LibWallet) ChangePublicPassphrase(oldPass []byte, newPass []byte) erro
 		newPass = []byte(wallet.InsecurePubPassphrase)
 	}
 
-	err := lw.wallet.ChangePublicPassphrase(oldPass, newPass)
+	err := lw.wallet.ChangePublicPassphrase(shutdownContext(), oldPass, newPass)
 	if err != nil {
 		return translateError(err)
 	}
@@ -176,17 +178,17 @@ func (lw *LibWallet) ChangePublicPassphrase(oldPass []byte, newPass []byte) erro
 
 func (lw *LibWallet) Shutdown() {
 	log.Info("Shuting down mobile wallet")
-	if lw.rpcClient != nil {
-		lw.rpcClient.Stop()
-	}
+
 	close(shutdownSignaled)
 	if lw.cancelSync != nil {
 		lw.cancelSync()
 	}
+
 	if logRotator != nil {
 		log.Infof("Shutting down log rotator")
 		logRotator.Close()
 	}
+
 	err := lw.loader.UnloadWallet()
 	if err != nil {
 		log.Errorf("Failed to close wallet: %v", err)
@@ -222,8 +224,8 @@ func shutdownListener() {
 	}
 }
 
-func contextWithShutdownCancel(ctx context.Context) context.Context {
-	ctx, cancel := context.WithCancel(ctx)
+func shutdownContext() context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		<-shutdownSignaled
 		cancel()
@@ -232,27 +234,23 @@ func contextWithShutdownCancel(ctx context.Context) context.Context {
 }
 
 func decodeAddress(a string, params *chaincfg.Params) (dcrutil.Address, error) {
-	addr, err := dcrutil.DecodeAddress(a)
+	addr, err := dcrutil.DecodeAddress(a, params)
 	if err != nil {
 		return nil, err
-	}
-	if !addr.IsForNet(params) {
-		return nil, fmt.Errorf("address %v is not intended for use on %v",
-			a, params.Name)
 	}
 	return addr, nil
 }
 
 func (lw *LibWallet) InitLoader() {
-	stakeOptions := &StakeOptions{
+	stakeOptions := &loader.StakeOptions{
 		VotingEnabled: false,
 		AddressReuse:  false,
 		VotingAddress: nil,
 		TicketFee:     10e8,
 	}
 	fmt.Println("Initizing Loader: ", lw.dataDir, "Db: ", lw.dbDriver)
-	l := NewLoader(lw.activeNet.Params, lw.dataDir, stakeOptions,
-		20, false, 10e5, wallet.DefaultAccountGapLimit)
+	l := loader.NewLoader(lw.activeNet, lw.dataDir, stakeOptions,
+		20, false, txrules.DefaultRelayFeePerKb.ToCoin(), wallet.DefaultAccountGapLimit, false)
 	l.SetDatabaseDriver(lw.dbDriver)
 	lw.loader = l
 	go shutdownListener()
@@ -271,7 +269,7 @@ func (lw *LibWallet) CreateWallet(passphrase string, seedMnemonic string) error 
 		return err
 	}
 
-	w, err := lw.loader.CreateNewWallet(pubPass, privPass, seed)
+	w, err := lw.loader.CreateNewWallet(shutdownContext(), pubPass, privPass, seed)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -403,7 +401,7 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 		if len(spvConnect) > 0 {
 			spvConnects := make([]string, len(spvConnect))
 			for i := 0; i < len(spvConnect); i++ {
-				spvConnect, err := NormalizeAddress(spvConnect[i], lw.activeNet.Params.DefaultPort)
+				spvConnect, err := NormalizeAddress(spvConnect[i], lw.activeNet.DefaultPort)
 				if err != nil {
 					for _, syncResponse := range lw.syncResponses {
 						syncResponse.OnSyncError(3, errors.E("SPV Connect address invalid: %v", err))
@@ -412,10 +410,10 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 				}
 				spvConnects[i] = spvConnect
 			}
-			syncer.SetPersistantPeers(spvConnects)
+			syncer.SetPersistentPeers(spvConnects)
 		}
+
 		wallet.SetNetworkBackend(syncer)
-		lw.loader.SetNetworkBackend(syncer)
 		ctx, cancel := context.WithCancel(context.Background())
 		lw.cancelSync = cancel
 		err := syncer.Run(ctx)
@@ -452,49 +450,7 @@ func (lw *LibWallet) RpcSync(networkAddress string, username string, password st
 		}
 	}
 
-	lw.mu.Lock()
-	chainClient := lw.rpcClient
-	lw.mu.Unlock()
-
-	ctx := contextWithShutdownCancel(context.Background())
-	// If the rpcClient is already set, you can just use that instead of attempting a new connection.
-	if chainClient == nil {
-		networkAddress, err := NormalizeAddress(networkAddress, lw.activeNet.JSONRPCClientPort)
-		if err != nil {
-			return errors.New(ErrInvalidAddress)
-		}
-		chainClient, err = chain.NewRPCClient(lw.activeNet.Params, networkAddress, username,
-			password, cert, len(cert) == 0)
-		if err != nil {
-			return translateError(err)
-		}
-
-		err = chainClient.Start(ctx, false)
-		if err != nil {
-			if err == rpcclient.ErrInvalidAuth {
-				return errors.New(ErrInvalid)
-			}
-			if errors.Match(errors.E(context.Canceled), err) {
-				return errors.New(ErrContextCanceled)
-			}
-			return errors.New(ErrUnavailable)
-		}
-		lw.mu.Lock()
-		lw.rpcClient = chainClient
-		lw.mu.Unlock()
-	}
-
-	n := chain.BackendFromRPCClient(chainClient.Client)
-	lw.loader.SetNetworkBackend(n)
-	wallet.SetNetworkBackend(n)
-
-	// Disassociate the RPC client from all subsystems until reconnection
-	// occurs.
-	defer lw.wallet.SetNetworkBackend(nil)
-	defer lw.loader.SetNetworkBackend(nil)
-	defer lw.loader.StopTicketPurchase()
-
-	ntfns := &chain.Notifications{
+	ntfns := &chain.Callbacks{
 		Synced: func(sync bool) {
 			for _, syncResponse := range lw.syncResponses {
 				syncResponse.OnSynced(sync)
@@ -560,14 +516,30 @@ func (lw *LibWallet) RpcSync(networkAddress string, username string, password st
 			}
 		},
 	}
-	syncer := chain.NewRPCSyncer(wallet, chainClient)
-	syncer.SetNotifications(ntfns)
+	networkAddress, err := NormalizeAddress(networkAddress, lw.activeNet.DefaultPort)
+	if err != nil {
+		return errors.New(ErrInvalidAddress)
+	}
+
+	rpcSyncer := chain.NewSyncer(wallet, &chain.RPCOptions{
+		Address:     networkAddress,
+		DefaultPort: rpcClientDefaultPortForNet(lw.activeNet.Name),
+		User:        username,
+		Pass:        password,
+		CA:          cert,
+		Insecure:    len(cert) == 0,
+	})
+
+	rpcSyncer.SetCallbacks(ntfns)
 
 	go func() {
 		// Run wallet synchronization until it is cancelled or errors.  If the
 		// context was cancelled, return immediately instead of trying to
 		// reconnect.
-		err := syncer.Run(ctx, true)
+		ctx, cancel := context.WithCancel(context.Background())
+		lw.cancelSync = cancel
+
+		err = rpcSyncer.Run(ctx)
 		if err != nil {
 			if err == context.Canceled {
 				for _, syncResponse := range lw.syncResponses {
@@ -602,7 +574,7 @@ func (lw *LibWallet) DropSpvConnection() {
 
 func (lw *LibWallet) OpenWallet(pubPass []byte) error {
 
-	w, err := lw.loader.OpenExistingWallet(pubPass)
+	w, err := lw.loader.OpenExistingWallet(shutdownContext(), pubPass)
 	if err != nil {
 		log.Error(err)
 		return translateError(err)
@@ -631,7 +603,7 @@ func (lw *LibWallet) RescanBlocks() error {
 		}()
 		lw.rescannning = true
 		progress := make(chan wallet.RescanProgress, 1)
-		ctx := contextWithShutdownCancel(context.Background())
+		ctx := shutdownContext()
 		var totalHeight int32
 		go lw.wallet.RescanProgressFromHeight(ctx, netBackend, 0, progress)
 		for p := range progress {
@@ -661,14 +633,14 @@ func (lw *LibWallet) RescanBlocks() error {
 }
 
 func (lw *LibWallet) GetBestBlock() int32 {
-	_, height := lw.wallet.MainChainTip()
+	_, height := lw.wallet.MainChainTip(shutdownContext())
 	return height
 }
 
 func (lw *LibWallet) GetBestBlockTimeStamp() int64 {
-	_, height := lw.wallet.MainChainTip()
+	_, height := lw.wallet.MainChainTip(shutdownContext())
 	identifier := wallet.NewBlockIdentifierFromHeight(height)
-	info, err := lw.wallet.BlockInfo(identifier)
+	info, err := lw.wallet.BlockInfo(shutdownContext(), identifier)
 	if err != nil {
 		log.Error(err)
 		return 0
@@ -758,7 +730,7 @@ func (lw *LibWallet) GetTransaction(txHash []byte) (string, error) {
 		return "", err
 	}
 
-	txSummary, _, blockHash, err := lw.wallet.TransactionSummary(hash)
+	txSummary, _, blockHash, err := lw.wallet.TransactionSummary(shutdownContext(), hash)
 	if err != nil {
 		log.Error(err)
 		return "", err
@@ -813,7 +785,7 @@ func (lw *LibWallet) GetTransaction(txHash []byte) (string, error) {
 	var height int32 = -1
 	if blockHash != nil {
 		blockIdentifier := wallet.NewBlockIdentifierFromHash(blockHash)
-		blockInfo, err := lw.wallet.BlockInfo(blockIdentifier)
+		blockInfo, err := lw.wallet.BlockInfo(shutdownContext(), blockIdentifier)
 		if err != nil {
 			log.Error(err)
 		} else {
@@ -843,7 +815,7 @@ func (lw *LibWallet) GetTransaction(txHash []byte) (string, error) {
 }
 
 func (lw *LibWallet) GetTransactions(response GetTransactionsResponse) error {
-	ctx := contextWithShutdownCancel(context.Background())
+	ctx := shutdownContext()
 	var startBlock, endBlock *wallet.BlockIdentifier
 	transactions := make([]Transaction, 0)
 	rangeFn := func(block *wallet.Block) (bool, error) {
@@ -920,7 +892,7 @@ func (lw *LibWallet) GetTransactions(response GetTransactionsResponse) error {
 			return false, nil
 		}
 	}
-	err := lw.wallet.GetTransactions(rangeFn, startBlock, endBlock)
+	err := lw.wallet.GetTransactions(shutdownContext(), rangeFn, startBlock, endBlock)
 	result, _ := json.Marshal(getTransactionsResponse{ErrorOccurred: false, Transactions: transactions})
 	response.OnResult(string(result))
 	return err
@@ -932,7 +904,7 @@ func (lw *LibWallet) DecodeTransaction(txHash []byte) (string, error) {
 		log.Error(err)
 		return "", err
 	}
-	txSummary, _, _, err := lw.wallet.TransactionSummary(hash)
+	txSummary, _, _, err := lw.wallet.TransactionSummary(shutdownContext(), hash)
 	if err != nil {
 		log.Error(err)
 		return "", err
@@ -1000,7 +972,7 @@ func decodeTxOutputs(mtx *wire.MsgTx, chainParams *chaincfg.Params) []DecodedOut
 						"commitment addr output for tx hash "+
 						"%v, output idx %v", mtx.TxHash(), i)}
 			} else {
-				encodedAddrs = []string{addr.EncodeAddress()}
+				encodedAddrs = []string{addr.Address()}
 			}
 		} else {
 			// Ignore the error here since an error means the script
@@ -1010,7 +982,7 @@ func decodeTxOutputs(mtx *wire.MsgTx, chainParams *chaincfg.Params) []DecodedOut
 				v.Version, v.PkScript, chainParams)
 			encodedAddrs = make([]string, len(addrs))
 			for j, addr := range addrs {
-				encodedAddrs[j] = addr.EncodeAddress()
+				encodedAddrs[j] = addr.Address()
 			}
 		}
 
@@ -1062,7 +1034,7 @@ func transactionType(txType wallet.TransactionType) string {
 }
 
 func (lw *LibWallet) SpendableForAccount(account int32, requiredConfirmations int32) (int64, error) {
-	bals, err := lw.wallet.CalculateAccountBalance(uint32(account), requiredConfirmations)
+	bals, err := lw.wallet.CalculateAccountBalance(shutdownContext(), uint32(account), requiredConfirmations)
 	if err != nil {
 		log.Error(err)
 		return 0, err
@@ -1083,8 +1055,8 @@ func (src *txChangeSource) ScriptSize() int {
 	return len(src.script)
 }
 
-func makeTxChangeSource(destAddr string) (*txChangeSource, error) {
-	addr, err := dcrutil.DecodeAddress(destAddr)
+func makeTxChangeSource(destAddr string, net dcrutil.AddressParams) (*txChangeSource, error) {
+	addr, err := dcrutil.DecodeAddress(destAddr, net)
 	if err != nil {
 		return nil, err
 	}
@@ -1095,14 +1067,14 @@ func makeTxChangeSource(destAddr string) (*txChangeSource, error) {
 	}
 	changeSource := &txChangeSource{
 		script:  pkScript,
-		version: txscript.DefaultScriptVersion,
+		version: DefaultScriptVersion,
 	}
 	return changeSource, nil
 }
 
 func (lw *LibWallet) ConstructTransaction(destAddr string, amount int64, srcAccount int32, requiredConfirmations int32, sendAll bool) (*UnsignedTransaction, error) {
 	// output destination
-	addr, err := dcrutil.DecodeAddress(destAddr)
+	addr, err := dcrutil.DecodeAddress(destAddr, lw.activeNet)
 	if err != nil {
 		return nil, err
 	}
@@ -1111,7 +1083,6 @@ func (lw *LibWallet) ConstructTransaction(destAddr string, amount int64, srcAcco
 		log.Error(err)
 		return nil, err
 	}
-	version := txscript.DefaultScriptVersion
 
 	// pay output
 	outputs := make([]*wire.TxOut, 0)
@@ -1121,12 +1092,12 @@ func (lw *LibWallet) ConstructTransaction(destAddr string, amount int64, srcAcco
 		algo = wallet.OutputSelectionAlgorithmDefault
 		output := &wire.TxOut{
 			Value:    amount,
-			Version:  version,
+			Version:  DefaultScriptVersion,
 			PkScript: pkScript,
 		}
 		outputs = append(outputs, output)
 	} else {
-		changeSource, err = makeTxChangeSource(destAddr)
+		changeSource, err = makeTxChangeSource(destAddr, lw.activeNet)
 		if err != nil {
 			log.Error(err)
 			return nil, err
@@ -1135,7 +1106,7 @@ func (lw *LibWallet) ConstructTransaction(destAddr string, amount int64, srcAcco
 	feePerKb := txrules.DefaultRelayFeePerKb
 
 	// create tx
-	tx, err := lw.wallet.NewUnsignedTransaction(outputs, feePerKb, uint32(srcAccount),
+	tx, err := lw.wallet.NewUnsignedTransaction(shutdownContext(), outputs, feePerKb, uint32(srcAccount),
 		requiredConfirmations, algo, changeSource)
 	if err != nil {
 		log.Error(err)
@@ -1180,7 +1151,7 @@ func (lw *LibWallet) SendTransaction(privPass []byte, destAddr string, amount in
 		}
 	}()
 	// output destination
-	addr, err := dcrutil.DecodeAddress(destAddr)
+	addr, err := dcrutil.DecodeAddress(destAddr, lw.activeNet)
 	if err != nil {
 		return nil, err
 	}
@@ -1198,12 +1169,12 @@ func (lw *LibWallet) SendTransaction(privPass []byte, destAddr string, amount in
 		algo = wallet.OutputSelectionAlgorithmDefault
 		output := &wire.TxOut{
 			Value:    amount,
-			Version:  txscript.DefaultScriptVersion,
+			Version:  DefaultScriptVersion,
 			PkScript: pkScript,
 		}
 		outputs = append(outputs, output)
 	} else {
-		changeSource, err = makeTxChangeSource(destAddr)
+		changeSource, err = makeTxChangeSource(destAddr, lw.activeNet)
 		if err != nil {
 			log.Error(err)
 			return nil, err
@@ -1211,7 +1182,7 @@ func (lw *LibWallet) SendTransaction(privPass []byte, destAddr string, amount in
 	}
 
 	// create tx
-	unsignedTx, err := lw.wallet.NewUnsignedTransaction(outputs, txrules.DefaultRelayFeePerKb, uint32(srcAccount),
+	unsignedTx, err := lw.wallet.NewUnsignedTransaction(shutdownContext(), outputs, txrules.DefaultRelayFeePerKb, uint32(srcAccount),
 		requiredConfs, algo, changeSource)
 	if err != nil {
 		log.Error(err)
@@ -1243,7 +1214,7 @@ func (lw *LibWallet) SendTransaction(privPass []byte, destAddr string, amount in
 		lock <- time.Time{}
 	}()
 
-	err = lw.wallet.Unlock(privPass, lock)
+	err = lw.wallet.Unlock(shutdownContext(), privPass, lock)
 	if err != nil {
 		log.Error(err)
 		return nil, errors.New(ErrInvalidPassphrase)
@@ -1251,7 +1222,7 @@ func (lw *LibWallet) SendTransaction(privPass []byte, destAddr string, amount in
 
 	var additionalPkScripts map[wire.OutPoint][]byte
 
-	invalidSigs, err := lw.wallet.SignTransaction(&tx, txscript.SigHashAll, additionalPkScripts, nil, nil)
+	invalidSigs, err := lw.wallet.SignTransaction(shutdownContext(), &tx, txscript.SigHashAll, additionalPkScripts, nil, nil)
 	if err != nil {
 		log.Error(err)
 		return nil, err
@@ -1278,7 +1249,7 @@ func (lw *LibWallet) SendTransaction(privPass []byte, destAddr string, amount in
 		return nil, err
 	}
 
-	txHash, err := lw.wallet.PublishTransaction(&msgTx, serializedTransaction.Bytes(), n)
+	txHash, err := lw.wallet.PublishTransaction(shutdownContext(), &msgTx, serializedTransaction.Bytes(), n)
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -1290,19 +1261,19 @@ func (lw *LibWallet) PublishUnminedTransactions() error {
 	if err != nil {
 		return errors.New(ErrNotConnected)
 	}
-	err = lw.wallet.PublishUnminedTransactions(contextWithShutdownCancel(context.Background()), netBackend)
+	err = lw.wallet.PublishUnminedTransactions(shutdownContext(), netBackend)
 	return err
 }
 
 func (lw *LibWallet) GetAccounts(requiredConfirmations int32) (string, error) {
-	resp, err := lw.wallet.Accounts()
+	resp, err := lw.wallet.Accounts(shutdownContext())
 	if err != nil {
 		return "", err
 	}
 	accounts := make([]Account, len(resp.Accounts))
 	for i := range resp.Accounts {
 		a := &resp.Accounts[i]
-		bals, err := lw.wallet.CalculateAccountBalance(a.AccountNumber, requiredConfirmations)
+		bals, err := lw.wallet.CalculateAccountBalance(shutdownContext(), a.AccountNumber, requiredConfirmations)
 		if err != nil {
 			return "", err
 		}
@@ -1344,13 +1315,13 @@ func (lw *LibWallet) NextAccount(accountName string, privPass []byte) error {
 		}
 		lock <- time.Time{} // send matters, not the value
 	}()
-	err := lw.wallet.Unlock(privPass, lock)
+	err := lw.wallet.Unlock(shutdownContext(), privPass, lock)
 	if err != nil {
 		log.Error(err)
 		return errors.New(ErrInvalidPassphrase)
 	}
 
-	_, err = lw.wallet.NextAccount(accountName)
+	_, err = lw.wallet.NextAccount(shutdownContext(), accountName)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -1359,7 +1330,7 @@ func (lw *LibWallet) NextAccount(accountName string, privPass []byte) error {
 }
 
 func (lw *LibWallet) RenameAccount(accountNumber int32, newName string) error {
-	err := lw.wallet.RenameAccount(uint32(accountNumber), newName)
+	err := lw.wallet.RenameAccount(shutdownContext(), uint32(accountNumber), newName)
 	return err
 }
 
@@ -1368,7 +1339,7 @@ func (lw *LibWallet) HaveAddress(address string) bool {
 	if err != nil {
 		return false
 	}
-	have, err := lw.wallet.HaveAddress(addr)
+	have, err := lw.wallet.HaveAddress(shutdownContext(), addr)
 	if err != nil {
 		return false
 	}
@@ -1382,7 +1353,7 @@ func (lw *LibWallet) IsAddressValid(address string) bool {
 }
 
 func (lw *LibWallet) AccountName(account int32) string {
-	name, err := lw.wallet.AccountName(uint32(account))
+	name, err := lw.wallet.AccountName(shutdownContext(), uint32(account))
 	if err != nil {
 		log.Error(err)
 		return "Account not found"
@@ -1391,11 +1362,11 @@ func (lw *LibWallet) AccountName(account int32) string {
 }
 
 func (lw *LibWallet) AccountOfAddress(address string) string {
-	addr, err := dcrutil.DecodeAddress(address)
+	addr, err := dcrutil.DecodeAddress(address, lw.activeNet)
 	if err != nil {
 		return err.Error()
 	}
-	info, _ := lw.wallet.AddressInfo(addr)
+	info, _ := lw.wallet.AddressInfo(shutdownContext(), addr)
 	return lw.AccountName(int32(info.Account()))
 }
 
@@ -1405,19 +1376,19 @@ func (lw *LibWallet) CurrentAddress(account int32) (string, error) {
 		log.Error(err)
 		return "", err
 	}
-	return addr.EncodeAddress(), nil
+	return addr.Address(), nil
 }
 
 func (lw *LibWallet) NextAddress(account int32) (string, error) {
 	var callOpts []wallet.NextAddressCallOption
 	callOpts = append(callOpts, wallet.WithGapPolicyWrap())
 
-	addr, err := lw.wallet.NewExternalAddress(uint32(account), callOpts...)
+	addr, err := lw.wallet.NewExternalAddress(shutdownContext(), uint32(account), callOpts...)
 	if err != nil {
 		log.Error(err)
 		return "", err
 	}
-	return addr.EncodeAddress(), nil
+	return addr.Address(), nil
 }
 
 func (lw *LibWallet) SignMessage(passphrase []byte, address string, message string) ([]byte, error) {
@@ -1425,7 +1396,7 @@ func (lw *LibWallet) SignMessage(passphrase []byte, address string, message stri
 	defer func() {
 		lock <- time.Time{}
 	}()
-	err := lw.wallet.Unlock(passphrase, lock)
+	err := lw.wallet.Unlock(shutdownContext(), passphrase, lock)
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -1439,14 +1410,14 @@ func (lw *LibWallet) SignMessage(passphrase []byte, address string, message stri
 	switch a := addr.(type) {
 	case *dcrutil.AddressSecpPubKey:
 	case *dcrutil.AddressPubKeyHash:
-		if a.DSA(a.Net()) != dcrec.STEcdsaSecp256k1 {
+		if a.DSA() != dcrec.STEcdsaSecp256k1 {
 			return nil, errors.New(ErrInvalidAddress)
 		}
 	default:
 		return nil, errors.New(ErrInvalidAddress)
 	}
 
-	sig, err = lw.wallet.SignMessage(message, addr)
+	sig, err = lw.wallet.SignMessage(shutdownContext(), message, addr)
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -1457,7 +1428,7 @@ func (lw *LibWallet) SignMessage(passphrase []byte, address string, message stri
 func (lw *LibWallet) VerifyMessage(address string, message string, signatureBase64 string) (bool, error) {
 	var valid bool
 
-	addr, err := dcrutil.DecodeAddress(address)
+	addr, err := dcrutil.DecodeAddress(address, lw.activeNet)
 	if err != nil {
 		return false, translateError(err)
 	}
@@ -1472,14 +1443,14 @@ func (lw *LibWallet) VerifyMessage(address string, message string, signatureBase
 	switch a := addr.(type) {
 	case *dcrutil.AddressSecpPubKey:
 	case *dcrutil.AddressPubKeyHash:
-		if a.DSA(a.Net()) != dcrec.STEcdsaSecp256k1 {
+		if a.DSA() != dcrec.STEcdsaSecp256k1 {
 			return false, errors.New(ErrInvalidAddress)
 		}
 	default:
 		return false, errors.New(ErrInvalidAddress)
 	}
 
-	valid, err = wallet.VerifyMessage(message, addr, signature)
+	valid, err = wallet.VerifyMessage(message, addr, signature, lw.activeNet)
 	if err != nil {
 		return false, translateError(err)
 	}
