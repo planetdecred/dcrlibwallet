@@ -1,4 +1,4 @@
-name: Go
+name: Build
 on: [push]
 jobs:
 
@@ -13,15 +13,21 @@ jobs:
         go-version: 1.13
       id: go
 
+    - name: Cache
+      uses: actions/cache@v1
+      id: cache
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
     - name: Check out code into the Go module directory
       uses: actions/checkout@v1
-    
 
-    - name: Build, run tests and vet
-      run:  |
-        go build
-        go test
-        go vet
-      env:
-        GO111MODULE: "on"
+    - name: Install dependencies
+      if: steps.cache.outputs.cache-hit != 'true'
+  
+    - name: Build
+      run:  go build
 
