@@ -42,5 +42,5 @@ jobs:
 
       - name: Lint
         run: |
-          export PATH=$PATH;~/go/bin
+          export PATH=$PATH:~/go/bin
           ./run_tests.sh lint
