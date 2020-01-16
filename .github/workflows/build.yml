@@ -27,6 +27,7 @@ jobs:
 
     - name: Install dependencies
       if: steps.cache.outputs.cache-hit != 'true'
+      run: go mod download
   
     - name: Build
       run:  go build
