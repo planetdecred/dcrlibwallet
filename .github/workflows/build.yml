@@ -14,7 +14,7 @@ jobs:
           go-version: 1.13
         id: go
 
-      - name: Cache
+      - name: Cache (dependencies)
         uses: actions/cache@v1
         id: cache
         with:
@@ -23,7 +23,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
-      - name: Install linters
+      - name: Cache (linter)
+        uses: actions/cache@v1
+        id: cache-linter
+        with:
+          path: $(go env GOPATH)/bin
+          key: ${{ runner.os }}-go-${{ hashFiles('golangci-lint') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install linter
+        if: steps.cache-linter.outputs.cache-hit != 'true'
         run: "curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s -- -b $(go env GOPATH)/bin v1.22.2"
 
       - name: Install dependencies
