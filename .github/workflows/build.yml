@@ -23,17 +23,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
-      - name: Cache (linter)
-        uses: actions/cache@v1
-        id: cachelinter
-        with:
-          path: ~/go/bin
-          key: ${{ runner.os }}-go-${{ hashFiles('**/golangci-lint') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
       - name: Install linter
-        if: steps.cachelinter.outputs.cache-hit != 'true'
         run: "curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s -- -b $(go env GOPATH)/bin v1.22.2"
 
       - name: Install dependencies
