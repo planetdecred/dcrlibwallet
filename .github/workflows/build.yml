@@ -28,7 +28,7 @@ jobs:
         id: cache-linter
         with:
           path: ~/go/bin
-          key: ${{ runner.os }}-go-${{ hashFiles('golangci-lint') }}
+          key: ${{ runner.os }}-go-${{ hashFiles('*') }}
           restore-keys: |
             ${{ runner.os }}-go-
 
