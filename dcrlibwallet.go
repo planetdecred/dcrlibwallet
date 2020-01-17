@@ -625,11 +625,16 @@ func (lw *LibWallet) RescanBlocks() error {
 		default:
 			for _, response := range lw.syncResponses {
 				response.OnRescan(totalHeight, FINISH)
+				response.OnSynced(true)
 			}
 		}
 	}()
 
 	return nil
+}
+
+func (lw *LibWallet) IsRescanning() bool {
+	return lw.rescannning
 }
 
 func (lw *LibWallet) GetBestBlock() int32 {
