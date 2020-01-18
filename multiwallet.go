@@ -39,21 +39,18 @@ type MultiWallet struct {
 func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 	errors.Separator = ":: "
 
-	if rootDir == "" {
-		return nil, errors.E(errors.Invalid, "rootDir must be a valid folder path")
-	}
-
-	if netType == "" {
-		netType = chaincfg.MainNetParams().Name
-	}
-
-	chainParams := utils.ChainParams(netType)
-	if chainParams == nil {
-		return nil, errors.Errorf("unsupported network type: %s", netType)
+	chainParams, err := utils.ChainParams(netType)
+	if err != nil {
+		return nil, err
 	}
 
 	rootDir = filepath.Join(rootDir, netType)
-	err := initLogRotator(filepath.Join(rootDir, logFileName))
+	err = os.MkdirAll(rootDir, 0700)
+	if err != nil {
+		return nil, errors.Errorf("failed to create rootDir: %v", err)
+	}
+
+	err = initLogRotator(filepath.Join(rootDir, logFileName))
 	if err != nil {
 		return nil, errors.Errorf("failed to init logRotator: %v", err.Error())
 	}

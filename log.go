@@ -7,7 +7,6 @@ package dcrlibwallet
 
 import (
 	"os"
-	"path/filepath"
 
 	"github.com/decred/dcrd/addrmgr"
 	"github.com/decred/dcrd/connmgr/v2"
@@ -90,11 +89,6 @@ var subsystemLoggers = map[string]slog.Logger{
 // create roll files in the same directory.  It must be called before the
 // package-global log rotater variables are used.
 func initLogRotator(logFile string) error {
-	logDir, _ := filepath.Split(logFile)
-	err := os.MkdirAll(logDir, 0700)
-	if err != nil {
-		return errors.Errorf("failed to create log directory: %v", err)
-	}
 	r, err := rotator.New(logFile, 10*1024, false, 3)
 	if err != nil {
 		return errors.Errorf("failed to create file rotator: %v", err)
