@@ -101,11 +101,11 @@ func initLogRotator(logFile string) error {
 // RegisterLogger should be called before logRotator is initialized.
 func RegisterLogger(tag string) (slog.Logger, error) {
 	if logRotator != nil {
-		return nil, errors.E("cannot register logger after log rotator is initialized")
+		return nil, errors.E(ErrLogRotatorAlreadyInitialized)
 	}
 
 	if _, exists := subsystemLoggers[tag]; exists {
-		return nil, errors.E("logger already registered for tag: %s", tag)
+		return nil, errors.E(ErrLoggerAlreadyRegistered)
 	}
 
 	logger := backendLog.Logger(tag)
