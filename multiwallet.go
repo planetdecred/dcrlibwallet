@@ -45,7 +45,7 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 	}
 
 	rootDir = filepath.Join(rootDir, netType)
-	err = os.MkdirAll(rootDir, 0700)
+	err = os.MkdirAll(rootDir, os.ModePerm)
 	if err != nil {
 		return nil, errors.Errorf("failed to create rootDir: %v", err)
 	}

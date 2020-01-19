@@ -19,6 +19,6 @@ func ChainParams(netType string) (*chaincfg.Params, error) {
 	case strings.ToLower(testnetParams.Name):
 		return testnetParams, nil
 	default:
-		return nil, errors.New("net type must be either mainnet or testnet3")
+		return nil, errors.New("invalid net type")
 	}
 }
