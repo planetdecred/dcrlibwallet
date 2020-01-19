@@ -13,7 +13,7 @@ import (
 // If will delete the directory if it is empty.
 func canUseDir(directory string) bool {
 	if os.MkdirAll(directory, os.ModePerm) == nil {
-		return os.Remove(directory) == nil
+		return os.Remove(directory) != nil
 	}
 	return false
 }
