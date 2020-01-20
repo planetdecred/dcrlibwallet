@@ -9,17 +9,13 @@ import (
 )
 
 // canUseDir returns true if the program can create the directory
-// if it doesn't exist or the directory is empty if it exists.
-// If will delete the directory if it is empty.
+// It will create the directory if it can
 func canUseDir(directory string) bool {
-	if os.MkdirAll(directory, os.ModePerm) == nil {
-		return os.Remove(directory) != nil
-	}
-	return false
+	return os.MkdirAll(directory, os.ModePerm) == nil
 }
 
-// TestNewMultiWallet tests if NewMultiWallet will return an error for valid
-// paths or not return an error for invalid paths
+// TestNewMultiWalletPath checks that NewMultiWallet returns an error for invalid
+// paths or no error for valid paths
 func TestNewMultiWallet(t *testing.T) {
 	f := func(rootDir string) bool {
 		canUse := canUseDir(rootDir)
