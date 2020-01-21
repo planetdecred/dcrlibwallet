@@ -6,7 +6,7 @@ A Decred wallet library written in golang for [dcrwallet](https://github.com/dec
 
 ## Build Dependencies
 
-[Go( >= 1.11 )](http://golang.org/doc/install)  
+[Go( >= 1.13 )](http://golang.org/doc/install)  
 [Gomobile](https://github.com/golang/go/wiki/Mobile#tools) (correctly init'd with gomobile init)  
 
 ## Build Instructions for Gomobile

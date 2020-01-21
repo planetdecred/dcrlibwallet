@@ -34,3 +34,5 @@ require (
 )
 
 replace github.com/raedahgroup/dcrlibwallet => ./
+
+go 1.13

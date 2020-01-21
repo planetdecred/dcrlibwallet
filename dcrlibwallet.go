@@ -14,7 +14,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -53,10 +52,8 @@ type LibWallet struct {
 	dataDir       string
 	dbDriver      string
 	wallet        *wallet.Wallet
-	rpcClient     *chain.Syncer
 	cancelSync    context.CancelFunc
 	loader        *loader.Loader
-	mu            sync.Mutex
 	activeNet     *chaincfg.Params
 	syncResponses []SpvSyncResponse
 	rescannning   bool
