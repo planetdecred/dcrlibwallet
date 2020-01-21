@@ -41,9 +41,9 @@ func (mw *MultiWallet) handlePeerCountUpdate(peerCount int32) {
 
 	if mw.syncData.showLogs && mw.syncData.syncing {
 		if peerCount == 1 {
-			log.Infof("Connected to %d peer on %s.\n", peerCount, mw.chainParams.Name)
+			log.Infof("Connected to %d peer on %s.", peerCount, mw.chainParams.Name)
 		} else {
-			log.Infof("Connected to %d peers on %s.\n", peerCount, mw.chainParams.Name)
+			log.Infof("Connected to %d peers on %s.", peerCount, mw.chainParams.Name)
 		}
 	}
 }
@@ -71,7 +71,7 @@ func (mw *MultiWallet) fetchHeadersStarted(peerInitialHeight int32) {
 	if mw.syncData.showLogs && mw.syncData.syncing {
 		blockInfo := mw.GetLowestBlock()
 		totalHeadersToFetch := mw.estimateBlockHeadersCountAfter(blockInfo.Timestamp)
-		log.Infof("Step 1 of 3 - fetching %d block headers.\n", totalHeadersToFetch)
+		log.Infof("Step 1 of 3 - fetching %d block headers.", totalHeadersToFetch)
 	}
 }
 
@@ -276,7 +276,7 @@ func (mw *MultiWallet) updateAddressDiscoveryProgress() {
 				if mw.syncData.showLogs && mw.syncData.syncing {
 					// avoid logging same message multiple times
 					if totalProgressPercent != lastTotalPercent || totalTimeRemainingSeconds != lastTimeRemaining {
-						log.Infof("Syncing %d%%, %s remaining, discovering used addresses.\n",
+						log.Infof("Syncing %d%%, %s remaining, discovering used addresses.",
 							totalProgressPercent, CalculateTotalTimeRemaining(totalTimeRemainingSeconds))
 
 						lastTotalPercent = totalProgressPercent
@@ -363,7 +363,7 @@ func (mw *MultiWallet) rescanStarted(walletID int) {
 	mw.syncData.activeSyncData.headersRescanProgress.WalletID = walletID
 
 	if mw.syncData.showLogs && mw.syncData.syncing {
-		log.Info("Step 3 of 3 - Scanning block headers")
+		log.Info("Step 3 of 3 - Scanning block headers.")
 	}
 }
 
@@ -421,7 +421,7 @@ func (mw *MultiWallet) rescanProgress(walletID int, rescannedThrough int32) {
 	mw.publishDebugInfo(debugInfo)
 
 	if mw.syncData.showLogs && mw.syncData.syncing {
-		log.Infof("Syncing %d%%, %s remaining, scanning %d of %d block headers.\n",
+		log.Infof("Syncing %d%%, %s remaining, scanning %d of %d block headers.",
 			mw.syncData.activeSyncData.headersRescanProgress.TotalSyncProgress,
 			CalculateTotalTimeRemaining(mw.syncData.activeSyncData.headersRescanProgress.TotalTimeRemainingSeconds),
 			mw.syncData.activeSyncData.headersRescanProgress.CurrentRescanHeight,
