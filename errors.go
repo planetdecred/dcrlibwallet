@@ -1,6 +1,10 @@
 package dcrlibwallet
 
-import "github.com/decred/dcrwallet/errors/v2"
+import (
+	"fmt"
+
+	"github.com/decred/dcrwallet/errors/v2"
+)
 
 const (
 	// Error Codes
@@ -44,3 +48,8 @@ func translateError(err error) error {
 	}
 	return err
 }
+
+var (
+	// ErrInvalidNetwork represents an invalid network (not a main, sim or test network)
+	ErrInvalidNetwork = fmt.Errorf("Invalid Network")
+)
