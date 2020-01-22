@@ -14,7 +14,7 @@ var _ = Describe("MultiWallet", func() {
 	Describe("NewMultiWallet(rootDir, dbDriver, netType)", func() {
 		Context("when netType is not a valid network", func() {
 			It("should fail", func() {
-				_, err := os.Stat(rootDir)
+				_, err := os.Stat(rootDir) // TODO: Extract to BeforeEach
 				didNotExist := os.IsNotExist(err)
 				multi, err := NewMultiWallet(rootDir, "", "") // TODO: Test with other strings
 				By("returning a nil wallet")
@@ -26,6 +26,14 @@ var _ = Describe("MultiWallet", func() {
 				By("not creating the directory if it doesn't exist")
 				_, err = os.Stat(rootDir)
 				Expect(os.IsNotExist(err)).To(Equal(didNotExist))
+			})
+		})
+		Context(`when dbDriver is not "", "bdb" or "badgerdb"`, func() {
+			It("should return a driver not found", func() {
+				multi, err := NewMultiWallet(rootDir, "nothing", "testnet3")
+
+				Expect(multi).To(BeNil())
+				Expect(err).ToNot(BeNil())
 			})
 		})
 	})
