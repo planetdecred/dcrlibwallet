@@ -53,15 +53,18 @@ func (mw *MultiWallet) handlePeerCountUpdate(peerCount int32) {
 // Fetch Headers Callbacks
 
 func (mw *MultiWallet) fetchHeadersStarted(peerInitialHeight int32) {
+	if !mw.IsSyncing() {
+		return
+	}
+
 	mw.syncData.mu.RLock()
-	isSyncing := mw.syncData.syncing
 	headersFetchingStarted := mw.syncData.beginFetchTimeStamp != -1
 	showLogs := mw.syncData.showLogs
 	mw.syncData.mu.RUnlock()
 
-	if !isSyncing || headersFetchingStarted {
-		// This function gets called for each newly connected peer,
-		// so ignore if sync is not in progress or if headers fetching was already started.
+	if headersFetchingStarted {
+		// This function gets called for each newly connected peer so
+		// ignore if headers fetching was already started.
 		return
 	}
 
@@ -77,21 +80,23 @@ func (mw *MultiWallet) fetchHeadersStarted(peerInitialHeight int32) {
 	mw.syncData.activeSyncData.startHeaderHeight = lowestBlockHeight
 	mw.syncData.mu.Unlock()
 
-	if showLogs && isSyncing {
+	if showLogs {
 		log.Infof("Step 1 of 3 - fetching %d block headers.", peerInitialHeight-lowestBlockHeight)
 	}
 }
 
 func (mw *MultiWallet) fetchHeadersProgress(lastFetchedHeaderHeight int32, lastFetchedHeaderTime int64) {
+	if !mw.IsSyncing() {
+		return
+	}
+
 	mw.syncData.mu.RLock()
-	isSyncing := mw.syncData.syncing
 	headersFetchingCompleted := mw.syncData.activeSyncData.headersFetchTimeSpent != -1
 	mw.syncData.mu.RUnlock()
 
-	if !isSyncing || headersFetchingCompleted {
-		// This function gets called for each newly connected peer,
-		// so ignore this call if sync is not in progress or
-		// if the headers fetching phase was previously completed.
+	if headersFetchingCompleted {
+		// This function gets called for each newly connected peer so ignore
+		// this call if the headers fetching phase was previously completed.
 		return
 	}
 
@@ -245,6 +250,10 @@ func (mw *MultiWallet) updateAddressDiscoveryProgress() {
 
 	go func() {
 		for {
+			if !mw.IsSyncing() {
+				return
+			}
+
 			// If there was some period of inactivity,
 			// assume that this process started at some point in the future,
 			// thereby accounting for the total reported time of inactivity.
@@ -329,6 +338,11 @@ func (mw *MultiWallet) publishAddressDiscoveryProgress() {
 
 func (mw *MultiWallet) discoverAddressesFinished(walletID int) {
 	mw.syncData.mu.Lock()
+
+	if !mw.syncData.syncing {
+		mw.syncData.mu.Unlock()
+		return
+	}
 
 	close(mw.syncData.activeSyncData.addressDiscoveryCompletedOrCanceled)
 	mw.syncData.activeSyncData.addressDiscoveryCompletedOrCanceled = nil
@@ -518,6 +532,7 @@ func (mw *MultiWallet) resetSyncData() {
 
 	mw.syncData.syncing = false
 	mw.syncData.synced = false
+	mw.syncData.cancelSync = nil
 	mw.syncData.activeSyncData = nil // to be reintialized on next sync
 
 	for _, wallet := range mw.wallets {
@@ -542,6 +557,7 @@ func (mw *MultiWallet) synced(walletID int, synced bool) {
 		mw.syncData.mu.Lock()
 		mw.syncData.syncing = false
 		mw.syncData.synced = true
+		mw.syncData.cancelSync = nil
 		mw.syncData.activeSyncData = nil // to be reintialized on next sync
 		mw.syncData.mu.Unlock()
 
@@ -559,7 +575,7 @@ func (mw *MultiWallet) synced(walletID int, synced bool) {
 			}
 
 			for _, syncProgressListener := range mw.syncProgressListeners() {
-				if allWalletsSynced {
+				if synced {
 					syncProgressListener.OnSyncCompleted()
 				} else {
 					syncProgressListener.OnSyncCanceled(false)

@@ -262,11 +262,7 @@ func (mw *MultiWallet) RestartSpvSync() error {
 }
 
 func (mw *MultiWallet) CancelSync() {
-	mw.syncData.mu.RLock()
-	isSyncActive := mw.syncData.cancelSync != nil
-	mw.syncData.mu.RUnlock()
-
-	if isSyncActive {
+	if mw.IsSyncing() {
 		log.Info("Canceling sync. May take a while for sync to fully cancel.")
 
 		mw.syncData.mu.Lock()
