@@ -37,14 +37,13 @@ type MultiWallet struct {
 }
 
 func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
+	chainParams := utils.ChainParams(netType)
+	if chainParams == nil {
+		return nil, ErrInvalidNetwork
+	}
 	rootDir = filepath.Join(rootDir, netType)
 	initLogRotator(filepath.Join(rootDir, logFileName))
 	errors.Separator = ":: "
-
-	chainParams := utils.ChainParams(netType)
-	if chainParams == nil {
-		return nil, errors.E("unsupported network type: %s", netType)
-	}
 
 	walletsDb, err := storm.Open(filepath.Join(rootDir, walletsDbName))
 	if err != nil {
