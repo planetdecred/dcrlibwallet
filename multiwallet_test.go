@@ -8,6 +8,10 @@ import (
 	. "github.com/raedahgroup/dcrlibwallet"
 )
 
+var _ = BeforeSuite(func() {
+	SetLogLevels("ERROR")
+})
+
 const rootDir = ".dcrlibwallet_tests_root"
 
 var _ = Describe("MultiWallet", func() {
@@ -31,7 +35,7 @@ var _ = Describe("MultiWallet", func() {
 		})
 		Context("when netType is not a valid network", func() {
 			It("should fail", func() {
-				_, err := os.Stat(rootDir) // TODO: Extract to BeforeEach
+				_, err := os.Stat(rootDir)
 				didNotExist := os.IsNotExist(err)
 				multi, err := NewMultiWallet(rootDir, "", "") // TODO: Test with other strings
 				By("returning a nil wallet")
@@ -45,15 +49,15 @@ var _ = Describe("MultiWallet", func() {
 				Expect(os.IsNotExist(err)).To(Equal(didNotExist))
 			})
 		})
-		Context(`when dbDriver is not "", "bdb" or "badgerdb"`, func() {
-			It("should fail", func() {
+		PContext(`when dbDriver is not "", "bdb" or "badgerdb"`, func() {
+			It(`should fail when dbDriver == "nothing"`, func() {
 				multi, err := NewMultiWallet(rootDir, "nothing", "testnet3")
 
 				By("returning a nil wallet")
-				Expect(multi).To(BeNil())
+				Expect(multi == nil).To(Equal(true)) // panics otherwise
 
-				By("returning a Driver not found error") //TODO: specify the error
-				Expect(err).ToNot(BeNil())
+				By("returning an InvalidDriver error")
+				Expect(err).To(Equal(ErrInvalidDriver))
 			})
 		})
 	})

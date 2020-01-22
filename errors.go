@@ -52,4 +52,7 @@ func translateError(err error) error {
 var (
 	// ErrInvalidNetwork represents an invalid network (not a main, sim or test network)
 	ErrInvalidNetwork = fmt.Errorf("Invalid Network")
+
+	// ErrInvalidDriver represents an invalid database driver (not badgerdb or bdb)
+	ErrInvalidDriver = fmt.Errorf("Invalid Database Driver")
 )
