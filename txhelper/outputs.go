@@ -1,16 +1,15 @@
 package txhelper
 
 import (
-	"github.com/decred/dcrd/dcrutil"
-	"github.com/decred/dcrd/txscript"
+	"github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/dcrd/wire"
 	"github.com/raedahgroup/dcrlibwallet/addresshelper"
 )
 
-func MakeTxOutputs(destinations []TransactionDestination) (outputs []*wire.TxOut, err error) {
+func MakeTxOutputs(destinations []TransactionDestination, net dcrutil.AddressParams) (outputs []*wire.TxOut, err error) {
 	for _, destination := range destinations {
 		var output *wire.TxOut
-		output, err = MakeTxOutput(destination)
+		output, err = MakeTxOutput(destination, net)
 		if err != nil {
 			return
 		}
@@ -20,8 +19,8 @@ func MakeTxOutputs(destinations []TransactionDestination) (outputs []*wire.TxOut
 	return
 }
 
-func MakeTxOutput(destination TransactionDestination) (output *wire.TxOut, err error) {
-	pkScript, err := addresshelper.PkScript(destination.Address)
+func MakeTxOutput(destination TransactionDestination, net dcrutil.AddressParams) (output *wire.TxOut, err error) {
+	pkScript, err := addresshelper.PkScript(destination.Address, net)
 	if err != nil {
 		return
 	}
@@ -33,7 +32,7 @@ func MakeTxOutput(destination TransactionDestination) (output *wire.TxOut, err e
 
 	output = &wire.TxOut{
 		Value:    int64(amountInAtom),
-		Version:  txscript.DefaultScriptVersion,
+		Version:  addresshelper.ScriptVersion,
 		PkScript: pkScript,
 	}
 	return

@@ -1,7 +1,7 @@
 package txhelper
 
 import (
-	"github.com/decred/dcrd/txscript"
+	"github.com/decred/dcrd/dcrutil/v2"
 	"github.com/raedahgroup/dcrlibwallet/addresshelper"
 )
 
@@ -19,14 +19,14 @@ func (src *txChangeSource) ScriptSize() int {
 	return len(src.script)
 }
 
-func MakeTxChangeSource(destAddr string) (*txChangeSource, error) {
-	pkScript, err := addresshelper.PkScript(destAddr)
+func MakeTxChangeSource(destAddr string, net dcrutil.AddressParams) (*txChangeSource, error) {
+	pkScript, err := addresshelper.PkScript(destAddr, net)
 	if err != nil {
 		return nil, err
 	}
 	changeSource := &txChangeSource{
 		script:  pkScript,
-		version: txscript.DefaultScriptVersion,
+		version: addresshelper.ScriptVersion,
 	}
 	return changeSource, nil
 }

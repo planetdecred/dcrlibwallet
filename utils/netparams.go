@@ -3,15 +3,15 @@ package utils
 import (
 	"strings"
 
-	"github.com/decred/dcrwallet/netparams"
+	"github.com/decred/dcrd/chaincfg/v2"
 )
 
-func NetParams(netType string) *netparams.Params {
+func NetParams(netType string) *chaincfg.Params {
 	switch strings.ToLower(netType) {
-	case strings.ToLower(netparams.MainNetParams.Name):
-		return &netparams.MainNetParams
-	case strings.ToLower(netparams.TestNet3Params.Name):
-		return &netparams.TestNet3Params
+	case strings.ToLower(chaincfg.MainNetParams().Name):
+		return chaincfg.MainNetParams()
+	case strings.ToLower(chaincfg.TestNet3Params().Name):
+		return chaincfg.TestNet3Params()
 	default:
 		return nil
 	}
