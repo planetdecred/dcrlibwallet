@@ -221,12 +221,17 @@ func shutdownListener() {
 	}
 }
 
-func shutdownContext() context.Context {
+func contextWithShutdownCancel() (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		<-shutdownSignaled
 		cancel()
 	}()
+	return ctx, cancel
+}
+
+func shutdownContext() context.Context {
+	ctx, _ := contextWithShutdownCancel()
 	return ctx
 }
 
@@ -533,7 +538,7 @@ func (lw *LibWallet) RpcSync(networkAddress string, username string, password st
 		// Run wallet synchronization until it is cancelled or errors.  If the
 		// context was cancelled, return immediately instead of trying to
 		// reconnect.
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := contextWithShutdownCancel()
 		lw.cancelSync = cancel
 
 		err = rpcSyncer.Run(ctx)
