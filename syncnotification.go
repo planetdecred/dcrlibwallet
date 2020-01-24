@@ -221,7 +221,7 @@ func (mw *MultiWallet) discoverAddressesStarted(walletID int) {
 	mw.syncData.activeSyncData.addressDiscoveryStartTime = time.Now().Unix()
 	mw.syncData.activeSyncData.addressDiscoveryProgress.WalletID = walletID
 
-	if mw.syncData.showLogs && mw.syncData.syncing {
+	if mw.syncData.showLogs {
 		log.Info("Step 2 of 3 - discovering used addresses.")
 	}
 
@@ -486,15 +486,10 @@ func (mw *MultiWallet) publishDebugInfo(debugInfo *DebugInfo) {
 /** Helper functions start here */
 
 func (mw *MultiWallet) estimateBlockHeadersCountAfter(lastHeaderTime int64) int32 {
-	var targetTimePerBlock float64
-	if mw.chainParams.Name == "mainnet" {
-		targetTimePerBlock = MainNetTargetTimePerBlock
-	} else {
-		targetTimePerBlock = TestNetTargetTimePerBlock
-	}
-
-	// Use the difference between current time (now) and last reported block time, to estimate total headers to fetch
+	// Use the difference between current time (now) and last reported block time,
+	// to estimate total headers to fetch.
 	timeDifference := float64(time.Now().Unix() - lastHeaderTime)
+	targetTimePerBlock := float64(mw.chainParams.TargetTimePerBlock)
 	estimatedHeadersDifference := timeDifference / targetTimePerBlock
 
 	// return next integer value (upper limit) if estimatedHeadersDifference is a fraction

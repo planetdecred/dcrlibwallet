@@ -314,7 +314,7 @@ func (mw *MultiWallet) CurrentSyncStage() int32 {
 	mw.syncData.mu.RLock()
 	defer mw.syncData.mu.RUnlock()
 
-	if mw.syncData != nil  && mw.syncData.syncing {
+	if mw.syncData != nil && mw.syncData.syncing {
 		return mw.syncData.syncStage
 	}
 	return InvalidSyncStage
@@ -324,7 +324,7 @@ func (mw *MultiWallet) GeneralSyncProgress() *GeneralSyncProgress {
 	mw.syncData.mu.RLock()
 	defer mw.syncData.mu.RUnlock()
 
-	if mw.syncData != nil  && mw.syncData.syncing {
+	if mw.syncData != nil && mw.syncData.syncing {
 		switch mw.syncData.syncStage {
 		case HeadersFetchSyncStage:
 			return mw.syncData.headersFetchProgress.GeneralSyncProgress
