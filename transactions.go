@@ -242,6 +242,20 @@ func (lw *LibWallet) replaceTxIfExist(tx *Transaction) error {
 	return nil
 }
 
+func (lw *LibWallet) reindexTransactions() error {
+	err := lw.txDB.Drop(&Transaction{})
+	if err != nil {
+		return err
+	}
+
+	err = lw.txDB.Set(BucketTxInfo, KeyEndBlock, 0)
+	if err != nil {
+		return err
+	}
+
+	return lw.IndexTransactions(-1, -1, func() {})
+}
+
 func (lw *LibWallet) parseTxSummary(tx *wallet.TransactionSummary, blockHash *chainhash.Hash) (*Transaction, error) {
 	var inputTotal int64
 	var outputTotal int64

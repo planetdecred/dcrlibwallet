@@ -381,6 +381,11 @@ func (lw *LibWallet) RescanBlocks() error {
 			}
 		}
 
+		err = lw.reindexTransactions()
+		if err != nil {
+			log.Errorf("Error clearing saved transactions: %v", err)
+		}
+
 		// Trigger sync completed callback.
 		// todo: probably best to have a dedicated rescan listener
 		// with callbacks for rescanStarted, rescanCompleted, rescanError and rescanCancel
