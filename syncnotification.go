@@ -209,125 +209,121 @@ func (mw *MultiWallet) fetchHeadersFinished() {
 // Address/Account Discovery Callbacks
 
 func (mw *MultiWallet) discoverAddressesStarted(walletID int) {
-	mw.syncData.mu.Lock()
-
-	if !mw.syncData.syncing || mw.syncData.activeSyncData.addressDiscoveryCompletedOrCanceled != nil {
-		// ignore if sync is not in progress i.e. !mw.syncData.syncing
-		// or already started address discovery i.e. mw.syncData.activeSyncData.addressDiscoveryCompleted != nil
+	if !mw.IsSyncing() {
 		return
 	}
 
+	mw.syncData.mu.RLock()
+	addressDiscoveryAlreadyStarted := mw.syncData.activeSyncData.addressDiscoveryStartTime != -1
+	totalHeadersFetchTime := float64(mw.syncData.headersFetchTimeSpent)
+	mw.syncData.mu.RUnlock()
+
+	if addressDiscoveryAlreadyStarted {
+		return
+	}
+
+	mw.syncData.mu.Lock()
 	mw.syncData.activeSyncData.syncStage = AddressDiscoverySyncStage
 	mw.syncData.activeSyncData.addressDiscoveryStartTime = time.Now().Unix()
 	mw.syncData.activeSyncData.addressDiscoveryProgress.WalletID = walletID
+	mw.syncData.addressDiscoveryCompletedOrCanceled = make(chan bool)
+	mw.syncData.mu.Unlock()
+
+	go mw.updateAddressDiscoveryProgress(totalHeadersFetchTime)
 
 	if mw.syncData.showLogs {
 		log.Info("Step 2 of 3 - discovering used addresses.")
 	}
-
-	mw.syncData.mu.Unlock()
-
-	mw.updateAddressDiscoveryProgress()
 }
 
-func (mw *MultiWallet) updateAddressDiscoveryProgress() {
-	mw.syncData.mu.Lock()
-	mw.syncData.addressDiscoveryCompletedOrCanceled = make(chan bool)
-	totalHeadersFetchTime := float64(mw.syncData.headersFetchTimeSpent)
-	mw.syncData.mu.Unlock()
+func (mw *MultiWallet) updateAddressDiscoveryProgress(totalHeadersFetchTime float64) {
+	// use ticker to calculate and broadcast address discovery progress every second
+	everySecondTicker := time.NewTicker(1 * time.Second)
 
 	// these values will be used every second to calculate the total sync progress
 	estimatedDiscoveryTime := totalHeadersFetchTime * DiscoveryPercentage
 	estimatedRescanTime := totalHeadersFetchTime * RescanPercentage
 
-	// following channels are used to determine next step in the below subroutine
-	everySecondTicker := time.NewTicker(1 * time.Second)
-	everySecondTickerChannel := everySecondTicker.C
-
 	// track last logged time remaining and total percent to avoid re-logging same message
 	var lastTimeRemaining int64
 	var lastTotalPercent int32 = -1
 
-	go func() {
-		for {
-			if !mw.IsSyncing() {
-				return
+	for {
+		if !mw.IsSyncing() {
+			return
+		}
+
+		// If there was some period of inactivity,
+		// assume that this process started at some point in the future,
+		// thereby accounting for the total reported time of inactivity.
+		mw.syncData.mu.Lock()
+		mw.syncData.addressDiscoveryStartTime += mw.syncData.totalInactiveSeconds
+		mw.syncData.totalInactiveSeconds = 0
+		addressDiscoveryStartTime := mw.syncData.addressDiscoveryStartTime
+		showLogs := mw.syncData.showLogs
+		mw.syncData.mu.Unlock()
+
+		select {
+		case <-mw.syncData.addressDiscoveryCompletedOrCanceled:
+			// stop calculating and broadcasting address discovery progress
+			everySecondTicker.Stop()
+			if showLogs {
+				log.Info("Address discovery complete.")
+			}
+			return
+
+		case <-everySecondTicker.C:
+			// calculate address discovery progress
+			elapsedDiscoveryTime := float64(time.Now().Unix() - addressDiscoveryStartTime)
+			discoveryProgress := (elapsedDiscoveryTime / estimatedDiscoveryTime) * 100
+
+			var totalSyncTime float64
+			if elapsedDiscoveryTime > estimatedDiscoveryTime {
+				totalSyncTime = totalHeadersFetchTime + elapsedDiscoveryTime + estimatedRescanTime
+			} else {
+				totalSyncTime = totalHeadersFetchTime + estimatedDiscoveryTime + estimatedRescanTime
 			}
 
-			// If there was some period of inactivity,
-			// assume that this process started at some point in the future,
-			// thereby accounting for the total reported time of inactivity.
+			totalElapsedTime := totalHeadersFetchTime + elapsedDiscoveryTime
+			totalProgress := (totalElapsedTime / totalSyncTime) * 100
+
+			remainingAccountDiscoveryTime := math.Round(estimatedDiscoveryTime - elapsedDiscoveryTime)
+			if remainingAccountDiscoveryTime < 0 {
+				remainingAccountDiscoveryTime = 0
+			}
+
+			totalProgressPercent := int32(math.Round(totalProgress))
+			totalTimeRemainingSeconds := int64(math.Round(remainingAccountDiscoveryTime + estimatedRescanTime))
+
+			// update address discovery progress, total progress and total time remaining
 			mw.syncData.mu.Lock()
-			mw.syncData.addressDiscoveryStartTime += mw.syncData.totalInactiveSeconds
-			mw.syncData.totalInactiveSeconds = 0
-			addressDiscoveryStartTime := mw.syncData.addressDiscoveryStartTime
-			showLogs := mw.syncData.showLogs
+			mw.syncData.addressDiscoveryProgress.AddressDiscoveryProgress = int32(math.Round(discoveryProgress))
+			mw.syncData.addressDiscoveryProgress.TotalSyncProgress = totalProgressPercent
+			mw.syncData.addressDiscoveryProgress.TotalTimeRemainingSeconds = totalTimeRemainingSeconds
 			mw.syncData.mu.Unlock()
 
-			select {
-			case <-everySecondTickerChannel:
-				// calculate address discovery progress
-				elapsedDiscoveryTime := float64(time.Now().Unix() - addressDiscoveryStartTime)
-				discoveryProgress := (elapsedDiscoveryTime / estimatedDiscoveryTime) * 100
+			mw.publishAddressDiscoveryProgress()
 
-				var totalSyncTime float64
-				if elapsedDiscoveryTime > estimatedDiscoveryTime {
-					totalSyncTime = totalHeadersFetchTime + elapsedDiscoveryTime + estimatedRescanTime
-				} else {
-					totalSyncTime = totalHeadersFetchTime + estimatedDiscoveryTime + estimatedRescanTime
+			debugInfo := &DebugInfo{
+				int64(math.Round(totalElapsedTime)),
+				totalTimeRemainingSeconds,
+				int64(math.Round(elapsedDiscoveryTime)),
+				int64(math.Round(remainingAccountDiscoveryTime)),
+			}
+			mw.publishDebugInfo(debugInfo)
+
+			if showLogs {
+				// avoid logging same message multiple times
+				if totalProgressPercent != lastTotalPercent || totalTimeRemainingSeconds != lastTimeRemaining {
+					log.Infof("Syncing %d%%, %s remaining, discovering used addresses.",
+						totalProgressPercent, CalculateTotalTimeRemaining(totalTimeRemainingSeconds))
+
+					lastTotalPercent = totalProgressPercent
+					lastTimeRemaining = totalTimeRemainingSeconds
 				}
-
-				totalElapsedTime := totalHeadersFetchTime + elapsedDiscoveryTime
-				totalProgress := (totalElapsedTime / totalSyncTime) * 100
-
-				remainingAccountDiscoveryTime := math.Round(estimatedDiscoveryTime - elapsedDiscoveryTime)
-				if remainingAccountDiscoveryTime < 0 {
-					remainingAccountDiscoveryTime = 0
-				}
-
-				totalProgressPercent := int32(math.Round(totalProgress))
-				totalTimeRemainingSeconds := int64(math.Round(remainingAccountDiscoveryTime + estimatedRescanTime))
-
-				// update address discovery progress, total progress and total time remaining
-				mw.syncData.mu.Lock()
-				mw.syncData.addressDiscoveryProgress.AddressDiscoveryProgress = int32(math.Round(discoveryProgress))
-				mw.syncData.addressDiscoveryProgress.TotalSyncProgress = totalProgressPercent
-				mw.syncData.addressDiscoveryProgress.TotalTimeRemainingSeconds = totalTimeRemainingSeconds
-				mw.syncData.mu.Unlock()
-
-				mw.publishAddressDiscoveryProgress()
-
-				debugInfo := &DebugInfo{
-					int64(math.Round(totalElapsedTime)),
-					totalTimeRemainingSeconds,
-					int64(math.Round(elapsedDiscoveryTime)),
-					int64(math.Round(remainingAccountDiscoveryTime)),
-				}
-				mw.publishDebugInfo(debugInfo)
-
-				if showLogs {
-					// avoid logging same message multiple times
-					if totalProgressPercent != lastTotalPercent || totalTimeRemainingSeconds != lastTimeRemaining {
-						log.Infof("Syncing %d%%, %s remaining, discovering used addresses.",
-							totalProgressPercent, CalculateTotalTimeRemaining(totalTimeRemainingSeconds))
-
-						lastTotalPercent = totalProgressPercent
-						lastTimeRemaining = totalTimeRemainingSeconds
-					}
-				}
-
-			case <-mw.syncData.addressDiscoveryCompletedOrCanceled:
-				// stop updating time taken and progress for address discovery
-				everySecondTicker.Stop()
-
-				if showLogs {
-					log.Info("Address discovery complete.")
-				}
-
-				return
 			}
 		}
-	}()
+	}
 }
 
 func (mw *MultiWallet) publishAddressDiscoveryProgress() {
@@ -337,18 +333,11 @@ func (mw *MultiWallet) publishAddressDiscoveryProgress() {
 }
 
 func (mw *MultiWallet) discoverAddressesFinished(walletID int) {
-	mw.syncData.mu.Lock()
-
-	if !mw.syncData.syncing {
-		mw.syncData.mu.Unlock()
+	if !mw.IsSyncing() {
 		return
 	}
 
-	close(mw.syncData.activeSyncData.addressDiscoveryCompletedOrCanceled)
-	mw.syncData.activeSyncData.addressDiscoveryCompletedOrCanceled = nil
-	mw.syncData.activeSyncData.totalDiscoveryTimeSpent = time.Now().Unix() - mw.syncData.addressDiscoveryStartTime
-
-	mw.syncData.mu.Unlock()
+	mw.stopUpdatingAddressDiscoveryProgress()
 
 	loadedWallet, loaded := mw.wallets[walletID].loader.LoadedWallet()
 	if loaded && !loadedWallet.Locked() { // loaded should always be true
@@ -358,23 +347,29 @@ func (mw *MultiWallet) discoverAddressesFinished(walletID int) {
 			log.Error(err)
 		}
 	}
+}
 
+func (mw *MultiWallet) stopUpdatingAddressDiscoveryProgress() {
+	mw.syncData.mu.Lock()
+	if mw.syncData.activeSyncData != nil && mw.syncData.activeSyncData.addressDiscoveryCompletedOrCanceled != nil {
+		close(mw.syncData.activeSyncData.addressDiscoveryCompletedOrCanceled)
+		mw.syncData.activeSyncData.addressDiscoveryCompletedOrCanceled = nil
+		mw.syncData.activeSyncData.totalDiscoveryTimeSpent = time.Now().Unix() - mw.syncData.addressDiscoveryStartTime
+	}
+	mw.syncData.mu.Unlock()
 }
 
 // Blocks Scan Callbacks
 
 func (mw *MultiWallet) rescanStarted(walletID int) {
+	mw.stopUpdatingAddressDiscoveryProgress()
+
 	mw.syncData.mu.Lock()
 	defer mw.syncData.mu.Unlock()
 
 	if !mw.syncData.syncing {
 		// ignore if sync is not in progress
 		return
-	}
-
-	if mw.syncData.activeSyncData.addressDiscoveryCompletedOrCanceled != nil {
-		close(mw.syncData.activeSyncData.addressDiscoveryCompletedOrCanceled)
-		mw.syncData.activeSyncData.addressDiscoveryCompletedOrCanceled = nil
 	}
 
 	mw.syncData.activeSyncData.syncStage = HeadersRescanSyncStage
@@ -497,16 +492,12 @@ func (mw *MultiWallet) estimateBlockHeadersCountAfter(lastHeaderTime int64) int3
 }
 
 func (mw *MultiWallet) notifySyncError(err error) {
-	mw.resetSyncData()
-
 	for _, syncProgressListener := range mw.syncProgressListeners() {
 		syncProgressListener.OnSyncEndedWithError(err)
 	}
 }
 
 func (mw *MultiWallet) notifySyncCanceled() {
-	mw.resetSyncData()
-
 	mw.syncData.mu.RLock()
 	restartSyncRequested := mw.syncData.restartSyncRequested
 	mw.syncData.mu.RUnlock()
@@ -517,18 +508,17 @@ func (mw *MultiWallet) notifySyncCanceled() {
 }
 
 func (mw *MultiWallet) resetSyncData() {
+	// It's possible that sync ends or errors while address discovery is ongoing.
+	// If this happens, it's important to stop the address discovery process before
+	// resetting sync data.
+	mw.stopUpdatingAddressDiscoveryProgress()
+
 	mw.syncData.mu.Lock()
-	defer mw.syncData.mu.Unlock()
-
-	if mw.syncData.activeSyncData.addressDiscoveryCompletedOrCanceled != nil {
-		close(mw.syncData.activeSyncData.addressDiscoveryCompletedOrCanceled)
-		mw.syncData.activeSyncData.addressDiscoveryCompletedOrCanceled = nil
-	}
-
 	mw.syncData.syncing = false
 	mw.syncData.synced = false
 	mw.syncData.cancelSync = nil
-	mw.syncData.activeSyncData = nil // to be reintialized on next sync
+	mw.syncData.activeSyncData = nil
+	mw.syncData.mu.Unlock()
 
 	for _, wallet := range mw.wallets {
 		wallet.waiting = true
@@ -552,8 +542,6 @@ func (mw *MultiWallet) synced(walletID int, synced bool) {
 		mw.syncData.mu.Lock()
 		mw.syncData.syncing = false
 		mw.syncData.synced = true
-		mw.syncData.cancelSync = nil
-		mw.syncData.activeSyncData = nil // to be reintialized on next sync
 		mw.syncData.mu.Unlock()
 
 		// begin indexing transactions after sync is completed,

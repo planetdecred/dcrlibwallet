@@ -82,9 +82,10 @@ func (mw *MultiWallet) initActiveSyncData() {
 		addressDiscoveryProgress: addressDiscoveryProgress,
 		headersRescanProgress:    headersRescanProgress,
 
-		beginFetchTimeStamp:     -1,
-		headersFetchTimeSpent:   -1,
-		totalDiscoveryTimeSpent: -1,
+		beginFetchTimeStamp:       -1,
+		headersFetchTimeSpent:     -1,
+		addressDiscoveryStartTime: -1,
+		totalDiscoveryTimeSpent:   -1,
 	}
 	mw.syncData.mu.Unlock()
 }
@@ -173,6 +174,11 @@ func (mw *MultiWallet) SyncInactiveForPeriod(totalInactiveSeconds int64) {
 }
 
 func (mw *MultiWallet) SpvSync() error {
+	// prevent an attempt to sync when the previous syncing has not been canceled
+	if mw.syncData.cancelSync != nil || mw.syncData.activeSyncData != nil {
+		return errors.New(ErrSyncAlreadyInProgress)
+	}
+
 	// Unset this flag as the invocation of this method implies that any request to restart sync has been fulfilled.
 	mw.syncData.mu.Lock()
 	mw.syncData.restartSyncRequested = false
@@ -224,28 +230,27 @@ func (mw *MultiWallet) SpvSync() error {
 	mw.syncData.cancelSync = cancel
 	mw.syncData.mu.Unlock()
 
-	// syncer.Run uses a wait group to block the thread until sync completes or an error occurs
+	for _, listener := range mw.syncProgressListeners() {
+		listener.OnSyncStarted()
+	}
+
+	// syncer.Run uses a wait group to block the thread until the sync context
+	// expires or is canceled or some other error occurs such as
+	// losing connection to all persistent peers.
 	go func() {
-		defer func() {
-			mw.syncData.mu.Lock()
-			mw.syncData.syncing = false
-			mw.syncData.cancelSync = nil
-			mw.syncData.mu.Unlock()
-		}()
+		syncError := syncer.Run(ctx)
 
-		for _, listener := range mw.syncProgressListeners() {
-			listener.OnSyncStarted()
-		}
+		// sync has ended or errored, reset sync variables
+		mw.resetSyncData()
 
-		err := syncer.Run(ctx)
-		if err != nil {
-			if err == context.Canceled {
+		if syncError != nil {
+			if syncError == context.DeadlineExceeded {
+				mw.notifySyncError(errors.Errorf("SPV synchronization deadline exceeded: %v", syncError))
+			} else if syncError == context.Canceled {
 				mw.syncData.syncCanceled <- true
 				mw.notifySyncCanceled()
-			} else if err == context.DeadlineExceeded {
-				mw.notifySyncError(errors.Errorf("SPV synchronization deadline exceeded: %v", err))
 			} else {
-				mw.notifySyncError(err)
+				mw.notifySyncError(syncError)
 			}
 		}
 	}()
@@ -262,25 +267,22 @@ func (mw *MultiWallet) RestartSpvSync() error {
 }
 
 func (mw *MultiWallet) CancelSync() {
-	if mw.syncData.cancelSync != nil {
+	mw.syncData.mu.RLock()
+	cancelSync := mw.syncData.cancelSync
+	mw.syncData.mu.RUnlock()
+
+	if cancelSync != nil {
 		log.Info("Canceling sync. May take a while for sync to fully cancel.")
 
-		mw.syncData.mu.Lock()
-
-		if mw.syncData.activeSyncData != nil && mw.syncData.activeSyncData.addressDiscoveryCompletedOrCanceled != nil {
-			close(mw.syncData.activeSyncData.addressDiscoveryCompletedOrCanceled)
-			mw.syncData.activeSyncData.addressDiscoveryCompletedOrCanceled = nil
-		}
-
 		// Cancel the context used for syncer.Run in spvSync().
-		mw.syncData.cancelSync()
-		mw.syncData.cancelSync = nil
+		// This may not immediately cause the sync process to terminate,
+		// but when it eventually terminates, syncer.Run will return `err == context.Canceled`.
+		cancelSync()
 
-		mw.syncData.mu.Unlock()
-
-		// syncer.Run may not immediately return, following code blocks this function
-		// and waits for the syncer.Run to return `err == context.Canceled`.
+		// When sync terminates and syncer.Run returns `err == context.Canceled`,
+		// we will get notified on this channel.
 		<-mw.syncData.syncCanceled
+
 		log.Info("Sync fully canceled.")
 	}
 
