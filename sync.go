@@ -240,8 +240,8 @@ func (mw *MultiWallet) SpvSync() error {
 		err := syncer.Run(ctx)
 		if err != nil {
 			if err == context.Canceled {
-				mw.notifySyncCanceled()
 				mw.syncData.syncCanceled <- true
+				mw.notifySyncCanceled()
 			} else if err == context.DeadlineExceeded {
 				mw.notifySyncError(errors.Errorf("SPV synchronization deadline exceeded: %v", err))
 			} else {
@@ -262,12 +262,12 @@ func (mw *MultiWallet) RestartSpvSync() error {
 }
 
 func (mw *MultiWallet) CancelSync() {
-	if mw.IsSyncing() {
+	if mw.syncData.cancelSync != nil {
 		log.Info("Canceling sync. May take a while for sync to fully cancel.")
 
 		mw.syncData.mu.Lock()
 
-		if mw.syncData.addressDiscoveryCompletedOrCanceled != nil {
+		if mw.syncData.activeSyncData != nil && mw.syncData.activeSyncData.addressDiscoveryCompletedOrCanceled != nil {
 			close(mw.syncData.activeSyncData.addressDiscoveryCompletedOrCanceled)
 			mw.syncData.activeSyncData.addressDiscoveryCompletedOrCanceled = nil
 		}
@@ -308,6 +308,34 @@ func (mw *MultiWallet) IsSyncing() bool {
 	mw.syncData.mu.RLock()
 	defer mw.syncData.mu.RUnlock()
 	return mw.syncData.syncing
+}
+
+func (mw *MultiWallet) CurrentSyncStage() int32 {
+	mw.syncData.mu.RLock()
+	defer mw.syncData.mu.RUnlock()
+
+	if mw.syncData != nil  && mw.syncData.syncing {
+		return mw.syncData.syncStage
+	}
+	return InvalidSyncStage
+}
+
+func (mw *MultiWallet) GeneralSyncProgress() *GeneralSyncProgress {
+	mw.syncData.mu.RLock()
+	defer mw.syncData.mu.RUnlock()
+
+	if mw.syncData != nil  && mw.syncData.syncing {
+		switch mw.syncData.syncStage {
+		case HeadersFetchSyncStage:
+			return mw.syncData.headersFetchProgress.GeneralSyncProgress
+		case AddressDiscoverySyncStage:
+			return mw.syncData.addressDiscoveryProgress.GeneralSyncProgress
+		case HeadersRescanSyncStage:
+			return mw.syncData.headersRescanProgress.GeneralSyncProgress
+		}
+	}
+
+	return nil
 }
 
 func (mw *MultiWallet) ConnectedPeers() int32 {
