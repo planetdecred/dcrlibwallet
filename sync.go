@@ -179,11 +179,6 @@ func (mw *MultiWallet) SpvSync() error {
 		return errors.New(ErrSyncAlreadyInProgress)
 	}
 
-	// Unset this flag as the invocation of this method implies that any request to restart sync has been fulfilled.
-	mw.syncData.mu.Lock()
-	mw.syncData.restartSyncRequested = false
-	mw.syncData.mu.Unlock()
-
 	addr := &net.TCPAddr{IP: net.ParseIP("::1"), Port: 0}
 	addrManager := addrmgr.New(mw.rootDir, net.LookupIP) // TODO: be mindful of tor
 	lp := p2p.NewLocalPeer(mw.chainParams, addr, addrManager)
@@ -225,13 +220,17 @@ func (mw *MultiWallet) SpvSync() error {
 
 	ctx, cancel := mw.contextWithShutdownCancel()
 
+	var restartSyncRequested bool
+
 	mw.syncData.mu.Lock()
+	restartSyncRequested = mw.syncData.restartSyncRequested
+	mw.syncData.restartSyncRequested = false
 	mw.syncData.syncing = true
 	mw.syncData.cancelSync = cancel
 	mw.syncData.mu.Unlock()
 
 	for _, listener := range mw.syncProgressListeners() {
-		listener.OnSyncStarted()
+		listener.OnSyncStarted(restartSyncRequested)
 	}
 
 	// syncer.Run uses a wait group to block the thread until the sync context

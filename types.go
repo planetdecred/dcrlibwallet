@@ -61,7 +61,7 @@ type Accounts struct {
 /** begin sync-related types */
 
 type SyncProgressListener interface {
-	OnSyncStarted()
+	OnSyncStarted(wasRestarted bool)
 	OnPeerConnectedOrDisconnected(numberOfConnectedPeers int32)
 	OnHeadersFetchProgress(headersFetchProgress *HeadersFetchProgressReport)
 	OnAddressDiscoveryProgress(addressDiscoveryProgress *AddressDiscoveryProgressReport)
