@@ -21,6 +21,7 @@ type Wallet struct {
 	Name                        string `storm:"unique"`
 	DbDriver                    string
 	Seed                        string
+	IsRestored                  bool
 	HasDiscoveredAccounts       bool
 	PrivatePassphraseType       int32
 	IncomingTxNotificationsPref string

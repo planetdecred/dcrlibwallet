@@ -10,7 +10,7 @@ func (mw *MultiWallet) AllWallets() (wallets []*Wallet) {
 func (mw *MultiWallet) WalletsIterator() *WalletsIterator {
 	return &WalletsIterator{
 		currentIndex: 0,
-		wallets: mw.AllWallets(),
+		wallets:      mw.AllWallets(),
 	}
 }
 

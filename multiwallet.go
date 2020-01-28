@@ -272,6 +272,7 @@ func (mw *MultiWallet) CreateNewWallet(privatePassphrase string, privatePassphra
 func (mw *MultiWallet) RestoreWallet(seedMnemonic, privatePassphrase string, privatePassphraseType int32) (*Wallet, error) {
 	wallet := &Wallet{
 		PrivatePassphraseType: privatePassphraseType,
+		IsRestored:            true,
 		HasDiscoveredAccounts: false,
 	}
 
@@ -288,6 +289,7 @@ func (mw *MultiWallet) LinkExistingWallet(walletDataDir, originalPubPass string,
 
 	wallet := &Wallet{
 		PrivatePassphraseType: privatePassphraseType,
+		IsRestored:            true,
 		HasDiscoveredAccounts: false, // assume that account discovery hasn't been done
 	}
 
