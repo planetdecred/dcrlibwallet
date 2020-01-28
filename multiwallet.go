@@ -220,7 +220,7 @@ func (mw *MultiWallet) StartupSecurityType() int32 {
 }
 
 func (mw *MultiWallet) OpenWallets(startupPassphrase []byte) error {
-	if mw.syncData.activeSyncData != nil {
+	if mw.IsSyncing() {
 		return errors.New(ErrSyncAlreadyInProgress)
 	}
 
@@ -327,7 +327,7 @@ func (mw *MultiWallet) LinkExistingWallet(walletDataDir, originalPubPass string,
 }
 
 func (mw *MultiWallet) addNewWallet(wallet *Wallet, finalizeWalletSetup func() error) (*Wallet, error) {
-	if mw.syncData.activeSyncData != nil {
+	if mw.IsSyncing() {
 		return nil, errors.New(ErrSyncAlreadyInProgress)
 	}
 
@@ -402,7 +402,7 @@ func (mw *MultiWallet) RenameWallet(walletID int, newName string) error {
 }
 
 func (mw *MultiWallet) DeleteWallet(walletID int, privPass []byte) error {
-	if mw.syncData.activeSyncData != nil {
+	if mw.IsSyncing() {
 		return errors.New(ErrSyncAlreadyInProgress)
 	}
 
