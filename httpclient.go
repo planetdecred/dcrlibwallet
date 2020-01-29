@@ -10,7 +10,7 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/decred/dcrd/dcrjson"
+	"github.com/decred/dcrd/dcrjson/v2"
 )
 
 // newHTTPClient returns a new HTTP client that is configured according to the
