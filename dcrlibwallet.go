@@ -416,7 +416,7 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 		}
 
 		wallet.SetNetworkBackend(syncer)
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := contextWithShutdownCancel()
 		lw.cancelSync = cancel
 		err := syncer.Run(ctx)
 		if err != nil {
