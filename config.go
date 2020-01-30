@@ -16,7 +16,7 @@ const (
 	startupSecurityTypeConfigKey  = "startup_security_type"
 	UseFingerprintConfigKey       = "use_fingerprint"
 
-	BeepNewBlocksConfigKey           = "beep_new_blocks"
+	BeepNewBlocksConfigKey = "beep_new_blocks"
 
 	SyncOnCellularConfigKey             = "always_sync"
 	NetworkModeConfigKey                = "network_mode"
