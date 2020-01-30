@@ -140,6 +140,20 @@ func (mw *MultiWallet) Shutdown() {
 	}
 }
 
+// V1WalletExists checks if a wallet db file exists in `rootDir/{netType}`
+// as newer version wallets are no longer placed directly inside the
+// {netType} subdirectory of app data dir.
+func (mw *MultiWallet) V1WalletExists() bool {
+	return V1WalletExistsAt(mw.rootDir, mw.chainParams.Name)
+}
+
+// MigrateV1Wallet checks if a v1 wallet exists in `mw.rootDir` and
+// links/adds it as an additional database to this multiwallet instance.
+func (mw *MultiWallet) MigrateV1Wallet(originalPubPass string, originalPrivatePassType int32) error {
+	_, err := mw.LinkExistingWallet(mw.rootDir, originalPubPass, originalPrivatePassType)
+	return err
+}
+
 func (mw *MultiWallet) SetStartupPassphrase(passphrase []byte, passphraseType int32) error {
 	return mw.ChangeStartupPassphrase([]byte(""), passphrase, passphraseType)
 }
@@ -283,7 +297,7 @@ func (mw *MultiWallet) RestoreWallet(seedMnemonic, privatePassphrase string, pri
 
 func (mw *MultiWallet) LinkExistingWallet(walletDataDir, originalPubPass string, privatePassphraseType int32) (*Wallet, error) {
 	// check if `walletDataDir` contains wallet.db
-	if !WalletExistsAt(walletDataDir, mw.chainParams.Name) {
+	if !V1WalletExistsAt(walletDataDir, mw.chainParams.Name) {
 		return nil, errors.New(ErrNotExist)
 	}
 
