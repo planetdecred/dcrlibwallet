@@ -426,15 +426,6 @@ func (mw *MultiWallet) DeleteWallet(walletID int, privPass []byte) error {
 	return nil
 }
 
-func (mw *MultiWallet) FirstOrDefaultWallet() *Wallet {
-	// todo consider implementing default wallet feature
-
-	for _, wallet := range mw.wallets {
-		return wallet
-	}
-	return nil
-}
-
 func (mw *MultiWallet) WalletWithID(walletID int) *Wallet {
 	if wallet, ok := mw.wallets[walletID]; ok {
 		return wallet
