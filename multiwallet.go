@@ -140,11 +140,11 @@ func (mw *MultiWallet) Shutdown() {
 	}
 }
 
-// V1WalletExists checks if a wallet db file exists in `rootDir/{netType}`
-// as newer version wallets are no longer placed directly inside the
-// {netType} subdirectory of app data dir.
+// V1WalletExists checks if a wallet db file exists in `mw.rootDir`
+// as newer version wallets are no longer placed directly inside `mw.rootDir`
+// but in subdirectories instead.
 func (mw *MultiWallet) V1WalletExists() bool {
-	return V1WalletExistsAt(mw.rootDir, mw.chainParams.Name)
+	return WalletExistsAt(mw.rootDir)
 }
 
 // MigrateV1Wallet checks if a v1 wallet exists in `mw.rootDir` and
@@ -296,8 +296,10 @@ func (mw *MultiWallet) RestoreWallet(seedMnemonic, privatePassphrase string, pri
 }
 
 func (mw *MultiWallet) LinkExistingWallet(walletDataDir, originalPubPass string, privatePassphraseType int32) (*Wallet, error) {
+	// todo: confirm that the wallet being linked is of the same netType as this multiwallet instance.
+
 	// check if `walletDataDir` contains wallet.db
-	if !V1WalletExistsAt(walletDataDir, mw.chainParams.Name) {
+	if !WalletExistsAt(walletDataDir) {
 		return nil, errors.New(ErrNotExist)
 	}
 
@@ -308,8 +310,6 @@ func (mw *MultiWallet) LinkExistingWallet(walletDataDir, originalPubPass string,
 	}
 
 	return mw.addNewWallet(wallet, func() error {
-		walletDataDir = filepath.Join(walletDataDir, mw.chainParams.Name)
-
 		// move wallet.db and tx.db files to newly created dir for the wallet
 		currentWalletDbFilePath := filepath.Join(walletDataDir, walletDbName)
 		newWalletDbFilePath := filepath.Join(wallet.dataDir, walletDbName)

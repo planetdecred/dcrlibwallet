@@ -208,8 +208,8 @@ func roundUp(n float64) int32 {
 	return int32(math.Round(n))
 }
 
-func V1WalletExistsAt(rootDir, netType string) bool {
-	walletDbFilePath := filepath.Join(rootDir, netType, walletDbName)
+func WalletExistsAt(directory string) bool {
+	walletDbFilePath := filepath.Join(directory, walletDbName)
 	exists, err := fileExists(walletDbFilePath)
 	if err != nil {
 		log.Errorf("wallet exists check error: %v", err)
