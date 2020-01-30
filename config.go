@@ -2,6 +2,7 @@ package dcrlibwallet
 
 import (
 	"github.com/asdine/storm"
+	"github.com/decred/dcrwallet/errors/v2"
 )
 
 const (
@@ -124,4 +125,14 @@ func (mw *MultiWallet) ReadStringConfigValueForKey(key string, defaultValue stri
 		valueOut = defaultValue
 	}
 	return
+}
+
+func (mw *MultiWallet) UpdateIncomingNotificationsUserPreference(walletID int, notificationsPref string) error {
+	wallet := mw.WalletWithID(walletID)
+	if wallet == nil {
+		return errors.New(ErrNotExist)
+	}
+
+	wallet.IncomingTxNotificationsPref = notificationsPref
+	return translateError(mw.db.Save(wallet))
 }
