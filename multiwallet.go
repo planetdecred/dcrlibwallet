@@ -105,6 +105,9 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 
 	mw.listenForShutdown()
 
+	logLevel := mw.ReadStringConfigValueForKey(LogLevelConfigKey, "")
+	SetLogLevels(logLevel)
+
 	log.Infof("Loaded %d wallets", mw.LoadedWalletsCount())
 
 	return mw, nil
@@ -206,6 +209,14 @@ func (mw *MultiWallet) RemoveStartupPassphrase(oldPassphrase []byte) error {
 	mw.DeleteUserConfigValueForKey(startupSecurityTypeConfigKey)
 
 	return nil
+}
+
+func (mw *MultiWallet) IsStartupSecuritySet() bool {
+	return mw.ReadBoolConfigValueForKey(isStartupSecuritySetConfigKey, false)
+}
+
+func (mw *MultiWallet) StartupSecurityType() int32 {
+	return mw.ReadInt32ConfigValueForKey(startupSecurityTypeConfigKey, PassphraseTypePass)
 }
 
 func (mw *MultiWallet) OpenWallets(startupPassphrase []byte) error {
