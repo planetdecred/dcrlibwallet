@@ -10,7 +10,6 @@ import (
 	"github.com/decred/dcrd/chaincfg/v2"
 	"github.com/decred/dcrwallet/errors/v2"
 	w "github.com/decred/dcrwallet/wallet/v3"
-	"github.com/decred/dcrwallet/wallet/v3/txrules"
 	"github.com/decred/dcrwallet/walletseed"
 	"github.com/raedahgroup/dcrlibwallet/internal/loader"
 	"github.com/raedahgroup/dcrlibwallet/txindex"
@@ -56,18 +55,7 @@ func (wallet *Wallet) prepare(rootDir string, chainParams *chaincfg.Params) (err
 	}
 
 	// init loader
-	defaultFeePerKb := txrules.DefaultRelayFeePerKb.ToCoin()
-	stakeOptions := &loader.StakeOptions{
-		VotingEnabled: false,
-		AddressReuse:  false,
-		VotingAddress: nil,
-		TicketFee:     defaultFeePerKb,
-	}
-	wallet.loader = loader.NewLoader(wallet.chainParams, wallet.dataDir, stakeOptions, 20, false,
-		defaultFeePerKb, w.DefaultAccountGapLimit, false)
-	if wallet.DbDriver != "" {
-		wallet.loader.SetDatabaseDriver(wallet.DbDriver)
-	}
+	wallet.loader = initWalletLoader(wallet.chainParams, wallet.dataDir, wallet.DbDriver)
 
 	// init cancelFuncs slice to hold cancel functions for long running
 	// operations and start go routine to listen for shutdown signal

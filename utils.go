@@ -12,10 +12,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/decred/dcrd/chaincfg/v2"
 	"github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/dcrd/hdkeychain/v2"
 	"github.com/decred/dcrwallet/errors/v2"
+	"github.com/decred/dcrwallet/wallet/v3"
+	"github.com/decred/dcrwallet/wallet/v3/txrules"
 	"github.com/decred/dcrwallet/walletseed"
+	"github.com/raedahgroup/dcrlibwallet/internal/loader"
 )
 
 const (
@@ -226,4 +230,30 @@ func fileExists(filePath string) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+func moveFile(sourcePath, destinationPath string) error {
+	if exists, _ := fileExists(sourcePath); exists {
+		return os.Rename(sourcePath, destinationPath)
+	}
+	return nil
+}
+
+func initWalletLoader(chainParams *chaincfg.Params, walletDataDir, walletDbDriver string) *loader.Loader {
+	defaultFeePerKb := txrules.DefaultRelayFeePerKb.ToCoin()
+	stakeOptions := &loader.StakeOptions{
+		VotingEnabled: false,
+		AddressReuse:  false,
+		VotingAddress: nil,
+		TicketFee:     defaultFeePerKb,
+	}
+
+	walletLoader := loader.NewLoader(chainParams, walletDataDir, stakeOptions, 20, false,
+		defaultFeePerKb, wallet.DefaultAccountGapLimit, false)
+
+	if walletDbDriver != "" {
+		walletLoader.SetDatabaseDriver(walletDbDriver)
+	}
+
+	return walletLoader
 }

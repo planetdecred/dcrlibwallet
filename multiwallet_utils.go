@@ -1,8 +1,11 @@
 package dcrlibwallet
 
 import (
+	"context"
+
 	"github.com/asdine/storm"
 	"github.com/decred/dcrwallet/errors/v2"
+	w "github.com/decred/dcrwallet/wallet/v3"
 	"github.com/raedahgroup/dcrlibwallet/spv"
 )
 
@@ -35,6 +38,32 @@ func (mw *MultiWallet) batchDbTransaction(dbOp func(node storm.Node) error) (err
 	err = dbOp(dbTx)
 	panicked = false
 	return err
+}
+
+func (mw *MultiWallet) loadWalletTemporarily(ctx context.Context, walletDataDir, walletPublicPass string,
+	onLoaded func(*w.Wallet) error) error {
+
+	if walletPublicPass == "" {
+		walletPublicPass = w.InsecurePubPassphrase
+	}
+
+	// initialize the wallet loader
+	walletLoader := initWalletLoader(mw.chainParams, walletDataDir, mw.dbDriver)
+
+	// open the wallet to get ready for temporary use
+	wallet, err := walletLoader.OpenExistingWallet(ctx, []byte(walletPublicPass))
+	if err != nil {
+		return err
+	}
+
+	// unload wallet after temporary use
+	defer walletLoader.UnloadWallet()
+
+	if onLoaded != nil {
+		return onLoaded(wallet)
+	}
+
+	return nil
 }
 
 func (mw *MultiWallet) markWalletAsDiscoveredAccounts(walletID int) error {
