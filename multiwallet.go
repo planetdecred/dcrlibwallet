@@ -301,6 +301,11 @@ func (mw *MultiWallet) RestoreWallet(seedMnemonic, privatePassphrase string, pri
 	}
 
 	return mw.saveNewWallet(wallet, func() error {
+		err := wallet.prepare(mw.rootDir, mw.chainParams)
+		if err != nil {
+			return err
+		}
+
 		return wallet.createWallet(privatePassphrase, seedMnemonic)
 	})
 }
