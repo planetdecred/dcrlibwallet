@@ -212,6 +212,10 @@ func roundUp(n float64) int32 {
 	return int32(math.Round(n))
 }
 
+func WalletUniqueConfigKey(walletID int, key string) string {
+	return fmt.Sprintf("%d%s", walletID, key)
+}
+
 func WalletExistsAt(directory string) bool {
 	walletDbFilePath := filepath.Join(directory, walletDbName)
 	exists, err := fileExists(walletDbFilePath)

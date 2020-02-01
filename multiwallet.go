@@ -72,8 +72,21 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 		return nil, err
 	}
 
+	mw := &MultiWallet{
+		dbDriver:    dbDriver,
+		rootDir:     rootDir,
+		db:          walletsDb,
+		chainParams: chainParams,
+		wallets:     make(map[int]*Wallet),
+		syncData: &syncData{
+			syncCanceled:          make(chan bool),
+			syncProgressListeners: make(map[string]SyncProgressListener),
+		},
+		txAndBlockNotificationListeners: make(map[string]TxAndBlockNotificationListener),
+	}
+
 	// read saved wallets info from db and initialize wallets
-	query := walletsDb.Select(q.True()).OrderBy("ID")
+	query := mw.db.Select(q.True()).OrderBy("ID")
 	var wallets []*Wallet
 	err = query.Find(&wallets)
 	if err != nil && err != storm.ErrNotFound {
@@ -81,26 +94,12 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 	}
 
 	// prepare the wallets loaded from db for use
-	walletsMap := make(map[int]*Wallet)
 	for _, wallet := range wallets {
-		err = wallet.prepare(rootDir, chainParams)
+		err = wallet.prepare(rootDir, chainParams, mw.walletConfigSetFn(wallet.ID), mw.walletConfigReadFn(wallet.ID))
 		if err != nil {
 			return nil, err
 		}
-		walletsMap[wallet.ID] = wallet
-	}
-
-	mw := &MultiWallet{
-		dbDriver:    dbDriver,
-		rootDir:     rootDir,
-		db:          walletsDb,
-		chainParams: chainParams,
-		wallets:     walletsMap,
-		syncData: &syncData{
-			syncCanceled:          make(chan bool),
-			syncProgressListeners: make(map[string]SyncProgressListener),
-		},
-		txAndBlockNotificationListeners: make(map[string]TxAndBlockNotificationListener),
+		mw.wallets[wallet.ID] = wallet
 	}
 
 	mw.listenForShutdown()
@@ -262,7 +261,7 @@ func (mw *MultiWallet) CreateWatchOnlyWallet(walletName, extendedPublicKey strin
 	}
 
 	return mw.saveNewWallet(wallet, func() error {
-		err := wallet.prepare(mw.rootDir, mw.chainParams)
+		err := wallet.prepare(mw.rootDir, mw.chainParams, mw.walletConfigSetFn(wallet.ID), mw.walletConfigReadFn(wallet.ID))
 		if err != nil {
 			return err
 		}
@@ -284,7 +283,7 @@ func (mw *MultiWallet) CreateNewWallet(privatePassphrase string, privatePassphra
 	}
 
 	return mw.saveNewWallet(wallet, func() error {
-		err := wallet.prepare(mw.rootDir, mw.chainParams)
+		err := wallet.prepare(mw.rootDir, mw.chainParams, mw.walletConfigSetFn(wallet.ID), mw.walletConfigReadFn(wallet.ID))
 		if err != nil {
 			return err
 		}
@@ -301,7 +300,7 @@ func (mw *MultiWallet) RestoreWallet(seedMnemonic, privatePassphrase string, pri
 	}
 
 	return mw.saveNewWallet(wallet, func() error {
-		err := wallet.prepare(mw.rootDir, mw.chainParams)
+		err := wallet.prepare(mw.rootDir, mw.chainParams, mw.walletConfigSetFn(wallet.ID), mw.walletConfigReadFn(wallet.ID))
 		if err != nil {
 			return err
 		}
@@ -349,7 +348,7 @@ func (mw *MultiWallet) LinkExistingWallet(walletDataDir, originalPubPass string,
 
 		// prepare the wallet for use and open it
 		err := (func() error {
-			err := wallet.prepare(mw.rootDir, mw.chainParams)
+			err := wallet.prepare(mw.rootDir, mw.chainParams, mw.walletConfigSetFn(wallet.ID), mw.walletConfigReadFn(wallet.ID))
 			if err != nil {
 				return err
 			}

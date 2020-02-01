@@ -16,14 +16,13 @@ import (
 )
 
 type Wallet struct {
-	ID                          int    `storm:"id,increment"`
-	Name                        string `storm:"unique"`
-	DbDriver                    string
-	Seed                        string
-	IsRestored                  bool
-	HasDiscoveredAccounts       bool
-	PrivatePassphraseType       int32
-	IncomingTxNotificationsPref string
+	ID                    int    `storm:"id,increment"`
+	Name                  string `storm:"unique"`
+	DbDriver              string
+	Seed                  string
+	IsRestored            bool
+	HasDiscoveredAccounts bool
+	PrivatePassphraseType int32
 
 	internal    *w.Wallet
 	chainParams *chaincfg.Params
@@ -37,14 +36,29 @@ type Wallet struct {
 
 	shuttingDown chan bool
 	cancelFuncs  []context.CancelFunc
+
+	// setUserConfigValue saves the provided key-value pair to a config database.
+	// This function is ideally assigned when the `wallet.prepare` method is
+	// called from a MultiWallet instance.
+	setUserConfigValue configSaveFn
+
+	// readUserConfigValue returns the previously saved value for the provided
+	// key from a config database. Returns nil if the key wasn't previously set.
+	// This function is ideally assigned when the `wallet.prepare` method is
+	// called from a MultiWallet instance.
+	readUserConfigValue configReadFn
 }
 
 // prepare gets a wallet ready for use by opening the transactions index database
 // and initializing the wallet loader which can be used subsequently to create,
 // load and unload the wallet.
-func (wallet *Wallet) prepare(rootDir string, chainParams *chaincfg.Params) (err error) {
+func (wallet *Wallet) prepare(rootDir string, chainParams *chaincfg.Params,
+	setUserConfigValueFn configSaveFn, readUserConfigValueFn configReadFn) (err error) {
+
 	wallet.chainParams = chainParams
 	wallet.dataDir = filepath.Join(rootDir, strconv.Itoa(wallet.ID))
+	wallet.setUserConfigValue = setUserConfigValueFn
+	wallet.readUserConfigValue = readUserConfigValueFn
 
 	// open database for indexing transactions for faster loading
 	txDBPath := filepath.Join(wallet.dataDir, txindex.DbName)
