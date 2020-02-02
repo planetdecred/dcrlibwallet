@@ -201,8 +201,8 @@ func (mw *MultiWallet) ChangeStartupPassphrase(oldPassphrase, newPassphrase []by
 		return err
 	}
 
-	mw.SaveUserConfigValue(isStartupSecuritySetConfigKey, true)
-	mw.SaveUserConfigValue(startupSecurityTypeConfigKey, passphraseType)
+	mw.SaveUserConfigValue(IsStartupSecuritySetConfigKey, true)
+	mw.SaveUserConfigValue(StartupSecurityTypeConfigKey, passphraseType)
 
 	return nil
 }
@@ -218,18 +218,18 @@ func (mw *MultiWallet) RemoveStartupPassphrase(oldPassphrase []byte) error {
 		return err
 	}
 
-	mw.SaveUserConfigValue(isStartupSecuritySetConfigKey, false)
-	mw.DeleteUserConfigValueForKey(startupSecurityTypeConfigKey)
+	mw.SaveUserConfigValue(IsStartupSecuritySetConfigKey, false)
+	mw.DeleteUserConfigValueForKey(StartupSecurityTypeConfigKey)
 
 	return nil
 }
 
 func (mw *MultiWallet) IsStartupSecuritySet() bool {
-	return mw.ReadBoolConfigValueForKey(isStartupSecuritySetConfigKey, false)
+	return mw.ReadBoolConfigValueForKey(IsStartupSecuritySetConfigKey, false)
 }
 
 func (mw *MultiWallet) StartupSecurityType() int32 {
-	return mw.ReadInt32ConfigValueForKey(startupSecurityTypeConfigKey, PassphraseTypePass)
+	return mw.ReadInt32ConfigValueForKey(StartupSecurityTypeConfigKey, PassphraseTypePass)
 }
 
 func (mw *MultiWallet) OpenWallets(startupPassphrase []byte) error {
