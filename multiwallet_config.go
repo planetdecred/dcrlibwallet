@@ -137,9 +137,7 @@ func (mw *MultiWallet) ReadLongConfigValueForKey(key string, defaultValue int64)
 	return
 }
 
-func (mw *MultiWallet) ReadStringConfigValueForKey(key string, defaultValue string) (valueOut string) {
-	if err := mw.ReadUserConfigValue(key, &valueOut); err == storm.ErrNotFound {
-		valueOut = defaultValue
-	}
+func (mw *MultiWallet) ReadStringConfigValueForKey(key string) (valueOut string) {
+	mw.ReadUserConfigValue(key, &valueOut)
 	return
 }

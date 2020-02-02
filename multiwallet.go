@@ -104,7 +104,7 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 
 	mw.listenForShutdown()
 
-	logLevel := mw.ReadStringConfigValueForKey(LogLevelConfigKey, "")
+	logLevel := mw.ReadStringConfigValueForKey(LogLevelConfigKey)
 	SetLogLevels(logLevel)
 
 	log.Infof("Loaded %d wallets", mw.LoadedWalletsCount())
