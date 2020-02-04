@@ -77,6 +77,7 @@ func (mw *MultiWallet) markWalletAsDiscoveredAccounts(walletID int) error {
 		return err
 	}
 
+	log.Infof("Set discovered accounts = true for wallet %d", wallet.ID)
 	wallet.HasDiscoveredAccounts = true
 	err = mw.db.Save(wallet)
 	if err != nil {
