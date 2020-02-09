@@ -53,7 +53,7 @@ func (mw *MultiWallet) loadWalletTemporarily(ctx context.Context, walletDataDir,
 	// open the wallet to get ready for temporary use
 	wallet, err := walletLoader.OpenExistingWallet(ctx, []byte(walletPublicPass))
 	if err != nil {
-		return err
+		return translateError(err)
 	}
 
 	// unload wallet after temporary use

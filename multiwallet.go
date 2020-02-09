@@ -139,20 +139,6 @@ func (mw *MultiWallet) Shutdown() {
 	}
 }
 
-// V1WalletExists checks if a wallet db file exists in `mw.rootDir`
-// as newer version wallets are no longer placed directly inside `mw.rootDir`
-// but in subdirectories instead.
-func (mw *MultiWallet) V1WalletExists() bool {
-	return WalletExistsAt(mw.rootDir)
-}
-
-// MigrateV1Wallet checks if a v1 wallet exists in `mw.rootDir` and
-// links/adds it as an additional database to this multiwallet instance.
-func (mw *MultiWallet) MigrateV1Wallet(originalPubPass string, originalPrivatePassType int32) error {
-	_, err := mw.LinkExistingWallet(mw.rootDir, originalPubPass, originalPrivatePassType)
-	return err
-}
-
 func (mw *MultiWallet) SetStartupPassphrase(passphrase []byte, passphraseType int32) error {
 	return mw.ChangeStartupPassphrase([]byte(""), passphrase, passphraseType)
 }
@@ -429,7 +415,7 @@ func (mw *MultiWallet) saveNewWallet(wallet *Wallet, setupWallet func() error) (
 	})
 
 	if err != nil {
-		return nil, err
+		return nil, translateError(err)
 	}
 
 	mw.wallets[wallet.ID] = wallet
