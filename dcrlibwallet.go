@@ -113,7 +113,7 @@ func newLibWallet(walletDataDir, walletDbDriver string, activeNet *chaincfg.Para
 func (lw *LibWallet) Shutdown() {
 	log.Info("Shutting down dcrlibwallet")
 
-	// Trigger shuttingDown signal to cancel all contexts created with `contextWithShutdownCancel`.
+	// Trigger shuttingDown signal to cancel all contexts created with `lw.shutdownContext()`.
 	lw.shuttingDown <- true
 
 	lw.CancelSync()

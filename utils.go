@@ -46,9 +46,14 @@ func (lw *LibWallet) listenForShutdown() {
 	}()
 }
 
-func (lw *LibWallet) shutdownContext() context.Context {
+func (lw *LibWallet) contextWithShutdownCancel() (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(context.Background())
 	lw.cancelFuncs = append(lw.cancelFuncs, cancel)
+	return ctx, cancel
+}
+
+func (lw *LibWallet) shutdownContext() context.Context {
+	ctx, _ := lw.contextWithShutdownCancel()
 	return ctx
 }
 

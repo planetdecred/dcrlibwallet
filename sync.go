@@ -200,7 +200,7 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 
 	loadedWallet.SetNetworkBackend(syncer)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := lw.contextWithShutdownCancel()
 	lw.cancelSync = cancel
 
 	// syncer.Run uses a wait group to block the thread until sync completes or an error occurs
@@ -383,7 +383,7 @@ func (lw *LibWallet) RescanBlocks() error {
 
 		err = lw.reindexTransactions()
 		if err != nil {
-			log.Errorf("Error clearing saved transactions: %v", err)
+			log.Errorf("Error re-indexing transactions: %v", err)
 		}
 
 		// Trigger sync completed callback.

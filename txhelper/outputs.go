@@ -32,7 +32,7 @@ func MakeTxOutput(destination TransactionDestination, net dcrutil.AddressParams)
 
 	output = &wire.TxOut{
 		Value:    int64(amountInAtom),
-		Version:  addresshelper.ScriptVersion,
+		Version:  addresshelper.DefaultScriptVersion,
 		PkScript: pkScript,
 	}
 	return

@@ -26,7 +26,7 @@ func MakeTxChangeSource(destAddr string, net dcrutil.AddressParams) (*txChangeSo
 	}
 	changeSource := &txChangeSource{
 		script:  pkScript,
-		version: addresshelper.ScriptVersion,
+		version: addresshelper.DefaultScriptVersion,
 	}
 	return changeSource, nil
 }
