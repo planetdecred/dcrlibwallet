@@ -41,10 +41,6 @@ func (mw *MultiWallet) listenForTransactions(walletID int) {
 
 		for _, block := range v.AttachedBlocks {
 			blockHash := block.Header.BlockHash()
-
-			log.Infof("[%d] New Block %d", wallet.ID, block.Header.Height)
-			mw.publishBlockAttached(wallet.ID, int32(block.Header.Height))
-
 			for _, transaction := range block.Transactions {
 				tempTransaction, err := wallet.decodeTransactionWithTxSummary(&transaction, &blockHash)
 				if err != nil {
@@ -57,10 +53,10 @@ func (mw *MultiWallet) listenForTransactions(walletID int) {
 					log.Errorf("[%d] Incoming block replace tx error :%v", wallet.ID, err)
 					return
 				}
-
-				log.Infof("[%d] Confirmed Transaction %s", wallet.ID, tempTransaction.Hash)
 				mw.publishTransactionConfirmed(wallet.ID, transaction.Hash.String(), int32(block.Header.Height))
 			}
+
+			mw.publishBlockAttached(wallet.ID, int32(block.Header.Height))
 		}
 	}
 }
