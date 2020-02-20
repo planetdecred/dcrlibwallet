@@ -2,16 +2,15 @@ package dcrlibwallet
 
 import (
 	"bytes"
-	"context"
 	"time"
 
-	"github.com/decred/dcrd/dcrutil"
-	"github.com/decred/dcrd/txscript"
+	"github.com/decred/dcrd/dcrutil/v2"
+	"github.com/decred/dcrd/txscript/v2"
 	"github.com/decred/dcrd/wire"
-	"github.com/decred/dcrwallet/errors"
-	"github.com/decred/dcrwallet/wallet"
-	"github.com/decred/dcrwallet/wallet/txauthor"
-	"github.com/decred/dcrwallet/wallet/txrules"
+	"github.com/decred/dcrwallet/errors/v2"
+	"github.com/decred/dcrwallet/wallet/v3"
+	"github.com/decred/dcrwallet/wallet/v3/txauthor"
+	"github.com/decred/dcrwallet/wallet/v3/txrules"
 	"github.com/raedahgroup/dcrlibwallet/txhelper"
 )
 
@@ -97,7 +96,7 @@ func (lw *LibWallet) SendTransaction(amount int64, fromAccount int32, toAddress 
 		lock <- time.Time{}
 	}()
 
-	err = lw.wallet.Unlock(privatePassphrase, lock)
+	err = lw.wallet.Unlock(lw.shutdownContext(), privatePassphrase, lock)
 	if err != nil {
 		log.Error(err)
 		return nil, errors.New(ErrInvalidPassphrase)
@@ -105,7 +104,7 @@ func (lw *LibWallet) SendTransaction(amount int64, fromAccount int32, toAddress 
 
 	var additionalPkScripts map[wire.OutPoint][]byte
 
-	invalidSigs, err := lw.wallet.SignTransaction(&tx, txscript.SigHashAll, additionalPkScripts, nil, nil)
+	invalidSigs, err := lw.wallet.SignTransaction(lw.shutdownContext(), &tx, txscript.SigHashAll, additionalPkScripts, nil, nil)
 	if err != nil {
 		log.Error(err)
 		return nil, err
@@ -132,7 +131,7 @@ func (lw *LibWallet) SendTransaction(amount int64, fromAccount int32, toAddress 
 		return nil, err
 	}
 
-	txHash, err := lw.wallet.PublishTransaction(&msgTx, serializedTransaction.Bytes(), n)
+	txHash, err := lw.wallet.PublishTransaction(lw.shutdownContext(), &msgTx, serializedTransaction.Bytes(), n)
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -158,12 +157,12 @@ func (lw *LibWallet) constructTransaction(amount int64, fromAccount int32, toAdd
 
 	if spendAllFundsInAccount {
 		outputSelectionAlgorithm = wallet.OutputSelectionAlgorithmAll
-		changeSource, err = txhelper.MakeTxChangeSource(toAddress)
+		changeSource, err = txhelper.MakeTxChangeSource(toAddress, lw.activeNet)
 	} else {
 		outputSelectionAlgorithm = wallet.OutputSelectionAlgorithmDefault
 		outputs, err = txhelper.MakeTxOutputs([]txhelper.TransactionDestination{
 			{Address: toAddress, Amount: dcrutil.Amount(amount).ToCoin()},
-		})
+		}, lw.activeNet)
 	}
 
 	if err != nil {
@@ -171,7 +170,7 @@ func (lw *LibWallet) constructTransaction(amount int64, fromAccount int32, toAdd
 		return
 	}
 
-	return lw.wallet.NewUnsignedTransaction(outputs, txrules.DefaultRelayFeePerKb, uint32(fromAccount),
+	return lw.wallet.NewUnsignedTransaction(lw.shutdownContext(), outputs, txrules.DefaultRelayFeePerKb, uint32(fromAccount),
 		requiredConfirmations, outputSelectionAlgorithm, changeSource)
 }
 
@@ -180,7 +179,6 @@ func (lw *LibWallet) PublishUnminedTransactions() error {
 	if err != nil {
 		return errors.New(ErrNotConnected)
 	}
-	ctx, _ := lw.contextWithShutdownCancel(context.Background())
-	err = lw.wallet.PublishUnminedTransactions(ctx, netBackend)
+	err = lw.wallet.PublishUnminedTransactions(lw.shutdownContext(), netBackend)
 	return err
 }

@@ -1,8 +1,8 @@
 package dcrlibwallet
 
 import (
-	"github.com/decred/dcrd/dcrutil"
-	"github.com/decred/dcrwallet/wallet"
+	"github.com/decred/dcrd/dcrutil/v2"
+	"github.com/decred/dcrwallet/wallet/v3"
 	"github.com/raedahgroup/dcrlibwallet/addresshelper"
 )
 
@@ -16,16 +16,16 @@ type AddressInfo struct {
 }
 
 func (lw *LibWallet) IsAddressValid(address string) bool {
-	_, err := addresshelper.DecodeForNetwork(address, lw.activeNet.Params)
+	_, err := addresshelper.DecodeForNetwork(address, lw.activeNet)
 	return err == nil
 }
 
 func (lw *LibWallet) HaveAddress(address string) bool {
-	addr, err := addresshelper.DecodeForNetwork(address, lw.activeNet.Params)
+	addr, err := addresshelper.DecodeForNetwork(address, lw.activeNet)
 	if err != nil {
 		return false
 	}
-	have, err := lw.wallet.HaveAddress(addr)
+	have, err := lw.wallet.HaveAddress(lw.shutdownContext(), addr)
 	if err != nil {
 		return false
 	}
@@ -34,16 +34,16 @@ func (lw *LibWallet) HaveAddress(address string) bool {
 }
 
 func (lw *LibWallet) AccountOfAddress(address string) string {
-	addr, err := dcrutil.DecodeAddress(address)
+	addr, err := dcrutil.DecodeAddress(address, lw.activeNet)
 	if err != nil {
 		return err.Error()
 	}
-	info, _ := lw.wallet.AddressInfo(addr)
+	info, _ := lw.wallet.AddressInfo(lw.shutdownContext(), addr)
 	return lw.AccountName(int32(info.Account()))
 }
 
 func (lw *LibWallet) AddressInfo(address string) (*AddressInfo, error) {
-	addr, err := dcrutil.DecodeAddress(address)
+	addr, err := dcrutil.DecodeAddress(address, lw.activeNet)
 	if err != nil {
 		log.Error(err)
 		return nil, err
@@ -53,7 +53,7 @@ func (lw *LibWallet) AddressInfo(address string) (*AddressInfo, error) {
 		Address: address,
 	}
 
-	info, _ := lw.wallet.AddressInfo(addr)
+	info, _ := lw.wallet.AddressInfo(lw.shutdownContext(), addr)
 	if info != nil {
 		addressInfo.IsMine = true
 		addressInfo.AccountNumber = info.Account()
@@ -69,17 +69,17 @@ func (lw *LibWallet) CurrentAddress(account int32) (string, error) {
 		log.Error(err)
 		return "", err
 	}
-	return addr.EncodeAddress(), nil
+	return addr.Address(), nil
 }
 
 func (lw *LibWallet) NextAddress(account int32) (string, error) {
 	var callOpts []wallet.NextAddressCallOption
 	callOpts = append(callOpts, wallet.WithGapPolicyWrap())
 
-	addr, err := lw.wallet.NewExternalAddress(uint32(account), callOpts...)
+	addr, err := lw.wallet.NewExternalAddress(lw.shutdownContext(), uint32(account), callOpts...)
 	if err != nil {
 		log.Error(err)
 		return "", err
 	}
-	return addr.EncodeAddress(), nil
+	return addr.Address(), nil
 }

@@ -4,8 +4,8 @@ import (
 	"math"
 	"time"
 
-	"github.com/decred/dcrwallet/chain"
-	"github.com/decred/dcrwallet/spv"
+	"github.com/decred/dcrwallet/chain/v3"
+	"github.com/decred/dcrwallet/spv/v3"
 )
 
 const (
@@ -38,8 +38,8 @@ func (lw *LibWallet) spvSyncNotificationCallbacks() *spv.Notifications {
 	}
 }
 
-func (lw *LibWallet) generalSyncNotificationCallbacks() *chain.Notifications {
-	return &chain.Notifications{
+func (lw *LibWallet) generalSyncNotificationCallbacks() *chain.Callbacks {
+	return &chain.Callbacks{
 		FetchMissingCFiltersStarted:  func() {},
 		FetchMissingCFiltersProgress: func(missingCFitlersStart, missingCFitlersEnd int32) {},
 		FetchMissingCFiltersFinished: func() {},
@@ -105,7 +105,7 @@ func (lw *LibWallet) fetchHeadersProgress(fetchedHeadersCount int32, lastHeaderT
 	lw.activeSyncData.beginFetchTimeStamp += lw.activeSyncData.totalInactiveSeconds
 	lw.activeSyncData.totalInactiveSeconds = 0
 
-	lw.activeSyncData.totalFetchedHeadersCount += fetchedHeadersCount
+	lw.activeSyncData.totalFetchedHeadersCount = fetchedHeadersCount
 	headersLeftToFetch := lw.estimateBlockHeadersCountAfter(lastHeaderTime)
 	totalHeadersToFetch := lw.activeSyncData.totalFetchedHeadersCount + headersLeftToFetch
 	headersFetchProgress := float64(lw.activeSyncData.totalFetchedHeadersCount) / float64(totalHeadersToFetch)

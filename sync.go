@@ -2,26 +2,20 @@ package dcrlibwallet
 
 import (
 	"context"
+	"math"
 	"net"
 	"strings"
-	"sync"
-
-	"math"
 	"time"
 
 	"github.com/decred/dcrd/addrmgr"
-	"github.com/decred/dcrd/rpcclient"
-	"github.com/decred/dcrwallet/chain"
-	"github.com/decred/dcrwallet/errors"
-	"github.com/decred/dcrwallet/p2p"
-	"github.com/decred/dcrwallet/spv"
-	"github.com/decred/dcrwallet/wallet"
+	"github.com/decred/dcrwallet/chain/v3"
+	"github.com/decred/dcrwallet/errors/v2"
+	"github.com/decred/dcrwallet/p2p/v2"
+	"github.com/decred/dcrwallet/spv/v3"
+	"github.com/decred/dcrwallet/wallet/v3"
 )
 
 type syncData struct {
-	mu        sync.Mutex
-	rpcClient *chain.RPCClient
-
 	syncProgressListeners map[string]SyncProgressListener
 	showLogs              bool
 
@@ -181,7 +175,7 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 	if peerAddresses != "" {
 		addresses := strings.Split(peerAddresses, ";")
 		for _, address := range addresses {
-			peerAddress, err := NormalizeAddress(address, lw.activeNet.Params.DefaultPort)
+			peerAddress, err := NormalizeAddress(address, lw.activeNet.DefaultPort)
 			if err != nil {
 				log.Errorf("SPV peer address invalid: %v", err)
 			} else {
@@ -201,13 +195,12 @@ func (lw *LibWallet) SpvSync(peerAddresses string) error {
 	syncer := spv.NewSyncer(loadedWallet, lp)
 	syncer.SetNotifications(lw.spvSyncNotificationCallbacks())
 	if len(validPeerAddresses) > 0 {
-		syncer.SetPersistantPeers(validPeerAddresses)
+		syncer.SetPersistentPeers(validPeerAddresses)
 	}
 
 	loadedWallet.SetNetworkBackend(syncer)
-	lw.walletLoader.SetNetworkBackend(syncer)
 
-	ctx, cancel := lw.contextWithShutdownCancel(context.Background())
+	ctx, cancel := lw.contextWithShutdownCancel()
 	lw.cancelSync = cancel
 
 	// syncer.Run uses a wait group to block the thread until sync completes or an error occurs
@@ -253,24 +246,22 @@ func (lw *LibWallet) RpcSync(networkAddress string, username string, password st
 		return errors.New(ErrSyncAlreadyInProgress)
 	}
 
-	ctx, cancel := lw.contextWithShutdownCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
 	lw.cancelSync = cancel
-
-	chainClient, err := lw.connectToRpcClient(ctx, networkAddress, username, password, cert)
-	if err != nil {
-		return err
-	}
 
 	// init activeSyncData to be used to hold data used
 	// to calculate sync estimates only during sync
 	lw.initActiveSyncData()
 
-	syncer := chain.NewRPCSyncer(loadedWallet, chainClient)
-	syncer.SetNotifications(lw.generalSyncNotificationCallbacks())
-
-	networkBackend := chain.BackendFromRPCClient(chainClient.Client)
-	lw.walletLoader.SetNetworkBackend(networkBackend)
-	loadedWallet.SetNetworkBackend(networkBackend)
+	syncer := chain.NewSyncer(loadedWallet, &chain.RPCOptions{
+		Address:     networkAddress,
+		DefaultPort: rpcClientDefaultPortForNet(lw.activeNet.Name),
+		User:        username,
+		Pass:        password,
+		CA:          cert,
+		Insecure:    len(cert) == 0,
+	})
+	syncer.SetCallbacks(lw.generalSyncNotificationCallbacks())
 
 	// notify sync progress listeners that connected peer count will not be reported because we're using rpc
 	for _, syncProgressListener := range lw.syncProgressListeners {
@@ -283,7 +274,7 @@ func (lw *LibWallet) RpcSync(networkAddress string, username string, password st
 		defer func() {
 			lw.syncing = false
 		}()
-		err := syncer.Run(ctx, true)
+		err := syncer.Run(ctx)
 		if err != nil {
 			if err == context.Canceled {
 				lw.notifySyncCanceled()
@@ -305,47 +296,6 @@ func (lw *LibWallet) RestartRpcSync(networkAddress string, username string, pass
 	return lw.RpcSync(networkAddress, username, password, cert)
 }
 
-func (lw *LibWallet) connectToRpcClient(ctx context.Context, networkAddress string, username string, password string,
-	cert []byte) (chainClient *chain.RPCClient, err error) {
-
-	lw.mu.Lock()
-	chainClient = lw.rpcClient
-	lw.mu.Unlock()
-
-	// If the rpcClient is already set, you can just use that instead of attempting a new connection.
-	if chainClient != nil {
-		return
-	}
-
-	// rpcClient is not already set, attempt a new connection.
-	networkAddress, err = NormalizeAddress(networkAddress, lw.activeNet.JSONRPCClientPort)
-	if err != nil {
-		return nil, errors.New(ErrInvalidAddress)
-	}
-	chainClient, err = chain.NewRPCClient(lw.activeNet.Params, networkAddress, username, password, cert, len(cert) == 0)
-	if err != nil {
-		return nil, translateError(err)
-	}
-
-	err = chainClient.Start(ctx, false)
-	if err != nil {
-		if err == rpcclient.ErrInvalidAuth {
-			return nil, errors.New(ErrInvalid)
-		}
-		if errors.Match(errors.E(context.Canceled), err) {
-			return nil, errors.New(ErrContextCanceled)
-		}
-		return nil, errors.New(ErrUnavailable)
-	}
-
-	// Set rpcClient so it can be used subsequently without re-connecting to the rpc server.
-	lw.mu.Lock()
-	lw.rpcClient = chainClient
-	lw.mu.Unlock()
-
-	return
-}
-
 func (lw *LibWallet) CancelSync() {
 	if lw.cancelSync != nil {
 		log.Info("Canceling sync. May take a while for sync to fully cancel.")
@@ -365,7 +315,6 @@ func (lw *LibWallet) CancelSync() {
 		return
 	}
 
-	lw.walletLoader.SetNetworkBackend(nil)
 	loadedWallet.SetNetworkBackend(nil)
 }
 
@@ -393,7 +342,8 @@ func (lw *LibWallet) RescanBlocks() error {
 		}()
 
 		lw.rescanning = true
-		ctx, _ := lw.contextWithShutdownCancel(context.Background())
+
+		ctx := lw.shutdownContext()
 
 		progress := make(chan wallet.RescanProgress, 1)
 		go lw.wallet.RescanProgressFromHeight(ctx, netBackend, 0, progress)
@@ -431,6 +381,11 @@ func (lw *LibWallet) RescanBlocks() error {
 			}
 		}
 
+		err = lw.reindexTransactions()
+		if err != nil {
+			log.Errorf("Error re-indexing transactions: %v", err)
+		}
+
 		// Trigger sync completed callback.
 		// todo: probably best to have a dedicated rescan listener
 		// with callbacks for rescanStarted, rescanCompleted, rescanError and rescanCancel
@@ -453,7 +408,7 @@ func (lw *LibWallet) GetBestBlock() int32 {
 		return 0
 	}
 
-	_, height := lw.wallet.MainChainTip()
+	_, height := lw.wallet.MainChainTip(lw.shutdownContext())
 	return height
 }
 
@@ -464,9 +419,9 @@ func (lw *LibWallet) GetBestBlockTimeStamp() int64 {
 		return 0
 	}
 
-	_, height := lw.wallet.MainChainTip()
+	_, height := lw.wallet.MainChainTip(lw.shutdownContext())
 	identifier := wallet.NewBlockIdentifierFromHeight(height)
-	info, err := lw.wallet.BlockInfo(identifier)
+	info, err := lw.wallet.BlockInfo(lw.shutdownContext(), identifier)
 	if err != nil {
 		log.Error(err)
 		return 0

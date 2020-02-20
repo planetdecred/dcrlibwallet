@@ -9,8 +9,8 @@ import (
 	"net"
 	"time"
 
-	"github.com/decred/dcrd/dcrutil"
-	"github.com/decred/dcrd/hdkeychain"
+	"github.com/decred/dcrd/dcrutil/v2"
+	"github.com/decred/dcrd/hdkeychain/v2"
 	"github.com/decred/dcrwallet/walletseed"
 )
 
@@ -29,6 +29,9 @@ const (
 
 	MaxAmountAtom = dcrutil.MaxAmount
 	MaxAmountDcr  = dcrutil.MaxAmount / dcrutil.AtomsPerCoin
+
+	TestnetJSONRPCClientPort = "19109"
+	MainnetJSONRPCClientPort = "9109"
 )
 
 func (lw *LibWallet) listenForShutdown() {
@@ -43,10 +46,15 @@ func (lw *LibWallet) listenForShutdown() {
 	}()
 }
 
-func (lw *LibWallet) contextWithShutdownCancel(ctx context.Context) (context.Context, context.CancelFunc) {
-	ctx, cancel := context.WithCancel(ctx)
+func (lw *LibWallet) contextWithShutdownCancel() (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(context.Background())
 	lw.cancelFuncs = append(lw.cancelFuncs, cancel)
 	return ctx, cancel
+}
+
+func (lw *LibWallet) shutdownContext() context.Context {
+	ctx, _ := lw.contextWithShutdownCancel()
+	return ctx
 }
 
 func NormalizeAddress(addr string, defaultPort string) (string, error) {
@@ -137,4 +145,12 @@ func calculateTotalTimeRemaining(timeRemainingInSeconds int64) string {
 
 func roundUp(n float64) int32 {
 	return int32(math.Round(n))
+}
+
+func rpcClientDefaultPortForNet(netype string) string {
+	if netype == "mainnet" {
+		return MainnetJSONRPCClientPort
+	}
+
+	return TestnetJSONRPCClientPort
 }

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/decred/dcrwallet/errors"
-	"github.com/decred/dcrwallet/wallet"
+	"github.com/decred/dcrwallet/errors/v2"
+	"github.com/decred/dcrwallet/wallet/v3"
 	"github.com/decred/dcrwallet/walletseed"
 )
 
@@ -26,7 +26,7 @@ func (lw *LibWallet) CreateWallet(passphrase string, seedMnemonic string) error 
 		return err
 	}
 
-	w, err := lw.walletLoader.CreateNewWallet(pubPass, privPass, seed)
+	w, err := lw.walletLoader.CreateNewWallet(lw.shutdownContext(), pubPass, privPass, seed)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -38,7 +38,7 @@ func (lw *LibWallet) CreateWallet(passphrase string, seedMnemonic string) error 
 }
 
 func (lw *LibWallet) OpenWallet(pubPass []byte) error {
-	w, err := lw.walletLoader.OpenExistingWallet(pubPass)
+	w, err := lw.walletLoader.OpenExistingWallet(lw.shutdownContext(), pubPass)
 	if err != nil {
 		log.Error(err)
 		return translateError(err)
@@ -63,7 +63,7 @@ func (lw *LibWallet) UnlockWallet(privPass []byte) error {
 		}
 	}()
 
-	err := loadedWallet.Unlock(privPass, nil)
+	err := loadedWallet.Unlock(lw.shutdownContext(), privPass, nil)
 	return err
 }
 
@@ -84,7 +84,7 @@ func (lw *LibWallet) ChangePrivatePassphrase(oldPass []byte, newPass []byte) err
 		}
 	}()
 
-	err := lw.wallet.ChangePrivatePassphrase(oldPass, newPass)
+	err := lw.wallet.ChangePrivatePassphrase(lw.shutdownContext(), oldPass, newPass)
 	if err != nil {
 		return translateError(err)
 	}
@@ -109,7 +109,7 @@ func (lw *LibWallet) ChangePublicPassphrase(oldPass []byte, newPass []byte) erro
 		newPass = []byte(wallet.InsecurePubPassphrase)
 	}
 
-	err := lw.wallet.ChangePublicPassphrase(oldPass, newPass)
+	err := lw.wallet.ChangePublicPassphrase(lw.shutdownContext(), oldPass, newPass)
 	if err != nil {
 		return translateError(err)
 	}
@@ -133,7 +133,7 @@ func (lw *LibWallet) DeleteWallet(privatePassphrase []byte) error {
 		return errors.New(ErrWalletNotLoaded)
 	}
 
-	err := wallet.Unlock(privatePassphrase, nil)
+	err := wallet.Unlock(lw.shutdownContext(), privatePassphrase, nil)
 	if err != nil {
 		return translateError(err)
 	}
