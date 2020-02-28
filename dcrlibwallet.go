@@ -603,6 +603,9 @@ func (lw *LibWallet) RescanBlocks() error {
 		defer func() {
 			lw.rescannning = false
 		}()
+		for _, syncResponse := range lw.syncResponses {
+			syncResponse.OnRescan(0, START)
+		}
 		lw.rescannning = true
 		progress := make(chan wallet.RescanProgress, 1)
 		ctx := shutdownContext()
