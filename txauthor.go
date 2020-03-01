@@ -158,16 +158,27 @@ func (lw *LibWallet) constructTransaction(amount int64, fromAccount int32, toAdd
 	if spendAllFundsInAccount {
 		outputSelectionAlgorithm = wallet.OutputSelectionAlgorithmAll
 		changeSource, err = txhelper.MakeTxChangeSource(toAddress, lw.activeNet)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		outputSelectionAlgorithm = wallet.OutputSelectionAlgorithmDefault
 		outputs, err = txhelper.MakeTxOutputs([]txhelper.TransactionDestination{
 			{Address: toAddress, Amount: dcrutil.Amount(amount).ToCoin()},
 		}, lw.activeNet)
-	}
+		if err != nil {
+			return nil, err
+		}
 
-	if err != nil {
-		log.Error(err)
-		return
+		addr, err := lw.wallet.NewChangeAddress(lw.shutdownContext(), uint32(fromAccount))
+		if err != nil {
+			return nil, err
+		}
+
+		changeSource, err = txhelper.MakeTxChangeSource(addr.Address(), lw.activeNet)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return lw.wallet.NewUnsignedTransaction(lw.shutdownContext(), outputs, txrules.DefaultRelayFeePerKb, uint32(fromAccount),
