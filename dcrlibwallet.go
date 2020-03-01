@@ -32,7 +32,6 @@ import (
 	"github.com/decred/dcrwallet/p2p/v2"
 	"github.com/decred/dcrwallet/spv/v3"
 	"github.com/decred/dcrwallet/wallet/v3"
-	"github.com/decred/dcrwallet/wallet/v3/txauthor"
 	"github.com/decred/dcrwallet/wallet/v3/txrules"
 	"github.com/decred/dcrwallet/walletseed"
 	"github.com/decred/slog"
@@ -57,6 +56,8 @@ type LibWallet struct {
 	activeNet     *chaincfg.Params
 	syncResponses []SpvSyncResponse
 	rescannning   bool
+
+	changeSource *txChangeSource
 }
 
 func NewLibWallet(homeDir string, dbDriver string, netType string) (*LibWallet, error) {
@@ -1053,8 +1054,9 @@ func (lw *LibWallet) SpendableForAccount(account int32, requiredConfirmations in
 }
 
 type txChangeSource struct {
-	version uint16
-	script  []byte
+	srcAccount int32
+	version    uint16
+	script     []byte
 }
 
 func (src *txChangeSource) Script() ([]byte, uint16, error) {
@@ -1065,7 +1067,7 @@ func (src *txChangeSource) ScriptSize() int {
 	return len(src.script)
 }
 
-func makeTxChangeSource(destAddr string, net dcrutil.AddressParams) (*txChangeSource, error) {
+func makeTxChangeSource(sourceAccount int32, destAddr string, net dcrutil.AddressParams) (*txChangeSource, error) {
 	addr, err := dcrutil.DecodeAddress(destAddr, net)
 	if err != nil {
 		return nil, err
@@ -1076,8 +1078,9 @@ func makeTxChangeSource(destAddr string, net dcrutil.AddressParams) (*txChangeSo
 		return nil, err
 	}
 	changeSource := &txChangeSource{
-		script:  pkScript,
-		version: DefaultScriptVersion,
+		srcAccount: sourceAccount,
+		script:     pkScript,
+		version:    DefaultScriptVersion,
 	}
 	return changeSource, nil
 }
@@ -1097,11 +1100,11 @@ func (lw *LibWallet) ConstructTransaction(destAddr string, amount int64, srcAcco
 	// pay output
 	outputs := make([]*wire.TxOut, 0)
 	var algo wallet.OutputSelectionAlgorithm = wallet.OutputSelectionAlgorithmAll
-	var changeSource txauthor.ChangeSource
+	var changeSource *txChangeSource
 
 	if sendAll {
 		// send change to source account
-		changeSource, err = makeTxChangeSource(destAddr, lw.activeNet)
+		changeSource, err = makeTxChangeSource(srcAccount, destAddr, lw.activeNet)
 		if err != nil {
 			log.Error(err)
 			return nil, err
@@ -1115,16 +1118,22 @@ func (lw *LibWallet) ConstructTransaction(destAddr string, amount int64, srcAcco
 		}
 		outputs = append(outputs, output)
 
-		addr, err := lw.wallet.NewChangeAddress(shutdownContext(), uint32(srcAccount))
-		if err != nil {
-			log.Error(err)
-			return nil, err
-		}
+		if lw.changeSource == nil || lw.changeSource.srcAccount != srcAccount {
+			addr, err := lw.wallet.NewChangeAddress(shutdownContext(), uint32(srcAccount))
+			if err != nil {
+				log.Error(err)
+				return nil, err
+			}
 
-		changeSource, err = makeTxChangeSource(addr.Address(), lw.activeNet)
-		if err != nil {
-			log.Error(err)
-			return nil, err
+			changeSource, err = makeTxChangeSource(srcAccount, addr.Address(), lw.activeNet)
+			if err != nil {
+				log.Error(err)
+				return nil, err
+			}
+
+			lw.changeSource = changeSource
+		} else {
+			changeSource = lw.changeSource
 		}
 	}
 
@@ -1188,10 +1197,10 @@ func (lw *LibWallet) SendTransaction(privPass []byte, destAddr string, amount in
 	// pay output
 	outputs := make([]*wire.TxOut, 0)
 	var algo wallet.OutputSelectionAlgorithm = wallet.OutputSelectionAlgorithmAll
-	var changeSource txauthor.ChangeSource
+	var changeSource *txChangeSource
 	if sendAll {
 		// send change to source account
-		changeSource, err = makeTxChangeSource(destAddr, lw.activeNet)
+		changeSource, err = makeTxChangeSource(srcAccount, destAddr, lw.activeNet)
 		if err != nil {
 			log.Error(err)
 			return nil, err
@@ -1205,16 +1214,22 @@ func (lw *LibWallet) SendTransaction(privPass []byte, destAddr string, amount in
 		}
 		outputs = append(outputs, output)
 
-		addr, err := lw.wallet.NewChangeAddress(shutdownContext(), uint32(srcAccount))
-		if err != nil {
-			log.Error(err)
-			return nil, err
-		}
+		if lw.changeSource == nil || lw.changeSource.srcAccount != srcAccount {
+			addr, err := lw.wallet.NewChangeAddress(shutdownContext(), uint32(srcAccount))
+			if err != nil {
+				log.Error(err)
+				return nil, err
+			}
 
-		changeSource, err = makeTxChangeSource(addr.Address(), lw.activeNet)
-		if err != nil {
-			log.Error(err)
-			return nil, err
+			changeSource, err = makeTxChangeSource(srcAccount, addr.Address(), lw.activeNet)
+			if err != nil {
+				log.Error(err)
+				return nil, err
+			}
+
+			lw.changeSource = changeSource
+		} else {
+			changeSource = lw.changeSource
 		}
 	}
 
@@ -1290,6 +1305,8 @@ func (lw *LibWallet) SendTransaction(privPass []byte, destAddr string, amount in
 	if err != nil {
 		return nil, translateError(err)
 	}
+
+	lw.changeSource = nil
 	return txHash[:], nil
 }
 
