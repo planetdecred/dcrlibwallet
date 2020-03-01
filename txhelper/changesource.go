@@ -6,27 +6,29 @@ import (
 )
 
 // implements Script() and ScriptSize() functions of txauthor.ChangeSource
-type txChangeSource struct {
-	version uint16
-	script  []byte
+type TxChangeSource struct {
+	SrcAccount int32
+	version    uint16
+	script     []byte
 }
 
-func (src *txChangeSource) Script() ([]byte, uint16, error) {
+func (src *TxChangeSource) Script() ([]byte, uint16, error) {
 	return src.script, src.version, nil
 }
 
-func (src *txChangeSource) ScriptSize() int {
+func (src *TxChangeSource) ScriptSize() int {
 	return len(src.script)
 }
 
-func MakeTxChangeSource(destAddr string, net dcrutil.AddressParams) (*txChangeSource, error) {
+func MakeTxChangeSource(srcAccount int32, destAddr string, net dcrutil.AddressParams) (*TxChangeSource, error) {
 	pkScript, err := addresshelper.PkScript(destAddr, net)
 	if err != nil {
 		return nil, err
 	}
-	changeSource := &txChangeSource{
-		script:  pkScript,
-		version: addresshelper.DefaultScriptVersion,
+	changeSource := &TxChangeSource{
+		SrcAccount: srcAccount,
+		script:     pkScript,
+		version:    addresshelper.DefaultScriptVersion,
 	}
 	return changeSource, nil
 }

@@ -153,11 +153,11 @@ func (lw *LibWallet) constructTransaction(amount int64, fromAccount int32, toAdd
 	// If spendAllFundsInAccount == false, `outputs` will contain destination address and amount to send.
 	// Else, the destination address will be used to make a `changeSource`.
 	var outputs []*wire.TxOut
-	var changeSource txauthor.ChangeSource
+	var changeSource *txhelper.TxChangeSource
 
 	if spendAllFundsInAccount {
 		outputSelectionAlgorithm = wallet.OutputSelectionAlgorithmAll
-		changeSource, err = txhelper.MakeTxChangeSource(toAddress, lw.activeNet)
+		changeSource, err = txhelper.MakeTxChangeSource(fromAccount, toAddress, lw.activeNet)
 		if err != nil {
 			return nil, err
 		}
@@ -170,14 +170,18 @@ func (lw *LibWallet) constructTransaction(amount int64, fromAccount int32, toAdd
 			return nil, err
 		}
 
-		addr, err := lw.wallet.NewChangeAddress(lw.shutdownContext(), uint32(fromAccount))
-		if err != nil {
-			return nil, err
-		}
+		if lw.changeSource == nil || lw.changeSource.SrcAccount != fromAccount {
+			addr, err := lw.wallet.NewChangeAddress(lw.shutdownContext(), uint32(fromAccount))
+			if err != nil {
+				return nil, err
+			}
 
-		changeSource, err = txhelper.MakeTxChangeSource(addr.Address(), lw.activeNet)
-		if err != nil {
-			return nil, err
+			changeSource, err = txhelper.MakeTxChangeSource(fromAccount, addr.Address(), lw.activeNet)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			changeSource = lw.changeSource
 		}
 	}
 

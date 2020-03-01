@@ -15,6 +15,7 @@ import (
 	"github.com/decred/dcrwallet/wallet/v3"
 	"github.com/decred/dcrwallet/wallet/v3/txrules"
 	"github.com/raedahgroup/dcrlibwallet/internal/loader"
+	"github.com/raedahgroup/dcrlibwallet/txhelper"
 	"github.com/raedahgroup/dcrlibwallet/utils"
 	bolt "go.etcd.io/bbolt"
 )
@@ -33,6 +34,8 @@ type LibWallet struct {
 	wallet        *wallet.Wallet
 	txDB          *storm.DB
 	*syncData
+
+	changeSource *txhelper.TxChangeSource
 
 	shuttingDown chan bool
 	cancelFuncs  []context.CancelFunc
