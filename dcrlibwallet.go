@@ -1098,7 +1098,15 @@ func (lw *LibWallet) ConstructTransaction(destAddr string, amount int64, srcAcco
 	outputs := make([]*wire.TxOut, 0)
 	var algo wallet.OutputSelectionAlgorithm = wallet.OutputSelectionAlgorithmAll
 	var changeSource txauthor.ChangeSource
-	if !sendAll {
+
+	if sendAll {
+		// send change to source account
+		changeSource, err = makeTxChangeSource(destAddr, lw.activeNet)
+		if err != nil {
+			log.Error(err)
+			return nil, err
+		}
+	} else {
 		algo = wallet.OutputSelectionAlgorithmDefault
 		output := &wire.TxOut{
 			Value:    amount,
@@ -1106,16 +1114,22 @@ func (lw *LibWallet) ConstructTransaction(destAddr string, amount int64, srcAcco
 			PkScript: pkScript,
 		}
 		outputs = append(outputs, output)
-	} else {
-		changeSource, err = makeTxChangeSource(destAddr, lw.activeNet)
+
+		addr, err := lw.wallet.NewChangeAddress(shutdownContext(), uint32(srcAccount))
+		if err != nil {
+			log.Error(err)
+			return nil, err
+		}
+
+		changeSource, err = makeTxChangeSource(addr.Address(), lw.activeNet)
 		if err != nil {
 			log.Error(err)
 			return nil, err
 		}
 	}
-	feePerKb := txrules.DefaultRelayFeePerKb
 
 	// create tx
+	feePerKb := txrules.DefaultRelayFeePerKb
 	tx, err := lw.wallet.NewUnsignedTransaction(shutdownContext(), outputs, feePerKb, uint32(srcAccount),
 		requiredConfirmations, algo, changeSource)
 	if err != nil {
@@ -1175,7 +1189,14 @@ func (lw *LibWallet) SendTransaction(privPass []byte, destAddr string, amount in
 	outputs := make([]*wire.TxOut, 0)
 	var algo wallet.OutputSelectionAlgorithm = wallet.OutputSelectionAlgorithmAll
 	var changeSource txauthor.ChangeSource
-	if !sendAll {
+	if sendAll {
+		// send change to source account
+		changeSource, err = makeTxChangeSource(destAddr, lw.activeNet)
+		if err != nil {
+			log.Error(err)
+			return nil, err
+		}
+	} else {
 		algo = wallet.OutputSelectionAlgorithmDefault
 		output := &wire.TxOut{
 			Value:    amount,
@@ -1183,8 +1204,14 @@ func (lw *LibWallet) SendTransaction(privPass []byte, destAddr string, amount in
 			PkScript: pkScript,
 		}
 		outputs = append(outputs, output)
-	} else {
-		changeSource, err = makeTxChangeSource(destAddr, lw.activeNet)
+
+		addr, err := lw.wallet.NewChangeAddress(shutdownContext(), uint32(srcAccount))
+		if err != nil {
+			log.Error(err)
+			return nil, err
+		}
+
+		changeSource, err = makeTxChangeSource(addr.Address(), lw.activeNet)
 		if err != nil {
 			log.Error(err)
 			return nil, err
