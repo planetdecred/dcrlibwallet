@@ -16,23 +16,19 @@ import (
 )
 
 type TxAuthor struct {
-	sendFromAccount       uint32
+	sourceWallet          *Wallet
+	sourceAccountNumber   uint32
 	destinations          []TransactionDestination
 	requiredConfirmations int32
-	wallet                *Wallet
 }
 
-func (wallet *Wallet) NewUnsignedTx(sourceAccountNumber, requiredConfirmations int32) *TxAuthor {
+func (mw *MultiWallet) NewUnsignedTx(sourceWallet *Wallet, sourceAccountNumber int32) *TxAuthor {
 	return &TxAuthor{
-		sendFromAccount:       uint32(sourceAccountNumber),
+		sourceWallet:          sourceWallet,
+		sourceAccountNumber:   uint32(sourceAccountNumber),
 		destinations:          make([]TransactionDestination, 0),
-		requiredConfirmations: requiredConfirmations,
-		wallet:                wallet,
+		requiredConfirmations: mw.RequiredConfirmations(),
 	}
-}
-
-func (tx *TxAuthor) SetSourceAccount(accountNumber int32) {
-	tx.sendFromAccount = uint32(accountNumber)
 }
 
 func (tx *TxAuthor) AddSendDestination(address string, atomAmount int64, sendMax bool) {
@@ -54,6 +50,22 @@ func (tx *TxAuthor) UpdateSendDestination(index int, address string, atomAmount 
 func (tx *TxAuthor) RemoveSendDestination(index int) {
 	if len(tx.destinations) > index {
 		tx.destinations = append(tx.destinations[:index], tx.destinations[index+1:]...)
+	}
+}
+
+func (tx *TxAuthor) SendDestination(atIndex int) *TransactionDestination {
+	return &tx.destinations[atIndex]
+}
+
+func (tx *TxAuthor) TotalSendAmount() *Amount {
+	var totalSendAmountAtom int64 = 0
+	for _, destination := range tx.destinations {
+		totalSendAmountAtom += destination.AtomAmount
+	}
+
+	return &Amount{
+		AtomValue: totalSendAmountAtom,
+		DcrValue:  dcrutil.Amount(totalSendAmountAtom).ToCoin(),
 	}
 }
 
@@ -81,7 +93,7 @@ func (tx *TxAuthor) EstimateMaxSendAmount() (*Amount, error) {
 		return nil, err
 	}
 
-	spendableAccountBalance, err := tx.wallet.SpendableForAccount(int32(tx.sendFromAccount), tx.requiredConfirmations)
+	spendableAccountBalance, err := tx.sourceWallet.SpendableForAccount(int32(tx.sourceAccountNumber), tx.requiredConfirmations)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +113,7 @@ func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
 		}
 	}()
 
-	n, err := tx.wallet.internal.NetworkBackend()
+	n, err := tx.sourceWallet.internal.NetworkBackend()
 	if err != nil {
 		log.Error(err)
 		return nil, err
@@ -137,8 +149,8 @@ func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
 		lock <- time.Time{}
 	}()
 
-	ctx := tx.wallet.shutdownContext()
-	err = tx.wallet.internal.Unlock(ctx, privatePassphrase, lock)
+	ctx := tx.sourceWallet.shutdownContext()
+	err = tx.sourceWallet.internal.Unlock(ctx, privatePassphrase, lock)
 	if err != nil {
 		log.Error(err)
 		return nil, errors.New(ErrInvalidPassphrase)
@@ -146,7 +158,7 @@ func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
 
 	var additionalPkScripts map[wire.OutPoint][]byte
 
-	invalidSigs, err := tx.wallet.internal.SignTransaction(ctx, &msgTx, txscript.SigHashAll, additionalPkScripts, nil, nil)
+	invalidSigs, err := tx.sourceWallet.internal.SignTransaction(ctx, &msgTx, txscript.SigHashAll, additionalPkScripts, nil, nil)
 	if err != nil {
 		log.Error(err)
 		return nil, err
@@ -172,7 +184,7 @@ func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	txHash, err := tx.wallet.internal.PublishTransaction(ctx, &msgTx, serializedTransaction.Bytes(), n)
+	txHash, err := tx.sourceWallet.internal.PublishTransaction(ctx, &msgTx, serializedTransaction.Bytes(), n)
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -185,7 +197,7 @@ func (tx *TxAuthor) constructTransaction() (*txauthor.AuthoredTx, error) {
 	var outputSelectionAlgorithm w.OutputSelectionAlgorithm = w.OutputSelectionAlgorithmDefault
 	var changeSource txauthor.ChangeSource
 
-	ctx := tx.wallet.shutdownContext()
+	ctx := tx.sourceWallet.shutdownContext()
 
 	for _, destination := range tx.destinations {
 		// validate the amount to send to this destination address
@@ -203,7 +215,7 @@ func (tx *TxAuthor) constructTransaction() (*txauthor.AuthoredTx, error) {
 			outputSelectionAlgorithm = w.OutputSelectionAlgorithmAll
 
 			// Use this destination address to make a changeSource rather than a tx output.
-			changeSource, err = txhelper.MakeTxChangeSource(destination.Address, tx.wallet.chainParams)
+			changeSource, err = txhelper.MakeTxChangeSource(destination.Address, tx.sourceWallet.chainParams)
 			if err != nil {
 				log.Errorf("constructTransaction: error preparing change source: %v", err)
 				return nil, fmt.Errorf("max amount change source error: %v", err)
@@ -211,19 +223,19 @@ func (tx *TxAuthor) constructTransaction() (*txauthor.AuthoredTx, error) {
 
 			continue // do not prepare a tx output for this destination
 		} else {
-			address, err := tx.wallet.internal.NewChangeAddress(ctx, tx.sendFromAccount)
+			address, err := tx.sourceWallet.internal.NewChangeAddress(ctx, tx.sourceAccountNumber)
 			if err != nil {
 				return nil, fmt.Errorf("change address error: %v", err)
 			}
 
-			changeSource, err = txhelper.MakeTxChangeSource(address.String(), tx.wallet.chainParams)
+			changeSource, err = txhelper.MakeTxChangeSource(address.String(), tx.sourceWallet.chainParams)
 			if err != nil {
 				log.Errorf("constructTransaction: error preparing change source: %v", err)
 				return nil, fmt.Errorf("change source error: %v", err)
 			}
 		}
 
-		output, err := txhelper.MakeTxOutput(destination.Address, destination.AtomAmount, tx.wallet.chainParams)
+		output, err := txhelper.MakeTxOutput(destination.Address, destination.AtomAmount, tx.sourceWallet.chainParams)
 		if err != nil {
 			log.Errorf("constructTransaction: error preparing tx output: %v", err)
 			return nil, fmt.Errorf("make tx output error: %v", err)
@@ -232,6 +244,6 @@ func (tx *TxAuthor) constructTransaction() (*txauthor.AuthoredTx, error) {
 		outputs = append(outputs, output)
 	}
 
-	return tx.wallet.internal.NewUnsignedTransaction(ctx, outputs, txrules.DefaultRelayFeePerKb, tx.sendFromAccount,
+	return tx.sourceWallet.internal.NewUnsignedTransaction(ctx, outputs, txrules.DefaultRelayFeePerKb, tx.sourceAccountNumber,
 		tx.requiredConfirmations, outputSelectionAlgorithm, changeSource)
 }
