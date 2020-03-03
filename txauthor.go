@@ -19,7 +19,6 @@ type TxAuthor struct {
 	sourceWallet          *Wallet
 	sourceAccountNumber   uint32
 	destinations          []TransactionDestination
-	requiredConfirmations int32
 }
 
 func (mw *MultiWallet) NewUnsignedTx(sourceWallet *Wallet, sourceAccountNumber int32) *TxAuthor {
@@ -27,7 +26,6 @@ func (mw *MultiWallet) NewUnsignedTx(sourceWallet *Wallet, sourceAccountNumber i
 		sourceWallet:          sourceWallet,
 		sourceAccountNumber:   uint32(sourceAccountNumber),
 		destinations:          make([]TransactionDestination, 0),
-		requiredConfirmations: mw.RequiredConfirmations(),
 	}
 }
 
@@ -93,7 +91,7 @@ func (tx *TxAuthor) EstimateMaxSendAmount() (*Amount, error) {
 		return nil, err
 	}
 
-	spendableAccountBalance, err := tx.sourceWallet.SpendableForAccount(int32(tx.sourceAccountNumber), tx.requiredConfirmations)
+	spendableAccountBalance, err := tx.sourceWallet.SpendableForAccount(int32(tx.sourceAccountNumber))
 	if err != nil {
 		return nil, err
 	}
@@ -244,6 +242,7 @@ func (tx *TxAuthor) constructTransaction() (*txauthor.AuthoredTx, error) {
 		outputs = append(outputs, output)
 	}
 
+	requiredConfirmations := tx.sourceWallet.RequiredConfirmations()
 	return tx.sourceWallet.internal.NewUnsignedTransaction(ctx, outputs, txrules.DefaultRelayFeePerKb, tx.sourceAccountNumber,
-		tx.requiredConfirmations, outputSelectionAlgorithm, changeSource)
+		requiredConfirmations, outputSelectionAlgorithm, changeSource)
 }
