@@ -16,16 +16,16 @@ import (
 )
 
 type TxAuthor struct {
-	sourceWallet          *Wallet
-	sourceAccountNumber   uint32
-	destinations          []TransactionDestination
+	sourceWallet        *Wallet
+	sourceAccountNumber uint32
+	destinations        []TransactionDestination
 }
 
 func (mw *MultiWallet) NewUnsignedTx(sourceWallet *Wallet, sourceAccountNumber int32) *TxAuthor {
 	return &TxAuthor{
-		sourceWallet:          sourceWallet,
-		sourceAccountNumber:   uint32(sourceAccountNumber),
-		destinations:          make([]TransactionDestination, 0),
+		sourceWallet:        sourceWallet,
+		sourceAccountNumber: uint32(sourceAccountNumber),
+		destinations:        make([]TransactionDestination, 0),
 	}
 }
 
