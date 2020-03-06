@@ -19,11 +19,14 @@ type AddressInfo struct {
 	AccountName   string
 }
 
+// IsAddressValid decodes the string coding of an address and
+// returns whether the network param is valid or not
 func (wallet *Wallet) IsAddressValid(address string) bool {
 	_, err := dcrutil.DecodeAddress(address, wallet.chainParams)
 	return err == nil
 }
 
+//HaveAddress returns whether or not wallet is the owner of the address.
 func (wallet *Wallet) HaveAddress(address string) bool {
 	addr, err := dcrutil.DecodeAddress(address, wallet.chainParams)
 	if err != nil {
@@ -38,6 +41,8 @@ func (wallet *Wallet) HaveAddress(address string) bool {
 	return have
 }
 
+//AccountOfAddress returns a detailed information of an
+// account belonging to a wallet address.
 func (wallet *Wallet) AccountOfAddress(address string) string {
 	addr, err := dcrutil.DecodeAddress(address, wallet.chainParams)
 	if err != nil {
@@ -48,6 +53,8 @@ func (wallet *Wallet) AccountOfAddress(address string) string {
 	return wallet.AccountName(int32(info.Account()))
 }
 
+//AddressInfo returns information for an address such as
+//the address, account number and name of the account.
 func (wallet *Wallet) AddressInfo(address string) (*AddressInfo, error) {
 	addr, err := dcrutil.DecodeAddress(address, wallet.chainParams)
 	if err != nil {
@@ -69,6 +76,8 @@ func (wallet *Wallet) AddressInfo(address string) (*AddressInfo, error) {
 	return addressInfo, nil
 }
 
+//CurrentAddress returns the string encoding of the
+// most recent payment address.
 func (wallet *Wallet) CurrentAddress(account int32) (string, error) {
 	if wallet.IsRestored && !wallet.HasDiscoveredAccounts {
 		return "", errors.E(ErrAddressDiscoveryNotDone)
@@ -82,6 +91,7 @@ func (wallet *Wallet) CurrentAddress(account int32) (string, error) {
 	return addr.Address(), nil
 }
 
+//NextAddress returns the string encoding  an external address.
 func (wallet *Wallet) NextAddress(account int32) (string, error) {
 	if wallet.IsRestored && !wallet.HasDiscoveredAccounts {
 		return "", errors.E(ErrAddressDiscoveryNotDone)
@@ -95,6 +105,7 @@ func (wallet *Wallet) NextAddress(account int32) (string, error) {
 	return addr.Address(), nil
 }
 
+//AddressPubKey returns the public key of an address in wallet.
 func (wallet *Wallet) AddressPubKey(address string) (string, error) {
 	addr, err := dcrutil.DecodeAddress(address, wallet.chainParams)
 	if err != nil {
