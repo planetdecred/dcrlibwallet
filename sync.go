@@ -90,6 +90,8 @@ func (mw *MultiWallet) initActiveSyncData() {
 	mw.syncData.mu.Unlock()
 }
 
+//IsSyncProgressListenerRegisteredFor checks for and returns a value that checks
+// whether or not a progress listener was set for the wallet syncing.
 func (mw *MultiWallet) IsSyncProgressListenerRegisteredFor(uniqueIdentifier string) bool {
 	mw.syncData.mu.RLock()
 	_, exists := mw.syncData.syncProgressListeners[uniqueIdentifier]
@@ -97,6 +99,8 @@ func (mw *MultiWallet) IsSyncProgressListenerRegisteredFor(uniqueIdentifier stri
 	return exists
 }
 
+//AddSyncProgressListener checks and sets a new progress listener if there is
+// no existing progress listener for wallet syncing.
 func (mw *MultiWallet) AddSyncProgressListener(syncProgressListener SyncProgressListener, uniqueIdentifier string) error {
 	if mw.IsSyncProgressListenerRegisteredFor(uniqueIdentifier) {
 		return errors.New(ErrListenerAlreadyExist)
@@ -110,6 +114,7 @@ func (mw *MultiWallet) AddSyncProgressListener(syncProgressListener SyncProgress
 	return mw.PublishLastSyncProgress(uniqueIdentifier)
 }
 
+//RemoveSyncProgressListener deletes an existing progress listener for wallet syncing.
 func (mw *MultiWallet) RemoveSyncProgressListener(uniqueIdentifier string) {
 	mw.syncData.mu.Lock()
 	delete(mw.syncData.syncProgressListeners, uniqueIdentifier)
@@ -128,6 +133,7 @@ func (mw *MultiWallet) syncProgressListeners() []SyncProgressListener {
 	return listeners
 }
 
+//PublishLastSyncProgress fetches and publishes sync and scan data
 func (mw *MultiWallet) PublishLastSyncProgress(uniqueIdentifier string) error {
 	mw.syncData.mu.RLock()
 	defer mw.syncData.mu.RUnlock()
@@ -151,12 +157,14 @@ func (mw *MultiWallet) PublishLastSyncProgress(uniqueIdentifier string) error {
 	return nil
 }
 
+//EnableSyncLogs enables logging of scan logs
 func (mw *MultiWallet) EnableSyncLogs() {
 	mw.syncData.mu.Lock()
 	mw.syncData.showLogs = true
 	mw.syncData.mu.Unlock()
 }
 
+//SyncInactiveForPeriod accounts for inactive sync period
 func (mw *MultiWallet) SyncInactiveForPeriod(totalInactiveSeconds int64) {
 	mw.syncData.mu.Lock()
 	defer mw.syncData.mu.Unlock()
@@ -173,6 +181,7 @@ func (mw *MultiWallet) SyncInactiveForPeriod(totalInactiveSeconds int64) {
 	}
 }
 
+//SpvSync sets a wallet syncing for spv peer to peer connections
 func (mw *MultiWallet) SpvSync() error {
 	// prevent an attempt to sync when the previous syncing has not been canceled
 	if mw.IsSyncing() || mw.IsSynced() {
@@ -258,6 +267,7 @@ func (mw *MultiWallet) SpvSync() error {
 	return nil
 }
 
+//RestartSpvSync sends a request to restart SpvSync
 func (mw *MultiWallet) RestartSpvSync() error {
 	mw.syncData.mu.Lock()
 	mw.syncData.restartSyncRequested = true
@@ -267,6 +277,7 @@ func (mw *MultiWallet) RestartSpvSync() error {
 	return mw.SpvSync()
 }
 
+//CancelSync cancels/stops any active wallet syncing
 func (mw *MultiWallet) CancelSync() {
 	mw.syncData.mu.RLock()
 	cancelSync := mw.syncData.cancelSync
@@ -297,30 +308,38 @@ func (mw *MultiWallet) CancelSync() {
 	}
 }
 
+//IsWaiting returns  whether or not a wallet is waiting to be synced
 func (wallet *Wallet) IsWaiting() bool {
 	return wallet.waiting
 }
 
+//IsSynced returns whether or not a wallet has been synced
 func (wallet *Wallet) IsSynced() bool {
 	return wallet.synced
 }
 
+//IsSyncing returns whether or not a wallet is undergoing syncing
 func (wallet *Wallet) IsSyncing() bool {
 	return wallet.syncing
 }
 
+//IsSynced returns the state of a wallet
+// being synced if it has been synced
 func (mw *MultiWallet) IsSynced() bool {
 	mw.syncData.mu.RLock()
 	defer mw.syncData.mu.RUnlock()
 	return mw.syncData.synced
 }
 
+//IsSyncing returns the state of a wallet undergoing syncing,
+//if it is syncing
 func (mw *MultiWallet) IsSyncing() bool {
 	mw.syncData.mu.RLock()
 	defer mw.syncData.mu.RUnlock()
 	return mw.syncData.syncing
 }
 
+//CurrentSyncStage returns the sync stage of the wallet
 func (mw *MultiWallet) CurrentSyncStage() int32 {
 	mw.syncData.mu.RLock()
 	defer mw.syncData.mu.RUnlock()
@@ -331,6 +350,7 @@ func (mw *MultiWallet) CurrentSyncStage() int32 {
 	return InvalidSyncStage
 }
 
+//GeneralSyncProgress returns the total sync progress
 func (mw *MultiWallet) GeneralSyncProgress() *GeneralSyncProgress {
 	mw.syncData.mu.RLock()
 	defer mw.syncData.mu.RUnlock()
@@ -349,12 +369,14 @@ func (mw *MultiWallet) GeneralSyncProgress() *GeneralSyncProgress {
 	return nil
 }
 
+//ConnectedPeers returns the number of connected peers via spv
 func (mw *MultiWallet) ConnectedPeers() int32 {
 	mw.syncData.mu.RLock()
 	defer mw.syncData.mu.RUnlock()
 	return mw.syncData.connectedPeers
 }
 
+//GetBestBlock retrieves the best block height of a loaded wallet
 func (mw *MultiWallet) GetBestBlock() *BlockInfo {
 	var bestBlock int32 = -1
 	var blockInfo *BlockInfo
@@ -373,6 +395,7 @@ func (mw *MultiWallet) GetBestBlock() *BlockInfo {
 	return blockInfo
 }
 
+//GetLowestBlock gets the lowest block height of a loaded wallet
 func (mw *MultiWallet) GetLowestBlock() *BlockInfo {
 	var lowestBlock int32 = -1
 	var blockInfo *BlockInfo
@@ -390,6 +413,7 @@ func (mw *MultiWallet) GetLowestBlock() *BlockInfo {
 	return blockInfo
 }
 
+//GetBestBlock gets the best block height that the wallet is synced to
 func (wallet *Wallet) GetBestBlock() int32 {
 	if wallet.internal == nil {
 		// This method is sometimes called after a wallet is deleted and causes crash.
@@ -401,6 +425,7 @@ func (wallet *Wallet) GetBestBlock() int32 {
 	return height
 }
 
+//GetBestBlockTimeStamp gets the best Timestamp of a block header event
 func (wallet *Wallet) GetBestBlockTimeStamp() int64 {
 	if wallet.internal == nil {
 		// This method is sometimes called after a wallet is deleted and causes crash.
@@ -419,6 +444,7 @@ func (wallet *Wallet) GetBestBlockTimeStamp() int64 {
 	return info.Timestamp
 }
 
+//GetLowestBlockTimestamp gets the lowest Timestamp of a block header event
 func (mw *MultiWallet) GetLowestBlockTimestamp() int64 {
 	var timestamp int64 = -1
 	for _, wallet := range mw.wallets {
