@@ -85,6 +85,7 @@ func (wallet *Wallet) prepare(rootDir string, chainParams *chaincfg.Params,
 	return nil
 }
 
+//Shutdown closes the wallet and transaction db
 func (wallet *Wallet) Shutdown() {
 	// Trigger shuttingDown signal to cancel all contexts created with
 	// `wallet.shutdownContext()` or `wallet.shutdownContextWithCancel()`.
@@ -109,10 +110,12 @@ func (wallet *Wallet) Shutdown() {
 	}
 }
 
+//NetType returns a human-readable identifier for a Network
 func (wallet *Wallet) NetType() string {
 	return wallet.chainParams.Name
 }
 
+//WalletExists returns whether or not a wallet exists at the loaders' db path
 func (wallet *Wallet) WalletExists() (bool, error) {
 	return wallet.loader.WalletExists()
 }
@@ -158,6 +161,7 @@ func (wallet *Wallet) createWatchingOnlyWallet(extendedPublicKey string) error {
 	return nil
 }
 
+//IsWatchingOnlyWallet returns whether or not a wallet is in watching only mode
 func (wallet *Wallet) IsWatchingOnlyWallet() bool {
 	if w, ok := wallet.loader.LoadedWallet(); ok {
 		return w.Manager.WatchingOnly()
@@ -184,6 +188,7 @@ func (wallet *Wallet) WalletOpened() bool {
 	return wallet.internal != nil
 }
 
+//UnlockWallet unlocks the wallet allowing access to private keys
 func (wallet *Wallet) UnlockWallet(privPass []byte) error {
 	loadedWallet, ok := wallet.loader.LoadedWallet()
 	if !ok {
@@ -205,12 +210,14 @@ func (wallet *Wallet) UnlockWallet(privPass []byte) error {
 	return nil
 }
 
+//LockWallet locks the wallet's address manager
 func (wallet *Wallet) LockWallet() {
 	if !wallet.internal.Locked() {
 		wallet.internal.Lock()
 	}
 }
 
+//IsLocked returns whether a wallet is locked
 func (wallet *Wallet) IsLocked() bool {
 	return wallet.internal.Locked()
 }
