@@ -36,6 +36,7 @@ func (wallet *Wallet) StakeInfo() (*w.StakeInfoData, error) {
 	return wallet.internal.StakeInfo(ctx)
 }
 
+//GetTickets returns information about ticket request
 func (wallet *Wallet) GetTickets(startingBlockHash, endingBlockHash []byte, targetCount int32) ([]*TicketInfo, error) {
 	return wallet.getTickets(&GetTicketsRequest{
 		StartingBlockHash: startingBlockHash,
@@ -44,6 +45,8 @@ func (wallet *Wallet) GetTickets(startingBlockHash, endingBlockHash []byte, targ
 	})
 }
 
+//GetTicketsForBlockHeightRange returns information about
+// ticket request used for block height range.
 func (wallet *Wallet) GetTicketsForBlockHeightRange(startHeight, endHeight, targetCount int32) ([]*TicketInfo, error) {
 	return wallet.getTickets(&GetTicketsRequest{
 		StartingBlockHeight: startHeight,
