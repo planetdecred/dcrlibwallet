@@ -463,7 +463,7 @@ func (mw *MultiWallet) RenameWallet(walletID int, newName string) error {
 	return mw.db.Save(wallet) // update WalletName field
 }
 
-//DeleteWallet checks whether or not wallet is syncing, then deletes the wallet with its accompanying Id
+//DeleteWallet checks whether or not wallet is syncing, then deletes teh wallet with its accompanying Id
 func (mw *MultiWallet) DeleteWallet(walletID int, privPass []byte) error {
 	if mw.IsSyncing() {
 		return errors.New(ErrSyncAlreadyInProgress)
@@ -548,7 +548,7 @@ func (mw *MultiWallet) OpenedWalletIDs() string {
 	return string(jsonEncoded)
 }
 
-//OpenedWalletsCount returns the number of opened wallets
+//OpenedWalletsCount returns teh number of opened wallets
 func (mw *MultiWallet) OpenedWalletsCount() int32 {
 	return int32(len(mw.OpenedWalletIDsRaw()))
 }
