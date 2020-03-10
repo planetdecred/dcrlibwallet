@@ -45,6 +45,8 @@ type transaction struct {
 	writable bool
 }
 
+// ReadBucket returns a structure within the
+// database allowed to perform read operations.
 func (tx *transaction) ReadBucket(key []byte) walletdb.ReadBucket {
 	if tx.db.closed {
 		return nil
@@ -52,6 +54,8 @@ func (tx *transaction) ReadBucket(key []byte) walletdb.ReadBucket {
 	return tx.ReadWriteBucket(key)
 }
 
+// ReadWriteBucket returns a structure within the database
+// allowed to perform read and write operations.
 func (tx *transaction) ReadWriteBucket(key []byte) walletdb.ReadWriteBucket {
 	if tx.db.closed {
 		return nil
@@ -69,6 +73,8 @@ func (tx *transaction) ReadWriteBucket(key []byte) walletdb.ReadWriteBucket {
 	return readWriteBucket
 }
 
+// CreateTopLevelBucket creates a new bucket with
+// ability to perform read and write operations.
 func (tx *transaction) CreateTopLevelBucket(key []byte) (walletdb.ReadWriteBucket, error) {
 	if tx.db.closed {
 		return nil, errors.E(errors.Invalid)
@@ -82,6 +88,8 @@ func (tx *transaction) CreateTopLevelBucket(key []byte) (walletdb.ReadWriteBucke
 	return bucket, nil
 }
 
+// DeleteTopLevelBucket removes a bucket (structure within
+// database that allows for read or write operations).
 func (tx *transaction) DeleteTopLevelBucket(key []byte) error {
 	if tx.db.closed {
 		return errors.E(errors.Invalid)
@@ -186,6 +194,7 @@ func (b *Bucket) NestedReadWriteBucket(key []byte) walletdb.ReadWriteBucket {
 	return nestedBucket
 }
 
+// NestedReadBucket returns a
 func (b *Bucket) NestedReadBucket(key []byte) walletdb.ReadBucket {
 	if b.dbTransaction.db.closed {
 		return nil
@@ -293,6 +302,8 @@ func (b *Bucket) Delete(key []byte) error {
 	return convertErr(b.delete(key))
 }
 
+// ReadCursor returns a bucket cursor that can be
+// positioned at the start and end of the bucket.
 func (b *Bucket) ReadCursor() walletdb.ReadCursor {
 	if b.dbTransaction.db.closed {
 		return nil
@@ -589,10 +600,14 @@ func (db *db) beginTx(writable bool) (*transaction, error) {
 	return tran, nil
 }
 
+// BeginReadTx returns a database transaction
+// that can be used for reads.
 func (db *db) BeginReadTx() (walletdb.ReadTx, error) {
 	return db.beginTx(false)
 }
 
+// BeginReadWriteTx returns a database transactions
+// that can be used for reads and writes.
 func (db *db) BeginReadWriteTx() (walletdb.ReadWriteTx, error) {
 	return db.beginTx(true)
 }
