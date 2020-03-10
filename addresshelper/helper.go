@@ -10,6 +10,10 @@ import (
 
 const scriptVersion = 0
 
+
+// PkScript decodes the string encoding of an address
+// and returns an error if process failed and a new
+// script for pay transaction output.
 func PkScript(address string, net dcrutil.AddressParams) ([]byte, error) {
 	addr, err := dcrutil.DecodeAddress(address, net)
 	if err != nil {
@@ -19,6 +23,8 @@ func PkScript(address string, net dcrutil.AddressParams) ([]byte, error) {
 	return txscript.PayToAddrScript(addr)
 }
 
+// PkScriptAddresses returns the type of
+// script and associated addresses.
 func PkScriptAddresses(params *chaincfg.Params, pkScript []byte) ([]string, error) {
 	_, addresses, _, err := txscript.ExtractPkScriptAddrs(scriptVersion, pkScript, params)
 	if err != nil {
