@@ -112,6 +112,7 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 	return mw, nil
 }
 
+// Shutdown closes all opened wallets and database in MultiWallet instance
 func (mw *MultiWallet) Shutdown() {
 	log.Info("Shutting down dcrlibwallet")
 
@@ -139,12 +140,12 @@ func (mw *MultiWallet) Shutdown() {
 	}
 }
 
-//SetStartupPassPhrase sets the passPhrase of a wallet.
+// SetStartupPassPhrase sets the passPhrase of a wallet.
 func (mw *MultiWallet) SetStartupPassphrase(passphrase []byte, passphraseType int32) error {
 	return mw.ChangeStartupPassphrase([]byte(""), passphrase, passphraseType)
 }
 
-//VerifyStartupPassphrase checks for and verifies the passPhrase of a wallet
+// VerifyStartupPassphrase checks for and verifies the passPhrase of a wallet
 // and returns an error respectively.
 func (mw *MultiWallet) VerifyStartupPassphrase(startupPassphrase []byte) error {
 	var startupPassphraseHash []byte
@@ -170,7 +171,7 @@ func (mw *MultiWallet) VerifyStartupPassphrase(startupPassphrase []byte) error {
 	return nil
 }
 
-//ChangeStartupPassPhrase verifies the current passPhrase
+// ChangeStartupPassPhrase verifies the current passPhrase
 // and generates and sets a new one.
 func (mw *MultiWallet) ChangeStartupPassphrase(oldPassphrase, newPassphrase []byte, passphraseType int32) error {
 	if len(newPassphrase) == 0 {
@@ -198,7 +199,7 @@ func (mw *MultiWallet) ChangeStartupPassphrase(oldPassphrase, newPassphrase []by
 	return nil
 }
 
-//RemoveStartupPassphrase verifies the current passPhrase and deletes it.
+// RemoveStartupPassphrase verifies the current passPhrase and deletes it.
 func (mw *MultiWallet) RemoveStartupPassphrase(oldPassphrase []byte) error {
 	err := mw.VerifyStartupPassphrase(oldPassphrase)
 	if err != nil {
@@ -216,17 +217,17 @@ func (mw *MultiWallet) RemoveStartupPassphrase(oldPassphrase []byte) error {
 	return nil
 }
 
-//IsStartupSecuritySet returns whether ot not the startup security is set.
+// IsStartupSecuritySet returns whether ot not the startup security is set.
 func (mw *MultiWallet) IsStartupSecuritySet() bool {
 	return mw.ReadBoolConfigValueForKey(IsStartupSecuritySetConfigKey, false)
 }
 
-//StartupSecurityType returns the type of security used for the startup passPhrase
+// StartupSecurityType returns the type of security used for the startup passPhrase
 func (mw *MultiWallet) StartupSecurityType() int32 {
 	return mw.ReadInt32ConfigValueForKey(StartupSecurityTypeConfigKey, PassphraseTypePass)
 }
 
-//OpenWallets checks whether or not the wallets is syncing,
+// OpenWallets checks whether or not the wallets is syncing,
 // verifies the passPhrase and opens the wallet
 func (mw *MultiWallet) OpenWallets(startupPassphrase []byte) error {
 	if mw.IsSyncing() {
@@ -250,7 +251,7 @@ func (mw *MultiWallet) OpenWallets(startupPassphrase []byte) error {
 	return nil
 }
 
-//CreateWatchOnlyWallet creates a watch-only wallet,
+// CreateWatchOnlyWallet creates a watch-only wallet,
 // without neither a wallet seed nor a private keys.
 func (mw *MultiWallet) CreateWatchOnlyWallet(walletName, extendedPublicKey string) (*Wallet, error) {
 	wallet := &Wallet{
@@ -268,7 +269,7 @@ func (mw *MultiWallet) CreateWatchOnlyWallet(walletName, extendedPublicKey strin
 	})
 }
 
-//CreateNewWallet creates a new wallet with
+// CreateNewWallet creates a new wallet with
 // wallet seed as well as private PassPhrase
 func (mw *MultiWallet) CreateNewWallet(privatePassphrase string, privatePassphraseType int32) (*Wallet, error) {
 	seed, err := GenerateSeed()
@@ -292,7 +293,7 @@ func (mw *MultiWallet) CreateNewWallet(privatePassphrase string, privatePassphra
 	})
 }
 
-//RestoreWallet uses a wallet seed, private passPhrase
+// RestoreWallet uses a wallet seed, private passPhrase
 // to restore a previously existing wallet.
 func (mw *MultiWallet) RestoreWallet(seedMnemonic, privatePassphrase string, privatePassphraseType int32) (*Wallet, error) {
 	wallet := &Wallet{
@@ -441,7 +442,7 @@ func (mw *MultiWallet) saveNewWallet(wallet *Wallet, setupWallet func() error) (
 	return wallet, nil
 }
 
-//RenameWallet checks the newName if it contains an existing name
+// RenameWallet checks the newName if it contains an existing name
 // and returns an updated walletName for the wallet.
 func (mw *MultiWallet) RenameWallet(walletID int, newName string) error {
 	if strings.HasPrefix(newName, "wallet-") {
@@ -463,7 +464,7 @@ func (mw *MultiWallet) RenameWallet(walletID int, newName string) error {
 	return mw.db.Save(wallet) // update WalletName field
 }
 
-//DeleteWallet checks whether or not wallet is syncing, then deletes teh wallet with its accompanying Id
+// DeleteWallet checks whether or not wallet is syncing, then deletes the wallet with its accompanying Id
 func (mw *MultiWallet) DeleteWallet(walletID int, privPass []byte) error {
 	if mw.IsSyncing() {
 		return errors.New(ErrSyncAlreadyInProgress)
@@ -489,7 +490,7 @@ func (mw *MultiWallet) DeleteWallet(walletID int, privPass []byte) error {
 	return nil
 }
 
-//WalletWithID returns wallet with an Id for easy selection
+// WalletWithID returns wallet with an Id for easy selection
 func (mw *MultiWallet) WalletWithID(walletID int) *Wallet {
 	if wallet, ok := mw.wallets[walletID]; ok {
 		return wallet
@@ -497,7 +498,7 @@ func (mw *MultiWallet) WalletWithID(walletID int) *Wallet {
 	return nil
 }
 
-//VerifySeedForWallet checks if a certain wallets' seed is a match.
+// VerifySeedForWallet checks if a certain wallets' seed is a match.
 func (mw *MultiWallet) VerifySeedForWallet(walletID int, seedMnemonic string) error {
 	wallet := mw.WalletWithID(walletID)
 	if wallet == nil {
@@ -512,7 +513,7 @@ func (mw *MultiWallet) VerifySeedForWallet(walletID int, seedMnemonic string) er
 	return errors.New(ErrInvalid)
 }
 
-//NumWalletsNeedingSeedBackup iterates over the available
+// NumWalletsNeedingSeedBackup iterates over the available
 // wallets and checks and returns a list of any needing backups.
 func (mw *MultiWallet) NumWalletsNeedingSeedBackup() int32 {
 	var backupsNeeded int32
@@ -525,12 +526,12 @@ func (mw *MultiWallet) NumWalletsNeedingSeedBackup() int32 {
 	return backupsNeeded
 }
 
-//LoadedWalletsCount returns the number of loaded wallets
+// LoadedWalletsCount returns the number of loaded wallets
 func (mw *MultiWallet) LoadedWalletsCount() int32 {
 	return int32(len(mw.wallets))
 }
 
-//OpenedWalletIDsRaw returns an array of int of walletIDs of wallets opened
+// OpenedWalletIDsRaw returns an array of int of walletIDs of wallets opened
 func (mw *MultiWallet) OpenedWalletIDsRaw() []int {
 	walletIDs := make([]int, 0)
 	for _, wallet := range mw.wallets {
@@ -541,19 +542,19 @@ func (mw *MultiWallet) OpenedWalletIDsRaw() []int {
 	return walletIDs
 }
 
-//OpenedWalletIDs returns a json.marshal of opened walletIDs
+// OpenedWalletIDs returns a json.marshal of opened walletIDs
 func (mw *MultiWallet) OpenedWalletIDs() string {
 	walletIDs := mw.OpenedWalletIDsRaw()
 	jsonEncoded, _ := json.Marshal(&walletIDs)
 	return string(jsonEncoded)
 }
 
-//OpenedWalletsCount returns teh number of opened wallets
+// OpenedWalletsCount returns the number of opened wallets
 func (mw *MultiWallet) OpenedWalletsCount() int32 {
 	return int32(len(mw.OpenedWalletIDsRaw()))
 }
 
-//SyncedWalletsCount returns an int of synced wallets
+// SyncedWalletsCount returns an int of synced wallets
 func (mw *MultiWallet) SyncedWalletsCount() int32 {
 	var syncedWallets int32
 	for _, wallet := range mw.wallets {
@@ -565,7 +566,7 @@ func (mw *MultiWallet) SyncedWalletsCount() int32 {
 	return syncedWallets
 }
 
-//WalletNameExists returns whether or not a chosen walletName exists
+// WalletNameExists returns whether or not a chosen walletName exists
 func (mw *MultiWallet) WalletNameExists(walletName string) (bool, error) {
 	if strings.HasPrefix(walletName, "wallet-") {
 		return false, errors.E(ErrReservedWalletName)
@@ -581,7 +582,7 @@ func (mw *MultiWallet) WalletNameExists(walletName string) (bool, error) {
 	return false, nil
 }
 
-//UnlockWallet unlocks a wallet using the said wallets ID and privatePassPhrase
+// UnlockWallet unlocks a wallet using the said wallets ID and privatePassPhrase
 func (mw *MultiWallet) UnlockWallet(walletID int, privPass []byte) error {
 	wallet := mw.WalletWithID(walletID)
 	if wallet == nil {
@@ -591,7 +592,7 @@ func (mw *MultiWallet) UnlockWallet(walletID int, privPass []byte) error {
 	return wallet.UnlockWallet(privPass)
 }
 
-//ChangePrivatePassphraseForWallet changes the passPhrase for a wallet from old to new.
+// ChangePrivatePassphraseForWallet changes the passPhrase for a wallet from old to new.
 func (mw *MultiWallet) ChangePrivatePassphraseForWallet(walletID int, oldPrivatePassphrase, newPrivatePassphrase []byte, privatePassphraseType int32) error {
 	if privatePassphraseType != PassphraseTypePin && privatePassphraseType != PassphraseTypePass {
 		return errors.New(ErrInvalid)
