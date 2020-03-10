@@ -33,6 +33,8 @@ func (db *DB) SaveOrUpdate(emptyTxPointer, tx interface{}) (overwritten bool, er
 	return
 }
 
+// SaveLastIndexPoint this saves the last index
+// of of block height height achieved.
 func (db *DB) SaveLastIndexPoint(endBlockHeight int32) error {
 	err := db.txDB.Set(TxBucketName, KeyEndBlock, &endBlockHeight)
 	if err != nil {
@@ -41,6 +43,8 @@ func (db *DB) SaveLastIndexPoint(endBlockHeight int32) error {
 	return nil
 }
 
+// ClearSavedTransactions deletes a bucket
+// saved on the transaction database.
 func (db *DB) ClearSavedTransactions(emptyTxPointer interface{}) error {
 	err := db.txDB.Drop(emptyTxPointer)
 	if err != nil {
