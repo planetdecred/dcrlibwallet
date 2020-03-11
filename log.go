@@ -142,12 +142,12 @@ func setLogLevel(subsystemID string, logLevel string) {
 	logger.SetLevel(level)
 }
 
-// Log writes a message to the log using LevelInfo
+// Log writes a message to the log using LevelInfo.
 func Log(m string) {
 	log.Info(m)
 }
 
-// LogT writes a tagged message to the log using LevelInfo
+// LogT writes a tagged message to the log using LevelInfo.
 func LogT(tag, m string) {
 	log.Infof("%s: %s", tag, m)
 }
