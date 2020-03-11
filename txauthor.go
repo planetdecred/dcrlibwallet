@@ -14,6 +14,8 @@ import (
 	"github.com/decred/dcrwallet/wallet/v3/txauthor"
 	"github.com/decred/dcrwallet/wallet/v3/txrules"
 	"github.com/raedahgroup/dcrlibwallet/txhelper"
+	"github.com/raedahgroup/godcr-gio/wallet"
+	"github.com/raedahgroup/godcr/app/walletmediums/dcrlibwallet"
 )
 
 type TxAuthor struct {
@@ -32,11 +34,16 @@ func (mw *MultiWallet) NewUnsignedTx(sourceWallet *Wallet, sourceAccountNumber i
 }
 
 func (tx *TxAuthor) AddSendDestination(address string, atomAmount int64, sendMax bool) {
+	_, err := dcrutil.DecodeAddress(address, tx.sourceWallet.chainParams)
+	if err != nil{
+		return
+	}
 	tx.destinations = append(tx.destinations, TransactionDestination{
 		Address:    address,
 		AtomAmount: atomAmount,
 		SendMax:    sendMax,
 	})
+	return
 }
 
 func (tx *TxAuthor) UpdateSendDestination(index int, address string, atomAmount int64, sendMax bool) {
