@@ -36,7 +36,7 @@ func (wallet *Wallet) StakeInfo() (*w.StakeInfoData, error) {
 	return wallet.internal.StakeInfo(ctx)
 }
 
-//GetTickets returns information about ticket request
+// GetTickets returns information about ticket request.
 func (wallet *Wallet) GetTickets(startingBlockHash, endingBlockHash []byte, targetCount int32) ([]*TicketInfo, error) {
 	return wallet.getTickets(&GetTicketsRequest{
 		StartingBlockHash: startingBlockHash,
@@ -45,7 +45,7 @@ func (wallet *Wallet) GetTickets(startingBlockHash, endingBlockHash []byte, targ
 	})
 }
 
-//GetTicketsForBlockHeightRange returns information about
+// GetTicketsForBlockHeightRange returns information about
 // ticket request used for block height range.
 func (wallet *Wallet) GetTicketsForBlockHeightRange(startHeight, endHeight, targetCount int32) ([]*TicketInfo, error) {
 	return wallet.getTickets(&GetTicketsRequest{
@@ -179,7 +179,8 @@ func (wallet *Wallet) TicketPrice(ctx context.Context) (*TicketPriceResponse, er
 	}, nil
 }
 
-// PurchaseTickets purchases tickets from the wallet. Returns a slice of hashes for tickets purchased
+// PurchaseTickets purchases tickets from the wallet. Returns a slice
+// of hashes for tickets purchased.
 func (wallet *Wallet) PurchaseTickets(ctx context.Context, request *PurchaseTicketsRequest, vspHost string) ([]string, error) {
 	var err error
 
