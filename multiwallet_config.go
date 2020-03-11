@@ -57,7 +57,7 @@ func (mw *MultiWallet) SaveUserConfigValue(key string, value interface{}) {
 	}
 }
 
-//ReadUserConfigValue retrieves the raw value for config key
+// ReadUserConfigValue retrieves the raw value for config key.
 func (mw *MultiWallet) ReadUserConfigValue(key string, valueOut interface{}) error {
 	err := mw.db.Get(userConfigBucketName, key, valueOut)
 	if err != nil && err != storm.ErrNotFound {
@@ -66,7 +66,7 @@ func (mw *MultiWallet) ReadUserConfigValue(key string, valueOut interface{}) err
 	return err
 }
 
-//DeleteUserConfigValueForKey deletes a key from the bucket
+// DeleteUserConfigValueForKey deletes a key from the bucket.
 func (mw *MultiWallet) DeleteUserConfigValueForKey(key string) {
 	err := mw.db.Delete(userConfigBucketName, key)
 	if err != nil {
@@ -74,7 +74,7 @@ func (mw *MultiWallet) DeleteUserConfigValueForKey(key string) {
 	}
 }
 
-//ClearConfig drops a config bucket name
+// ClearConfig drops a config bucket name.
 func (mw *MultiWallet) ClearConfig() {
 	err := mw.db.Drop(userConfigBucketName)
 	if err != nil {
@@ -82,37 +82,37 @@ func (mw *MultiWallet) ClearConfig() {
 	}
 }
 
-//SetBoolConfigValueForKey sets bool config value for key
+// SetBoolConfigValueForKey sets bool config value for key.
 func (mw *MultiWallet) SetBoolConfigValueForKey(key string, value bool) {
 	mw.SaveUserConfigValue(key, value)
 }
 
-//SetDoubleConfigValueForKey sets float64 config value for key
+// SetDoubleConfigValueForKey sets float64 config value for key.
 func (mw *MultiWallet) SetDoubleConfigValueForKey(key string, value float64) {
 	mw.SaveUserConfigValue(key, value)
 }
 
-//SetIntConfigValueForKey sets an int config value for key
+// SetIntConfigValueForKey sets an int config value for key.
 func (mw *MultiWallet) SetIntConfigValueForKey(key string, value int) {
 	mw.SaveUserConfigValue(key, value)
 }
 
-//SetInt32ConfigValueForKey sets an int32 config value for key
+// SetInt32ConfigValueForKey sets an int32 config value for key.
 func (mw *MultiWallet) SetInt32ConfigValueForKey(key string, value int32) {
 	mw.SaveUserConfigValue(key, value)
 }
 
-//SetLongConfigValueForKey sets an int64 config value for key
+// SetLongConfigValueForKey sets an int64 config value for key.
 func (mw *MultiWallet) SetLongConfigValueForKey(key string, value int64) {
 	mw.SaveUserConfigValue(key, value)
 }
 
-//SetStringConfigValueForKey sets a string config value for key
+// SetStringConfigValueForKey sets a string config value for key.
 func (mw *MultiWallet) SetStringConfigValueForKey(key, value string) {
 	mw.SaveUserConfigValue(key, value)
 }
 
-//ReadBoolConfigValueForKey reads the bool config value for key
+// ReadBoolConfigValueForKey reads the bool config value for key.
 func (mw *MultiWallet) ReadBoolConfigValueForKey(key string, defaultValue bool) (valueOut bool) {
 	if err := mw.ReadUserConfigValue(key, &valueOut); err == storm.ErrNotFound {
 		valueOut = defaultValue
@@ -120,7 +120,7 @@ func (mw *MultiWallet) ReadBoolConfigValueForKey(key string, defaultValue bool) 
 	return
 }
 
-//ReadDoubleConfigValueForKey reads the float64 config value for key
+// ReadDoubleConfigValueForKey reads the float64 config value for key.
 func (mw *MultiWallet) ReadDoubleConfigValueForKey(key string, defaultValue float64) (valueOut float64) {
 	if err := mw.ReadUserConfigValue(key, &valueOut); err == storm.ErrNotFound {
 		valueOut = defaultValue
@@ -128,7 +128,7 @@ func (mw *MultiWallet) ReadDoubleConfigValueForKey(key string, defaultValue floa
 	return
 }
 
-//ReadIntConfigValueForKey reads the int config value for key
+// ReadIntConfigValueForKey reads the int config value for key.
 func (mw *MultiWallet) ReadIntConfigValueForKey(key string, defaultValue int) (valueOut int) {
 	if err := mw.ReadUserConfigValue(key, &valueOut); err == storm.ErrNotFound {
 		valueOut = defaultValue
@@ -136,7 +136,7 @@ func (mw *MultiWallet) ReadIntConfigValueForKey(key string, defaultValue int) (v
 	return
 }
 
-//ReadInt32ConfigValueForKey reads the int32 config value for key
+// ReadInt32ConfigValueForKey reads the int32 config value for key.
 func (mw *MultiWallet) ReadInt32ConfigValueForKey(key string, defaultValue int32) (valueOut int32) {
 	if err := mw.ReadUserConfigValue(key, &valueOut); err == storm.ErrNotFound {
 		valueOut = defaultValue
@@ -144,7 +144,7 @@ func (mw *MultiWallet) ReadInt32ConfigValueForKey(key string, defaultValue int32
 	return
 }
 
-//ReadLongConfigValueForKey reads the int64 config value for key
+// ReadLongConfigValueForKey reads the int64 config value for key.
 func (mw *MultiWallet) ReadLongConfigValueForKey(key string, defaultValue int64) (valueOut int64) {
 	if err := mw.ReadUserConfigValue(key, &valueOut); err == storm.ErrNotFound {
 		valueOut = defaultValue
@@ -152,7 +152,7 @@ func (mw *MultiWallet) ReadLongConfigValueForKey(key string, defaultValue int64)
 	return
 }
 
-//ReadStringConfigValueForKey reads the string config value for key
+// ReadStringConfigValueForKey reads the string config value for key.
 func (mw *MultiWallet) ReadStringConfigValueForKey(key string) (valueOut string) {
 	mw.ReadUserConfigValue(key, &valueOut)
 	return
