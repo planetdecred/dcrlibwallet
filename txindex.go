@@ -6,8 +6,8 @@ import (
 	"github.com/raedahgroup/dcrlibwallet/txindex"
 )
 
-//IndexTransactions returns an index of all transactions
-// from start to end of a full block height
+// IndexTransactions returns an index of all transactions
+// from start to end of a full block height.
 func (wallet *Wallet) IndexTransactions() error {
 	ctx := wallet.shutdownContext()
 

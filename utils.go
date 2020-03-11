@@ -71,7 +71,7 @@ func (mw *MultiWallet) contextWithShutdownCancel() (context.Context, context.Can
 	return ctx, cancel
 }
 
-//ValidateExtPubKey provides an instance of key extension required by the network type
+// ValidateExtPubKey provides an instance of key extension required by the network type.
 func (mw *MultiWallet) ValidateExtPubKey(extendedPubKey string) error {
 	_, err := hdkeychain.NewKeyFromString(extendedPubKey, mw.chainParams)
 	if err != nil {

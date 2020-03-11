@@ -102,7 +102,7 @@ func (tx *TxAuthor) EstimateMaxSendAmount() (*Amount, error) {
 	}, nil
 }
 
-//Broadcast allows for pasting of raw transactions conducted in a wallet
+// Broadcast allows for pasting of raw transactions conducted in a wallet.
 func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
 	defer func() {
 		for i := range privatePassphrase {
