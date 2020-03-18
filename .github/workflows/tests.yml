@@ -16,12 +16,12 @@ jobs:
         run: docker build -t testenv -f linux_test.dockerfile .
 
       - name: Run the image
-        run: docker run devenv
+        run: docker run testenv
 
   windows_test:
     name: Tests - windows
 
-    runs-on: windows
+    runs-on: windows-latest
 
     steps:
       - name: Check out code into the Go module directory
@@ -31,4 +31,4 @@ jobs:
         run: docker build -t testenv -f windows_test.dockerfile .
 
       - name: Run the image
-        run: docker run devenv
+        run: docker run testenv
