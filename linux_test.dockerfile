@@ -4,6 +4,6 @@ COPY . /src
 
 WORKDIR /src
 
-RUN go build
+RUN go mod download
 
 ENTRYPOINT [ "go", "test"]

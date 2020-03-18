@@ -13,9 +13,13 @@ import (
 
 const rootDir = ".dcrlibwallet_tests_root"
 
+func init() {
+	SetLogLevels("error")
+}
+
 var _ = Describe("Account", func() {
 	var (
-		wallet *Wallet
+		wallet   *Wallet
 		password string
 	)
 
