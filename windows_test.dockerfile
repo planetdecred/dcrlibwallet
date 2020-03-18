@@ -6,4 +6,4 @@ WORKDIR /src
 
 RUN go mod download
 
-ENTRYPOINT ["go", "test"]
+ENTRYPOINT [ "go", "test", "-timeout", "1m"]
