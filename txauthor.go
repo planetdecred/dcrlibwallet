@@ -14,8 +14,6 @@ import (
 	"github.com/decred/dcrwallet/wallet/v3/txauthor"
 	"github.com/decred/dcrwallet/wallet/v3/txrules"
 	"github.com/raedahgroup/dcrlibwallet/txhelper"
-	"github.com/raedahgroup/godcr-gio/wallet"
-	"github.com/raedahgroup/godcr/app/walletmediums/dcrlibwallet"
 )
 
 type TxAuthor struct {
