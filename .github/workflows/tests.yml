@@ -3,7 +3,7 @@ name: Tests
 on: [pull_request, push]
 
 jobs:
-  build:
+  linux_test:
     name: Tests - linux
 
     runs-on: ubuntu-latest
@@ -17,8 +17,8 @@ jobs:
 
       - name: Run the image
         run: docker run devenv
-  
-  build:
+
+  windows_test:
     name: Tests - windows
 
     runs-on: windows
@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@v1
 
       - name: Build the docker image
-        run: docker build -t testenv -f windows_test.dockerfile . 
+        run: docker build -t testenv -f windows_test.dockerfile .
 
       - name: Run the image
         run: docker run devenv
