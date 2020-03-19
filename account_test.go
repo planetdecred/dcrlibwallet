@@ -27,6 +27,7 @@ var _ = Describe("Account", func() {
 	)
 
 	BeforeSuite(func () {
+		os.RemoveAll(rootDir)
 		multi, err := NewMultiWallet(rootDir, "", "testnet3")
 		Expect(err).To(BeNil())
 		Expect(multi).ToNot(BeNil())
@@ -42,8 +43,6 @@ var _ = Describe("Account", func() {
 		if wallet != nil {
 			wallet.Shutdown()
 		}
-		err := os.RemoveAll(rootDir)
-		Expect(err).To(BeNil())
 	})
 
 	getWrongAccountNumber := func () uint32 {
