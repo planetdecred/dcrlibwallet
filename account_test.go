@@ -21,12 +21,12 @@ func init() {
 
 var _ = Describe("Account", func() {
 	var (
-		wallet   *Wallet
+		wallet         *Wallet
 		internalWallet *w.Wallet
-		password string
+		password       string
 	)
 
-	BeforeSuite(func () {
+	BeforeSuite(func() {
 		os.RemoveAll(rootDir)
 		multi, err := NewMultiWallet(rootDir, "", "testnet3")
 		Expect(err).To(BeNil())
@@ -45,7 +45,7 @@ var _ = Describe("Account", func() {
 		}
 	})
 
-	getWrongAccountNumber := func () uint32 {
+	getWrongAccountNumber := func() uint32 {
 		var accountNumber uint32 = 1220
 		var err error
 		for err == nil {
@@ -95,6 +95,7 @@ var _ = Describe("Account", func() {
 			var accountNumber uint32 = 0
 			var confirmations int32 = 0
 			internalBalance, err := internalWallet.CalculateAccountBalance(context.Background(), accountNumber, confirmations)
+			Expect(err).To(BeNil())
 			balance, err := wallet.GetAccountBalance(int32(accountNumber), confirmations)
 			By("returning a nil error")
 			Expect(err).To(BeNil())
@@ -115,6 +116,7 @@ var _ = Describe("Account", func() {
 			var accountNumber uint32 = 0
 			var confirmations int32 = 0
 			internalBalance, err := internalWallet.CalculateAccountBalance(context.Background(), accountNumber, confirmations)
+			Expect(err).To(BeNil())
 			balance, err := wallet.SpendableForAccount(int32(accountNumber), confirmations)
 			By("returning a nil error")
 			Expect(err).To(BeNil())
@@ -208,7 +210,7 @@ var _ = Describe("Account", func() {
 		})
 		Context("when called with a non-existing account number", func() {
 			It("should fail", func() {
-				var wrongAccountNumber  = getWrongAccountNumber()
+				var wrongAccountNumber = getWrongAccountNumber()
 				_, err := wallet.AccountNameRaw(wrongAccountNumber)
 				By("returning a non nil error")
 				Expect(err).ToNot(BeNil())
@@ -221,7 +223,7 @@ var _ = Describe("Account", func() {
 			var accountNumber uint32 = 0
 			internalAccountName, err := internalWallet.AccountName(context.Background(), accountNumber)
 			Expect(err).To(BeNil())
-			
+
 			number, err := wallet.AccountNumber(internalAccountName)
 			By("returning a nil error")
 			Expect(err).To(BeNil())
