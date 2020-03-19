@@ -2,12 +2,14 @@ package dcrlibwallet_test
 
 import (
 	"context"
+	"encoding/json"
 	"math/rand"
 	"os"
 	"strconv"
 	"time"
 
 	w "github.com/decred/dcrwallet/wallet/v3"
+	"github.com/decred/dcrwallet/wallet/v3/udb"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/raedahgroup/dcrlibwallet"
@@ -55,6 +57,28 @@ var _ = Describe("Account", func() {
 		return accountNumber
 	}
 
+	assertBalanceEqual := func (intBal udb.Balances, bal *Balance)  {
+		Expect(bal.ImmatureReward).To(BeEquivalentTo(intBal.ImmatureCoinbaseRewards))
+		Expect(bal.ImmatureStakeGeneration).To(BeEquivalentTo(intBal.ImmatureStakeGeneration))
+		Expect(bal.LockedByTickets).To(BeEquivalentTo(intBal.LockedByTickets))
+		Expect(bal.Spendable).To(BeEquivalentTo(intBal.Spendable))
+		Expect(bal.Total).To(BeEquivalentTo(intBal.Total))
+		Expect(bal.UnConfirmed).To(BeEquivalentTo(intBal.Unconfirmed))
+		Expect(bal.VotingAuthority).To(BeEquivalentTo(intBal.VotingAuthority))
+	}
+
+	assertAccountsEquals := func (intAcc w.AccountResult, acc *Account) {
+		Expect(intAcc.AccountName).To(BeEquivalentTo(acc.Name))
+		Expect(intAcc.AccountNumber).To(BeEquivalentTo(acc.Number))
+		Expect(intAcc.AccountNumber).To(BeEquivalentTo(acc.Number))
+		Expect(int32(int32(intAcc.LastUsedExternalIndex + 20))).To(BeEquivalentTo(acc.ExternalKeyCount))
+		Expect(int32(intAcc.LastUsedInternalIndex + 20)).To(BeEquivalentTo(acc.InternalKeyCount))
+		Expect(intAcc.ImportedKeyCount).To(BeEquivalentTo(acc.ImportedKeyCount))
+		intBalance, err := internalWallet.CalculateAccountBalance(context.Background(), uint32(acc.Number), 0)
+		Expect(err).To(BeNil())
+		assertBalanceEqual(intBalance, acc.Balance)
+	}
+
 	Describe("GetAccounts", func() {
 		It("should get accounts", func() {
 			res, err := wallet.GetAccounts(0)
@@ -62,20 +86,36 @@ var _ = Describe("Account", func() {
 			Expect(err).To(BeNil())
 			By("returning nonempty accounts string")
 			Expect(res).ToNot(BeEquivalentTo(""))
+			var accountsRes Accounts
+			err = json.Unmarshal([]byte(res), &accountsRes)
+			Expect(err).To(BeNil())
+			internalAccount, err := internalWallet.Accounts(context.Background())
+			Expect(err).To(BeNil())
+			Expect(accountsRes.Count).To(BeEquivalentTo(len(internalAccount.Accounts)))
+			Expect(accountsRes.CurrentBlockHash).To(BeEquivalentTo(internalAccount.CurrentBlockHash[:]))
+			Expect(accountsRes.CurrentBlockHeight).To(BeEquivalentTo(internalAccount.CurrentBlockHeight))
+			for i := 0; i < len(internalAccount.Accounts); i++ {
+				assertAccountsEquals(internalAccount.Accounts[i], accountsRes.Acc[i])
+			}
 		})
 	})
 
 	Describe("GetAccount", func() {
 		Context("when called with the right parameters", func() {
 			It("should get account", func() {
-				var accountNumber int32 = 0
-				account, err := wallet.GetAccount(accountNumber, 0)
+				var accountNumber uint32 = 0
+				account, err := wallet.GetAccount(int32(accountNumber), 0)
 				By("returning a nil error")
 				Expect(err).To(BeNil())
 				By("returning a non nil account")
 				Expect(account).ToNot(BeNil())
 				By("returning an account with the supplied account number")
 				Expect(account.Number).To(BeEquivalentTo(accountNumber))
+				intAccount, err := internalWallet.AccountProperties(context.Background(), accountNumber)
+				Expect(err).To(BeNil())
+				assertAccountsEquals(w.AccountResult{
+					AccountProperties: *intAccount,
+				}, account)
 			})
 		})
 
@@ -101,13 +141,7 @@ var _ = Describe("Account", func() {
 			Expect(err).To(BeNil())
 			By("returning the expected balance")
 			Expect(balance).ToNot(BeNil())
-			Expect(balance.Total).To(BeEquivalentTo(internalBalance.Total))
-			Expect(balance.ImmatureReward).To(BeEquivalentTo(internalBalance.ImmatureCoinbaseRewards))
-			Expect(balance.ImmatureStakeGeneration).To(BeEquivalentTo(internalBalance.ImmatureStakeGeneration))
-			Expect(balance.Spendable).To(BeEquivalentTo(internalBalance.Spendable))
-			Expect(balance.LockedByTickets).To(BeEquivalentTo(internalBalance.LockedByTickets))
-			Expect(balance.VotingAuthority).To(BeEquivalentTo(internalBalance.VotingAuthority))
-			Expect(balance.UnConfirmed).To(BeEquivalentTo(internalBalance.Unconfirmed))
+			assertBalanceEqual(internalBalance, balance)
 		})
 	})
 
