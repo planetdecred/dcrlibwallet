@@ -1,11 +1,13 @@
 package dcrlibwallet_test
 
 import (
+	"context"
 	"math/rand"
 	"os"
 	"strconv"
 	"time"
 
+	w "github.com/decred/dcrwallet/wallet/v3"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/raedahgroup/dcrlibwallet"
@@ -20,10 +22,11 @@ func init() {
 var _ = Describe("Account", func() {
 	var (
 		wallet   *Wallet
+		internalWallet *w.Wallet
 		password string
 	)
 
-	BeforeEach(func() {
+	BeforeSuite(func () {
 		multi, err := NewMultiWallet(rootDir, "", "testnet3")
 		Expect(err).To(BeNil())
 		Expect(multi).ToNot(BeNil())
@@ -32,15 +35,26 @@ var _ = Describe("Account", func() {
 		wallet, err = multi.CreateNewWallet(password, 0)
 		Expect(err).To(BeNil())
 		Expect(wallet).ToNot(BeNil())
+		internalWallet = wallet.InternalWallet()
 	})
 
-	AfterEach(func() {
+	AfterSuite(func() {
 		if wallet != nil {
 			wallet.Shutdown()
 		}
 		err := os.RemoveAll(rootDir)
 		Expect(err).To(BeNil())
 	})
+
+	getWrongAccountNumber := func () uint32 {
+		var accountNumber uint32 = 1220
+		var err error
+		for err == nil {
+			accountNumber++
+			_, err = internalWallet.AccountName(context.Background(), accountNumber)
+		}
+		return accountNumber
+	}
 
 	Describe("GetAccounts", func() {
 		It("should get accounts", func() {
@@ -79,22 +93,34 @@ var _ = Describe("Account", func() {
 
 	Describe("GetAccountBalance", func() {
 		It("should get the account balance", func() {
-			balance, err := wallet.GetAccountBalance(0, 0)
+			var accountNumber uint32 = 0
+			var confirmations int32 = 0
+			internalBalance, err := internalWallet.CalculateAccountBalance(context.Background(), accountNumber, confirmations)
+			balance, err := wallet.GetAccountBalance(int32(accountNumber), confirmations)
 			By("returning a nil error")
 			Expect(err).To(BeNil())
 			By("returning the expected balance")
 			Expect(balance).ToNot(BeNil())
-			Expect(balance.Total).To(BeEquivalentTo(0))
+			Expect(balance.Total).To(BeEquivalentTo(internalBalance.Total))
+			Expect(balance.ImmatureReward).To(BeEquivalentTo(internalBalance.ImmatureCoinbaseRewards))
+			Expect(balance.ImmatureStakeGeneration).To(BeEquivalentTo(internalBalance.ImmatureStakeGeneration))
+			Expect(balance.Spendable).To(BeEquivalentTo(internalBalance.Spendable))
+			Expect(balance.LockedByTickets).To(BeEquivalentTo(internalBalance.LockedByTickets))
+			Expect(balance.VotingAuthority).To(BeEquivalentTo(internalBalance.VotingAuthority))
+			Expect(balance.UnConfirmed).To(BeEquivalentTo(internalBalance.Unconfirmed))
 		})
 	})
 
 	Describe("SpendableForAccount", func() {
 		It("should return the spendable balance", func() {
-			balance, err := wallet.SpendableForAccount(0, 0)
+			var accountNumber uint32 = 0
+			var confirmations int32 = 0
+			internalBalance, err := internalWallet.CalculateAccountBalance(context.Background(), accountNumber, confirmations)
+			balance, err := wallet.SpendableForAccount(int32(accountNumber), confirmations)
 			By("returning a nil error")
 			Expect(err).To(BeNil())
 			By("returning the expected balance")
-			Expect(balance).To(BeEquivalentTo(0))
+			Expect(balance).To(BeEquivalentTo(internalBalance.Spendable))
 		})
 	})
 
@@ -149,15 +175,19 @@ var _ = Describe("Account", func() {
 	Describe("AccountName", func() {
 		Context("when called with an existing account number", func() {
 			It("should return the account name", func() {
+				var accountNumber uint32 = 0
+				internalAccountName, err := internalWallet.AccountName(context.Background(), accountNumber)
+				Expect(err).To(BeNil())
 				name := wallet.AccountName(0)
 				By("returning the expected account name")
-				Expect(name).To(BeEquivalentTo("default"))
+				Expect(name).To(BeEquivalentTo(internalAccountName))
 			})
 		})
 
 		Context("when called with a non-existing account number", func() {
 			It("should fail", func() {
-				name := wallet.AccountName(1220)
+				var wrongAccountNumber uint32 = getWrongAccountNumber()
+				name := wallet.AccountName(int32(wrongAccountNumber))
 				By("returning 'Account not found'")
 				Expect(name).To(BeEquivalentTo("Account not found"))
 			})
@@ -167,16 +197,20 @@ var _ = Describe("Account", func() {
 	Describe("AccountNameRaw", func() {
 		Context("when called with a valid account number", func() {
 			It("should return the account name", func() {
-				name, err := wallet.AccountNameRaw(0)
+				var accountNumber uint32 = 0
+				internalAccountName, err := internalWallet.AccountName(context.Background(), accountNumber)
+				Expect(err).To(BeNil())
+				name, err := wallet.AccountNameRaw(accountNumber)
 				By("returning a nil error")
 				Expect(err).To(BeNil())
 				By("returning the expected account name")
-				Expect(name).To(BeEquivalentTo("default"))
+				Expect(name).To(BeEquivalentTo(internalAccountName))
 			})
 		})
 		Context("when called with a non-existing account number", func() {
 			It("should fail", func() {
-				_, err := wallet.AccountNameRaw(10290)
+				var wrongAccountNumber  = getWrongAccountNumber()
+				_, err := wallet.AccountNameRaw(wrongAccountNumber)
 				By("returning a non nil error")
 				Expect(err).ToNot(BeNil())
 			})
@@ -185,11 +219,15 @@ var _ = Describe("Account", func() {
 
 	Describe("AccountNumber", func() {
 		It("should return the account number", func() {
-			number, err := wallet.AccountNumber("default")
+			var accountNumber uint32 = 0
+			internalAccountName, err := internalWallet.AccountName(context.Background(), accountNumber)
+			Expect(err).To(BeNil())
+			
+			number, err := wallet.AccountNumber(internalAccountName)
 			By("returning a nil error")
 			Expect(err).To(BeNil())
 			By("returning the expected account number")
-			Expect(number).To(BeEquivalentTo(uint32(0)))
+			Expect(number).To(BeEquivalentTo(accountNumber))
 		})
 	})
 
