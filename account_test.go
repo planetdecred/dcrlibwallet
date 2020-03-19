@@ -43,14 +43,12 @@ var _ = Describe("Account", func() {
 	})
 
 	Describe("GetAccounts", func() {
-		Context("when called", func() {
-			It("should get accounts", func() {
-				res, err := wallet.GetAccounts(0)
-				By("returning a nil error")
-				Expect(err).To(BeNil())
-				By("returning nonempty accounts string")
-				Expect(res).ToNot(BeEquivalentTo(""))
-			})
+		It("should get accounts", func() {
+			res, err := wallet.GetAccounts(0)
+			By("returning a nil error")
+			Expect(err).To(BeNil())
+			By("returning nonempty accounts string")
+			Expect(res).ToNot(BeEquivalentTo(""))
 		})
 	})
 
@@ -80,32 +78,28 @@ var _ = Describe("Account", func() {
 	})
 
 	Describe("GetAccountBalance", func() {
-		Context("when called", func() {
-			It("should get the account balance", func() {
-				balance, err := wallet.GetAccountBalance(0, 0)
-				By("returning a nil error")
-				Expect(err).To(BeNil())
-				By("returning the expected balance")
-				Expect(balance).ToNot(BeNil())
-				Expect(balance.Total).To(BeEquivalentTo(0))
-			})
+		It("should get the account balance", func() {
+			balance, err := wallet.GetAccountBalance(0, 0)
+			By("returning a nil error")
+			Expect(err).To(BeNil())
+			By("returning the expected balance")
+			Expect(balance).ToNot(BeNil())
+			Expect(balance.Total).To(BeEquivalentTo(0))
 		})
 	})
 
 	Describe("SpendableForAccount", func() {
-		Context("when called", func() {
-			It("should return the spendable balance", func() {
-				balance, err := wallet.SpendableForAccount(0, 0)
-				By("returning a nil error")
-				Expect(err).To(BeNil())
-				By("returning the expected balance")
-				Expect(balance).To(BeEquivalentTo(0))
-			})
+		It("should return the spendable balance", func() {
+			balance, err := wallet.SpendableForAccount(0, 0)
+			By("returning a nil error")
+			Expect(err).To(BeNil())
+			By("returning the expected balance")
+			Expect(balance).To(BeEquivalentTo(0))
 		})
 	})
 
 	Describe("NextAccount", func() {
-		Context("when called", func() {
+		Context("when called with the right args", func() {
 			It("should return the next account number", func() {
 				accountNumber, err := wallet.NextAccount("account 1", []byte(password))
 				By("returning a nil error")
@@ -153,7 +147,7 @@ var _ = Describe("Account", func() {
 	})
 
 	Describe("AccountName", func() {
-		Context("when called", func() {
+		Context("when called with an existing account number", func() {
 			It("should return the account name", func() {
 				name := wallet.AccountName(0)
 				By("returning the expected account name")
@@ -190,28 +184,24 @@ var _ = Describe("Account", func() {
 	})
 
 	Describe("AccountNumber", func() {
-		Context("when called", func() {
-			It("should return the account number", func() {
-				number, err := wallet.AccountNumber("default")
-				By("returning a nil error")
-				Expect(err).To(BeNil())
-				By("returning the expected account number")
-				Expect(number).To(BeEquivalentTo(uint32(0)))
-			})
+		It("should return the account number", func() {
+			number, err := wallet.AccountNumber("default")
+			By("returning a nil error")
+			Expect(err).To(BeNil())
+			By("returning the expected account number")
+			Expect(number).To(BeEquivalentTo(uint32(0)))
 		})
 	})
 
 	Describe("HDPathForAccount", func() {
-		Context("when called", func() {
-			It("should return the HD path for account", func() {
-				var accountNumber int32 = 0
-				path, err := wallet.HDPathForAccount(accountNumber)
-				By("returning a nil error")
-				Expect(err).To(BeNil())
-				expectedPath := LegacyTestnetHDPath + strconv.Itoa(int(accountNumber))
-				By("returning the expected path")
-				Expect(path).To(BeEquivalentTo(expectedPath))
-			})
+		It("should return the HD path for account", func() {
+			var accountNumber int32 = 0
+			path, err := wallet.HDPathForAccount(accountNumber)
+			By("returning a nil error")
+			Expect(err).To(BeNil())
+			expectedPath := LegacyTestnetHDPath + strconv.Itoa(int(accountNumber))
+			By("returning the expected path")
+			Expect(path).To(BeEquivalentTo(expectedPath))
 		})
 	})
 })
