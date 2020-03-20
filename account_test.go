@@ -71,7 +71,7 @@ var _ = Describe("Account", func() {
 		Expect(intAcc.AccountName).To(BeEquivalentTo(acc.Name))
 		Expect(intAcc.AccountNumber).To(BeEquivalentTo(acc.Number))
 		Expect(intAcc.AccountNumber).To(BeEquivalentTo(acc.Number))
-		Expect(int32(int32(intAcc.LastUsedExternalIndex + 20))).To(BeEquivalentTo(acc.ExternalKeyCount))
+		Expect(int32(intAcc.LastUsedExternalIndex + 20)).To(BeEquivalentTo(acc.ExternalKeyCount))
 		Expect(int32(intAcc.LastUsedInternalIndex + 20)).To(BeEquivalentTo(acc.InternalKeyCount))
 		Expect(intAcc.ImportedKeyCount).To(BeEquivalentTo(acc.ImportedKeyCount))
 		intBalance, err := internalWallet.CalculateAccountBalance(context.Background(), uint32(acc.Number), 0)
