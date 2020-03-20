@@ -57,7 +57,7 @@ var _ = Describe("Account", func() {
 		return accountNumber
 	}
 
-	assertBalanceEqual := func (intBal udb.Balances, bal *Balance)  {
+	assertBalanceEqual := func(intBal udb.Balances, bal *Balance) {
 		Expect(bal.ImmatureReward).To(BeEquivalentTo(intBal.ImmatureCoinbaseRewards))
 		Expect(bal.ImmatureStakeGeneration).To(BeEquivalentTo(intBal.ImmatureStakeGeneration))
 		Expect(bal.LockedByTickets).To(BeEquivalentTo(intBal.LockedByTickets))
@@ -67,7 +67,7 @@ var _ = Describe("Account", func() {
 		Expect(bal.VotingAuthority).To(BeEquivalentTo(intBal.VotingAuthority))
 	}
 
-	assertAccountsEquals := func (intAcc w.AccountResult, acc *Account) {
+	assertAccountsEquals := func(intAcc w.AccountResult, acc *Account) {
 		Expect(intAcc.AccountName).To(BeEquivalentTo(acc.Name))
 		Expect(intAcc.AccountNumber).To(BeEquivalentTo(acc.Number))
 		Expect(intAcc.AccountNumber).To(BeEquivalentTo(acc.Number))
