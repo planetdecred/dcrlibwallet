@@ -218,28 +218,28 @@ func (tx *TxAuthor) constructTransaction() (*txauthor.AuthoredTx, error) {
 				log.Errorf("constructTransaction: error preparing change source: %v", err)
 				return nil, fmt.Errorf("max amount change source error: %v", err)
 			}
-
-			continue // do not prepare a tx output for this destination
 		} else {
-			address, err := tx.sourceWallet.internal.NewChangeAddress(ctx, tx.sourceAccountNumber)
+			output, err := txhelper.MakeTxOutput(destination.Address, destination.AtomAmount, tx.sourceWallet.chainParams)
 			if err != nil {
-				return nil, fmt.Errorf("change address error: %v", err)
+				log.Errorf("constructTransaction: error preparing tx output: %v", err)
+				return nil, fmt.Errorf("make tx output error: %v", err)
 			}
 
-			changeSource, err = txhelper.MakeTxChangeSource(address.String(), tx.sourceWallet.chainParams)
-			if err != nil {
-				log.Errorf("constructTransaction: error preparing change source: %v", err)
-				return nil, fmt.Errorf("change source error: %v", err)
-			}
+			outputs = append(outputs, output)
 		}
+	}
 
-		output, err := txhelper.MakeTxOutput(destination.Address, destination.AtomAmount, tx.sourceWallet.chainParams)
+	if changeSource == nil {
+		address, err := tx.sourceWallet.internal.NewChangeAddress(ctx, tx.sourceAccountNumber)
 		if err != nil {
-			log.Errorf("constructTransaction: error preparing tx output: %v", err)
-			return nil, fmt.Errorf("make tx output error: %v", err)
+			return nil, fmt.Errorf("change address error: %v", err)
 		}
 
-		outputs = append(outputs, output)
+		changeSource, err = txhelper.MakeTxChangeSource(address.String(), tx.sourceWallet.chainParams)
+		if err != nil {
+			log.Errorf("constructTransaction: error preparing change source: %v", err)
+			return nil, fmt.Errorf("change source error: %v", err)
+		}
 	}
 
 	requiredConfirmations := tx.sourceWallet.RequiredConfirmations()
