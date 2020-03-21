@@ -2,6 +2,7 @@ package dcrlibwallet
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"time"
 
@@ -19,6 +20,7 @@ type TxAuthor struct {
 	sourceWallet        *Wallet
 	sourceAccountNumber uint32
 	destinations        []TransactionDestination
+	changeAddress       string
 }
 
 func (mw *MultiWallet) NewUnsignedTx(sourceWallet *Wallet, sourceAccountNumber int32) *TxAuthor {
@@ -230,19 +232,43 @@ func (tx *TxAuthor) constructTransaction() (*txauthor.AuthoredTx, error) {
 	}
 
 	if changeSource == nil {
-		address, err := tx.sourceWallet.internal.NewChangeAddress(ctx, tx.sourceAccountNumber)
+		// dcrwallet should ordinarily handle cases where a nil changeSource
+		// is passed to `wallet.NewUnsignedTransaction` but the changeSource
+		// generated there errors on internal gap address limit exhaustion
+		// instead of wrapping around to a previously returned address.
+		//
+		// Generating a changeSource manually here, ensures that the gap address
+		// limit exhaustion error is avoided.
+		changeSource, err = tx.changeSource(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("change address error: %v", err)
-		}
-
-		changeSource, err = txhelper.MakeTxChangeSource(address.String(), tx.sourceWallet.chainParams)
-		if err != nil {
-			log.Errorf("constructTransaction: error preparing change source: %v", err)
-			return nil, fmt.Errorf("change source error: %v", err)
+			return nil, err
 		}
 	}
 
 	requiredConfirmations := tx.sourceWallet.RequiredConfirmations()
 	return tx.sourceWallet.internal.NewUnsignedTransaction(ctx, outputs, txrules.DefaultRelayFeePerKb, tx.sourceAccountNumber,
 		requiredConfirmations, outputSelectionAlgorithm, changeSource)
+}
+
+// changeSource derives an internal address from the source wallet and account
+// for this unsigned tx, if a change address had not been previously derived.
+// The derived (or previously derived) address is used to prepare a
+// change source for receiving change from this tx back into the wallet.
+func (tx *TxAuthor) changeSource(ctx context.Context) (txauthor.ChangeSource, error) {
+	if tx.changeAddress == "" {
+		address, err := tx.sourceWallet.internal.NewChangeAddress(ctx, tx.sourceAccountNumber)
+		if err != nil {
+			return nil, fmt.Errorf("change address error: %v", err)
+		}
+
+		tx.changeAddress = address.String()
+	}
+
+	changeSource, err := txhelper.MakeTxChangeSource(tx.changeAddress, tx.sourceWallet.chainParams)
+	if err != nil {
+		log.Errorf("constructTransaction: error preparing change source: %v", err)
+		return nil, fmt.Errorf("change source error: %v", err)
+	}
+
+	return changeSource, nil
 }
