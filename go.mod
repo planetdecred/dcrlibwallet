@@ -12,7 +12,6 @@ require (
 	github.com/decred/dcrd/hdkeychain/v2 v2.1.0
 	github.com/decred/dcrd/txscript/v2 v2.1.0
 	github.com/decred/dcrd/wire v1.3.0
-	github.com/decred/dcrdata/txhelpers v1.1.0
 	github.com/decred/dcrwallet/errors v1.1.0
 	github.com/decred/dcrwallet/errors/v2 v2.0.0
 	github.com/decred/dcrwallet/p2p/v2 v2.0.0
@@ -24,8 +23,8 @@ require (
 	github.com/dgraph-io/badger v1.5.4
 	github.com/jrick/logrotate v1.0.0
 	github.com/raedahgroup/dcrlibwallet/spv v0.0.0-00010101000000-000000000000
-	github.com/raedahgroup/godcr-gio v0.0.0-20200315232334-39ec94c7c23b
-	github.com/raedahgroup/godcr/app v0.0.0-20200113191321-d41651a66ae3
+	github.com/raedahgroup/godcr-gio v0.0.0-20200315232334-39ec94c7c23b // indirect
+	github.com/raedahgroup/godcr/app v0.0.0-20200113191321-d41651a66ae3 // indirect
 	go.etcd.io/bbolt v1.3.3
 	golang.org/x/crypto v0.0.0-20190820162420-60c769a6c586
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
