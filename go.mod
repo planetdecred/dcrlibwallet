@@ -1,6 +1,8 @@
 module github.com/raedahgroup/dcrlibwallet
 
 require (
+	github.com/AndreasBriese/bbloom v0.0.0-20190825152654-46b345b51c96 // indirect
+	github.com/DataDog/zstd v1.4.4 // indirect
 	github.com/asdine/storm v0.0.0-20190216191021-fe89819f6282
 	github.com/decred/dcrd/addrmgr v1.1.0
 	github.com/decred/dcrd/blockchain/stake/v2 v2.0.2
@@ -12,6 +14,7 @@ require (
 	github.com/decred/dcrd/hdkeychain/v2 v2.1.0
 	github.com/decred/dcrd/txscript/v2 v2.1.0
 	github.com/decred/dcrd/wire v1.3.0
+	github.com/decred/dcrdata/txhelpers v1.1.0
 	github.com/decred/dcrwallet/errors v1.1.0
 	github.com/decred/dcrwallet/errors/v2 v2.0.0
 	github.com/decred/dcrwallet/p2p/v2 v2.0.0
@@ -21,13 +24,14 @@ require (
 	github.com/decred/dcrwallet/walletseed v1.0.1
 	github.com/decred/slog v1.0.0
 	github.com/dgraph-io/badger v1.5.4
+	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
 	github.com/jrick/logrotate v1.0.0
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/raedahgroup/dcrlibwallet/spv v0.0.0-00010101000000-000000000000
-	github.com/raedahgroup/godcr-gio v0.0.0-20200315232334-39ec94c7c23b // indirect
-	github.com/raedahgroup/godcr/app v0.0.0-20200113191321-d41651a66ae3 // indirect
 	go.etcd.io/bbolt v1.3.3
 	golang.org/x/crypto v0.0.0-20190820162420-60c769a6c586
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
+	google.golang.org/appengine v1.6.5 // indirect
 )
 
 replace (
