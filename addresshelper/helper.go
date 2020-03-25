@@ -10,10 +10,6 @@ import (
 
 const scriptVersion = 0
 
-
-// PkScript decodes the string encoding of an address
-// and returns an error if process failed and a new
-// script for pay transaction output.
 func PkScript(address string, net dcrutil.AddressParams) ([]byte, error) {
 	addr, err := dcrutil.DecodeAddress(address, net)
 	if err != nil {
