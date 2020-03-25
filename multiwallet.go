@@ -312,7 +312,8 @@ func (mw *MultiWallet) RestoreWallet(seedMnemonic, privatePassphrase string, pri
 	})
 }
 
-//LinkExistingWallet links an already existing wallet to a new one
+//
+// LinkExistingWallet links an already existing wallet to a new one
 func (mw *MultiWallet) LinkExistingWallet(walletDataDir, originalPubPass string, privatePassphraseType int32) (*Wallet, error) {
 	if mw.IsSyncing() {
 		return nil, errors.New(ErrSyncAlreadyInProgress)

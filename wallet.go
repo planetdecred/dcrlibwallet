@@ -85,7 +85,7 @@ func (wallet *Wallet) prepare(rootDir string, chainParams *chaincfg.Params,
 	return nil
 }
 
-//Shutdown closes the wallet and transaction db
+// Shutdown closes the wallet and transaction db
 func (wallet *Wallet) Shutdown() {
 	// Trigger shuttingDown signal to cancel all contexts created with
 	// `wallet.shutdownContext()` or `wallet.shutdownContextWithCancel()`.

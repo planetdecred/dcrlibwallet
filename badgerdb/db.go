@@ -194,7 +194,7 @@ func (b *Bucket) NestedReadWriteBucket(key []byte) walletdb.ReadWriteBucket {
 	return nestedBucket
 }
 
-// NestedReadBucket returns a
+// NestedReadBucket returns a read and write bucket interface implementation.
 func (b *Bucket) NestedReadBucket(key []byte) walletdb.ReadBucket {
 	if b.dbTransaction.db.closed {
 		return nil

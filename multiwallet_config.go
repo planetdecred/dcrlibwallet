@@ -49,7 +49,7 @@ func (mw *MultiWallet) walletConfigReadFn(walletID int) configReadFn {
 	}
 }
 
-//SaveUserConfigValue saves config value name for key
+// SaveUserConfigValue saves config value name for key
 func (mw *MultiWallet) SaveUserConfigValue(key string, value interface{}) {
 	err := mw.db.Set(userConfigBucketName, key, value)
 	if err != nil {

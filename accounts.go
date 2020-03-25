@@ -21,7 +21,7 @@ func (wallet *Wallet) GetAccounts(requiredConfirmations int32) (string, error) {
 	return string(result), nil
 }
 
-//GetAccountsRaw returns all the information about an existing account.
+// GetAccountsRaw returns all the information about an existing account.
 func (wallet *Wallet) GetAccountsRaw(requiredConfirmations int32) (*Accounts, error) {
 	resp, err := wallet.internal.Accounts(wallet.shutdownContext())
 	if err != nil {
@@ -54,7 +54,8 @@ func (wallet *Wallet) GetAccountsRaw(requiredConfirmations int32) (*Accounts, er
 	}, nil
 }
 
-//AccountsIterator gets account information of an
+// AccountsIterator gets account information of a wallet and returns
+// the account index and the accompanying account information.
 func (wallet *Wallet) AccountsIterator(requiredConfirmations int32) (*AccountsIterator, error) {
 	accounts, err := wallet.GetAccountsRaw(requiredConfirmations)
 	if err != nil {
@@ -197,7 +198,7 @@ func (wallet *Wallet) AccountNumber(accountName string) (uint32, error) {
 	return wallet.internal.AccountNumber(wallet.shutdownContext(), accountName)
 }
 
-//Checks and identifies the coin network type for the account
+// Checks and identifies the coin network type for the account
 // and returns the path for any of the mainnet, testnet, or legacy.
 func (wallet *Wallet) HDPathForAccount(accountNumber int32) (string, error) {
 	cointype, err := wallet.internal.CoinType(wallet.shutdownContext())
