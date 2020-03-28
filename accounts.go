@@ -54,8 +54,8 @@ func (wallet *Wallet) GetAccountsRaw(requiredConfirmations int32) (*Accounts, er
 	}, nil
 }
 
-// AccountsIterator gets account information of a wallet and returns
-// the account index and the accompanying account information.
+// AccountsIterator returns an iterator that can be
+// used to loop through the accounts of a wallet.
 func (wallet *Wallet) AccountsIterator(requiredConfirmations int32) (*AccountsIterator, error) {
 	accounts, err := wallet.GetAccountsRaw(requiredConfirmations)
 	if err != nil {
@@ -68,8 +68,8 @@ func (wallet *Wallet) AccountsIterator(requiredConfirmations int32) (*AccountsIt
 	}, nil
 }
 
-// Iterates over the available accounts in the wallet and
-// returns the account within the length of the available accounts.
+// Next returns the account on the current iterator
+// index and increments the current index.
 func (accountsInterator *AccountsIterator) Next() *Account {
 	if accountsInterator.currentIndex < len(accountsInterator.accounts) {
 		account := accountsInterator.accounts[accountsInterator.currentIndex]
@@ -80,7 +80,7 @@ func (accountsInterator *AccountsIterator) Next() *Account {
 	return nil
 }
 
-// Sets the account index to default: 0
+// Reset sets the current iterator's index to 0.
 func (accountsInterator *AccountsIterator) Reset() {
 	accountsInterator.currentIndex = 0
 }
@@ -112,9 +112,8 @@ func (wallet *Wallet) GetAccount(accountNumber int32, requiredConfirmations int3
 	return account, nil
 }
 
-// GetAccountBalance sums up the amount of all unspent
-// transaction output in given account of a wallet and
-// returns the available balance.
+// GetAccountBalance returns all the balance
+// information in a given account.
 func (wallet *Wallet) GetAccountBalance(accountNumber int32, requiredConfirmations int32) (*Balance, error) {
 	balance, err := wallet.internal.CalculateAccountBalance(wallet.shutdownContext(), uint32(accountNumber), requiredConfirmations)
 	if err != nil {
@@ -132,9 +131,8 @@ func (wallet *Wallet) GetAccountBalance(accountNumber int32, requiredConfirmatio
 	}, nil
 }
 
-// SpendableForAccount sums up the amount of all
-// unspent transaction output in a given account
-// of a wallet and returns the spendable amount.
+// SpendableForAccount returns the spendable
+// balance in a given account.
 func (wallet *Wallet) SpendableForAccount(account int32, requiredConfirmations int32) (int64, error) {
 	bals, err := wallet.internal.CalculateAccountBalance(wallet.shutdownContext(), uint32(account), requiredConfirmations)
 	if err != nil {
@@ -144,9 +142,8 @@ func (wallet *Wallet) SpendableForAccount(account int32, requiredConfirmations i
 	return int64(bals.Spendable), nil
 }
 
-// NextAccount creates a new account  an returns
-// the account number with an account  name unique
-// to the account number.
+// NextAccount creates the account and returns the
+// account number.
 func (wallet *Wallet) NextAccount(accountName string, privPass []byte) (int32, error) {
 	lock := make(chan time.Time, 1)
 	defer func() {
@@ -168,7 +165,7 @@ func (wallet *Wallet) NextAccount(accountName string, privPass []byte) (int32, e
 	return int32(accountNumber), err
 }
 
-// Sets the name of an account to a newName.
+// RenameAccount sets the name for an account number to newName.
 func (wallet *Wallet) RenameAccount(accountNumber int32, newName string) error {
 	err := wallet.internal.RenameAccount(wallet.shutdownContext(), uint32(accountNumber), newName)
 	if err != nil {
@@ -178,7 +175,7 @@ func (wallet *Wallet) RenameAccount(accountNumber int32, newName string) error {
 	return nil
 }
 
-// Checks for an account and logs error if wallet is empty
+// AccountName returns the name for the passed account number.
 func (wallet *Wallet) AccountName(accountNumber int32) string {
 	name, err := wallet.AccountNameRaw(uint32(accountNumber))
 	if err != nil {
@@ -188,7 +185,7 @@ func (wallet *Wallet) AccountName(accountNumber int32) string {
 	return name
 }
 
-// Returns the account name for the corresponding account number.
+// AccountNameRaw returns the name for the passed account number.
 func (wallet *Wallet) AccountNameRaw(accountNumber uint32) (string, error) {
 	return wallet.internal.AccountName(wallet.shutdownContext(), accountNumber)
 }
@@ -198,8 +195,8 @@ func (wallet *Wallet) AccountNumber(accountName string) (uint32, error) {
 	return wallet.internal.AccountNumber(wallet.shutdownContext(), accountName)
 }
 
-// Checks and identifies the coin network type for the account
-// and returns the path for any of the mainnet, testnet, or legacy.
+// HDPathForAccount returns the HD path for the passed account based
+// on the coin-type and the net type of the wallet.
 func (wallet *Wallet) HDPathForAccount(accountNumber int32) (string, error) {
 	cointype, err := wallet.internal.CoinType(wallet.shutdownContext())
 	if err != nil {
