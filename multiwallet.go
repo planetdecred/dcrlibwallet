@@ -376,7 +376,7 @@ func (mw *MultiWallet) LinkExistingWallet(walletDataDir, originalPubPass string,
 // - calls the provided `setupWallet` function to perform any necessary creation,
 //   restoration or linking of the just saved wallet
 //
-// If all the above operations succeed, the wallet info will be persisted to db
+// IFF all the above operations succeed, the wallet info will be persisted to db
 // and the wallet will be added to `mw.wallets`.
 func (mw *MultiWallet) saveNewWallet(wallet *Wallet, setupWallet func() error) (*Wallet, error) {
 	exists, err := mw.WalletNameExists(wallet.Name)
