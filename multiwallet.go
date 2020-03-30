@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/asdine/storm"
 	"github.com/asdine/storm/q"
@@ -29,6 +30,7 @@ type MultiWallet struct {
 	wallets     map[int]*Wallet
 	syncData    *syncData
 
+	notificationListenersMu         sync.Mutex
 	txAndBlockNotificationListeners map[string]TxAndBlockNotificationListener
 	blocksRescanProgressListener    BlocksRescanProgressListener
 
