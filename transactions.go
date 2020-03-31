@@ -33,7 +33,7 @@ const (
 )
 
 // GetTransaction returns the JSON encoded string of
-// transactions in a wallet.
+// transaction details.
 func (wallet *Wallet) GetTransaction(txHash []byte) (string, error) {
 	transaction, err := wallet.GetTransactionRaw(txHash)
 	if err != nil {
@@ -49,7 +49,7 @@ func (wallet *Wallet) GetTransaction(txHash []byte) (string, error) {
 	return string(result), nil
 }
 
-// GetTransactionRaw returns the details of transaction related to the wallet.
+// GetTransactionRaw returns transaction details of a wallet belonging to txHash.
 func (wallet *Wallet) GetTransactionRaw(txHash []byte) (*Transaction, error) {
 	hash, err := chainhash.NewHash(txHash)
 	if err != nil {
@@ -67,7 +67,7 @@ func (wallet *Wallet) GetTransactionRaw(txHash []byte) (*Transaction, error) {
 }
 
 // GetTransactions returns the JSON encoding of all transactions
-// in a wallet starting from the most recent.
+// found in the wallet matching the passed parameters.
 func (wallet *Wallet) GetTransactions(offset, limit, txFilter int32, newestFirst bool) (string, error) {
 	transactions, err := wallet.GetTransactionsRaw(offset, limit, txFilter, newestFirst)
 	if err != nil {
@@ -82,15 +82,15 @@ func (wallet *Wallet) GetTransactions(offset, limit, txFilter int32, newestFirst
 	return string(jsonEncodedTransactions), nil
 }
 
-// GetTransactionsRaw returns the details of transactions related to the wallet.
+// GetTransactionsRaw returns an array of all transactions
+// found in the wallet matching the passed parameters.
 func (wallet *Wallet) GetTransactionsRaw(offset, limit, txFilter int32, newestFirst bool) (transactions []Transaction, err error) {
 	err = wallet.txDB.Read(offset, limit, txFilter, newestFirst, &transactions)
 	return
 }
 
-// GetTransactions returns the JSON encoded strings
-// of all transactions in several wallets starting
-// from the newest wallet created.
+// GetTransactions returns the JSON encoding of all transactions
+// matching the passed parameters found in the wallets.
 func (mw *MultiWallet) GetTransactions(offset, limit, txFilter int32, newestFirst bool) (string, error) {
 	transactions := make([]Transaction, 0)
 	for _, wallet := range mw.wallets {
@@ -122,8 +122,8 @@ func (mw *MultiWallet) GetTransactions(offset, limit, txFilter int32, newestFirs
 	return string(jsonEncodedTransactions), nil
 }
 
-// CountTransactions returns number of recorded transactions that
-// occurred within a wallet at a given period of time.
+// CountTransactions returns number of transactions matching
+// the txFilter.
 func (wallet *Wallet) CountTransactions(txFilter int32) (int, error) {
 	return wallet.txDB.Count(txFilter, &Transaction{})
 }
