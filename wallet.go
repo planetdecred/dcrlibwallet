@@ -115,7 +115,7 @@ func (wallet *Wallet) NetType() string {
 	return wallet.chainParams.Name
 }
 
-// WalletExists returns whether or not a wallet exists at the loaders' db path.
+// WalletExists returns true if a wallet exists at the loaders' DB path.
 func (wallet *Wallet) WalletExists() (bool, error) {
 	return wallet.loader.WalletExists()
 }
@@ -161,7 +161,8 @@ func (wallet *Wallet) createWatchingOnlyWallet(extendedPublicKey string) error {
 	return nil
 }
 
-// IsWatchingOnlyWallet returns whether or not a wallet is in watching only mode.
+// IsWatchingOnlyWallet returns true if a wallet is
+// a watching only wallet.
 func (wallet *Wallet) IsWatchingOnlyWallet() bool {
 	if w, ok := wallet.loader.LoadedWallet(); ok {
 		return w.Manager.WatchingOnly()
@@ -217,7 +218,7 @@ func (wallet *Wallet) LockWallet() {
 	}
 }
 
-// IsLocked returns whether a wallet is locked.
+// IsLocked returns true if a wallet is locked.
 func (wallet *Wallet) IsLocked() bool {
 	return wallet.internal.Locked()
 }
