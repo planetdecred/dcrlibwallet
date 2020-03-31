@@ -62,7 +62,7 @@ func (mw *MultiWallet) listenForTransactions(walletID int) {
 }
 
 // AddTxAndBlockNotificationListener adds a notification listener
-// for transaction and certain block height on wallet.
+// for new transactions and blocks received.
 func (mw *MultiWallet) AddTxAndBlockNotificationListener(txAndBlockNotificationListener TxAndBlockNotificationListener, uniqueIdentifier string) error {
 	_, ok := mw.txAndBlockNotificationListeners[uniqueIdentifier]
 	if ok {
@@ -74,8 +74,8 @@ func (mw *MultiWallet) AddTxAndBlockNotificationListener(txAndBlockNotificationL
 	return nil
 }
 
-// RemoveTxAndBlockNotificationListener deletes the notification
-// listener set for transaction and block height in a wallet.
+// RemoveTxAndBlockNotificationListener deletes existing
+// TxAndBlockNotificationListener matching uniqueIdentifier.
 func (mw *MultiWallet) RemoveTxAndBlockNotificationListener(uniqueIdentifier string) {
 	delete(mw.txAndBlockNotificationListeners, uniqueIdentifier)
 }
