@@ -22,7 +22,7 @@ type TxAuthor struct {
 	wallet                *Wallet
 }
 
-//NewUnsignedTx returns information on the account of transaction author
+//NewUnsignedTx returns a TxAuthor instance to construct a transaction.
 func (wallet *Wallet) NewUnsignedTx(sourceAccountNumber, requiredConfirmations int32) *TxAuthor {
 	return &TxAuthor{
 		sendFromAccount:       uint32(sourceAccountNumber),
@@ -32,7 +32,7 @@ func (wallet *Wallet) NewUnsignedTx(sourceAccountNumber, requiredConfirmations i
 	}
 }
 
-//SetSourceAccount sets the particular account from which to carry out transaction
+//SetSourceAccount sets the particular account from which to carry out the transaction.
 func (tx *TxAuthor) SetSourceAccount(accountNumber int32) {
 	tx.sendFromAccount = uint32(accountNumber)
 }
