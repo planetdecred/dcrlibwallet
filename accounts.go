@@ -9,8 +9,8 @@ import (
 	"github.com/decred/dcrwallet/errors/v2"
 )
 
-// GetAccounts returns a json.Marshal of an
-// account information in a wallet.
+// GetAccounts returns a json array of all
+// accounts information in a wallet.
 func (wallet *Wallet) GetAccounts(requiredConfirmations int32) (string, error) {
 	accountsResponse, err := wallet.GetAccountsRaw(requiredConfirmations)
 	if err != nil {
@@ -21,7 +21,7 @@ func (wallet *Wallet) GetAccounts(requiredConfirmations int32) (string, error) {
 	return string(result), nil
 }
 
-// GetAccountsRaw returns all the information about an existing account.
+// GetAccountsRaw returns an Accounts pointer containing all accounts information in a wallet.
 func (wallet *Wallet) GetAccountsRaw(requiredConfirmations int32) (*Accounts, error) {
 	resp, err := wallet.internal.Accounts(wallet.shutdownContext())
 	if err != nil {
@@ -190,7 +190,7 @@ func (wallet *Wallet) AccountNameRaw(accountNumber uint32) (string, error) {
 	return wallet.internal.AccountName(wallet.shutdownContext(), accountNumber)
 }
 
-// Returns an account number for the corresponding account name.
+// AccountNumber returns an account number for the passed account.
 func (wallet *Wallet) AccountNumber(accountName string) (uint32, error) {
 	return wallet.internal.AccountNumber(wallet.shutdownContext(), accountName)
 }
