@@ -49,7 +49,7 @@ func (mw *MultiWallet) walletConfigReadFn(walletID int) configReadFn {
 	}
 }
 
-// SaveUserConfigValue saves config value name for key
+// SaveUserConfigValue saves config value for key
 func (mw *MultiWallet) SaveUserConfigValue(key string, value interface{}) {
 	err := mw.db.Set(userConfigBucketName, key, value)
 	if err != nil {
@@ -74,7 +74,7 @@ func (mw *MultiWallet) DeleteUserConfigValueForKey(key string) {
 	}
 }
 
-// ClearConfig drops a config bucket name.
+// ClearConfig clears all saved config.
 func (mw *MultiWallet) ClearConfig() {
 	err := mw.db.Drop(userConfigBucketName)
 	if err != nil {
