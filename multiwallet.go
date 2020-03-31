@@ -271,8 +271,8 @@ func (mw *MultiWallet) CreateWatchOnlyWallet(walletName, extendedPublicKey strin
 	})
 }
 
-// CreateNewWallet creates a new wallet with
-// wallet seed as well as private PassPhrase
+// CreateNewWallet generates a wallet seed and creates a new
+// wallet using the provided private PassPhrase.
 func (mw *MultiWallet) CreateNewWallet(privatePassphrase string, privatePassphraseType int32) (*Wallet, error) {
 	seed, err := GenerateSeed()
 	if err != nil {
@@ -295,7 +295,7 @@ func (mw *MultiWallet) CreateNewWallet(privatePassphrase string, privatePassphra
 	})
 }
 
-// RestoreWallet uses a wallet seed and private passPhrase
+// RestoreWallet uses a wallet seed and private passphrase
 // to restore an existing wallet.
 func (mw *MultiWallet) RestoreWallet(seedMnemonic, privatePassphrase string, privatePassphraseType int32) (*Wallet, error) {
 	wallet := &Wallet{
@@ -520,8 +520,8 @@ func (mw *MultiWallet) VerifySeedForWallet(walletID int, seedMnemonic string) er
 	return errors.New(ErrInvalid)
 }
 
-// NumWalletsNeedingSeedBackup iterates over the available
-// wallets and checks and returns a list of any needing backups.
+// NumWalletsNeedingSeedBackup returns the number of
+// wallets that requires seed backup.
 func (mw *MultiWallet) NumWalletsNeedingSeedBackup() int32 {
 	var backupsNeeded int32
 	for _, wallet := range mw.wallets {
