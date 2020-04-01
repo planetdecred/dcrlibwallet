@@ -22,7 +22,7 @@ type TxAuthor struct {
 	wallet                *Wallet
 }
 
-//NewUnsignedTx returns a TxAuthor instance to construct a transaction.
+// NewUnsignedTx returns a TxAuthor instance to construct a transaction.
 func (wallet *Wallet) NewUnsignedTx(sourceAccountNumber, requiredConfirmations int32) *TxAuthor {
 	return &TxAuthor{
 		sendFromAccount:       uint32(sourceAccountNumber),
@@ -32,12 +32,13 @@ func (wallet *Wallet) NewUnsignedTx(sourceAccountNumber, requiredConfirmations i
 	}
 }
 
-//SetSourceAccount sets the particular account from which to carry out the transaction.
+// SetSourceAccount sets account to fund the transaction.
 func (tx *TxAuthor) SetSourceAccount(accountNumber int32) {
 	tx.sendFromAccount = uint32(accountNumber)
 }
 
-//AddSendDestination sets the wallet address to which funds are sent to
+// AddSendDestination adds an address and amount to receive
+// to the transaction.
 func (tx *TxAuthor) AddSendDestination(address string, atomAmount int64, sendMax bool) {
 	tx.destinations = append(tx.destinations, TransactionDestination{
 		Address:    address,
@@ -46,7 +47,7 @@ func (tx *TxAuthor) AddSendDestination(address string, atomAmount int64, sendMax
 	})
 }
 
-//UpdateSendDestination allows for a change in wallet address to which funds are sent to
+//UpdateSendDestination updates the send destination at index.
 func (tx *TxAuthor) UpdateSendDestination(index int, address string, atomAmount int64, sendMax bool) {
 	tx.destinations[index] = TransactionDestination{
 		Address:    address,
@@ -55,14 +56,15 @@ func (tx *TxAuthor) UpdateSendDestination(index int, address string, atomAmount 
 	}
 }
 
-//RemoveSendDestination deletes an address that was set for receiving funds
+//RemoveSendDestination deletes a send destination suing the index.
 func (tx *TxAuthor) RemoveSendDestination(index int) {
 	if len(tx.destinations) > index {
 		tx.destinations = append(tx.destinations[:index], tx.destinations[index+1:]...)
 	}
 }
 
-//EstimateFeeAndSize returns the information about transaction fee and estimated size of transaction
+//EstimateFeeAndSize returns the information about the estimated
+// transaction fee and size of transaction.
 func (tx *TxAuthor) EstimateFeeAndSize() (*TxFeeAndSize, error) {
 	unsignedTx, err := tx.constructTransaction()
 	if err != nil {
@@ -81,8 +83,8 @@ func (tx *TxAuthor) EstimateFeeAndSize() (*TxFeeAndSize, error) {
 	}, nil
 }
 
-//EstimateMaxSendAmount returns the estimated limit of funds to send
-//or an error if no amount is set
+//EstimateMaxSendAmount returns the maximum spendable amount
+// excluding the transaction fee.
 func (tx *TxAuthor) EstimateMaxSendAmount() (*Amount, error) {
 	txFeeAndSize, err := tx.EstimateFeeAndSize()
 	if err != nil {
@@ -102,7 +104,7 @@ func (tx *TxAuthor) EstimateMaxSendAmount() (*Amount, error) {
 	}, nil
 }
 
-// Broadcast allows for pasting of raw transactions conducted in a wallet.
+// Broadcast signs and publishes the transactions to the network.
 func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
 	defer func() {
 		for i := range privatePassphrase {
