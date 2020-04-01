@@ -108,7 +108,7 @@ func (mw *MultiWallet) fetchHeadersProgress(lastFetchedHeaderHeight int32, lastF
 
 	headersLeftToFetch := mw.estimateBlockHeadersCountAfter(lastFetchedHeaderTime)
 	totalHeadersToFetch := lastFetchedHeaderHeight + headersLeftToFetch
-	headersFetchedSoFar := mw.syncData.beginFetchTimeStamp
+	headersFetchedSoFar := mw.syncData.activeSyncData.startHeaderHeight
 	headersFetchProgress := float64(headersFetchedSoFar) / float64(totalHeadersToFetch)
 	// todo: above equation is potentially flawed because `lastFetchedHeaderHeight`
 	// may not be the total number of headers fetched so far in THIS sync operation.
