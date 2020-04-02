@@ -83,8 +83,8 @@ func (mw *MultiWallet) RemoveTxAndBlockNotificationListener(uniqueIdentifier str
 }
 
 func (mw *MultiWallet) mempoolTransactionNotification(transaction string) {
-	mw.notificationListenersMu.Lock()
-	defer mw.notificationListenersMu.Unlock()
+	mw.notificationListenersMu.RLock()
+	defer mw.notificationListenersMu.RUnlock()
 
 	for _, txAndBlockNotifcationListener := range mw.txAndBlockNotificationListeners {
 		txAndBlockNotifcationListener.OnTransaction(transaction)
@@ -92,8 +92,8 @@ func (mw *MultiWallet) mempoolTransactionNotification(transaction string) {
 }
 
 func (mw *MultiWallet) publishTransactionConfirmed(walletID int, transactionHash string, blockHeight int32) {
-	mw.notificationListenersMu.Lock()
-	defer mw.notificationListenersMu.Unlock()
+	mw.notificationListenersMu.RLock()
+	defer mw.notificationListenersMu.RUnlock()
 
 	for _, txAndBlockNotifcationListener := range mw.txAndBlockNotificationListeners {
 		txAndBlockNotifcationListener.OnTransactionConfirmed(walletID, transactionHash, blockHeight)
@@ -101,8 +101,8 @@ func (mw *MultiWallet) publishTransactionConfirmed(walletID int, transactionHash
 }
 
 func (mw *MultiWallet) publishBlockAttached(walletID int, blockHeight int32) {
-	mw.notificationListenersMu.Lock()
-	defer mw.notificationListenersMu.Unlock()
+	mw.notificationListenersMu.RLock()
+	defer mw.notificationListenersMu.RUnlock()
 
 	for _, txAndBlockNotifcationListener := range mw.txAndBlockNotificationListeners {
 		txAndBlockNotifcationListener.OnBlockAttached(walletID, blockHeight)

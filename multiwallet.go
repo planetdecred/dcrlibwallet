@@ -30,7 +30,7 @@ type MultiWallet struct {
 	wallets     map[int]*Wallet
 	syncData    *syncData
 
-	notificationListenersMu         sync.Mutex
+	notificationListenersMu         sync.RWMutex
 	txAndBlockNotificationListeners map[string]TxAndBlockNotificationListener
 	blocksRescanProgressListener    BlocksRescanProgressListener
 
@@ -298,10 +298,6 @@ func (mw *MultiWallet) RestoreWallet(seedMnemonic, privatePassphrase string, pri
 }
 
 func (mw *MultiWallet) LinkExistingWallet(walletDataDir, originalPubPass string, privatePassphraseType int32) (*Wallet, error) {
-	if mw.IsSyncing() {
-		return nil, errors.New(ErrSyncAlreadyInProgress)
-	}
-
 	// check if `walletDataDir` contains wallet.db
 	if !WalletExistsAt(walletDataDir) {
 		return nil, errors.New(ErrNotExist)
@@ -455,9 +451,11 @@ func (mw *MultiWallet) DeleteWallet(walletID int, privPass []byte) error {
 
 	if mw.IsConnectedToDecredNetwork() {
 		mw.CancelSync()
-		if mw.OpenedWalletsCount() > 1 {
-			defer mw.SpvSync()
-		}
+		defer func() {
+			if mw.OpenedWalletsCount() > 0 {
+				mw.SpvSync()
+			}
+		}()
 	}
 
 	err := wallet.deleteWallet(privPass)
