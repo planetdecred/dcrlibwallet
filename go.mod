@@ -30,13 +30,17 @@ require (
 	github.com/dgryski/go-farm v0.0.0-20190104051053-3adb47b1fb0f // indirect
 	github.com/gorilla/websocket v1.4.1 // indirect
 	github.com/jrick/logrotate v1.0.0
+	github.com/onsi/ginkgo v1.12.0 // indirect
+	github.com/onsi/gomega v1.8.1 // indirect
 	github.com/pkg/errors v0.8.1 // indirect
 	github.com/raedahgroup/dcrlibwallet/spv v0.0.0-00010101000000-000000000000
-	github.com/raedahgroup/godcr-gio v0.0.0-20200326085541-ca2e8fc6f796
+	github.com/stretchr/testify v1.4.0 // indirect
 	go.etcd.io/bbolt v1.3.3
 	golang.org/x/crypto v0.0.0-20190820162420-60c769a6c586
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
+	golang.org/x/sys v0.0.0-20200124204421-9fbb57f87de9 // indirect
 	google.golang.org/appengine v1.5.0 // indirect
+	gopkg.in/yaml.v2 v2.2.7 // indirect
 )
 
 replace (
