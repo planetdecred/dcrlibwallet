@@ -325,7 +325,6 @@ func (wallet *Wallet) IsSyncing() bool {
 	return wallet.syncing
 }
 
-// IsSynced returns true if all wallets are synced.
 func (mw *MultiWallet) IsSynced() bool {
 	mw.syncData.mu.RLock()
 	defer mw.syncData.mu.RUnlock()
