@@ -41,7 +41,6 @@ func (tx *TxAuthor) AddSendDestination(address string, atomAmount int64, sendMax
 		AtomAmount: atomAmount,
 		SendMax:    sendMax,
 	})
-	return
 }
 
 func (tx *TxAuthor) UpdateSendDestination(index int, address string, atomAmount int64, sendMax bool) {
