@@ -90,6 +90,8 @@ func (mw *MultiWallet) initActiveSyncData() {
 	mw.syncData.mu.Unlock()
 }
 
+// IsSyncProgressListenerRegisteredFor returns true if a sync
+// progress listener is registered for uniqueIdentifier.
 func (mw *MultiWallet) IsSyncProgressListenerRegisteredFor(uniqueIdentifier string) bool {
 	mw.syncData.mu.RLock()
 	_, exists := mw.syncData.syncProgressListeners[uniqueIdentifier]
@@ -97,6 +99,8 @@ func (mw *MultiWallet) IsSyncProgressListenerRegisteredFor(uniqueIdentifier stri
 	return exists
 }
 
+// AddSyncProgressListener checks and sets a new progress listener if there is
+// no existing progress listener for wallet syncing.
 func (mw *MultiWallet) AddSyncProgressListener(syncProgressListener SyncProgressListener, uniqueIdentifier string) error {
 	if mw.IsSyncProgressListenerRegisteredFor(uniqueIdentifier) {
 		return errors.New(ErrListenerAlreadyExist)
@@ -110,6 +114,7 @@ func (mw *MultiWallet) AddSyncProgressListener(syncProgressListener SyncProgress
 	return mw.PublishLastSyncProgress(uniqueIdentifier)
 }
 
+// RemoveSyncProgressListener deletes an existing sync progress listener.
 func (mw *MultiWallet) RemoveSyncProgressListener(uniqueIdentifier string) {
 	mw.syncData.mu.Lock()
 	delete(mw.syncData.syncProgressListeners, uniqueIdentifier)
@@ -128,6 +133,8 @@ func (mw *MultiWallet) syncProgressListeners() []SyncProgressListener {
 	return listeners
 }
 
+// PublishLastSyncProgress broadcasts last sync progress
+// to registered sync progress listeners.
 func (mw *MultiWallet) PublishLastSyncProgress(uniqueIdentifier string) error {
 	mw.syncData.mu.RLock()
 	defer mw.syncData.mu.RUnlock()
@@ -151,12 +158,14 @@ func (mw *MultiWallet) PublishLastSyncProgress(uniqueIdentifier string) error {
 	return nil
 }
 
+// EnableSyncLogs enables logging of sync logs.
 func (mw *MultiWallet) EnableSyncLogs() {
 	mw.syncData.mu.Lock()
 	mw.syncData.showLogs = true
 	mw.syncData.mu.Unlock()
 }
 
+// SyncInactiveForPeriod accounts for inactive sync period.
 func (mw *MultiWallet) SyncInactiveForPeriod(totalInactiveSeconds int64) {
 	mw.syncData.mu.Lock()
 	defer mw.syncData.mu.Unlock()
@@ -173,6 +182,7 @@ func (mw *MultiWallet) SyncInactiveForPeriod(totalInactiveSeconds int64) {
 	}
 }
 
+// SpvSync starts syncing a wallet using SPV peer to peer connections.
 func (mw *MultiWallet) SpvSync() error {
 	// prevent an attempt to sync when the previous syncing has not been canceled
 	if mw.IsSyncing() || mw.IsSynced() {
@@ -258,6 +268,7 @@ func (mw *MultiWallet) SpvSync() error {
 	return nil
 }
 
+// RestartSpvSync restarts ongoing SpvSync.
 func (mw *MultiWallet) RestartSpvSync() error {
 	mw.syncData.mu.Lock()
 	mw.syncData.restartSyncRequested = true
@@ -267,6 +278,7 @@ func (mw *MultiWallet) RestartSpvSync() error {
 	return mw.SpvSync()
 }
 
+// CancelSync stops any active wallet syncing.
 func (mw *MultiWallet) CancelSync() {
 	mw.syncData.mu.RLock()
 	cancelSync := mw.syncData.cancelSync
@@ -297,18 +309,24 @@ func (mw *MultiWallet) CancelSync() {
 	}
 }
 
+// IsWaiting returns true if a wallet has not received
+// headers in a multi-wallet sync.
 func (wallet *Wallet) IsWaiting() bool {
 	return wallet.waiting
 }
 
+// IsSynced returns true if a wallet is synced.
 func (wallet *Wallet) IsSynced() bool {
 	return wallet.synced
 }
 
+// IsSyncing returns true if a wallet is syncing.
 func (wallet *Wallet) IsSyncing() bool {
 	return wallet.syncing
 }
 
+// IsConnectedToDecredNetwork returns true is a wallet is
+// connected to the decred network.
 func (mw *MultiWallet) IsConnectedToDecredNetwork() bool {
 	mw.syncData.mu.RLock()
 	defer mw.syncData.mu.RUnlock()
@@ -321,12 +339,14 @@ func (mw *MultiWallet) IsSynced() bool {
 	return mw.syncData.synced
 }
 
+// IsSyncing returns true if the wallets are syncing.
 func (mw *MultiWallet) IsSyncing() bool {
 	mw.syncData.mu.RLock()
 	defer mw.syncData.mu.RUnlock()
 	return mw.syncData.syncing
 }
 
+// CurrentSyncStage returns the sync stage of the wallets.
 func (mw *MultiWallet) CurrentSyncStage() int32 {
 	mw.syncData.mu.RLock()
 	defer mw.syncData.mu.RUnlock()
@@ -337,6 +357,7 @@ func (mw *MultiWallet) CurrentSyncStage() int32 {
 	return InvalidSyncStage
 }
 
+// GeneralSyncProgress returns the general sync progress.
 func (mw *MultiWallet) GeneralSyncProgress() *GeneralSyncProgress {
 	mw.syncData.mu.RLock()
 	defer mw.syncData.mu.RUnlock()
@@ -355,12 +376,14 @@ func (mw *MultiWallet) GeneralSyncProgress() *GeneralSyncProgress {
 	return nil
 }
 
+// ConnectedPeers returns the number of connected peers via spv.
 func (mw *MultiWallet) ConnectedPeers() int32 {
 	mw.syncData.mu.RLock()
 	defer mw.syncData.mu.RUnlock()
 	return mw.syncData.connectedPeers
 }
 
+// GetBestBlock retrieves highest block height from the loaded wallets.
 func (mw *MultiWallet) GetBestBlock() *BlockInfo {
 	var bestBlock int32 = -1
 	var blockInfo *BlockInfo
@@ -379,6 +402,7 @@ func (mw *MultiWallet) GetBestBlock() *BlockInfo {
 	return blockInfo
 }
 
+// GetLowestBlock retrieves the lowest block height from the loaded wallets.
 func (mw *MultiWallet) GetLowestBlock() *BlockInfo {
 	var lowestBlock int32 = -1
 	var blockInfo *BlockInfo
@@ -396,6 +420,7 @@ func (mw *MultiWallet) GetLowestBlock() *BlockInfo {
 	return blockInfo
 }
 
+// GetBestBlock retrieves the best block height that the wallet is synced to.
 func (wallet *Wallet) GetBestBlock() int32 {
 	if wallet.internal == nil {
 		// This method is sometimes called after a wallet is deleted and causes crash.
@@ -407,6 +432,7 @@ func (wallet *Wallet) GetBestBlock() int32 {
 	return height
 }
 
+// GetBestBlockTimeStamp retrieves the timestamp of the wallet's best block.
 func (wallet *Wallet) GetBestBlockTimeStamp() int64 {
 	if wallet.internal == nil {
 		// This method is sometimes called after a wallet is deleted and causes crash.
@@ -425,6 +451,8 @@ func (wallet *Wallet) GetBestBlockTimeStamp() int64 {
 	return info.Timestamp
 }
 
+// GetLowestBlockTimestamp gets the block timestamp from the
+// wallet with the lowest block height.
 func (mw *MultiWallet) GetLowestBlockTimestamp() int64 {
 	var timestamp int64 = -1
 	for _, wallet := range mw.wallets {

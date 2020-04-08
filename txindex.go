@@ -6,6 +6,8 @@ import (
 	"github.com/raedahgroup/dcrlibwallet/txindex"
 )
 
+// IndexTransactions saves all wallet transactions
+// into storm db.
 func (wallet *Wallet) IndexTransactions() error {
 	ctx := wallet.shutdownContext()
 

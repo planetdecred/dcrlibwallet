@@ -19,6 +19,8 @@ func PkScript(address string, net dcrutil.AddressParams) ([]byte, error) {
 	return txscript.PayToAddrScript(addr)
 }
 
+// PkScriptAddresses extracts and returns the addresses from
+// the passed script.
 func PkScriptAddresses(params *chaincfg.Params, pkScript []byte) ([]string, error) {
 	_, addresses, _, err := txscript.ExtractPkScriptAddrs(scriptVersion, pkScript, params)
 	if err != nil {

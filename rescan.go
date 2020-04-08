@@ -9,6 +9,8 @@ import (
 	w "github.com/decred/dcrwallet/wallet/v3"
 )
 
+// RescanBlocks rescans for relevant transactions in
+// all blocks in the main chain.
 func (mw *MultiWallet) RescanBlocks(walletID int) error {
 
 	wallet := mw.WalletWithID(walletID)
@@ -107,6 +109,7 @@ func (mw *MultiWallet) RescanBlocks(walletID int) error {
 	return nil
 }
 
+// CancelRescan cancels an ongoing scans.
 func (mw *MultiWallet) CancelRescan() {
 	mw.syncData.mu.Lock()
 	defer mw.syncData.mu.Unlock()
@@ -118,12 +121,15 @@ func (mw *MultiWallet) CancelRescan() {
 	}
 }
 
+// IsRescanning returns true if a wallet is rescanning blocks.
 func (mw *MultiWallet) IsRescanning() bool {
 	mw.syncData.mu.RLock()
 	defer mw.syncData.mu.RUnlock()
 	return mw.syncData.rescanning
 }
 
+// SetBlocksRescanProgressListener sets a listener to
+// receive block rescan progress.
 func (mw *MultiWallet) SetBlocksRescanProgressListener(blocksRescanProgressListener BlocksRescanProgressListener) {
 	mw.blocksRescanProgressListener = blocksRescanProgressListener
 }

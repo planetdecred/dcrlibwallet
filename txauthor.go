@@ -23,6 +23,7 @@ type TxAuthor struct {
 	changeAddress       string
 }
 
+// NewUnsignedTx returns a TxAuthor instance to construct a transaction.
 func (mw *MultiWallet) NewUnsignedTx(sourceWallet *Wallet, sourceAccountNumber int32) *TxAuthor {
 	return &TxAuthor{
 		sourceWallet:        sourceWallet,
@@ -31,6 +32,8 @@ func (mw *MultiWallet) NewUnsignedTx(sourceWallet *Wallet, sourceAccountNumber i
 	}
 }
 
+// AddSendDestination adds an address and amount to receive
+// to the transaction.
 func (tx *TxAuthor) AddSendDestination(address string, atomAmount int64, sendMax bool) {
 	tx.destinations = append(tx.destinations, TransactionDestination{
 		Address:    address,
@@ -39,6 +42,7 @@ func (tx *TxAuthor) AddSendDestination(address string, atomAmount int64, sendMax
 	})
 }
 
+//UpdateSendDestination updates the send destination at index.
 func (tx *TxAuthor) UpdateSendDestination(index int, address string, atomAmount int64, sendMax bool) {
 	tx.destinations[index] = TransactionDestination{
 		Address:    address,
@@ -47,28 +51,15 @@ func (tx *TxAuthor) UpdateSendDestination(index int, address string, atomAmount 
 	}
 }
 
+//RemoveSendDestination deletes a send destination suing the index.
 func (tx *TxAuthor) RemoveSendDestination(index int) {
 	if len(tx.destinations) > index {
 		tx.destinations = append(tx.destinations[:index], tx.destinations[index+1:]...)
 	}
 }
 
-func (tx *TxAuthor) SendDestination(atIndex int) *TransactionDestination {
-	return &tx.destinations[atIndex]
-}
-
-func (tx *TxAuthor) TotalSendAmount() *Amount {
-	var totalSendAmountAtom int64 = 0
-	for _, destination := range tx.destinations {
-		totalSendAmountAtom += destination.AtomAmount
-	}
-
-	return &Amount{
-		AtomValue: totalSendAmountAtom,
-		DcrValue:  dcrutil.Amount(totalSendAmountAtom).ToCoin(),
-	}
-}
-
+//EstimateFeeAndSize returns the information about the estimated
+// transaction fee and size of transaction.
 func (tx *TxAuthor) EstimateFeeAndSize() (*TxFeeAndSize, error) {
 	unsignedTx, err := tx.constructTransaction()
 	if err != nil {
@@ -87,6 +78,8 @@ func (tx *TxAuthor) EstimateFeeAndSize() (*TxFeeAndSize, error) {
 	}, nil
 }
 
+//EstimateMaxSendAmount returns the maximum spendable amount
+// excluding the transaction fee.
 func (tx *TxAuthor) EstimateMaxSendAmount() (*Amount, error) {
 	txFeeAndSize, err := tx.EstimateFeeAndSize()
 	if err != nil {
@@ -106,6 +99,7 @@ func (tx *TxAuthor) EstimateMaxSendAmount() (*Amount, error) {
 	}, nil
 }
 
+// Broadcast signs and publishes the transactions to the network.
 func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
 	defer func() {
 		for i := range privatePassphrase {

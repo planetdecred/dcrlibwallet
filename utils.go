@@ -88,6 +88,8 @@ func (mw *MultiWallet) contextWithShutdownCancel() (context.Context, context.Can
 	return ctx, cancel
 }
 
+// ValidateExtPubKey returns true if extendedPubKey is a
+// valid extended public key.
 func (mw *MultiWallet) ValidateExtPubKey(extendedPubKey string) error {
 	_, err := hdkeychain.NewKeyFromString(extendedPubKey, mw.chainParams)
 	if err != nil {

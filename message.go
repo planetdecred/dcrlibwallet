@@ -9,6 +9,8 @@ import (
 	w "github.com/decred/dcrwallet/wallet/v3"
 )
 
+// SignMessage returns the signature of a signed message
+// using an address associated private key.
 func (wallet *Wallet) SignMessage(passphrase []byte, address string, message string) ([]byte, error) {
 	lock := make(chan time.Time, 1)
 	defer func() {
@@ -45,6 +47,7 @@ func (wallet *Wallet) SignMessage(passphrase []byte, address string, message str
 	return sig, nil
 }
 
+// VerifyMessage verifies that signatureBase64 is a valid signature.
 func (wallet *Wallet) VerifyMessage(address string, message string, signatureBase64 string) (bool, error) {
 	var valid bool
 

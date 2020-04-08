@@ -11,7 +11,9 @@ import (
 )
 
 // AddressInfo holds information about an address
-// If the address belongs to the querying wallet, IsMine will be true and the AccountNumber and AccountName values will be populated
+// If the address belongs to the querying wallet,
+// IsMine will be true and the AccountNumber and
+// AccountName values will be populated.
 type AddressInfo struct {
 	Address       string
 	IsMine        bool
@@ -19,11 +21,14 @@ type AddressInfo struct {
 	AccountName   string
 }
 
+// IsAddressValid decodes an address string and checks if
+// it is valid for the current net type.
 func (wallet *Wallet) IsAddressValid(address string) bool {
 	_, err := dcrutil.DecodeAddress(address, wallet.chainParams)
 	return err == nil
 }
 
+// HaveAddress returns whether wallet is the owner of the address.
 func (wallet *Wallet) HaveAddress(address string) bool {
 	addr, err := dcrutil.DecodeAddress(address, wallet.chainParams)
 	if err != nil {
@@ -38,6 +43,7 @@ func (wallet *Wallet) HaveAddress(address string) bool {
 	return have
 }
 
+// AccountOfAddress returns the account name of the passed wallet address.
 func (wallet *Wallet) AccountOfAddress(address string) string {
 	addr, err := dcrutil.DecodeAddress(address, wallet.chainParams)
 	if err != nil {
@@ -48,6 +54,8 @@ func (wallet *Wallet) AccountOfAddress(address string) string {
 	return wallet.AccountName(int32(info.Account()))
 }
 
+// AddressInfo returns information for an address such as
+// the address, account number and name of the account.
 func (wallet *Wallet) AddressInfo(address string) (*AddressInfo, error) {
 	addr, err := dcrutil.DecodeAddress(address, wallet.chainParams)
 	if err != nil {
@@ -69,6 +77,7 @@ func (wallet *Wallet) AddressInfo(address string) (*AddressInfo, error) {
 	return addressInfo, nil
 }
 
+// CurrentAddress returns the next unused address of an account.
 func (wallet *Wallet) CurrentAddress(account int32) (string, error) {
 	if wallet.IsRestored && !wallet.HasDiscoveredAccounts {
 		return "", errors.E(ErrAddressDiscoveryNotDone)
@@ -82,6 +91,8 @@ func (wallet *Wallet) CurrentAddress(account int32) (string, error) {
 	return addr.Address(), nil
 }
 
+// NextAddress returns a new external address
+// for the passed account.
 func (wallet *Wallet) NextAddress(account int32) (string, error) {
 	if wallet.IsRestored && !wallet.HasDiscoveredAccounts {
 		return "", errors.E(ErrAddressDiscoveryNotDone)
@@ -95,6 +106,7 @@ func (wallet *Wallet) NextAddress(account int32) (string, error) {
 	return addr.Address(), nil
 }
 
+// AddressPubKey returns the public key of the passed address.
 func (wallet *Wallet) AddressPubKey(address string) (string, error) {
 	addr, err := dcrutil.DecodeAddress(address, wallet.chainParams)
 	if err != nil {
