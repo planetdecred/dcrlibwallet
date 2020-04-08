@@ -115,7 +115,7 @@ func (wallet *Wallet) GetAccount(accountNumber int32) (*Account, error) {
 // GetAccountBalance returns all the balance
 // information in a given account.
 func (wallet *Wallet) GetAccountBalance(accountNumber int32) (*Balance, error) {
-	balance, err := wallet.internal.CalculateAccountBalance(wallet.shutdownContext(), uint32(accountNumber), wallet.RequiredConfirmations()
+	balance, err := wallet.internal.CalculateAccountBalance(wallet.shutdownContext(), uint32(accountNumber), wallet.RequiredConfirmations())
 	if err != nil {
 		return nil, err
 	}
