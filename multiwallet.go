@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/asdine/storm"
 	"github.com/asdine/storm/q"
@@ -265,6 +266,7 @@ func (mw *MultiWallet) CreateNewWallet(privatePassphrase string, privatePassphra
 	}
 
 	wallet := &Wallet{
+		CreatedAt:             time.Now(),
 		Seed:                  seed,
 		PrivatePassphraseType: privatePassphraseType,
 		HasDiscoveredAccounts: true,
