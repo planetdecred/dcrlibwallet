@@ -246,6 +246,7 @@ func (mw *MultiWallet) OpenWallets(startupPassphrase []byte) error {
 func (mw *MultiWallet) CreateWatchOnlyWallet(walletName, extendedPublicKey string) (*Wallet, error) {
 	wallet := &Wallet{
 		Name:                  walletName,
+		IsRestored:            true,
 		HasDiscoveredAccounts: true,
 	}
 
