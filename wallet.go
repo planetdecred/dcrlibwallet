@@ -111,6 +111,8 @@ func (wallet *Wallet) Shutdown() {
 	}
 }
 
+// WalletCreationTimeInMillis returns the wallet creation time for new
+// wallets. Restored wallets would return an error.
 func (wallet *Wallet) WalletCreationTimeInMillis() (int64, error) {
 	if wallet.IsRestored {
 		return 0, errors.New(ErrWalletIsRestored)
