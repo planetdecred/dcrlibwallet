@@ -7,7 +7,7 @@ for i in $(find . -name go.mod -type f -print); do
   module=$(dirname ${i})
   echo "running tests and lint on ${module}"
   (cd ${module} && \
-    go test $TESTTAGS ./... && \
+    go test && \
     golangci-lint run --deadline=10m \
       --disable-all \
       --enable govet \
