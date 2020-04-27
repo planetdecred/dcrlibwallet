@@ -20,6 +20,9 @@ import (
 	bolt "go.etcd.io/bbolt"
 
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/kevinburke/nacl"
+	"github.com/kevinburke/nacl/secretbox"
 )
 
 type MultiWallet struct {
@@ -266,10 +269,22 @@ func (mw *MultiWallet) CreateNewWallet(walletName, privatePassphrase string, pri
 		return nil, err
 	}
 
+	k, err := bcrypt.GenerateFromPassword([]byte(privatePassphrase), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+
+	key, err := nacl.Load(string(k))
+	if err != nil {
+		return nil, err
+	}
+
+	encryptedSeed := secretbox.EasySeal([]byte(seed), key)
+
 	wallet := &Wallet{
 		Name:                  walletName,
 		CreatedAt:             time.Now(),
-		Seed:                  seed,
+		Seed:                  string(encryptedSeed),
 		PrivatePassphraseType: privatePassphraseType,
 		HasDiscoveredAccounts: true,
 	}
@@ -285,11 +300,24 @@ func (mw *MultiWallet) CreateNewWallet(walletName, privatePassphrase string, pri
 }
 
 func (mw *MultiWallet) RestoreWallet(walletName, seedMnemonic, privatePassphrase string, privatePassphraseType int32) (*Wallet, error) {
+	k, err := bcrypt.GenerateFromPassword([]byte(privatePassphrase), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+
+	key, err := nacl.Load(string(k))
+	if err != nil {
+		return nil, err
+	}
+
+	encryptedSeed := secretbox.EasySeal([]byte(seedMnemonic), key)
+
 	wallet := &Wallet{
 		Name:                  walletName,
 		PrivatePassphraseType: privatePassphraseType,
 		IsRestored:            true,
 		HasDiscoveredAccounts: false,
+		Seed:                  string(encryptedSeed),
 	}
 
 	return mw.saveNewWallet(wallet, func() error {
