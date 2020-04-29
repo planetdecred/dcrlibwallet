@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"math/rand"
-	"os"
 	"strconv"
 	"time"
 
@@ -22,31 +21,7 @@ func init() {
 }
 
 var _ = Describe("Account", func() {
-	var (
-		wallet         *Wallet
-		internalWallet *w.Wallet
-		password       string
-	)
-
-	BeforeSuite(func() {
-		os.RemoveAll(rootDir)
-		multi, err := NewMultiWallet(rootDir, "", "testnet3")
-		Expect(err).To(BeNil())
-		Expect(multi).ToNot(BeNil())
-
-		password = randomPassword()
-		wallet, err = multi.CreateNewWallet(password, 0)
-		Expect(err).To(BeNil())
-		Expect(wallet).ToNot(BeNil())
-		internalWallet = wallet.InternalWallet()
-	})
-
-	AfterSuite(func() {
-		if wallet != nil {
-			wallet.Shutdown()
-		}
-	})
-
+	
 	getWrongAccountNumber := func() uint32 {
 		var accountNumber uint32 = 1220
 		var err error
