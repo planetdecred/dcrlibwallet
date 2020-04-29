@@ -3,9 +3,7 @@ package dcrlibwallet_test
 import (
 	"context"
 	"encoding/json"
-	"math/rand"
 	"strconv"
-	"time"
 
 	w "github.com/decred/dcrwallet/wallet/v3"
 	"github.com/decred/dcrwallet/wallet/v3/udb"
@@ -21,7 +19,7 @@ func init() {
 }
 
 var _ = Describe("Account", func() {
-	
+
 	getWrongAccountNumber := func() uint32 {
 		var accountNumber uint32 = 1220
 		var err error
@@ -56,7 +54,7 @@ var _ = Describe("Account", func() {
 
 	Describe("GetAccounts", func() {
 		It("should get accounts", func() {
-			res, err := wallet.GetAccounts(0)
+			res, err := wallet.GetAccounts()
 			By("returning a nil error")
 			Expect(err).To(BeNil())
 			By("returning nonempty accounts string")
@@ -79,7 +77,7 @@ var _ = Describe("Account", func() {
 		Context("when called with the right parameters", func() {
 			It("should get account", func() {
 				var accountNumber uint32 = 0
-				account, err := wallet.GetAccount(int32(accountNumber), 0)
+				account, err := wallet.GetAccount(int32(accountNumber))
 				By("returning a nil error")
 				Expect(err).To(BeNil())
 				By("returning a non nil account")
@@ -96,7 +94,7 @@ var _ = Describe("Account", func() {
 
 		Context("when called for non-existing account", func() {
 			It("it should fail", func() {
-				account, err := wallet.GetAccount(1000000000, 0)
+				account, err := wallet.GetAccount(1000000000)
 				By("returning a non nil error")
 				Expect(err).ToNot(BeNil())
 				By("by returning nil account")
@@ -111,7 +109,7 @@ var _ = Describe("Account", func() {
 			var confirmations int32 = 0
 			internalBalance, err := internalWallet.CalculateAccountBalance(context.Background(), accountNumber, confirmations)
 			Expect(err).To(BeNil())
-			balance, err := wallet.GetAccountBalance(int32(accountNumber), confirmations)
+			balance, err := wallet.GetAccountBalance(int32(accountNumber))
 			By("returning a nil error")
 			Expect(err).To(BeNil())
 			By("returning the expected balance")
@@ -126,7 +124,7 @@ var _ = Describe("Account", func() {
 			var confirmations int32 = 0
 			internalBalance, err := internalWallet.CalculateAccountBalance(context.Background(), accountNumber, confirmations)
 			Expect(err).To(BeNil())
-			balance, err := wallet.SpendableForAccount(int32(accountNumber), confirmations)
+			balance, err := wallet.SpendableForAccount(int32(accountNumber))
 			By("returning a nil error")
 			Expect(err).To(BeNil())
 			By("returning the expected balance")
@@ -167,7 +165,7 @@ var _ = Describe("Account", func() {
 				By("returning a nil error")
 				Expect(err).To(BeNil())
 
-				account, err := wallet.GetAccount(0, 0)
+				account, err := wallet.GetAccount(0)
 				Expect(err).To(BeNil())
 				By("changing the account name in the wallet")
 				Expect(account.Name).To(BeEquivalentTo(updatedName))
@@ -253,13 +251,3 @@ var _ = Describe("Account", func() {
 		})
 	})
 })
-
-func randomPassword() string {
-	var random = rand.New(rand.NewSource(time.Now().UnixNano()))
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	b := make([]byte, 8)
-	for i := range b {
-		b[i] = charset[random.Intn(len(charset))]
-	}
-	return string(b)
-}
