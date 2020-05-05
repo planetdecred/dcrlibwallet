@@ -8,7 +8,10 @@ import (
 	"github.com/asdine/storm"
 	"github.com/decred/dcrwallet/errors/v2"
 	w "github.com/decred/dcrwallet/wallet/v3"
+	"github.com/kevinburke/nacl"
+	"github.com/kevinburke/nacl/secretbox"
 	"github.com/raedahgroup/dcrlibwallet/spv"
+	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -110,4 +113,40 @@ func (mw *MultiWallet) RootDirFileSizeInBytes() (int64, error) {
 		return err
 	})
 	return size, err
+}
+
+// encryptWalletSeed encrypts the seed with secretbox.EasySeal.
+func encryptWalletSeed(pass []byte, seed string) ([]byte, error) {
+	hash, err := bcrypt.GenerateFromPassword(pass, bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+
+	key, err := nacl.Load(string(hash))
+	if err != nil {
+		return nil, err
+	}
+
+	encryptedSeed := secretbox.EasySeal([]byte(seed), key)
+
+	return encryptedSeed, nil
+}
+
+func decryptWalletSeed(pass []byte, encryptedSeed []byte) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword(pass, bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+
+	key, err := nacl.Load(string(hash))
+	if err != nil {
+		return "", err
+	}
+
+	decryptedSeed, err := secretbox.EasyOpen(encryptedSeed, key)
+	if err != nil {
+		return "", err
+	}
+
+	return string(decryptedSeed), nil
 }

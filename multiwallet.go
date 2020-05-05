@@ -20,9 +20,6 @@ import (
 	bolt "go.etcd.io/bbolt"
 
 	"golang.org/x/crypto/bcrypt"
-
-	"github.com/kevinburke/nacl"
-	"github.com/kevinburke/nacl/secretbox"
 )
 
 type MultiWallet struct {
@@ -269,22 +266,14 @@ func (mw *MultiWallet) CreateNewWallet(walletName, privatePassphrase string, pri
 		return nil, err
 	}
 
-	k, err := bcrypt.GenerateFromPassword([]byte(privatePassphrase), bcrypt.DefaultCost)
+	encryptedSeed, err := encryptWalletSeed([]byte(privatePassphrase), seed)
 	if err != nil {
 		return nil, err
 	}
-
-	key, err := nacl.Load(string(k))
-	if err != nil {
-		return nil, err
-	}
-
-	encryptedSeed := secretbox.EasySeal([]byte(seed), key)
-
 	wallet := &Wallet{
 		Name:                  walletName,
 		CreatedAt:             time.Now(),
-		Seed:                  string(encryptedSeed),
+		EncryptedSeed:         encryptedSeed,
 		PrivatePassphraseType: privatePassphraseType,
 		HasDiscoveredAccounts: true,
 	}
@@ -300,24 +289,18 @@ func (mw *MultiWallet) CreateNewWallet(walletName, privatePassphrase string, pri
 }
 
 func (mw *MultiWallet) RestoreWallet(walletName, seedMnemonic, privatePassphrase string, privatePassphraseType int32) (*Wallet, error) {
-	k, err := bcrypt.GenerateFromPassword([]byte(privatePassphrase), bcrypt.DefaultCost)
+
+	encryptedSeed, err := encryptWalletSeed([]byte(privatePassphrase), seedMnemonic)
 	if err != nil {
 		return nil, err
 	}
-
-	key, err := nacl.Load(string(k))
-	if err != nil {
-		return nil, err
-	}
-
-	encryptedSeed := secretbox.EasySeal([]byte(seedMnemonic), key)
 
 	wallet := &Wallet{
 		Name:                  walletName,
 		PrivatePassphraseType: privatePassphraseType,
 		IsRestored:            true,
 		HasDiscoveredAccounts: false,
-		Seed:                  string(encryptedSeed),
+		EncryptedSeed:         encryptedSeed,
 	}
 
 	return mw.saveNewWallet(wallet, func() error {
@@ -514,28 +497,34 @@ func (mw *MultiWallet) WalletWithID(walletID int) *Wallet {
 	return nil
 }
 
-func (mw *MultiWallet) VerifySeedForWallet(walletID int, seedMnemonic string) error {
+// VerifySeedForWallet compares seedMnemonic with the decrypted wallet.EncryptedSeed and clears wallet.EncryptedSeed if they match.
+func (mw *MultiWallet) VerifySeedForWallet(walletID int, seedMnemonic string, privpass []byte) (bool, error) {
 	wallet := mw.WalletWithID(walletID)
 	if wallet == nil {
-		return errors.New(ErrNotExist)
+		return false, errors.New(ErrNotExist)
 	}
 
-	if wallet.Seed == seedMnemonic {
-		wallet.Seed = ""
-		return translateError(mw.db.Save(wallet))
+	decryptedSeed, err := decryptWalletSeed(privpass, wallet.EncryptedSeed)
+	if err != nil {
+		return false, err
 	}
 
-	return errors.New(ErrInvalid)
+	if decryptedSeed == seedMnemonic {
+		wallet.EncryptedSeed = nil
+		return true, translateError(mw.db.Save(wallet))
+	}
+
+	return false, errors.New(ErrInvalid)
 }
 
+// NumWalletsNeedingSeedBackup returns the number of opened wallets whose seed haven't been verified.
 func (mw *MultiWallet) NumWalletsNeedingSeedBackup() int32 {
 	var backupsNeeded int32
 	for _, wallet := range mw.wallets {
-		if wallet.WalletOpened() && wallet.Seed != "" {
+		if wallet.WalletOpened() && wallet.EncryptedSeed != nil {
 			backupsNeeded++
 		}
 	}
-
 	return backupsNeeded
 }
 
@@ -598,6 +587,7 @@ func (mw *MultiWallet) UnlockWallet(walletID int, privPass []byte) error {
 	return wallet.UnlockWallet(privPass)
 }
 
+// ChangePrivatePassphraseForWallet attempts to change the wallet's passphrase and re-encrypts the seed with the new passphrase.
 func (mw *MultiWallet) ChangePrivatePassphraseForWallet(walletID int, oldPrivatePassphrase, newPrivatePassphrase []byte, privatePassphraseType int32) error {
 	if privatePassphraseType != PassphraseTypePin && privatePassphraseType != PassphraseTypePass {
 		return errors.New(ErrInvalid)
@@ -612,6 +602,18 @@ func (mw *MultiWallet) ChangePrivatePassphraseForWallet(walletID int, oldPrivate
 	if err != nil {
 		return translateError(err)
 	}
+
+	decryptedSeed, err := decryptWalletSeed(newPrivatePassphrase, wallet.EncryptedSeed)
+	if err != nil {
+		return err
+	}
+
+	encrytedSeed, err := encryptWalletSeed(newPrivatePassphrase, decryptedSeed)
+	if err != nil {
+		return err
+	}
+
+	wallet.EncryptedSeed = encrytedSeed
 
 	wallet.PrivatePassphraseType = privatePassphraseType
 	return mw.db.Save(wallet)
