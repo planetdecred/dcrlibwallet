@@ -270,6 +270,7 @@ func (wallet *Wallet) deleteWallet(privatePassphrase []byte) error {
 	return os.RemoveAll(wallet.dataDir)
 }
 
+// DecryptSeed decrypts wallet.EncryptedSeed using privatePassphrase
 func (wallet *Wallet) DecryptSeed(privatePassphrase []byte) (string, error) {
 	return decryptWalletSeed(privatePassphrase, wallet.EncryptedSeed)
 }
