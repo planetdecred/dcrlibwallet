@@ -1,16 +1,32 @@
 package dcrlibwallet
 
 import (
+	"bytes"
+	"math/rand"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
+
+// genPass generates a random []byte
+func genPass() []byte {
+	pass := make([]byte, rand.Intn(32))
+	_, err := rand.Read(pass)
+	Expect(err).To(BeNil())
+	return pass
+}
 
 var _ = Describe("MultiwalletUtils", func() {
 	Describe("Wallet Seed Encryption", func() {
 		Context("encryptWalletSeed and decryptWalletSeed", func() {
 			It("encrypts and decrypts the wallet seed properly", func() {
-				pass := []byte("pass")     // randomize
-				newPass := []byte("passs") // randomize
+				pass := genPass()
+				pass2 := bytes.Repeat(pass, 1) // Required because the functions clear the pass memory after use
+				fakePass := genPass()
+				for bytes.Equal(pass, fakePass) {
+					fakePass = genPass()
+				}
+
 				seed, err := GenerateSeed()
 				Expect(err).To(BeNil())
 
@@ -19,11 +35,11 @@ var _ = Describe("MultiwalletUtils", func() {
 				Expect(err).To(BeNil())
 
 				By("Failing decryption of the encrypted seed using the wrong password")
-				_, err = decryptWalletSeed(newPass, encrypted)
+				_, err = decryptWalletSeed(fakePass, encrypted)
 				Expect(err).ToNot(BeNil())
 
 				By("Decrypting the encrypted seed using the correct password")
-				decrypted, err := decryptWalletSeed(pass, encrypted)
+				decrypted, err := decryptWalletSeed(pass2, encrypted)
 				Expect(err).To(BeNil())
 
 				By("Comparing the decrypted and original seeds")
