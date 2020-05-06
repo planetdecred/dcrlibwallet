@@ -11,7 +11,7 @@ import (
 	"github.com/kevinburke/nacl"
 	"github.com/kevinburke/nacl/secretbox"
 	"github.com/raedahgroup/dcrlibwallet/spv"
-	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/crypto/scrypt"
 )
 
 const (
@@ -115,30 +115,30 @@ func (mw *MultiWallet) RootDirFileSizeInBytes() (int64, error) {
 	return size, err
 }
 
-// encryptWalletSeed encrypts the seed with secretbox.EasySeal.
-func encryptWalletSeed(pass []byte, seed string) ([]byte, error) {
-	hash, err := bcrypt.GenerateFromPassword(pass, bcrypt.DefaultCost)
+// naclLoadFromPass derives a nacl.Key from pass using scrypt.Key
+func naclLoadFromPass(pass []byte) (nacl.Key, error) {
+	salt := []byte{0xc8, 0x28, 0xf2, 0x58, 0xa7, 0x6a, 0xad, 0x7b} // MUST CHANGE
+	const N, r, p = 1 << 15, 8, 1
+
+	hash, err := scrypt.Key(pass, salt, N, r, p, 32)
 	if err != nil {
 		return nil, err
 	}
-
-	key, err := nacl.Load(string(hash))
-	if err != nil {
-		return nil, err
-	}
-
-	encryptedSeed := secretbox.EasySeal([]byte(seed), key)
-
-	return encryptedSeed, nil
+	return nacl.Load(EncodeHex(hash))
 }
 
-func decryptWalletSeed(pass []byte, encryptedSeed []byte) (string, error) {
-	hash, err := bcrypt.GenerateFromPassword(pass, bcrypt.DefaultCost)
+// encryptWalletSeed encrypts the seed with secretbox.EasySeal using pass.
+func encryptWalletSeed(pass []byte, seed string) ([]byte, error) {
+	key, err := naclLoadFromPass(pass)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
+	return secretbox.EasySeal([]byte(seed), key), nil
+}
 
-	key, err := nacl.Load(string(hash))
+// decryptWalletSeed decrypts the encryptedSeed with secretbox.EasyOpen using pass.
+func decryptWalletSeed(pass []byte, encryptedSeed []byte) (string, error) {
+	key, err := naclLoadFromPass(pass)
 	if err != nil {
 		return "", err
 	}
