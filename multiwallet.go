@@ -606,13 +606,8 @@ func (mw *MultiWallet) ChangePrivatePassphraseForWallet(walletID int, oldPrivate
 		return errors.New(ErrInvalid)
 	}
 
-	err := wallet.changePrivatePassphrase(oldPrivatePassphrase, newPrivatePassphrase)
-	if err != nil {
-		return translateError(err)
-	}
-
 	if wallet.EncryptedSeed != nil {
-		decryptedSeed, err := decryptWalletSeed(newPrivatePassphrase, wallet.EncryptedSeed)
+		decryptedSeed, err := decryptWalletSeed(oldPrivatePassphrase, wallet.EncryptedSeed)
 		if err != nil {
 			return err
 		}
@@ -623,6 +618,11 @@ func (mw *MultiWallet) ChangePrivatePassphraseForWallet(walletID int, oldPrivate
 		}
 
 		wallet.EncryptedSeed = encrytedSeed
+	}
+
+	err := wallet.changePrivatePassphrase(oldPrivatePassphrase, newPrivatePassphrase)
+	if err != nil {
+		return translateError(err)
 	}
 
 	wallet.PrivatePassphraseType = privatePassphraseType
