@@ -150,7 +150,8 @@ func decryptWalletSeed(pass []byte, encryptedSeed []byte) (string, error) {
 
 	decryptedSeed, err := secretbox.EasyOpen(encryptedSeed, key)
 	if err != nil {
-		return "", err
+		log.Error(err)
+		return "", errors.New(ErrInvalidPassphrase)
 	}
 
 	return string(decryptedSeed), nil

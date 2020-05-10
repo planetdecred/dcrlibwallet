@@ -413,6 +413,14 @@ func (mw *MultiWallet) saveNewWallet(wallet *Wallet, setupWallet func() error) (
 		}
 
 		walletDataDir := filepath.Join(mw.rootDir, strconv.Itoa(wallet.ID))
+
+		dirExists, err := fileExists(walletDataDir)
+		if err != nil {
+			return err
+		} else if dirExists {
+			os.RemoveAll(walletDataDir)
+		}
+
 		os.MkdirAll(walletDataDir, os.ModePerm) // create wallet dir
 
 		if wallet.Name == "" {
@@ -514,7 +522,7 @@ func (mw *MultiWallet) VerifySeedForWallet(walletID int, seedMnemonic string, pr
 		return true, translateError(mw.db.Save(wallet))
 	}
 
-	return false, errors.New(ErrInvalid)
+	return false, errors.New(ErrInvalidPassphrase)
 }
 
 // NumWalletsNeedingSeedBackup returns the number of opened wallets whose seed haven't been verified.
@@ -603,17 +611,19 @@ func (mw *MultiWallet) ChangePrivatePassphraseForWallet(walletID int, oldPrivate
 		return translateError(err)
 	}
 
-	decryptedSeed, err := decryptWalletSeed(newPrivatePassphrase, wallet.EncryptedSeed)
-	if err != nil {
-		return err
-	}
+	if wallet.EncryptedSeed != nil {
+		decryptedSeed, err := decryptWalletSeed(newPrivatePassphrase, wallet.EncryptedSeed)
+		if err != nil {
+			return err
+		}
 
-	encrytedSeed, err := encryptWalletSeed(newPrivatePassphrase, decryptedSeed)
-	if err != nil {
-		return err
-	}
+		encrytedSeed, err := encryptWalletSeed(newPrivatePassphrase, decryptedSeed)
+		if err != nil {
+			return err
+		}
 
-	wallet.EncryptedSeed = encrytedSeed
+		wallet.EncryptedSeed = encrytedSeed
+	}
 
 	wallet.PrivatePassphraseType = privatePassphraseType
 	return mw.db.Save(wallet)
