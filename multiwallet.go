@@ -522,7 +522,7 @@ func (mw *MultiWallet) VerifySeedForWallet(walletID int, seedMnemonic string, pr
 		return true, translateError(mw.db.Save(wallet))
 	}
 
-	return false, errors.New(ErrInvalidPassphrase)
+	return false, errors.New(ErrInvalid)
 }
 
 // NumWalletsNeedingSeedBackup returns the number of opened wallets whose seed haven't been verified.
@@ -606,18 +606,17 @@ func (mw *MultiWallet) ChangePrivatePassphraseForWallet(walletID int, oldPrivate
 		return errors.New(ErrInvalid)
 	}
 
-	if wallet.EncryptedSeed != nil {
-		decryptedSeed, err := decryptWalletSeed(oldPrivatePassphrase, wallet.EncryptedSeed)
+	encryptedSeed := wallet.EncryptedSeed
+	if encryptedSeed != nil {
+		decryptedSeed, err := decryptWalletSeed(oldPrivatePassphrase, encryptedSeed)
 		if err != nil {
 			return err
 		}
 
-		encrytedSeed, err := encryptWalletSeed(newPrivatePassphrase, decryptedSeed)
+		encryptedSeed, err = encryptWalletSeed(newPrivatePassphrase, decryptedSeed)
 		if err != nil {
 			return err
 		}
-
-		wallet.EncryptedSeed = encrytedSeed
 	}
 
 	err := wallet.changePrivatePassphrase(oldPrivatePassphrase, newPrivatePassphrase)
@@ -625,6 +624,7 @@ func (mw *MultiWallet) ChangePrivatePassphraseForWallet(walletID int, oldPrivate
 		return translateError(err)
 	}
 
+	wallet.EncryptedSeed = encryptedSeed
 	wallet.PrivatePassphraseType = privatePassphraseType
 	return mw.db.Save(wallet)
 }
