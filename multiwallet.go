@@ -626,5 +626,19 @@ func (mw *MultiWallet) ChangePrivatePassphraseForWallet(walletID int, oldPrivate
 
 	wallet.EncryptedSeed = encryptedSeed
 	wallet.PrivatePassphraseType = privatePassphraseType
-	return mw.db.Save(wallet)
+	err = mw.db.Save(wallet)
+	if err != nil {
+		log.Errorf("error saving wallet-[%d] to database after passphrase change: %v", wallet.ID, err)
+
+		err2 := wallet.changePrivatePassphrase(newPrivatePassphrase, oldPrivatePassphrase)
+		if err2 != nil {
+			log.Errorf("error undoing wallet passphrase change: %v", err2)
+			log.Errorf("error wallet passphrase was changed but passphrase type and newly encrypted seed could not be saved: %v", err)
+			return errors.New(ErrSavingWallet)
+		}
+
+		return errors.New(ErrChangingPassphrase)
+	}
+
+	return nil
 }
