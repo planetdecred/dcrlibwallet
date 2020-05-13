@@ -260,6 +260,29 @@ func moveFile(sourcePath, destinationPath string) error {
 	return nil
 }
 
+func backupFile(fileName string) (newName string, err error) {
+	var backup func(f string) error
+	backup = func(f string) error {
+		newName = f + ".bak"
+		exists, err := fileExists(newName)
+		if err != nil {
+			return err
+		} else if exists {
+			return backup(newName)
+		}
+
+		err = moveFile(fileName, newName)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	err = backup(fileName)
+	return
+}
+
 func initWalletLoader(chainParams *chaincfg.Params, walletDataDir, walletDbDriver string) *loader.Loader {
 	defaultFeePerKb := txrules.DefaultRelayFeePerKb.ToCoin()
 	stakeOptions := &loader.StakeOptions{

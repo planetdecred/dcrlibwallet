@@ -418,7 +418,12 @@ func (mw *MultiWallet) saveNewWallet(wallet *Wallet, setupWallet func() error) (
 		if err != nil {
 			return err
 		} else if dirExists {
-			os.RemoveAll(walletDataDir)
+			newDirName, err := backupFile(walletDataDir)
+			if err != nil {
+				return err
+			}
+
+			log.Info("Undocumented file at %s moved to %s", walletDataDir, newDirName)
 		}
 
 		os.MkdirAll(walletDataDir, os.ModePerm) // create wallet dir
