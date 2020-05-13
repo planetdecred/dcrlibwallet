@@ -261,26 +261,20 @@ func moveFile(sourcePath, destinationPath string) error {
 }
 
 func backupFile(fileName string) (newName string, err error) {
-	var backup func(f string) error
-	backup = func(f string) error {
-		newName = f + ".bak"
-		exists, err := fileExists(newName)
-		if err != nil {
-			return err
-		} else if exists {
-			return backup(newName)
-		}
-
-		err = moveFile(fileName, newName)
-		if err != nil {
-			return err
-		}
-
-		return nil
+	newName = fileName + ".bak"
+	exists, err := fileExists(newName)
+	if err != nil {
+		return "", err
+	} else if exists {
+		return backupFile(newName)
 	}
 
-	err = backup(fileName)
-	return
+	err = moveFile(fileName, newName)
+	if err != nil {
+		return "", err
+	}
+
+	return newName, nil
 }
 
 func initWalletLoader(chainParams *chaincfg.Params, walletDataDir, walletDbDriver string) *loader.Loader {
