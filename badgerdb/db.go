@@ -7,6 +7,7 @@ package badgerdb
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"time"
@@ -24,7 +25,7 @@ func convertErr(err error) error {
 	}
 	var kind errors.Kind
 	switch err {
-	case badger.ErrValueLogSize, badger.ErrValueThreshold, badger.ErrTxnTooBig, badger.ErrReadOnlyTxn, badger.ErrDiscardedTxn, badger.ErrEmptyKey, badger.ErrThresholdZero,
+	case badger.ErrValueLogSize, badger.ErrTxnTooBig, badger.ErrReadOnlyTxn, badger.ErrDiscardedTxn, badger.ErrEmptyKey, badger.ErrThresholdZero,
 		badger.ErrRejected, badger.ErrInvalidRequest, badger.ErrManagedTxn, badger.ErrInvalidDump, badger.ErrZeroBandwidth, badger.ErrInvalidLoadingMode, badger.ErrWindowsNotSupported, badger.ErrReplayNeeded, badger.ErrTruncateNeeded:
 		kind = errors.Invalid
 	case badger.ErrKeyNotFound:
@@ -103,7 +104,7 @@ func (tx *transaction) DeleteTopLevelBucket(key []byte) error {
 	defer it.Close()
 	for it.Seek(key); it.ValidForPrefix(key); it.Next() {
 		item = it.Item()
-		val, err := item.Value()
+		val, err := item.ValueCopy(nil)
 		if err != nil {
 			continue
 		}
@@ -130,7 +131,7 @@ func (tx *transaction) Commit() error {
 		return errors.E(errors.Invalid)
 	}
 
-	err := tx.badgerTx.Commit(nil)
+	err := tx.badgerTx.Commit()
 	if err != nil {
 		return convertErr(err)
 	}
@@ -644,18 +645,31 @@ func openDB(dbPath string, create bool) (walletdb.DB, error) {
 	if !create && !fileExists(dbPath) {
 		return nil, errors.E(errors.NotExist, "missing database file")
 	}
-	opts := badger.DefaultOptions
-	opts.Dir = dbPath
-	opts.ValueDir = dbPath
-	opts.ValueLogLoadingMode = options.FileIO
-	opts.TableLoadingMode = options.MemoryMap
-	opts.ValueLogFileSize = 209715200
-	opts.MaxTableSize = 40000000
-	opts.LevelOneSize = 209715200
-	opts.NumMemtables = 1
-	opts.NumCompactors = 1
-	opts.NumLevelZeroTables = 1
-	opts.NumLevelZeroTablesStall = 2
+
+	fmt.Println("Running new badger config")
+	opts := badger.DefaultOptions(dbPath).
+		WithValueDir(dbPath).
+		WithValueLogLoadingMode(options.FileIO).
+		WithTableLoadingMode(options.FileIO).
+		WithNumMemtables(2).
+		WithNumLevelZeroTables(2).
+		WithNumLevelZeroTablesStall(4).
+		WithNumCompactors(1).
+		WithMaxTableSize(32 << 20).
+		WithValueLogFileSize(100 << 20)
+
+	// opts := badger.DefaultOptions
+	// opts.Dir = dbPath
+	// opts.ValueDir = dbPath
+	// opts.ValueLogLoadingMode = options.FileIO
+	// opts.TableLoadingMode = options.MemoryMap
+	// opts.ValueLogFileSize = 209715200
+	// opts.MaxTableSize = 40000000
+	// opts.LevelOneSize = 209715200
+	// opts.NumMemtables = 1
+	// opts.NumCompactors = 1
+	// opts.NumLevelZeroTables = 1
+	// opts.NumLevelZeroTablesStall = 2
 
 	d := &db{
 		closed: false,

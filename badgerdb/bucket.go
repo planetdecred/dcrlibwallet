@@ -47,7 +47,8 @@ func newBucket(tx *badger.Txn, badgerKey []byte, dbTx *transaction) (*Bucket, er
 	if err != nil {
 		//Not Found
 		if err == badger.ErrKeyNotFound {
-			err = tx.SetWithMeta(prefix, insertPrefixLength([]byte{}, len(prefix)), metaBucket)
+			entry := badger.NewEntry(prefix, insertPrefixLength([]byte{}, len(prefix))).WithMeta(metaBucket)
+			err = tx.SetEntry(entry)
 			if err != nil {
 				return nil, convertErr(err)
 			}
@@ -117,7 +118,8 @@ func (b *Bucket) bucket(key []byte, errorIfExists bool) (*Bucket, error) {
 	item, err := b.txn.Get(copiedKey)
 	if err != nil {
 		//Key Not Found
-		err = b.txn.SetWithMeta(copiedKey, insertPrefixLength([]byte{}, len(b.prefix)), metaBucket)
+		entry := badger.NewEntry(copiedKey, insertPrefixLength([]byte{}, len(b.prefix))).WithMeta(metaBucket)
+		err = b.txn.SetEntry(entry)
 		if err != nil {
 			return nil, convertErr(err)
 		}
@@ -166,7 +168,7 @@ func (b *Bucket) dropBucket(key []byte) error {
 
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		item = it.Item()
-		val, err := item.Value()
+		val, err := item.ValueCopy(nil)
 		if err != nil {
 			continue
 		}
@@ -193,7 +195,7 @@ func (b *Bucket) get(key []byte) []byte {
 		//Not found
 		return nil
 	}
-	val, err := item.Value()
+	val, err := item.ValueCopy(nil)
 	if err != nil {
 		return nil
 	}
@@ -249,7 +251,7 @@ func (b *Bucket) forEach(fn func(k, v []byte) error) error {
 			continue
 		}
 
-		v, err := item.Value()
+		v, err := item.ValueCopy(nil)
 		if err != nil {
 			return convertErr(err)
 		}
