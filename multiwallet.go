@@ -1,6 +1,7 @@
 package dcrlibwallet
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -282,6 +283,7 @@ func (mw *MultiWallet) CreateNewWallet(walletName, privatePassphrase string, pri
 	if err != nil {
 		return nil, err
 	}
+
 	wallet := &Wallet{
 		Name:                  walletName,
 		CreatedAt:             time.Now(),
@@ -405,12 +407,10 @@ func (mw *MultiWallet) saveNewWallet(wallet *Wallet, setupWallet func() error) (
 		return nil, errors.New(ErrExist)
 	}
 
-	// Check if any of the other wallets has the same seed with this wallet
-	// If so, return an error 
-	for _, wal := range mw.wallets {
-		if wal.Seed == wallet.Seed {
-			return nil, errors.New(ErrSeedExists)
-		}
+	// check if wallet with same seed already exists
+	err = mw.checkForSeedClash(wallet.EncryptedSeed)
+	if err != nil {
+		return nil, err
 	}
 
 	if mw.IsConnectedToDecredNetwork() {
@@ -659,5 +659,16 @@ func (mw *MultiWallet) ChangePrivatePassphraseForWallet(walletID int, oldPrivate
 		return errors.New(ErrChangingPassphrase)
 	}
 
+	return nil
+}
+
+// checkForSeedClash checks to see if any wallet in the multi wallet has the same seed as the passed seed
+// returns an error if there is any
+func (mw *MultiWallet) checkForSeedClash(encryptedSeed []byte) error {
+	for _, wal := range mw.wallets {
+		if bytes.Equal(wal.EncryptedSeed, encryptedSeed) {
+			return errors.New(ErrSeedExists)
+		}
+	}
 	return nil
 }
