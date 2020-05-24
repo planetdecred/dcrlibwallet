@@ -405,10 +405,19 @@ func (mw *MultiWallet) saveNewWallet(wallet *Wallet, setupWallet func() error) (
 		return nil, errors.New(ErrExist)
 	}
 
+	// Check if any of the other wallets has the same seed with this wallet
+	// If so, return an error 
+	for _, wal := range mw.wallets {
+		if wal.Seed == wallet.Seed {
+			return nil, errors.New(ErrSeedExists)
+		}
+	}
+
 	if mw.IsConnectedToDecredNetwork() {
 		mw.CancelSync()
 		defer mw.SpvSync()
 	}
+
 	// Perform database save operations in batch transaction
 	// for automatic rollback if error occurs at any point.
 	err = mw.batchDbTransaction(func(db storm.Node) error {

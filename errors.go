@@ -33,6 +33,7 @@ const (
 	ErrAddressDiscoveryNotDone      = "address_discovery_not_done"
 	ErrChangingPassphrase           = "err_changing_passphrase"
 	ErrSavingWallet                 = "err_saving_wallet"
+	ErrSeedExists                   = "wallet_seed_exists"
 )
 
 // todo, should update this method to translate more error kinds.
