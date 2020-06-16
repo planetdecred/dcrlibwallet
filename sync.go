@@ -54,7 +54,8 @@ type activeSyncData struct {
 
 	rescanStartTime int64
 
-	totalInactiveSeconds int64
+	totalInactiveSeconds     int64
+	totalFetchedHeadersCount int32
 }
 
 const (

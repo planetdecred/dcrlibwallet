@@ -59,6 +59,7 @@ func (mw *MultiWallet) fetchHeadersStarted(peerInitialHeight int32) {
 
 	mw.syncData.mu.RLock()
 	headersFetchingStarted := mw.syncData.beginFetchTimeStamp != -1
+	mw.syncData.totalFetchedHeadersCount = 0
 	showLogs := mw.syncData.showLogs
 	mw.syncData.mu.RUnlock()
 
@@ -106,9 +107,13 @@ func (mw *MultiWallet) fetchHeadersProgress(lastFetchedHeaderHeight int32, lastF
 		}
 	}
 
+	if lastFetchedHeaderHeight > mw.syncData.activeSyncData.startHeaderHeight {
+		mw.syncData.activeSyncData.totalFetchedHeadersCount = lastFetchedHeaderHeight - mw.syncData.activeSyncData.startHeaderHeight
+	}
+
 	headersLeftToFetch := mw.estimateBlockHeadersCountAfter(lastFetchedHeaderTime)
 	totalHeadersToFetch := lastFetchedHeaderHeight + headersLeftToFetch
-	headersFetchProgress := float64(lastFetchedHeaderHeight) / float64(totalHeadersToFetch)
+	headersFetchProgress := float64(mw.syncData.activeSyncData.totalFetchedHeadersCount) / float64(totalHeadersToFetch)
 	// todo: above equation is potentially flawed because `lastFetchedHeaderHeight`
 	// may not be the total number of headers fetched so far in THIS sync operation.
 	// it may include headers previously fetched.
