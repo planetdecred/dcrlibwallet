@@ -1,0 +1,74 @@
+App memory usage: <=81mb
+
+Config used to generate this log
+
+WithValueDir(dbPath).
+WithValueLogLoadingMode(options.FileIO).
+WithTableLoadingMode(options.FileIO)
+opts.ValueLogFileSize = 209715200
+opts.MaxTableSize = 40000000
+opts.LevelOneSize = 209715200
+opts.NumMemtables = 1
+opts.NumCompactors = 1
+opts.NumLevelZeroTables = 1
+opts.NumLevelZeroTablesStall = 2
+opts.Compression = options.ZSTD
+opts.ZSTDCompressionLevel = 3
+opts.KeepL0InMemory = false
+
+0000000.vlog 130.9mb
+0000002.sst  15.5mb
+
+
+Changes in previous config that also gave same result:
+[0]
+opts.ValueLogFileSize = 50 << 20
+opts.MaxTableSize = 40 << 20
+opts.LevelOneSize = 50 << 20
+opts.NumMemtables = 5
+opts.NumCompactors = 0
+opts.NumLevelZeroTables = 5
+opts.NumLevelZeroTablesStall = 10
+
+[1]
+opts.SyncWrites = false
+
+[2]
+WithTableLoadingMode(options.MemoryMap)
+
+[3]
+opts.MaxTableSize = 150 << 20
+opts.LevelOneSize = 150 << 20
+
+07:53:59.602 [INF] SYNC: [1] Connected 2000 blocks, new tip 0000000001e22b762da6911b124657281d5dc71eedefd225929a9845f131613e, height 152000, date 2019-03-16 00:44:36 +0000 UTC
+07:54:00.528 [INF] SYNC: [1] Connected 2000 blocks, new tip 000000000017241d813ed4436331e83f83a15e0661e4ccf7bbc0443a57fc03d2, height 154000, date 2019-03-18 19:14:08 +0000 UTC
+07:54:01.238 [INF] SYNC: [1] Connected 2000 blocks, new tip 00000000034afabb171c74d671750331a4a09977cd100eaa8589767a30a3abdb, height 156000, date 2019-03-22 00:48:13 +0000 UTC
+07:54:02.066 [INF] SYNC: [1] Connected 2000 blocks, new tip 0000000001f6d4b5c326d95f4c6c9ae585677c8831daf76bd5e682ef76cc2ec7, height 158000, date 2019-03-24 21:38:26 +0000 UTC
+07:54:02.752 [INF] SYNC: [1] Connected 2000 blocks, new tip 00000000005cd231a7632c4c134e87156906deda981b0d04c1179dc569b00e4d, height 160000, date 2019-03-27 16:07:02 +0000 UTC
+07:54:03.455 [INF] SYNC: [1] Connected 2000 blocks, new tip 0000000002fa242bb4bec99b758a582907469832f8970ed4217709abdf11c88d, height 162000, date 2019-03-30 11:06:00 +0000 UTC
+07:54:04.121 [INF] SYNC: [1] Connected 2000 blocks, new tip 0000000001de1d2c42712b90269c5a6361db016ea4afaf241955320a2a48dbd2, height 164000, date 2019-04-02 05:14:10 +0000 UTC
+
+07:54:04 DEBUG: Storing value log head: {Fid:0 Len:30 Offset:77385529}
+07:54:04 DEBUG: Flushing memtable, mt.size=40444755 size of flushChan: 0
+
+07:54:04.948 [INF] SYNC: [1] Connected 2000 blocks, new tip 00000000057636a70bf0c90471b4d591f13fe289d587b85a6bf3720c197ffdfa, height 166000, date 2019-04-05 01:00:46 +0000 UTC
+07:54:05.965 [INF] SYNC: [1] Connected 2000 blocks, new tip 00000000578daea050ad5652cea37e69c7cbe7c9a016e27438809663fbe6c432, height 168000, date 2019-04-09 05:57:44 +0000 UTC
+
+07:54:06 INFO: Got compaction priority: {level:0 score:1 dropPrefix:[]}
+07:54:06 INFO: Running for level: 0
+07:54:07 DEBUG: LOG Compact. Added 492163 keys. Skipped 0 keys. Iteration took: 886.757475ms
+07:54:07 DEBUG: Discard stats: map[]
+07:54:07 INFO: LOG Compact 0->1, del 1 tables, add 1 tables, took 1.104381668s
+07:54:07 INFO: Compaction for level: 0 DONE
+
+07:54:12.635 [INF] SYNC: [1] Connected 2000 blocks, new tip 0000000002c4903d2e792efce25e43259e919ec092e56342bbba86eb7a6173bb, height 170000, date 2019-04-12 02:38:45 +0000 UTC
+07:54:18.893 [INF] SYNC: [1] Connected 2000 blocks, new tip 0000000003d798910573e2c3aa70644033bd0aeac4725321466649656f042c48, height 172000, date 2019-04-14 21:15:35 +0000 UTC
+07:54:25.553 [INF] SYNC: [1] Connected 2000 blocks, new tip 0000000000027f152738f749b9482c8da5239b7b72a946a3cb85b13c16022865, height 174000, date 2019-04-17 10:15:10 +0000 UTC
+07:54:31.693 [INF] SYNC: [1] Connected 2000 blocks, new tip 0000000051808bcc44eb843b9a4f20cf22ec897c1cfc9c5e7a5402fe294433bf, height 176000, date 2019-04-23 07:41:41 +0000 UTC
+07:54:44.356 [INF] SYNC: [1] Connected 2000 blocks, new tip 0000000001914a31847ba168f006a8288ac9b924666c89940d96da3fceaf656d, height 178000, date 2019-04-24 21:29:09 +0000 UTC
+07:54:44.361 [INF] SYNC: [1] Received sidechain or orphan block 0000002f9bbdf02bfaf1241bd4417667c1706fb6bf70903ef5c7c096246457ba, height 443656
+07:54:50.952 [INF] SYNC: [1] Connected 2000 blocks, new tip 0000000001010d675ca31f81db5bda7074a761776efe383f4777de62377dfc8d, height 180000, date 2019-04-27 23:24:17 +0000 UTC
+07:54:57.000 [INF] SYNC: [1] Connected 2000 blocks, new tip 000000000058bc070a61d2fe93e187cd980bebb5ea435586be26ae5d32fa3098, height 182000, date 2019-04-30 17:40:00 +0000 UTC
+07:55:03.307 [INF] SYNC: [1] Connected 2000 blocks, new tip 00000000028d7c636d554c010f7435d5c2a96de48b742fbfc75b3582618e4043, height 184000, date 2019-05-03 12:50:43 +0000 UTC
+07:55:09.624 [INF] SYNC: [1] Connected 2000 blocks, new tip 000000000dea30417de984a2f3cc17a0efb05fcb52caecd89751f4cbda5fe507, height 186000, date 2019-05-06 18:32:21 +0000 UTC
+07:55:16.104 [INF] SYNC: [1] Connected 2000 blocks, new tip 00000000006def5daa3197482951048011064edf77381adcc593be486cec1cd9, height 188000, date 2019-05-09 06:38:18 +0000 UTC

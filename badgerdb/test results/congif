@@ -1,0 +1,32 @@
+442714 blocks - 568s
+290000 blocks - 167s blocked
+
+
+
+Total Fetch time: 691s 11.5minutes p2p
+
+
+443782 blocks - 294s
+opts.LevelSizeMultiplier = 10
+opts.TableLoadingMode = options.MemoryMap - 35s with FileIO
+opts.ValueLogLoadingMode = options.FileIO
+opts.MaxLevels = 2
+opts.MaxTableSize = 32 << 20
+opts.NumCompactors = 1
+opts.NumLevelZeroTables = 1
+opts.NumLevelZeroTablesStall = 2
+opts.NumMemtables = 1
+opts.BloomFalsePositive = 0.01
+opts.BlockSize = 4 * 1024
+opts.SyncWrites = false
+opts.NumVersionsToKeep = 1
+opts.CompactL0OnClose = false
+opts.KeepL0InMemory = false
+opts.VerifyValueChecksum = false
+opts.MaxCacheSize = 20 << 20
+opts.ZSTDCompressionLevel = 1
+opts.Compression = options.None
+opts.ValueLogFileSize = 50 << 20
+opts.ValueLogMaxEntries = 100000
+opts.ValueThreshold = 15
+opts.LogRotatesToFlush = 1

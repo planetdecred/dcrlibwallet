@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
 
 	"decred.org/dcrwallet/errors"
 	"decred.org/dcrwallet/wallet/walletdb"
@@ -306,7 +305,6 @@ func (b *Bucket) ReadCursor() walletdb.ReadCursor {
 	if !b.dbTransaction.writable {
 		txn := b.dbTransaction.db.NewTransaction(false)
 		opts := badger.DefaultIteratorOptions
-		opts.PrefetchSize = 100
 		it := txn.NewIterator(opts)
 		reverseOptions := badger.DefaultIteratorOptions
 		//Key-only iteration for faster search. Value gets fetched when item.Value() is called.
@@ -574,7 +572,6 @@ func (c *Cursor) Close() {
 type db struct {
 	*badger.DB
 	closed bool
-	ticker *time.Ticker
 }
 
 // Enforce db implements the walletdb.DB interface.
@@ -616,12 +613,6 @@ func (db *db) Close() error {
 
 	db.closed = true // setting this to true to pause all operations that will happen while db is closing
 
-	if db.ticker != nil {
-		db.ticker.Stop()
-	}
-
-	time.Sleep(2 * time.Second) // sleep for 2 seconds to ensure any db operation completes before proceeding
-
 	err := db.DB.Close()
 	if err != nil {
 		return convertErr(err)
@@ -646,30 +637,63 @@ func openDB(dbPath string, create bool) (walletdb.DB, error) {
 		return nil, errors.E(errors.NotExist, "missing database file")
 	}
 
-	fmt.Println("Running new badger config")
+	fmt.Println("Running new badger v2.0, no config")
 	opts := badger.DefaultOptions(dbPath).
-		WithValueDir(dbPath).
-		WithValueLogLoadingMode(options.FileIO).
-		WithTableLoadingMode(options.FileIO).
-		WithNumMemtables(2).
-		WithNumLevelZeroTables(2).
-		WithNumLevelZeroTablesStall(4).
-		WithNumCompactors(1).
-		WithMaxTableSize(32 << 20).
-		WithValueLogFileSize(100 << 20)
+		WithValueDir(dbPath)
+	// WithValueLogLoadingMode(options.FileIO).
+	// WithTableLoadingMode(options.FileIO).
+	// WithLoadBloomsOnOpen(true).
+	// WithSyncWrites(false).
+	// WithNumMemtables(1).
+	// WithNumLevelZeroTables(2).
+	// WithNumLevelZeroTablesStall(2).
+	// WithNumCompactors(0).
+	// WithMaxTableSize(150 << 20).
+	// WithValueLogFileSize(150 << 20).
+	// WithLevelOneSize(150 << 20).
+	// WithLevelSizeMultiplier(1).
+	// WithKeepL0InMemory(false)
+
+	// opts.LevelSizeMultiplier = 10
+	opts.TableLoadingMode = options.FileIO
+	opts.ValueLogLoadingMode = options.FileIO
+	// opts.MaxLevels = 2
+	// opts.MaxTableSize = 32 << 20
+	// opts.NumCompactors = 2
+	// opts.NumLevelZeroTables = 2
+	// opts.NumLevelZeroTablesStall = 3
+	// opts.NumMemtables = 2
+	// opts.BloomFalsePositive = 0.01
+	// opts.BlockSize = 4 * 1024
+	// opts.SyncWrites = true
+	// opts.NumVersionsToKeep = 1
+	// opts.CompactL0OnClose = false
+	// opts.KeepL0InMemory = false
+	// opts.VerifyValueChecksum = false
+	// opts.MaxCacheSize = 20 << 20
+	// opts.ZSTDCompressionLevel = 1
+	// opts.Compression = options.None
+	// opts.ValueLogFileSize = 50 << 20
+	// opts.ValueLogMaxEntries = 100000
+	// opts.ValueThreshold = 15
+	// opts.LogRotatesToFlush = 1
 
 	// opts := badger.DefaultOptions
 	// opts.Dir = dbPath
 	// opts.ValueDir = dbPath
 	// opts.ValueLogLoadingMode = options.FileIO
 	// opts.TableLoadingMode = options.MemoryMap
-	// opts.ValueLogFileSize = 209715200
-	// opts.MaxTableSize = 40000000
-	// opts.LevelOneSize = 209715200
-	// opts.NumMemtables = 1
-	// opts.NumCompactors = 1
-	// opts.NumLevelZeroTables = 1
-	// opts.NumLevelZeroTablesStall = 2
+	// opts.ValueLogFileSize = 150 << 20
+	// opts.MaxTableSize = 150 << 20
+	// opts.LevelOneSize = 150 << 20
+	// opts.NumMemtables = 5
+	// opts.NumCompactors = 0
+	// opts.NumLevelZeroTables = 5
+	// opts.NumLevelZeroTablesStall = 10
+	// opts.SyncWrites = false
+	// opts.Compression = options.ZSTD
+	// opts.ZSTDCompressionLevel = 3
+	// opts.KeepL0InMemory = false
 
 	d := &db{
 		closed: false,
@@ -677,16 +701,6 @@ func openDB(dbPath string, create bool) (walletdb.DB, error) {
 	badgerDB, err := badger.Open(opts)
 	if err == nil {
 		d.DB = badgerDB
-		go func() {
-			d.ticker = time.NewTicker(20 * time.Second)
-			for range d.ticker.C {
-			again:
-				err := d.RunValueLogGC(0.7)
-				if err == nil {
-					goto again
-				}
-			}
-		}()
 	}
 
 	return d, convertErr(err)
