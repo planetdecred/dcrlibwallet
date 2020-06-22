@@ -60,5 +60,25 @@ func (wallet *Wallet) decodeTransactionWithTxSummary(txSummary *w.TransactionSum
 		Outputs:     walletOutputs,
 	}
 
-	return DecodeTransaction(walletTx, wallet.chainParams)
+	decodedTx, err := DecodeTransaction(walletTx, wallet.chainParams)
+	if err != nil {
+		return nil, err
+	}
+
+	if decodedTx.TicketSpentHash != "" {
+		hash, err := chainhash.NewHashFromStr(decodedTx.TicketSpentHash)
+		if err != nil {
+			return nil, err
+		}
+
+		ticketPurchaseTx, err := wallet.GetTransactionRaw(hash[:])
+		if err != nil {
+			return nil, err
+		}
+
+		timeDifferenceInSeconds := decodedTx.Timestamp - ticketPurchaseTx.Timestamp
+		decodedTx.DaysToVoteOrRevoke = int32(timeDifferenceInSeconds / 86400) // seconds to days conversion
+	}
+
+	return decodedTx, nil
 }

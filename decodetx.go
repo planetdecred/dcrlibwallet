@@ -35,7 +35,7 @@ func DecodeTransaction(walletTx *TxInfoFromWallet, netParams *chaincfg.Params) (
 	inputs := decodeTxInputs(msgTx, walletTx.Inputs)
 	outputs := decodeTxOutputs(msgTx, netParams, walletTx.Outputs)
 
-	ssGenVersion, lastBlockValid, voteBits := voteInfo(msgTx)
+	ssGenVersion, lastBlockValid, voteBits, voteReward, ticketSpentHash := voteInfo(msgTx)
 
 	return &Transaction{
 		WalletID:    walletTx.WalletID,
@@ -57,9 +57,11 @@ func DecodeTransaction(walletTx *TxInfoFromWallet, netParams *chaincfg.Params) (
 		Inputs:    inputs,
 		Outputs:   outputs,
 
-		VoteVersion:    int32(ssGenVersion),
-		LastBlockValid: lastBlockValid,
-		VoteBits:       voteBits,
+		VoteVersion:     int32(ssGenVersion),
+		LastBlockValid:  lastBlockValid,
+		VoteBits:        voteBits,
+		VoteReward:      voteReward,
+		TicketSpentHash: ticketSpentHash,
 	}, nil
 }
 
@@ -142,12 +144,14 @@ func decodeTxOutputs(mtx *wire.MsgTx, netParams *chaincfg.Params, walletOutputs 
 	return
 }
 
-func voteInfo(msgTx *wire.MsgTx) (ssGenVersion uint32, lastBlockValid bool, voteBits string) {
+func voteInfo(msgTx *wire.MsgTx) (ssGenVersion uint32, lastBlockValid bool, voteBits string, voteReward int64, ticketSpentHash string) {
 	if stake.IsSSGen(msgTx) {
 		ssGenVersion = voteVersion(msgTx)
 		bits := binary.LittleEndian.Uint16(msgTx.TxOut[1].PkScript[2:4])
 		voteBits = fmt.Sprintf("%#04x", bits)
 		lastBlockValid = bits&uint16(BlockValid) != 0
+		voteReward = msgTx.TxIn[0].ValueIn
+		ticketSpentHash = msgTx.TxIn[1].PreviousOutPoint.Hash.String()
 	}
 	return
 }
