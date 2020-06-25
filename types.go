@@ -155,7 +155,7 @@ type Transaction struct {
 	LastBlockValid     bool   `json:"last_block_valid"`
 	VoteBits           string `json:"vote_bits"`
 	VoteReward         int64  `json:"vote_reward"`
-	TicketSpentHash    string `json:"ticket_spent_hash"`
+	TicketSpentHash    string `storm:"unique" json:"ticket_spent_hash"`
 	DaysToVoteOrRevoke int32  `json:"days_to_vote_revoke"`
 }
 

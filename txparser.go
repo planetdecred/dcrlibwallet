@@ -78,6 +78,24 @@ func (wallet *Wallet) decodeTransactionWithTxSummary(txSummary *w.TransactionSum
 
 		timeDifferenceInSeconds := decodedTx.Timestamp - ticketPurchaseTx.Timestamp
 		decodedTx.DaysToVoteOrRevoke = int32(timeDifferenceInSeconds / 86400) // seconds to days conversion
+
+		// calculate reward
+		var ticketInvestment int64
+		for _, input := range ticketPurchaseTx.Inputs {
+			if input.AccountNumber > -1 {
+				ticketInvestment += input.Amount
+			}
+		}
+
+		var ticketOutput int64
+		for _, output := range walletTx.Outputs {
+			if output.AccountNumber > -1 {
+				ticketOutput += output.AmountOut
+			}
+		}
+
+		reward := ticketOutput - ticketInvestment
+		decodedTx.VoteReward = reward
 	}
 
 	return decodedTx, nil

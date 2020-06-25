@@ -1,7 +1,6 @@
 package dcrlibwallet
 
 import (
-	"encoding/binary"
 	"fmt"
 
 	"github.com/decred/dcrd/blockchain/stake/v2"
@@ -35,7 +34,12 @@ func DecodeTransaction(walletTx *TxInfoFromWallet, netParams *chaincfg.Params) (
 	inputs := decodeTxInputs(msgTx, walletTx.Inputs)
 	outputs := decodeTxOutputs(msgTx, netParams, walletTx.Outputs)
 
-	ssGenVersion, lastBlockValid, voteBits, voteReward, ticketSpentHash := voteInfo(msgTx)
+	ssGenVersion, lastBlockValid, voteBits, ticketSpentHash := voteInfo(msgTx)
+
+	// ticketSpentHash will be empty if this isn't a vote tx
+	if stake.IsSSRtx(msgTx) {
+		ticketSpentHash = msgTx.TxIn[0].PreviousOutPoint.Hash.String()
+	}
 
 	return &Transaction{
 		WalletID:    walletTx.WalletID,
@@ -60,7 +64,6 @@ func DecodeTransaction(walletTx *TxInfoFromWallet, netParams *chaincfg.Params) (
 		VoteVersion:     int32(ssGenVersion),
 		LastBlockValid:  lastBlockValid,
 		VoteBits:        voteBits,
-		VoteReward:      voteReward,
 		TicketSpentHash: ticketSpentHash,
 	}, nil
 }
@@ -144,22 +147,13 @@ func decodeTxOutputs(mtx *wire.MsgTx, netParams *chaincfg.Params, walletOutputs 
 	return
 }
 
-func voteInfo(msgTx *wire.MsgTx) (ssGenVersion uint32, lastBlockValid bool, voteBits string, voteReward int64, ticketSpentHash string) {
+func voteInfo(msgTx *wire.MsgTx) (ssGenVersion uint32, lastBlockValid bool, voteBits string, ticketSpentHash string) {
 	if stake.IsSSGen(msgTx) {
-		ssGenVersion = voteVersion(msgTx)
-		bits := binary.LittleEndian.Uint16(msgTx.TxOut[1].PkScript[2:4])
+		ssGenVersion = stake.SSGenVersion(msgTx)
+		bits := stake.SSGenVoteBits(msgTx)
 		voteBits = fmt.Sprintf("%#04x", bits)
 		lastBlockValid = bits&uint16(BlockValid) != 0
-		voteReward = msgTx.TxIn[0].ValueIn
 		ticketSpentHash = msgTx.TxIn[1].PreviousOutPoint.Hash.String()
 	}
 	return
-}
-
-func voteVersion(mtx *wire.MsgTx) uint32 {
-	if len(mtx.TxOut[1].PkScript) < 8 {
-		return 0 // Consensus version absent
-	}
-
-	return binary.LittleEndian.Uint32(mtx.TxOut[1].PkScript[4:8])
 }
