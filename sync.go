@@ -87,6 +87,7 @@ func (mw *MultiWallet) initActiveSyncData() {
 		headersFetchTimeSpent:     -1,
 		addressDiscoveryStartTime: -1,
 		totalDiscoveryTimeSpent:   -1,
+		totalFetchedHeadersCount:  0,
 	}
 	mw.syncData.mu.Unlock()
 }

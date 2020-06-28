@@ -194,6 +194,7 @@ func (mw *MultiWallet) fetchHeadersFinished() {
 	}
 
 	mw.syncData.activeSyncData.startHeaderHeight = -1
+	mw.syncData.totalFetchedHeadersCount = 0
 	mw.syncData.activeSyncData.headersFetchTimeSpent = time.Now().Unix() - mw.syncData.beginFetchTimeStamp
 
 	// If there is some period of inactivity reported at this stage,
