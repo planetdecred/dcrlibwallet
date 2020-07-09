@@ -5,8 +5,8 @@ import (
 	"sort"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/raedahgroup/dcrlibwallet/txhelper"
-	"github.com/raedahgroup/dcrlibwallet/txindex"
+	"github.com/planetdecred/dcrlibwallet/txhelper"
+	"github.com/planetdecred/dcrlibwallet/txindex"
 )
 
 const (
