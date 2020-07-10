@@ -59,7 +59,6 @@ func (mw *MultiWallet) fetchHeadersStarted(peerInitialHeight int32) {
 
 	mw.syncData.mu.RLock()
 	headersFetchingStarted := mw.syncData.beginFetchTimeStamp != -1
-	mw.syncData.totalFetchedHeadersCount = 0
 	showLogs := mw.syncData.showLogs
 	mw.syncData.mu.RUnlock()
 
@@ -79,6 +78,7 @@ func (mw *MultiWallet) fetchHeadersStarted(peerInitialHeight int32) {
 	mw.syncData.activeSyncData.syncStage = HeadersFetchSyncStage
 	mw.syncData.activeSyncData.beginFetchTimeStamp = time.Now().Unix()
 	mw.syncData.activeSyncData.startHeaderHeight = lowestBlockHeight
+	mw.syncData.totalFetchedHeadersCount = 0
 	mw.syncData.mu.Unlock()
 
 	if showLogs {
@@ -107,6 +107,9 @@ func (mw *MultiWallet) fetchHeadersProgress(lastFetchedHeaderHeight int32, lastF
 		}
 	}
 
+	// lock the mutex before reading and writing to mw.syncData.*
+	mw.syncData.mu.Lock()
+
 	if lastFetchedHeaderHeight > mw.syncData.activeSyncData.startHeaderHeight {
 		mw.syncData.activeSyncData.totalFetchedHeadersCount = lastFetchedHeaderHeight - mw.syncData.activeSyncData.startHeaderHeight
 	}
@@ -120,9 +123,6 @@ func (mw *MultiWallet) fetchHeadersProgress(lastFetchedHeaderHeight int32, lastF
 	// probably better to compare number of headers fetched so far in THIS sync operation
 	// against the estimated number of headers left to fetch in THIS sync operation
 	// in order to determine the headers fetch progress so far in THIS sync operation.
-
-	// lock the mutex before reading and writing to mw.syncData.*
-	mw.syncData.mu.Lock()
 
 	// If there was some period of inactivity,
 	// assume that this process started at some point in the future,
