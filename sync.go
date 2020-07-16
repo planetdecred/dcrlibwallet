@@ -24,7 +24,7 @@ type syncData struct {
 	syncing      bool
 	cancelSync   context.CancelFunc
 	cancelRescan context.CancelFunc
-	syncCanceled chan bool
+	syncCanceled chan struct{}
 
 	// Flag to notify syncCanceled callback if the sync was canceled so as to be restarted.
 	restartSyncRequested bool
@@ -250,7 +250,7 @@ func (mw *MultiWallet) SpvSync() error {
 			if syncError == context.DeadlineExceeded {
 				mw.notifySyncError(errors.Errorf("SPV synchronization deadline exceeded: %v", syncError))
 			} else if syncError == context.Canceled {
-				mw.syncData.syncCanceled <- true
+				close(mw.syncData.syncCanceled)
 				mw.notifySyncCanceled()
 			} else {
 				mw.notifySyncError(syncError)
