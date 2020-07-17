@@ -231,6 +231,7 @@ func (mw *MultiWallet) SpvSync() error {
 	mw.syncData.restartSyncRequested = false
 	mw.syncData.syncing = true
 	mw.syncData.cancelSync = cancel
+	mw.syncData.syncCanceled = make(chan struct{})
 	mw.syncData.mu.Unlock()
 
 	for _, listener := range mw.syncProgressListeners() {
@@ -242,10 +243,7 @@ func (mw *MultiWallet) SpvSync() error {
 	// losing connection to all persistent peers.
 	go func() {
 		syncError := syncer.Run(ctx)
-
-		// sync has ended or errored, reset sync variables
-		mw.resetSyncData()
-
+		//sync has ended or errored
 		if syncError != nil {
 			if syncError == context.DeadlineExceeded {
 				mw.notifySyncError(errors.Errorf("SPV synchronization deadline exceeded: %v", syncError))
@@ -256,6 +254,9 @@ func (mw *MultiWallet) SpvSync() error {
 				mw.notifySyncError(syncError)
 			}
 		}
+
+		//reset sync variables
+		mw.resetSyncData()
 	}()
 	return nil
 }
