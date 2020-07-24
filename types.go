@@ -262,6 +262,10 @@ type VSPTicketPurchaseInfo struct {
 /** end ticket-related types */
 
 /** begin politea proposal types */
+type Policy struct {
+	ProposalListPageSize int `json:"proposallistpagesize"`
+}
+
 type ProposalFile struct {
 	Name    string `json:"name"`
 	Mime    string `json:"mime"`
@@ -298,6 +302,6 @@ type Proposal struct {
 	CensorshipRecord ProposalCensorshipRecord `json:"censorshiprecord"`
 }
 
-type ProposalResult struct {
+type Proposals struct {
 	Proposals []Proposal `json:"proposals"`
 }
