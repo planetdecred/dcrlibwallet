@@ -263,9 +263,16 @@ type VSPTicketPurchaseInfo struct {
 
 /** begin politea proposal types */
 type ProposalFile struct {
+	Name    string `json:"name"`
+	Mime    string `json:"mime"`
+	Digest  string `json:"digest"`
+	Payload string `json:"payload"`
 }
 
 type ProposalMetaData struct {
+	Name   string `json:"name"`
+	LinkTo string `json:"linkto"`
+	LinkBy int64  `json:"linkby"`
 }
 
 type ProposalCensorshipRecord struct {
