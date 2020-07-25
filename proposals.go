@@ -41,11 +41,14 @@ func (mw *MultiWallet) getPolicy() (*Policy, error) {
 	return policy, nil
 }
 
+// GetProposalsChunk gets proposals starting after the proposal with the specified
+// censorship hash. The number of proposals returned is specified in the poltiea
+// policy API endpoint
 func (mw *MultiWallet) GetProposalsChunk(from string) ([]Proposal, error) {
 	var result Proposals
 	url := proposalsEndpoint
 	if from != "" {
-		url = fmt.Sprintf(proposalsEndpoint+"?from=%s", from)
+		url = fmt.Sprintf(proposalsEndpoint+"?after=%s", from)
 	}
 
 	err := mw.get(url, &result)
@@ -57,7 +60,8 @@ func (mw *MultiWallet) GetProposalsChunk(from string) ([]Proposal, error) {
 
 }
 
-func (mw *MultiWallet) GetProposals() ([]Proposal, error) {
+// GetAllProposals fetches all the proposals from the API
+func (mw *MultiWallet) GetAllProposals() ([]Proposal, error) {
 	var proposals []Proposal
 	var result []Proposal
 	var err error
@@ -82,7 +86,6 @@ func (mw *MultiWallet) GetProposals() ([]Proposal, error) {
 		if err != nil {
 			break
 		}
-
 		proposals = append(proposals, result...)
 	}
 
