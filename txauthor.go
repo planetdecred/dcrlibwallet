@@ -34,7 +34,7 @@ func (mw *MultiWallet) NewUnsignedTx(sourceWallet *Wallet, sourceAccountNumber i
 func (tx *TxAuthor) AddSendDestination(address string, atomAmount int64, sendMax bool) error {
 	_, err := dcrutil.DecodeAddress(address, tx.sourceWallet.chainParams)
 	if err != nil {
-		return err
+		return translateError(err)
 	}
 
 	tx.destinations = append(tx.destinations, TransactionDestination{
