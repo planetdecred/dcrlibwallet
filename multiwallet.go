@@ -3,7 +3,6 @@ package dcrlibwallet
 import (
 	"context"
 	"encoding/json"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -36,10 +35,10 @@ type MultiWallet struct {
 	txAndBlockNotificationListeners map[string]TxAndBlockNotificationListener
 	blocksRescanProgressListener    BlocksRescanProgressListener
 
-	httpClient *http.Client
-
 	shuttingDown chan bool
 	cancelFuncs  []context.CancelFunc
+
+	Politea Politea
 }
 
 func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
@@ -89,6 +88,7 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 			syncProgressListeners: make(map[string]SyncProgressListener),
 		},
 		txAndBlockNotificationListeners: make(map[string]TxAndBlockNotificationListener),
+		Politea:                         newPolitea(),
 	}
 
 	// read saved wallets info from db and initialize wallets
@@ -107,9 +107,6 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 		}
 		mw.wallets[wallet.ID] = wallet
 	}
-
-	// create http client
-	mw.createHTTPClient()
 
 	mw.listenForShutdown()
 

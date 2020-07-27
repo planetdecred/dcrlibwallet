@@ -262,7 +262,11 @@ type VSPTicketPurchaseInfo struct {
 /** end ticket-related types */
 
 /** begin politea proposal types */
-type Policy struct {
+type ServerVersion struct {
+	Version int `json:"version"`
+}
+
+type ServerPolicy struct {
 	ProposalListPageSize int `json:"proposallistpagesize"`
 }
 

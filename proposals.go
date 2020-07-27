@@ -1,93 +1,165 @@
 package dcrlibwallet
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
-	"time"
+	"net/url"
 )
 
 const (
-	proposalsEndpoint = "https://proposals.decred.org/api/v1/proposals/vetted"
-	policyEndpoint    = "https://proposals.decred.org/api/v1/policy"
+	apiEndpoint = "proposals.decred.org"
 )
 
-func (mw *MultiWallet) createHTTPClient() {
-	mw.httpClient = &http.Client{
-		Transport: &http.Transport{
-			MaxIdleConnsPerHost: 2,
-		},
-		Timeout: time.Duration(10) * time.Second,
-	}
+type Politea struct {
+	csrfToken    string
+	serverPolicy *ServerPolicy
 }
 
-func (mw *MultiWallet) get(url string, responseData interface{}) error {
-	res, err := mw.httpClient.Get(url)
+func newPolitea() Politea {
+	return Politea{}
+}
+
+func (p *Politea) prepareRequest(path, method string, body []byte) (*http.Request, error) {
+	req := &http.Request{
+		Method: method,
+		URL:    &url.URL{Scheme: "https", Host: "proposals.decred.org", Path: "/api/v1" + path},
+	}
+
+	if body != nil {
+		req.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+	}
+
+	if method == "POST" {
+		originalURL := req.URL
+		if p.csrfToken == "" {
+			req.URL.Path = "/api/v1/version"
+			res, err := http.DefaultClient.Do(req)
+			if err != nil {
+				return nil, fmt.Errorf("error fetching csrf token")
+			}
+
+			err = p.handleResponse(res, &p.csrfToken)
+			if err != nil {
+				return nil, err
+			}
+		}
+		req.URL = originalURL
+		req.Header.Set("X-CSRF-TOKEN", p.csrfToken)
+	}
+
+	return req, nil
+}
+
+func (p *Politea) makeRequest(path, method string, body []byte, dest interface{}) error {
+	req, err := p.prepareRequest(path, method, body)
 	if err != nil {
 		return err
 	}
-	defer res.Body.Close()
 
-	return json.NewDecoder(res.Body).Decode(responseData)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+
+	return p.handleResponse(res, dest)
 }
 
-func (mw *MultiWallet) getPolicy() (*Policy, error) {
-	var policy *Policy
-	err := mw.get(policyEndpoint, &policy)
+func (p *Politea) handleResponse(res *http.Response, dest interface{}) error {
+	if res.StatusCode == 200 {
+		return json.NewDecoder(res.Body).Decode(dest)
+	}
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return fmt.Errorf("error reading response body: %s", err.Error())
+	}
+	res.Body.Close()
+
+	return fmt.Errorf("request error: %s", string(body))
+}
+
+func (p *Politea) getServerPolicy() (*ServerPolicy, error) {
+	var serverPolicy ServerPolicy
+
+	err := p.makeRequest("/policy", "GET", nil, &serverPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching politea policy: %v", err)
 	}
 
-	return policy, nil
+	return &serverPolicy, nil
+}
+
+func (p *Politea) getProposalsChunk(startHash string) ([]Proposal, error) {
+	var result Proposals
+
+	path := "/proposals/vetted"
+	if startHash != "" {
+		path = fmt.Sprintf(path+"?after=%s", startHash)
+	}
+
+	err := p.makeRequest(path, "GET", nil, &result)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching proposals from %s: %v", startHash, err)
+	}
+
+	return result.Proposals, err
 }
 
 // GetProposalsChunk gets proposals starting after the proposal with the specified
 // censorship hash. The number of proposals returned is specified in the poltiea
 // policy API endpoint
-func (mw *MultiWallet) GetProposalsChunk(from string) ([]Proposal, error) {
-	var result Proposals
-	url := proposalsEndpoint
-	if from != "" {
-		url = fmt.Sprintf(proposalsEndpoint+"?after=%s", from)
-	}
-
-	err := mw.get(url, &result)
+func (p *Politea) GetProposalsChunk(startHash string) (string, error) {
+	proposals, err := p.getProposalsChunk(startHash)
 	if err != nil {
-		return nil, fmt.Errorf("error fetching proposals from %s: %v", from, err)
+		return "", err
 	}
 
-	return result.Proposals, nil
+	jsonBytes, err := json.Marshal(proposals)
+	if err != nil {
+		return "", fmt.Errorf("error marshalling proposal result to json: %s", err.Error())
+	}
 
+	return string(jsonBytes), nil
 }
 
-// GetAllProposals fetches all the proposals from the API
-func (mw *MultiWallet) GetAllProposals() ([]Proposal, error) {
-	var proposals []Proposal
-	var result []Proposal
+// GetAllProposal fetches all vetted proposals from the API
+func (p *Politea) GetAllProposals() (string, error) {
+	var proposalChunkResult, proposals []Proposal
 	var err error
 
-	policy, err := mw.getPolicy()
-	if err != nil {
-		return nil, err
+	if p.serverPolicy == nil {
+		policy, err := p.getServerPolicy()
+		if err != nil {
+			return "", err
+		}
+		p.serverPolicy = policy
 	}
 
-	result, err = mw.GetProposalsChunk("")
+	proposalChunkResult, err = p.getProposalsChunk("")
 	if err != nil {
-		return nil, fmt.Errorf("error fetching all proposals")
+		return "", fmt.Errorf("error fetching all proposals: %s", err.Error())
 	}
-	proposals = append(proposals, result...)
+	proposals = append(proposals, proposalChunkResult...)
 
 	for {
-		if result == nil || len(result) < policy.ProposalListPageSize {
+		if proposalChunkResult == nil || len(proposalChunkResult) < p.serverPolicy.ProposalListPageSize {
 			break
 		}
 
-		result, err = mw.GetProposalsChunk(result[policy.ProposalListPageSize-1].CensorshipRecord.Token)
+		proposalChunkResult, err = p.getProposalsChunk(proposalChunkResult[p.serverPolicy.ProposalListPageSize-1].CensorshipRecord.Token)
 		if err != nil {
 			break
 		}
-		proposals = append(proposals, result...)
+		proposals = append(proposals, proposalChunkResult...)
 	}
 
-	return proposals, err
+	jsonBytes, err := json.Marshal(proposals)
+	if err != nil {
+		return "", fmt.Errorf("error marshalling proposal result to json: %s", err.Error())
+	}
+
+	return string(jsonBytes), err
 }
