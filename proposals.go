@@ -10,7 +10,11 @@ import (
 )
 
 const (
-	apiEndpoint = "proposals.decred.org"
+	apiEndpoint            = "proposals.decred.org"
+	apiEndpointPath        = "/api/v1"
+	apiVersionPath         = "/api/v1/version"
+	apiPolicyPath          = "/policy"
+	apiVettedProposalsPath = "/proposals/vetted"
 )
 
 type Politeia struct {
@@ -25,7 +29,7 @@ func newPoliteia() Politeia {
 func (p *Politeia) prepareRequest(path, method string, queryStrings map[string]string, body []byte) (*http.Request, error) {
 	req := &http.Request{
 		Method: method,
-		URL:    &url.URL{Scheme: "https", Host: "proposals.decred.org", Path: "/api/v1" + path},
+		URL:    &url.URL{Scheme: "https", Host: apiEndpoint, Path: apiEndpointPath + path},
 	}
 
 	if body != nil {
@@ -43,7 +47,7 @@ func (p *Politeia) prepareRequest(path, method string, queryStrings map[string]s
 	if method == "POST" {
 		originalURL := req.URL
 		if p.csrfToken == "" {
-			req.URL.Path = "/api/v1/version"
+			req.URL.Path = apiVersionPath
 			res, err := http.DefaultClient.Do(req)
 			if err != nil {
 				return nil, fmt.Errorf("error fetching csrf token")
@@ -92,7 +96,7 @@ func (p *Politeia) handleResponse(res *http.Response, dest interface{}) error {
 func (p *Politeia) getServerPolicy() (*ServerPolicy, error) {
 	var serverPolicy ServerPolicy
 
-	err := p.makeRequest("/policy", "GET", nil, nil, &serverPolicy)
+	err := p.makeRequest(apiPolicyPath, "GET", nil, nil, &serverPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching politeia policy: %v", err)
 	}
@@ -101,8 +105,6 @@ func (p *Politeia) getServerPolicy() (*ServerPolicy, error) {
 }
 
 func (p *Politeia) getProposalsChunk(startHash string) ([]Proposal, error) {
-	var result Proposals
-
 	var queryStrings map[string]string
 	if startHash != "" {
 		queryStrings = map[string]string{
@@ -110,7 +112,8 @@ func (p *Politeia) getProposalsChunk(startHash string) ([]Proposal, error) {
 		}
 	}
 
-	err := p.makeRequest("/proposals/vetted", "GET", queryStrings, nil, &result)
+	var result Proposals
+	err := p.makeRequest(apiVettedProposalsPath, "GET", queryStrings, nil, &result)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching proposals from %s: %v", startHash, err)
 	}
