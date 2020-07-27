@@ -13,16 +13,16 @@ const (
 	apiEndpoint = "proposals.decred.org"
 )
 
-type Politea struct {
+type Politeia struct {
 	csrfToken    string
 	serverPolicy *ServerPolicy
 }
 
-func newPolitea() Politea {
-	return Politea{}
+func newPoliteia() Politeia {
+	return Politeia{}
 }
 
-func (p *Politea) prepareRequest(path, method string, body []byte) (*http.Request, error) {
+func (p *Politeia) prepareRequest(path, method string, queryStrings map[string]string, body []byte) (*http.Request, error) {
 	req := &http.Request{
 		Method: method,
 		URL:    &url.URL{Scheme: "https", Host: "proposals.decred.org", Path: "/api/v1" + path},
@@ -30,6 +30,14 @@ func (p *Politea) prepareRequest(path, method string, body []byte) (*http.Reques
 
 	if body != nil {
 		req.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+	}
+
+	if queryStrings != nil {
+		queryString := req.URL.Query()
+		for i, v := range queryStrings {
+			queryString.Set(i, v)
+		}
+		req.URL.RawQuery = queryString.Encode()
 	}
 
 	if method == "POST" {
@@ -53,8 +61,8 @@ func (p *Politea) prepareRequest(path, method string, body []byte) (*http.Reques
 	return req, nil
 }
 
-func (p *Politea) makeRequest(path, method string, body []byte, dest interface{}) error {
-	req, err := p.prepareRequest(path, method, body)
+func (p *Politeia) makeRequest(path, method string, queryStrings map[string]string, body []byte, dest interface{}) error {
+	req, err := p.prepareRequest(path, method, queryStrings, body)
 	if err != nil {
 		return err
 	}
@@ -67,7 +75,7 @@ func (p *Politea) makeRequest(path, method string, body []byte, dest interface{}
 	return p.handleResponse(res, dest)
 }
 
-func (p *Politea) handleResponse(res *http.Response, dest interface{}) error {
+func (p *Politeia) handleResponse(res *http.Response, dest interface{}) error {
 	if res.StatusCode == 200 {
 		return json.NewDecoder(res.Body).Decode(dest)
 	}
@@ -81,26 +89,28 @@ func (p *Politea) handleResponse(res *http.Response, dest interface{}) error {
 	return fmt.Errorf("request error: %s", string(body))
 }
 
-func (p *Politea) getServerPolicy() (*ServerPolicy, error) {
+func (p *Politeia) getServerPolicy() (*ServerPolicy, error) {
 	var serverPolicy ServerPolicy
 
-	err := p.makeRequest("/policy", "GET", nil, &serverPolicy)
+	err := p.makeRequest("/policy", "GET", nil, nil, &serverPolicy)
 	if err != nil {
-		return nil, fmt.Errorf("error fetching politea policy: %v", err)
+		return nil, fmt.Errorf("error fetching politeia policy: %v", err)
 	}
 
 	return &serverPolicy, nil
 }
 
-func (p *Politea) getProposalsChunk(startHash string) ([]Proposal, error) {
+func (p *Politeia) getProposalsChunk(startHash string) ([]Proposal, error) {
 	var result Proposals
 
-	path := "/proposals/vetted"
+	var queryStrings map[string]string
 	if startHash != "" {
-		path = fmt.Sprintf(path+"?after=%s", startHash)
+		queryStrings = map[string]string{
+			"after": startHash,
+		}
 	}
 
-	err := p.makeRequest(path, "GET", nil, &result)
+	err := p.makeRequest("/proposals/vetted", "GET", queryStrings, nil, &result)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching proposals from %s: %v", startHash, err)
 	}
@@ -109,9 +119,9 @@ func (p *Politea) getProposalsChunk(startHash string) ([]Proposal, error) {
 }
 
 // GetProposalsChunk gets proposals starting after the proposal with the specified
-// censorship hash. The number of proposals returned is specified in the poltiea
+// censorship hash. The number of proposals returned is specified in the poltieia
 // policy API endpoint
-func (p *Politea) GetProposalsChunk(startHash string) (string, error) {
+func (p *Politeia) GetProposalsChunk(startHash string) (string, error) {
 	proposals, err := p.getProposalsChunk(startHash)
 	if err != nil {
 		return "", err
@@ -126,7 +136,7 @@ func (p *Politea) GetProposalsChunk(startHash string) (string, error) {
 }
 
 // GetAllProposal fetches all vetted proposals from the API
-func (p *Politea) GetAllProposals() (string, error) {
+func (p *Politeia) GetAllProposals() (string, error) {
 	var proposalChunkResult, proposals []Proposal
 	var err error
 
@@ -151,7 +161,7 @@ func (p *Politea) GetAllProposals() (string, error) {
 
 		proposalChunkResult, err = p.getProposalsChunk(proposalChunkResult[p.serverPolicy.ProposalListPageSize-1].CensorshipRecord.Token)
 		if err != nil {
-			break
+			return "", err
 		}
 		proposals = append(proposals, proposalChunkResult...)
 	}
