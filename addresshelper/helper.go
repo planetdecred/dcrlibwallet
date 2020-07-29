@@ -3,9 +3,9 @@ package addresshelper
 import (
 	"fmt"
 
-	chaincfg "github.com/decred/dcrd/chaincfg/v2"
-	dcrutil "github.com/decred/dcrd/dcrutil/v2"
-	txscript "github.com/decred/dcrd/txscript/v2"
+	chaincfg "github.com/decred/dcrd/chaincfg/v3"
+	dcrutil "github.com/decred/dcrd/dcrutil/v3"
+	txscript "github.com/decred/dcrd/txscript/v3"
 )
 
 const scriptVersion = 0

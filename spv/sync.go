@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2019 The Decred developers
+// Copyright (c) 2018-2020 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -13,15 +13,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	"decred.org/dcrwallet/errors"
+	"decred.org/dcrwallet/lru"
+	"decred.org/dcrwallet/p2p"
+	"decred.org/dcrwallet/validate"
+	"decred.org/dcrwallet/wallet"
 	"github.com/decred/dcrd/addrmgr"
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrd/gcs/blockcf"
+	"github.com/decred/dcrd/gcs/v2/blockcf2"
 	"github.com/decred/dcrd/wire"
-	"github.com/decred/dcrwallet/errors/v2"
-	"github.com/decred/dcrwallet/lru"
-	"github.com/decred/dcrwallet/p2p/v2"
-	"github.com/decred/dcrwallet/validate"
-	"github.com/decred/dcrwallet/wallet/v3"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -54,7 +54,7 @@ type Syncer struct {
 	// TODO: Replace precise rescan filter with wallet db accesses to avoid
 	// needing to keep all relevant data in memory.
 	rescanFilter map[int]*wallet.RescanFilter
-	filterData   map[int]*blockcf.Entries
+	filterData   map[int]*blockcf2.Entries
 	filterMu     sync.Mutex
 
 	// seenTxs records hashes of received inventoried transactions.  Once a
@@ -73,6 +73,10 @@ type Syncer struct {
 
 	// Holds all potential callbacks used to notify clients
 	notifications *Notifications
+
+	// Mempool for non-wallet-relevant transactions.
+	mempool     sync.Map // k=chainhash.Hash v=*wire.MsgTx
+	mempoolAdds chan *chainhash.Hash
 }
 
 // Notifications struct to contain all of the upcoming callbacks that will
@@ -110,12 +114,12 @@ type Notifications struct {
 // NewSyncer creates a Syncer that will sync the wallet using SPV.
 func NewSyncer(wallets map[int]*wallet.Wallet, lp *p2p.LocalPeer) *Syncer {
 	rescanFilter := make(map[int]*wallet.RescanFilter)
-	filterData := make(map[int]*blockcf.Entries)
+	filterData := make(map[int]*blockcf2.Entries)
 	atomicWalletsSynced := make(map[int]*uint32, len(wallets))
 
 	for walletID := range wallets {
 		rescanFilter[walletID] = wallet.NewRescanFilter(nil, nil)
-		filterData[walletID] = &blockcf.Entries{}
+		filterData[walletID] = &blockcf2.Entries{}
 		atomicWalletsSynced[walletID] = new(uint32)
 	}
 
@@ -129,6 +133,7 @@ func NewSyncer(wallets map[int]*wallet.Wallet, lp *p2p.LocalPeer) *Syncer {
 		filterData:          filterData,
 		seenTxs:             lru.NewCache(2000),
 		lp:                  lp,
+		mempoolAdds:         make(chan *chainhash.Hash),
 	}
 }
 
@@ -152,6 +157,18 @@ func (s *Syncer) synced(walletID int) {
 		s.notifications.Synced != nil {
 		s.notifications.Synced(walletID, true)
 	}
+}
+
+// GetRemotePeers returns a map of connected remote peers.
+func (s *Syncer) GetRemotePeers() map[string]*p2p.RemotePeer {
+	s.remotesMu.Lock()
+	defer s.remotesMu.Unlock()
+
+	remotes := make(map[string]*p2p.RemotePeer, len(s.remotes))
+	for k, rp := range s.remotes {
+		remotes[k] = rp
+	}
+	return remotes
 }
 
 // unsynced checks the atomic that controls wallet syncness and if previously
@@ -332,7 +349,7 @@ func (s *Syncer) Run(ctx context.Context) error {
 
 	// Seed peers over DNS when not disabled by persistent peers.
 	if len(s.persistentPeers) == 0 {
-		s.lp.DNSSeed(wire.SFNodeNetwork | wire.SFNodeCF)
+		s.lp.SeedPeers(ctx, wire.SFNodeNetwork|wire.SFNodeCF)
 	}
 
 	// Start background handlers to read received messages from remote peers
@@ -350,6 +367,8 @@ func (s *Syncer) Run(ctx context.Context) error {
 	} else {
 		g.Go(func() error { return s.connectToCandidates(ctx) })
 	}
+
+	g.Go(func() error { return s.handleMempool(ctx) })
 
 	// Wait until cancellation or a handler errors.
 	return g.Wait()
@@ -638,8 +657,16 @@ func (s *Syncer) receiveGetData(ctx context.Context) error {
 						rp.RemoteAddr(), err)
 					return
 				}
-				if len(missing) != 0 {
-					notFound = append(notFound, missing...)
+
+				// For the missing ones, attempt to search in
+				// the non-wallet-relevant syncer mempool.
+				for _, miss := range missing {
+					if v, ok := s.mempool.Load(miss.Hash); ok {
+						tx := v.(*wire.MsgTx)
+						foundTxs = append(foundTxs, tx)
+						continue
+					}
+					notFound = append(notFound, miss)
 				}
 			}
 
@@ -814,7 +841,7 @@ ProcessTx:
 	for walletID, w := range s.wallets {
 		relevant := s.filterRelevant(txs, walletID)
 		for _, tx := range relevant {
-			err := w.AcceptMempoolTx(ctx, tx)
+			err := w.AddTransaction(ctx, tx, nil)
 			if err != nil {
 				op := errors.Opf(opf, rp.RemoteAddr())
 				log.Warn(errors.E(op, err))
@@ -888,8 +915,8 @@ FilterLoop:
 		worker := func() {
 			for i := range c {
 				n := chain[i]
-				f := n.Filter
-				k := blockcf.Key(n.Hash)
+				f := n.FilterV2
+				k := blockcf2.Key(&n.Header.MerkleRoot)
 				if f.N() != 0 && f.MatchAny(k, filterData) {
 					fmatchMu.Lock()
 					fmatches = append(fmatches, n.Hash)
@@ -932,11 +959,6 @@ FilterLoop:
 				if err != nil {
 					err = validate.DCP0005MerkleRoot(b)
 				}
-				if err != nil {
-					rp.Disconnect(err)
-					return nil, err
-				}
-				err = validate.RegularCFilter(b, chain[i].Filter)
 				if err != nil {
 					rp.Disconnect(err)
 					return nil, err
@@ -992,7 +1014,7 @@ func (s *Syncer) handleBlockAnnouncements(ctx context.Context, rp *p2p.RemotePee
 		hash := h.BlockHash()
 		blockHashes = append(blockHashes, &hash)
 	}
-	filters, err := rp.CFilters(ctx, blockHashes)
+	filters, err := rp.CFiltersV2(ctx, blockHashes)
 	if err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -1004,6 +1026,7 @@ func (s *Syncer) handleBlockAnnouncements(ctx context.Context, rp *p2p.RemotePee
 		newBlocks := make([]*wallet.BlockNode, 0, len(headers))
 		var bestChain []*wallet.BlockNode
 		var matchingTxs map[chainhash.Hash][]*wire.MsgTx
+		cnet := w.ChainParams().Net
 		err = func() error {
 			defer s.sidechainMu.Unlock()
 			s.sidechainMu.Lock()
@@ -1016,7 +1039,17 @@ func (s *Syncer) handleBlockAnnouncements(ctx context.Context, rp *p2p.RemotePee
 				if haveBlock {
 					continue
 				}
-				n := wallet.NewBlockNode(headers[i], blockHashes[i], filters[i])
+
+				cf := filters[i]
+				filter, proofIndex, proof := cf.Filter, cf.ProofIndex, cf.Proof
+
+				err = validate.CFilterV2HeaderCommitment(cnet, headers[i],
+					filter, proofIndex, proof)
+				if err != nil {
+					return err
+				}
+
+				n := wallet.NewBlockNode(headers[i], blockHashes[i], filter)
 				if s.sidechains.AddBlockNode(n) {
 					newBlocks = append(newBlocks, n)
 				}
@@ -1122,6 +1155,7 @@ func (s *Syncer) getHeaders(ctx context.Context, rp *p2p.RemotePeer) error {
 	s.locatorMu.Unlock()
 
 	var lastHeight int32
+	cnet := lowestChainWallet.ChainParams().Net
 
 	for {
 		headers, err := rp.Headers(ctx, locators, &hashStop)
@@ -1155,10 +1189,17 @@ func (s *Syncer) getHeaders(ctx context.Context, rp *p2p.RemotePeer) error {
 			g.Go(func() error {
 				header := headers[i]
 				hash := header.BlockHash()
-				filter, err := rp.CFilter(ctx, &hash)
+				filter, proofIndex, proof, err := rp.CFilterV2(ctx, &hash)
 				if err != nil {
 					return err
 				}
+
+				err = validate.CFilterV2HeaderCommitment(cnet, header,
+					filter, proofIndex, proof)
+				if err != nil {
+					return err
+				}
+
 				nodes[i] = wallet.NewBlockNode(header, &hash, filter)
 				return nil
 			})
@@ -1307,7 +1348,7 @@ func (s *Syncer) startupSync(ctx context.Context, rp *p2p.RemotePeer) error {
 				s.unsynced(walletID)
 
 				s.discoverAddressesStart(walletID)
-				err = w.DiscoverActiveAddresses(ctx, rp, rescanPoint, !w.Locked())
+				err = w.DiscoverActiveAddresses(ctx, rp, rescanPoint, !w.Locked(), w.GapLimit())
 				if err != nil {
 					return err
 				}
@@ -1366,4 +1407,25 @@ func (s *Syncer) startupSync(ctx context.Context, rp *p2p.RemotePeer) error {
 	}
 
 	return nil
+}
+
+// handleMempool handles eviction from the local mempool of non-wallet-backed
+// transactions. It MUST be run as a goroutine.
+func (s *Syncer) handleMempool(ctx context.Context) error {
+	const mempoolEvictionTimeout = 60 * time.Minute
+
+	for {
+		select {
+		case txHash := <-s.mempoolAdds:
+			go func() {
+				select {
+				case <-ctx.Done():
+				case <-time.After(mempoolEvictionTimeout):
+					s.mempool.Delete(txHash)
+				}
+			}()
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 }

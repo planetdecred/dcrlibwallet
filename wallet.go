@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/decred/dcrd/chaincfg/v2"
+	w "decred.org/dcrwallet/wallet"
+	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrwallet/errors/v2"
-	w "github.com/decred/dcrwallet/wallet/v3"
 	"github.com/decred/dcrwallet/walletseed"
 	"github.com/planetdecred/dcrlibwallet/internal/loader"
 	"github.com/planetdecred/dcrlibwallet/txindex"
@@ -172,7 +172,7 @@ func (wallet *Wallet) createWatchingOnlyWallet(extendedPublicKey string) error {
 
 func (wallet *Wallet) IsWatchingOnlyWallet() bool {
 	if w, ok := wallet.loader.LoadedWallet(); ok {
-		return w.Manager.WatchingOnly()
+		return w.WatchingOnly()
 	}
 
 	return false

@@ -3,8 +3,8 @@ package dcrlibwallet
 import (
 	"fmt"
 
+	w "decred.org/dcrwallet/wallet"
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	w "github.com/decred/dcrwallet/wallet/v3"
 )
 
 const BlockHeightInvalid int32 = -1

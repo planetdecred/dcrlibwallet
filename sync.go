@@ -6,10 +6,10 @@ import (
 	"strings"
 	"sync"
 
+	"decred.org/dcrwallet/p2p"
+	w "decred.org/dcrwallet/wallet"
 	"github.com/decred/dcrd/addrmgr"
 	"github.com/decred/dcrwallet/errors/v2"
-	"github.com/decred/dcrwallet/p2p/v2"
-	w "github.com/decred/dcrwallet/wallet/v3"
 	"github.com/planetdecred/dcrlibwallet/spv"
 )
 

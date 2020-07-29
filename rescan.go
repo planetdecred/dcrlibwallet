@@ -5,8 +5,8 @@ import (
 	"math"
 	"time"
 
+	w "decred.org/dcrwallet/wallet"
 	"github.com/decred/dcrwallet/errors"
-	w "github.com/decred/dcrwallet/wallet/v3"
 )
 
 func (mw *MultiWallet) RescanBlocks(walletID int) error {

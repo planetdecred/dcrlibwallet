@@ -1,6 +1,6 @@
 package dcrlibwallet
 
-import "github.com/decred/dcrwallet/wallet/v3"
+import "decred.org/dcrwallet/wallet"
 
 type WalletsIterator struct {
 	currentIndex int
@@ -309,6 +309,8 @@ type Proposal struct {
 type Proposals struct {
 	Proposals []Proposal `json:"proposals"`
 }
+
+/** end politea proposal types */
 
 type UnspentOutput struct {
 	TransactionHash []byte

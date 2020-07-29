@@ -9,16 +9,16 @@ import (
 	"runtime"
 	"sync"
 
+	"decred.org/dcrwallet/errors"
+	"decred.org/dcrwallet/p2p"
+	"decred.org/dcrwallet/validate"
+	"decred.org/dcrwallet/wallet"
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrd/dcrutil/v2"
-	"github.com/decred/dcrd/gcs"
-	"github.com/decred/dcrd/gcs/blockcf"
-	"github.com/decred/dcrd/txscript/v2"
+	"github.com/decred/dcrd/dcrutil/v3"
+	"github.com/decred/dcrd/gcs/v2"
+	"github.com/decred/dcrd/gcs/v2/blockcf2"
+	"github.com/decred/dcrd/txscript/v3"
 	"github.com/decred/dcrd/wire"
-	"github.com/decred/dcrwallet/errors/v2"
-	"github.com/decred/dcrwallet/p2p/v2"
-	"github.com/decred/dcrwallet/validate"
-	"github.com/decred/dcrwallet/wallet/v3"
 )
 
 var _ wallet.NetworkBackend = (*WalletBackend)(nil)
@@ -53,8 +53,17 @@ func (wb *WalletBackend) Blocks(ctx context.Context, blockHashes []*chainhash.Ha
 	}
 }
 
-// CFilters implements the CFilters method of the wallet.Peer interface.
-func (wb *WalletBackend) CFilters(ctx context.Context, blockHashes []*chainhash.Hash) ([]*gcs.Filter, error) {
+// filterProof is an alias to the same anonymous struct as wallet package's
+// FilterProof struct.
+
+type filterProof = struct {
+	Filter     *gcs.FilterV2
+	ProofIndex uint32
+	Proof      []chainhash.Hash
+}
+
+// CFiltersV2 implements the CFiltersV2 method of the wallet.Peer interface.
+func (wb *WalletBackend) CFiltersV2(ctx context.Context, blockHashes []*chainhash.Hash) ([]filterProof, error) {
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -63,7 +72,7 @@ func (wb *WalletBackend) CFilters(ctx context.Context, blockHashes []*chainhash.
 		if err != nil {
 			return nil, err
 		}
-		fs, err := rp.CFilters(ctx, blockHashes)
+		fs, err := rp.CFiltersV2(ctx, blockHashes)
 		if err != nil {
 			continue
 		}
@@ -98,17 +107,24 @@ func (wb *WalletBackend) String() string {
 
 // LoadTxFilter implements the LoadTxFilter method of the wallet.NetworkBackend
 // interface.
+//
+// NOTE: due to blockcf2 *not* including the spent outpoints in the block, the
+// addrs[] slice MUST include the addresses corresponding to the respective
+// outpoints, otherwise they will not be returned during the rescan.
 func (wb *WalletBackend) LoadTxFilter(ctx context.Context, reload bool, addrs []dcrutil.Address, outpoints []wire.OutPoint) error {
 	wb.filterMu.Lock()
 	if reload || wb.rescanFilter[wb.WalletID] == nil {
 		wb.rescanFilter[wb.WalletID] = wallet.NewRescanFilter(nil, nil)
-		wb.filterData[wb.WalletID] = &blockcf.Entries{}
+		wb.filterData[wb.WalletID] = &blockcf2.Entries{}
 	}
 	for _, addr := range addrs {
 		var pkScript []byte
+		type scripter interface {
+			PaymentScript() (uint16, []byte)
+		}
 		switch addr := addr.(type) {
-		case wallet.V0Scripter:
-			pkScript = addr.ScriptV0()
+		case scripter:
+			_, pkScript = addr.PaymentScript()
 		default:
 			pkScript, _ = txscript.PayToAddrScript(addr)
 		}
@@ -119,7 +135,6 @@ func (wb *WalletBackend) LoadTxFilter(ctx context.Context, reload bool, addrs []
 	}
 	for i := range outpoints {
 		wb.rescanFilter[wb.WalletID].AddUnspentOutPoint(&outpoints[i])
-		wb.filterData[wb.WalletID].AddOutPoint(&outpoints[i])
 	}
 	wb.filterMu.Unlock()
 	return nil
@@ -128,9 +143,34 @@ func (wb *WalletBackend) LoadTxFilter(ctx context.Context, reload bool, addrs []
 // PublishTransactions implements the PublishTransaction method of the
 // wallet.Peer interface.
 func (wb *WalletBackend) PublishTransactions(ctx context.Context, txs ...*wire.MsgTx) error {
+	// Figure out transactions that are not stored by the wallet and create
+	// an aux map so we can choose which need to be stored in the syncer's
+	// mempool.
+	walletBacked := make(map[chainhash.Hash]bool, len(txs))
+	for _, w := range wb.wallets {
+		relevant, _, err := w.DetermineRelevantTxs(ctx, txs...)
+		if err != nil {
+			return err
+		}
+		for _, tx := range relevant {
+			walletBacked[tx.TxHash()] = true
+		}
+	}
+
 	msg := wire.NewMsgInvSizeHint(uint(len(txs)))
 	for _, tx := range txs {
 		txHash := tx.TxHash()
+		if !walletBacked[txHash] {
+			// Load into the mempool and let the mempool handler
+			// know of it.
+			if _, loaded := wb.mempool.LoadOrStore(txHash, tx); !loaded {
+				select {
+				case wb.mempoolAdds <- &txHash:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			}
+		}
 		err := msg.AddInvVect(wire.NewInvVect(wire.InvTypeTx, &txHash))
 		if err != nil {
 			return errors.E(errors.Protocol, err)
@@ -153,13 +193,15 @@ func (wb *WalletBackend) Rescan(ctx context.Context, blockHashes []chainhash.Has
 		return errors.E(op, errors.Invalid)
 	}
 
-	cfilters := make([]*gcs.Filter, 0, len(blockHashes))
+	cfilters := make([]*gcs.FilterV2, 0, len(blockHashes))
+	cfilterKeys := make([][gcs.KeySize]byte, 0, len(blockHashes))
 	for i := 0; i < len(blockHashes); i++ {
-		f, err := w.CFilter(ctx, &blockHashes[i])
+		k, f, err := w.CFilterV2(ctx, &blockHashes[i])
 		if err != nil {
 			return err
 		}
 		cfilters = append(cfilters, f)
+		cfilterKeys = append(cfilterKeys, k)
 	}
 
 	blockMatches := make([]*wire.MsgBlock, len(blockHashes)) // Block assigned to slice once fetched
@@ -187,7 +229,7 @@ FilterLoop:
 			go func() {
 				for i := range c {
 					blockHash := &blockHashes[i]
-					key := blockcf.Key(blockHash)
+					key := cfilterKeys[i]
 					f := cfilters[i]
 					if f.MatchAny(key, filterData) {
 						fmatchMu.Lock()
@@ -236,7 +278,10 @@ FilterLoop:
 					// header is saved by the wallet, and modifications to these in
 					// the downloaded block would result in a different block hash
 					// and failure to fetch the block.
-					i := fmatchidx[j]
+					//
+					// Block filters were also validated
+					// against the header (assuming dcp0005
+					// was activated).
 					err = validate.MerkleRoots(b)
 					if err != nil {
 						err = validate.DCP0005MerkleRoot(b)
@@ -247,14 +292,8 @@ FilterLoop:
 						rp = nil
 						continue PickPeer
 					}
-					err = validate.RegularCFilter(b, cfilters[i])
-					if err != nil {
-						err := errors.E(op, err)
-						rp.Disconnect(err)
-						rp = nil
-						continue PickPeer
-					}
 
+					i := fmatchidx[j]
 					blockMatches[i] = b
 				}
 				break
