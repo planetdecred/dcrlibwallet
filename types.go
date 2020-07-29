@@ -63,6 +63,17 @@ type Accounts struct {
 	CurrentBlockHeight int32
 }
 
+type PeerInfo struct {
+	ID             int32  `json:"id"`
+	Addr           string `json:"addr"`
+	AddrLocal      string `json:"addr_local"`
+	Services       string `json:"services"`
+	Version        uint32 `json:"version"`
+	SubVer         string `json:"sub_ver"`
+	StartingHeight int64  `json:"starting_height"`
+	BanScore       int32  `json:"ban_score"`
+}
+
 /** begin sync-related types */
 
 type SyncProgressListener interface {
