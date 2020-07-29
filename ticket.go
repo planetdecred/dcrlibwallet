@@ -267,15 +267,15 @@ func (wallet *Wallet) PurchaseTickets(ctx context.Context, request *PurchaseTick
 
 func (wallet *Wallet) updateTicketPurchaseRequestWithVSPInfo(vspHost string, request *PurchaseTicketsRequest) error {
 	// generate an address and get the pubkeyaddr
-	// address, err := wallet.CurrentAddress(0)
-	// if err != nil {
-	// 	return fmt.Errorf("get wallet pubkeyaddr error: %s", err.Error())
-	// }
-	pubKeyAddr := "todo:"
-	// pubKeyAddr, err := wallet.AddressPubKey(address)
-	// if err != nil {
-	// 	return fmt.Errorf("get wallet pubkeyaddr error: %s", err.Error())
-	// }
+	address, err := wallet.CurrentAddress(0)
+	if err != nil {
+		return fmt.Errorf("get wallet pubkeyaddr error: %s", err.Error())
+	}
+
+	pubKeyAddr, err := wallet.AddressPubKey(address)
+	if err != nil {
+		return fmt.Errorf("get wallet pubkeyaddr error: %s", err.Error())
+	}
 
 	// invoke vsp api
 	ticketPurchaseInfo, err := CallVSPTicketInfoAPI(vspHost, pubKeyAddr)

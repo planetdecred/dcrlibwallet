@@ -197,13 +197,12 @@ func (wallet *Wallet) RenameAccount(accountNumber int32, newName string) error {
 	return nil
 }
 
-func (wallet *Wallet) AccountName(accountNumber int32) string {
+func (wallet *Wallet) AccountName(accountNumber int32) (string, error) {
 	name, err := wallet.AccountNameRaw(uint32(accountNumber))
 	if err != nil {
-		log.Error(err)
-		return "Account not found"
+		return "", translateError(err)
 	}
-	return name
+	return name, nil
 }
 
 func (wallet *Wallet) AccountNameRaw(accountNumber uint32) (string, error) {
