@@ -277,53 +277,48 @@ type VSPTicketPurchaseInfo struct {
 
 /** end ticket-related types */
 
-/** begin politea proposal types */
-type ServerVersion struct {
-	Version int `json:"version"`
-}
-
-type ServerPolicy struct {
-	ProposalListPageSize int `json:"proposallistpagesize"`
-}
-
-type ProposalFile struct {
-	Name    string `json:"name"`
-	Mime    string `json:"mime"`
-	Digest  string `json:"digest"`
-	Payload string `json:"payload"`
-}
-
-type ProposalMetaData struct {
-	Name   string `json:"name"`
-	LinkTo string `json:"linkto"`
-	LinkBy int64  `json:"linkby"`
-}
-
-type ProposalCensorshipRecord struct {
-	Token     string `json:"token"`
-	Merkle    string `json:"merkle"`
-	Signature string `json:"signature"`
-}
-
+/** begin politeia types */
 type Proposal struct {
+	ID               int                      `storm:"id,increment"`
+	Token            string                   `json:"-" storm:"index"`
+	Category         int32                    `json:"category" storm:"index"`
 	Name             string                   `json:"name"`
-	State            int                      `json:"state"`
-	Status           int                      `json:"status"`
+	State            int32                    `json:"state"`
+	Status           int32                    `json:"status"`
 	Timestamp        int64                    `json:"timestamp"`
 	UserID           string                   `json:"userid"`
 	Username         string                   `json:"username"`
 	PublicKey        string                   `json:"publickey"`
 	Signature        string                   `json:"signature"`
-	NumComments      int                      `json:"numcomments"`
+	NumComments      int32                    `json:"numcomments"`
 	Version          string                   `json:"version"`
 	PublishedAt      int64                    `json:"publishedat"`
-	Files            []ProposalFile           `json:"files"`
-	MetaData         []ProposalMetaData       `json:"metadata"`
-	CensorshipRecord ProposalCensorshipRecord `json:"censorshiprecord"`
+	Files            []proposalFile           `json:"files"`
+	MetaData         []proposalMetaData       `json:"metadata"`
+	CensorshipRecord proposalCensorshipRecord `json:"censorshiprecord"`
+	VoteSummary      proposalVoteSummary      `json:"votesummary"`
 }
 
-type Proposals struct {
-	Proposals []Proposal `json:"proposals"`
+type ProposalNotificationListener interface {
+	OnNewProposal(proposalID int, censorshipToken string)
+	OnProposalVoteStarted(proposalID int, censorshipToken string)
+	OnProposalVoteFinished(proposalID int, censorshipToken string)
+}
+
+type ProposalSyncProgressListener interface {
+	OnSyncStarted()
+	OnProposalsDiscovery()
+	OnProposalsFetched(proposalsFetchProgress *ProposalsFetchProgressReport)
+	OnSyncCompleted()
+	OnSyncCanceled()
+	OnSyncEndedWithError(err error)
+}
+
+type ProposalsFetchProgressReport struct {
+	TotalProposalsToFetch   int32 `json:"total_proposals_to_fetch"`
+	CurrentBatchLowerHeight int32 `json:"current_batch_lower_height"`
+	CurrentBatchUpperHeight int32 `json:"current_batch_upper_height"`
+	ProposalsFetchProgress  int32 `json:"proposals_fetch_progress"`
 }
 
 /** end politea proposal types */

@@ -15,6 +15,9 @@ import (
 	"github.com/asdine/storm"
 	"github.com/asdine/storm/q"
 	"github.com/decred/dcrd/chaincfg/v3"
+	"github.com/decred/dcrwallet/errors/v2"
+	w "github.com/decred/dcrwallet/wallet/v3"
+	"github.com/planetdecred/dcrlibwallet/txindex"
 	"github.com/planetdecred/dcrlibwallet/utils"
 	"github.com/planetdecred/dcrlibwallet/walletdata"
 	bolt "go.etcd.io/bbolt"
@@ -38,7 +41,7 @@ type MultiWallet struct {
 	shuttingDown chan bool
 	cancelFuncs  []context.CancelFunc
 
-	Politeia Politeia
+	Politeia *Politeia
 }
 
 func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
@@ -87,7 +90,11 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 			syncProgressListeners: make(map[string]SyncProgressListener),
 		},
 		txAndBlockNotificationListeners: make(map[string]TxAndBlockNotificationListener),
-		Politeia:                        newPoliteia(),
+	}
+
+	mw.Politeia, err = newPoliteia(rootDir, mw.ReadBoolConfigValueForKey)
+	if err != nil {
+		return nil, err
 	}
 
 	// read saved wallets info from db and initialize wallets

@@ -24,6 +24,8 @@ const (
 	SpvPersistentPeerAddressesConfigKey = "spv_peer_addresses"
 	UserAgentConfigKey                  = "user_agent"
 
+	PoliteiaNotificationConfigKey = "politeia_notification"
+
 	LastTxHashConfigKey = "last_tx_hash"
 
 	VSPHostConfigKey = "vsp_host"
