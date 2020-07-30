@@ -261,7 +261,12 @@ type VSPTicketPurchaseInfo struct {
 
 /** end ticket-related types */
 
-/** begin politea proposal types */
+/** begin politeia types */
+type Err struct {
+	Code    uint16   `json:"errorcode"`
+	Context []string `json:"errorcontext"`
+}
+
 type ServerVersion struct {
 	Version int `json:"version"`
 }
@@ -304,6 +309,7 @@ type Proposal struct {
 	Files            []ProposalFile           `json:"files"`
 	MetaData         []ProposalMetaData       `json:"metadata"`
 	CensorshipRecord ProposalCensorshipRecord `json:"censorshiprecord"`
+	VoteStatus       VoteStatus
 }
 
 type Proposals struct {
@@ -312,4 +318,31 @@ type Proposals struct {
 
 type ProposalResult struct {
 	Proposal Proposal `json:"proposal"`
+}
+
+type VoteOption struct {
+	ID          string `json:"id"`
+	Description string `json:"description"`
+	Bits        int    `json:"bits"`
+}
+
+type VoteOptionResult struct {
+	Option        VoteOption `json:"option"`
+	VotesReceived int64      `json:"votesreceived"`
+}
+
+type VoteStatus struct {
+	Token              string             `json:"token"`
+	Status             int                `json:"status"`
+	TotalVotes         int                `json:"totalvotes"`
+	OptionsResult      []VoteOptionResult `json:"optionsresult"`
+	EndHeight          string             `json:"endheight"`
+	BestBlock          string             `json:"bestblock"`
+	NumOfEligibleVotes int                `json:"numofeligiblevotes"`
+	QuorumPercentage   int                `json:"quorumpercentage"`
+	PassPercentage     int                `json:"passpercentage"`
+}
+
+type VotesStatus struct {
+	VotesStatus []VoteStatus `json:"votesstatus"`
 }
