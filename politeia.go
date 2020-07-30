@@ -170,6 +170,7 @@ func (p *Politeia) GetProposalsChunk(startHash string) (string, error) {
 
 	wg, _ := errgroup.WithContext(context.Background())
 	for i := range proposals {
+		i := i
 		wg.Go(func() error {
 			voteStatus, err := p.getVoteStatus(proposals[i].CensorshipRecord.Token)
 			if err != nil {

@@ -309,7 +309,7 @@ type Proposal struct {
 	Files            []ProposalFile           `json:"files"`
 	MetaData         []ProposalMetaData       `json:"metadata"`
 	CensorshipRecord ProposalCensorshipRecord `json:"censorshiprecord"`
-	VoteStatus       VoteStatus
+	VoteStatus       VoteStatus               `json:"votestatus"`
 }
 
 type Proposals struct {
