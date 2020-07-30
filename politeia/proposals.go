@@ -142,7 +142,7 @@ func (p *Politeia) getVoteStatus(censorshipToken string) (*VoteStatus, error) {
 
 // GetVoteStatus fetches the vote status of a single public proposal
 func (p *Politeia) GetVoteStatus(censorshipToken string) (string, error) {
-	voteStatus, err := p.GetVoteStatus(censorshipToken)
+	voteStatus, err := p.getVoteStatus(censorshipToken)
 	if err != nil {
 		return "", err
 	}

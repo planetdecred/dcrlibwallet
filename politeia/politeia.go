@@ -113,10 +113,9 @@ func (p *Politeia) handleResponse(res *http.Response, dest interface{}) error {
 			return err
 		}
 		return fmt.Errorf("bad request: %s", ErrorStatus[errResp.Code])
-	default:
-		return errors.New("an unknown error occurred")
 	}
-	return nil
+
+	return errors.New("an unknown error occurred")
 }
 
 func (p *Politeia) marshalResponse(res *http.Response, dest interface{}) error {
