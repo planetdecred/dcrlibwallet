@@ -15,6 +15,7 @@ import (
 	"github.com/decred/dcrd/chaincfg/v2"
 	"github.com/decred/dcrwallet/errors/v2"
 	w "github.com/decred/dcrwallet/wallet/v3"
+	"github.com/planetdecred/dcrlibwallet/politeia"
 	"github.com/planetdecred/dcrlibwallet/txindex"
 	"github.com/planetdecred/dcrlibwallet/utils"
 	bolt "go.etcd.io/bbolt"
@@ -38,7 +39,7 @@ type MultiWallet struct {
 	shuttingDown chan bool
 	cancelFuncs  []context.CancelFunc
 
-	Politeia Politeia
+	Politeia politeia.Politeia
 }
 
 func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
@@ -87,7 +88,7 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 			syncProgressListeners: make(map[string]SyncProgressListener),
 		},
 		txAndBlockNotificationListeners: make(map[string]TxAndBlockNotificationListener),
-		Politeia:                        newPoliteia(),
+		Politeia:                        politeia.New(),
 	}
 
 	// read saved wallets info from db and initialize wallets

@@ -309,3 +309,7 @@ type Proposal struct {
 type Proposals struct {
 	Proposals []Proposal `json:"proposals"`
 }
+
+type ProposalResult struct {
+	Proposal Proposal `json:"proposal"`
+}
