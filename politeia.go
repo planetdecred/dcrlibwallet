@@ -2,7 +2,7 @@ package dcrlibwallet
 
 import (
 	"bytes"
-	"context"
+	// "context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,18 +10,21 @@ import (
 	"net/http"
 	"net/url"
 
-	"golang.org/x/sync/errgroup"
+	// "golang.org/x/sync/errgroup"
 )
 
 const (
-	endpoint            = "proposals.decred.org"
-	endpointPath        = "/api/v1"
-	versionPath         = "/version"
-	policyPath          = "/policy"
-	vettedProposalsPath = "/proposals/vetted"
-	proposalDetailsPath = "/proposals/%s"
-	voteStatusPath      = "/proposals/%s/votestatus"
-	votesStatusPath     = "/proposals/votestatus"
+	endpoint            	= "proposals.decred.org"
+	endpointPath        	= "/api/v1"
+	versionPath         	= "/version"
+	policyPath          	= "/policy"
+	vettedProposalsPath 	= "/proposals/vetted"
+	proposalDetailsPath 	= "/proposals/%s"
+	voteStatusPath      	= "/proposals/%s/votestatus"
+	votesStatusPath     	= "/proposals/votestatus"
+	tokenInventoryPath 		= "/proposals/tokeninventory"
+	batchProposalsPath  	= "/proposals/batch"
+	batchVoteSummaryPath  	= "proposals/batchvotesummary"
 )
 
 type Politeia struct {
@@ -142,6 +145,74 @@ func (p *Politeia) getServerPolicy() (*ServerPolicy, error) {
 	return &serverPolicy, nil
 }
 
+func (p *Politeia) getTokenInventory() (*TokenInventory, error) {
+	var tokenInventory TokenInventory
+	err := p.makeRequest(tokenInventoryPath, "GET", nil, nil, &tokenInventory)
+	if err != nil {
+		return nil, err
+	}
+
+	return &tokenInventory, nil
+}
+
+// GetTokenInventory fetches the censorship record tokens of all proposals in the inventory
+func (p *Politeia) GetTokenInventory() (string, error) {
+	tokenInventory, err := p.getTokenInventory()
+	if err != nil {
+		return "", err
+	}
+
+	jsonBytes, err := json.Marshal(tokenInventory)
+	if err != nil {
+		return "", fmt.Errorf("error marshalling token inventory result to json: %s", err.Error())
+	}
+
+	return string(jsonBytes), nil
+}
+
+func (p *Politeia) getBatchProposals(censorshipTokens *Tokens) ([]Proposal, error) {
+	if censorshipTokens == nil {
+		return nil, errors.New("censorship token cannot be empty")
+	}
+
+	b, err := json.Marshal(censorshipTokens)
+	if err != nil {
+		return nil, err
+	}
+	 
+	var result Proposals
+	err = p.makeRequest(batchProposalsPath, "POST", nil, b, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	return result.Proposals, err
+}
+
+//GetBatchProposals retrieves the proposal details for a list of proposals using an array of csfr as params
+func (p *Politeia) GetBatchProposals() (string, error) {
+
+	tokenInventory, err := p.getTokenInventory()
+	if err != nil {
+		return "", err
+	}
+
+	prevotes := &Tokens{tokenInventory.Pre[:4]}
+
+	proposals, err := p.getBatchProposals(prevotes)
+	if err != nil {
+		return "", err
+	}
+
+	jsonBytes, err := json.Marshal(proposals)
+	if err != nil {
+		return "", fmt.Errorf("error marshalling batch proposals result to json: %s", err.Error())
+	}
+
+	return string(jsonBytes), nil
+
+}
+
 func (p *Politeia) getProposalsChunk(startHash string) ([]Proposal, error) {
 	var queryStrings map[string]string
 	if startHash != "" {
@@ -168,21 +239,12 @@ func (p *Politeia) GetProposalsChunk(startHash string) (string, error) {
 		return "", err
 	}
 
-	wg, _ := errgroup.WithContext(context.Background())
 	for i := range proposals {
-		i := i
-		wg.Go(func() error {
-			voteStatus, err := p.getVoteStatus(proposals[i].CensorshipRecord.Token)
-			if err != nil {
-				return err
-			}
-			proposals[i].VoteStatus = *voteStatus
-			return nil
-		})
-	}
-
-	if err := wg.Wait(); err != nil {
-		return "", err
+		voteStatus, err := p.getVoteStatus(proposals[i].CensorshipRecord.Token)
+		if err != nil {
+			return "", err
+		}
+		proposals[i].VoteStatus = *voteStatus
 	}
 
 	jsonBytes, err := json.Marshal(proposals)

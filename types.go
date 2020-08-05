@@ -346,3 +346,15 @@ type VoteStatus struct {
 type VotesStatus struct {
 	VotesStatus []VoteStatus `json:"votesstatus"`
 }
+
+type TokenInventory struct {
+	Pre       []string `json:"pre"`
+	Active    []string `json:"active"`
+	Approved  []string `json:"approved"`
+	Rejected  []string `json:"rejected"`
+	Abandoned []string `json:"abandoned"`
+}
+
+type Tokens struct {
+	Tokens []string `json:"tokens"`
+}
