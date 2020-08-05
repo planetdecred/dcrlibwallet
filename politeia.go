@@ -61,6 +61,7 @@ func (p *Politeia) prepareRequest(path, method string, queryStrings map[string]s
 				return nil, err
 			}
 		}
+		req.Header = make(http.Header)
 		req.Header.Set("X-CSRF-TOKEN", p.csrfToken)
 		req.AddCookie(p.cookie)
 	}
@@ -170,7 +171,7 @@ func (p *Politeia) GetTokenInventory() (string, error) {
 	return string(jsonBytes), nil
 }
 
-func (p *Politeia) getBatchProposals(censorshipTokens *Tokens) ([]Proposal, error) {
+func (p *Politeia) getBatchPreProposals(censorshipTokens *Tokens) ([]Proposal, error) {
 	if censorshipTokens == nil {
 		return nil, errors.New("censorship token cannot be empty")
 	}
@@ -189,17 +190,81 @@ func (p *Politeia) getBatchProposals(censorshipTokens *Tokens) ([]Proposal, erro
 	return result.Proposals, err
 }
 
-//GetBatchProposals retrieves the proposal details for a list of proposals using an array of csfr as params
-func (p *Politeia) GetBatchProposals() (string, error) {
+//GetBatchPreProposals retrieves the proposal details for a list of pre-vote proposals using an array of csfr as params
+func (p *Politeia) GetBatchPreProposals() (string, error) {
 
 	tokenInventory, err := p.getTokenInventory()
 	if err != nil {
 		return "", err
 	}
 
-	prevotes := &Tokens{tokenInventory.Pre[:4]}
+	prevotes := &Tokens{tokenInventory.Pre}
 
-	proposals, err := p.getBatchProposals(prevotes)
+	proposals, err := p.getBatchPreProposals(prevotes)
+	if err != nil {
+		return "", err
+	}
+
+	votesStatus, err := p.getBatchPreVoteSummary(prevotes)
+	if err != nil {
+		return "", err
+	}
+
+	var voteStatus VoteStatus
+	for i := range proposals {
+		for j := range votesStatus {
+			voteStatus = votesStatus[j]
+			proposals[i].VoteStatus = voteStatus
+		}
+	}
+
+	for i := range proposals {
+		voteStatus, err := p.getVoteStatus(proposals[i].CensorshipRecord.Token)
+		if err != nil {
+			return "", err
+		}
+		proposals[i].VoteStatus = *voteStatus
+	}
+
+	jsonBytes, err := json.Marshal(proposals)
+	if err != nil {
+		return "", fmt.Errorf("error marshalling batch proposals result to json: %s", err.Error())
+	}
+
+	return string(jsonBytes), nil
+
+}
+
+func (p *Politeia) getBatchPreVoteSummary(censorshipTokens *Tokens) ([]VoteStatus, error) {
+	if censorshipTokens == nil {
+		return nil, errors.New("censorship token cannot be empty")
+	}
+
+	b, err := json.Marshal(censorshipTokens)
+	if err != nil {
+		return nil, err
+	}
+	 
+	var result VotesStatus
+	err = p.makeRequest(batchVoteSummaryPath, "POST", nil, b, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	return result.VotesStatus, err
+}
+
+//GetBatchPreVoteSummary retrieves the vote summaries for a list of proposals using an array of csfr as params
+func (p *Politeia) GetBatchPreVoteSummary() (string, error) {
+
+	tokenInventory, err := p.getTokenInventory()
+	if err != nil {
+		return "", err
+	}
+
+	prevotes := &Tokens{tokenInventory.Pre}
+
+	proposals, err := p.getBatchPreVoteSummary(prevotes)
 	if err != nil {
 		return "", err
 	}
