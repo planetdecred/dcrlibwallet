@@ -34,6 +34,7 @@ const (
 	ErrChangingPassphrase           = "err_changing_passphrase"
 	ErrSavingWallet                 = "err_saving_wallet"
 	ErrIndexOutOfRange              = "err_index_out_of_range"
+	ErrNoMixableOutput              = "err_no_mixable_output"
 )
 
 // todo, should update this method to translate more error kinds.

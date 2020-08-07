@@ -16,6 +16,7 @@ require (
 	github.com/decred/dcrd/txscript/v3 v3.0.0
 	github.com/decred/dcrd/wire v1.4.0
 	github.com/decred/dcrdata/txhelpers/v4 v4.0.1
+	github.com/decred/dcrwallet/ticketbuyer/v4 v4.0.2
 	github.com/decred/slog v1.1.0
 	github.com/dgraph-io/badger v1.6.2
 	github.com/jrick/logrotate v1.0.0
@@ -29,5 +30,7 @@ require (
 )
 
 replace decred.org/dcrwallet => decred.org/dcrwallet v1.6.0-rc4
+
+replace github.com/decred/dcrdata/txhelpers/v4 => github.com/decred/dcrdata/txhelpers/v4 v4.0.0-20200108145420-f82113e7e212
 
 go 1.13
