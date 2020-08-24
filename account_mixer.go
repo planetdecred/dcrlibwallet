@@ -1,10 +1,12 @@
 package dcrlibwallet
 
 import (
+	"encoding/json"
 	"errors"
 
 	"decred.org/dcrwallet/ticketbuyer"
 	w "decred.org/dcrwallet/wallet"
+	"github.com/asdine/storm"
 	"github.com/decred/dcrd/dcrutil/v3"
 )
 
@@ -158,11 +160,14 @@ func (wallet *Wallet) IsAccountMixerActive() bool {
 	return wallet.cancelAccountMixer != nil
 }
 
-func (wallet *Wallet) FindLastUsedCSPPAccounts() ([]int32, error) {
+func (wallet *Wallet) FindLastUsedCSPPAccounts() (string, error) {
 	var mixedTransaction Transaction
 	err := wallet.walletDataDB.FindLast("IsMixed", true, &mixedTransaction)
 	if err != nil {
-		return nil, translateError(err)
+		if err == storm.ErrNotFound {
+			return "[]", nil
+		}
+		return "", translateError(err)
 	}
 
 	var csppAccountNumbers []int32
@@ -192,8 +197,11 @@ func (wallet *Wallet) FindLastUsedCSPPAccounts() ([]int32, error) {
 		if output.AccountNumber >= 0 {
 			addAcccountIfNotExist(output.AccountNumber)
 		}
-
 	}
 
-	return csppAccountNumbers, nil
+	accountNumbers, err := json.Marshal(csppAccountNumbers)
+	if err != nil {
+		return "", err
+	}
+	return string(accountNumbers), nil
 }
