@@ -637,63 +637,18 @@ func openDB(dbPath string, create bool) (walletdb.DB, error) {
 		return nil, errors.E(errors.NotExist, "missing database file")
 	}
 
-	fmt.Println("Running new badger v2.0, no config")
+	fmt.Println("Running new badger v1.6.1, new config config")
 	opts := badger.DefaultOptions(dbPath).
-		WithValueDir(dbPath)
-	// WithValueLogLoadingMode(options.FileIO).
-	// WithTableLoadingMode(options.FileIO).
-	// WithLoadBloomsOnOpen(true).
-	// WithSyncWrites(false).
-	// WithNumMemtables(1).
-	// WithNumLevelZeroTables(2).
-	// WithNumLevelZeroTablesStall(2).
-	// WithNumCompactors(0).
-	// WithMaxTableSize(150 << 20).
-	// WithValueLogFileSize(150 << 20).
-	// WithLevelOneSize(150 << 20).
-	// WithLevelSizeMultiplier(1).
-	// WithKeepL0InMemory(false)
-
-	// opts.LevelSizeMultiplier = 10
-	opts.TableLoadingMode = options.FileIO
-	opts.ValueLogLoadingMode = options.FileIO
-	// opts.MaxLevels = 2
-	// opts.MaxTableSize = 32 << 20
-	// opts.NumCompactors = 2
-	// opts.NumLevelZeroTables = 2
-	// opts.NumLevelZeroTablesStall = 3
-	// opts.NumMemtables = 2
-	// opts.BloomFalsePositive = 0.01
-	// opts.BlockSize = 4 * 1024
-	// opts.SyncWrites = true
-	// opts.NumVersionsToKeep = 1
-	// opts.CompactL0OnClose = false
-	// opts.KeepL0InMemory = false
-	// opts.VerifyValueChecksum = false
-	// opts.MaxCacheSize = 20 << 20
-	// opts.ZSTDCompressionLevel = 1
-	// opts.Compression = options.None
-	// opts.ValueLogFileSize = 50 << 20
-	// opts.ValueLogMaxEntries = 100000
-	// opts.ValueThreshold = 15
-	// opts.LogRotatesToFlush = 1
-
-	// opts := badger.DefaultOptions
-	// opts.Dir = dbPath
-	// opts.ValueDir = dbPath
-	// opts.ValueLogLoadingMode = options.FileIO
-	// opts.TableLoadingMode = options.MemoryMap
-	// opts.ValueLogFileSize = 150 << 20
-	// opts.MaxTableSize = 150 << 20
-	// opts.LevelOneSize = 150 << 20
-	// opts.NumMemtables = 5
-	// opts.NumCompactors = 0
-	// opts.NumLevelZeroTables = 5
-	// opts.NumLevelZeroTablesStall = 10
-	// opts.SyncWrites = false
-	// opts.Compression = options.ZSTD
-	// opts.ZSTDCompressionLevel = 3
-	// opts.KeepL0InMemory = false
+		WithValueDir(dbPath).
+		WithValueLogLoadingMode(options.FileIO).
+		WithTableLoadingMode(options.FileIO).
+		WithValueLogFileSize(256 << 20).
+		WithMaxTableSize(64 << 20).
+		WithLevelOneSize(256 << 20).
+		WithNumMemtables(3).
+		WithNumCompactors(1).
+		WithNumLevelZeroTables(3).
+		WithNumLevelZeroTablesStall(5)
 
 	d := &db{
 		closed: false,
