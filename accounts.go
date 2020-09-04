@@ -25,22 +25,13 @@ func (wallet *Wallet) GetAccountsRaw() (*Accounts, error) {
 		return nil, err
 	}
 	accounts := make([]*Account, len(resp.Accounts))
-	for i, account := range resp.Accounts {
-		balance, err := wallet.GetAccountBalance(int32(account.AccountNumber))
+	for i, a := range resp.Accounts {
+		account, err := wallet.GetAccount(int32(a.AccountNumber))
 		if err != nil {
 			return nil, err
 		}
 
-		accounts[i] = &Account{
-			WalletID:         wallet.ID,
-			Number:           int32(account.AccountNumber),
-			Name:             account.AccountName,
-			TotalBalance:     int64(account.TotalBalance),
-			Balance:          balance,
-			ExternalKeyCount: int32(account.LastUsedExternalIndex + 20),
-			InternalKeyCount: int32(account.LastUsedInternalIndex + 20),
-			ImportedKeyCount: int32(account.ImportedKeyCount),
-		}
+		accounts[i] = account
 	}
 
 	return &Accounts{
