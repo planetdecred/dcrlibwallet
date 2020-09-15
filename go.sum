@@ -40,6 +40,7 @@ github.com/dchest/siphash v1.2.1 h1:4cLinnzVJDKxTCl9B01807Yiy+W7ZzVHj/KIroQRvT4=
 github.com/dchest/siphash v1.2.1/go.mod h1:q+IRvb2gOSrUnYoPqHiyHXS0FOBBOdl6tONBlVnOnt4=
 github.com/decred/base58 v1.0.1 h1:w5qTcb0hYpKuIBYIn4Ckirkj1aOWrSq8onPQpb3eGg8=
 github.com/decred/base58 v1.0.1/go.mod h1:H2ENcsJjye1G7CbRa67kV9OFaui0LGr56ntKKoY5g9c=
+<<<<<<< HEAD
 github.com/decred/base58 v1.0.3 h1:KGZuh8d1WEMIrK0leQRM47W85KqCAdl2N+uagbctdDI=
 github.com/decred/base58 v1.0.3/go.mod h1:pXP9cXCfM2sFLb2viz2FNIdeMWmZDBKG3ZBYbiSM78E=
 github.com/decred/dcrd/addrmgr v1.2.0 h1:wN9bvDFHOus1J4s3KUtnsyiebNoi6w5R6INbP+JH0gI=
@@ -48,6 +49,26 @@ github.com/decred/dcrd/blockchain/stake/v2 v2.0.2 h1:tRrJTywABGsUpf6qrTrtdIOKXyZ
 github.com/decred/dcrd/blockchain/stake/v2 v2.0.2/go.mod h1:o2TT/l/YFdrt15waUdlZ3g90zfSwlA0WgQqHV9UGJF4=
 github.com/decred/dcrd/blockchain/stake/v3 v3.0.0 h1:vr0o0ICjuEzg1End6YtBfwgDuPkg+FYIwGVEz18kFg0=
 github.com/decred/dcrd/blockchain/stake/v3 v3.0.0/go.mod h1:5GIUwsrHQCJauacgCegIR6t92SaeVi28Qls/BLN9vOw=
+=======
+github.com/decred/base58 v1.0.2 h1:yupIH6bg+q7KYfBk7oUv3xFjKGb5Ypm4+v/61X4keGY=
+github.com/decred/base58 v1.0.2/go.mod h1:pXP9cXCfM2sFLb2viz2FNIdeMWmZDBKG3ZBYbiSM78E=
+github.com/decred/dcrd/addrmgr v1.0.2 h1:BfJoFEkdDDhaQSsx9NkVOTiOTUbEevbVf+aYRQSIAmU=
+github.com/decred/dcrd/addrmgr v1.0.2/go.mod h1:gNnmTuf/Xkg8ZX3j5GXbajzPrSdf5bA7HitO2bjmq0Q=
+github.com/decred/dcrd/addrmgr v1.1.0 h1:VQkn1qmafZypfN2u7yi7J/girwz4ZDicquo7JzsoxdQ=
+github.com/decred/dcrd/addrmgr v1.1.0/go.mod h1:exghL+0+QeVvO4MXezWJ1C2tcpBn3ngfuP6S1R+adB8=
+github.com/decred/dcrd/blockchain v1.1.1 h1:CWr90sZ2YLQz84EGT+X/pzU+9AZB1eXQUy+4fsJSt5w=
+github.com/decred/dcrd/blockchain v1.1.1/go.mod h1:zxi/41LgzHitpz/CZu0gxHyFHz8+ysd3lH8E3P5Uifg=
+github.com/decred/dcrd/blockchain/stake v1.0.1/go.mod h1:hgoGmWMIu2LLApBbcguVpzCEEfX7M2YhuMrQdpohJzc=
+github.com/decred/dcrd/blockchain/stake v1.1.0 h1:kCxZdQ2/UfcD+XjE3wlCv0vLKWR9ZFtjbbTTpudb74o=
+github.com/decred/dcrd/blockchain/stake v1.1.0/go.mod h1:WRuaml4bcyZYza1NT3qizlLcQwMIcAQRENvZVb2t884=
+github.com/decred/dcrd/blockchain/stake v1.2.1 h1:Llj+mKNJEnMskeakMj62hllNVtiHF2vo7cDxsvoLVFg=
+github.com/decred/dcrd/blockchain/stake v1.2.1/go.mod h1:3YGhsM2WCwUM6o0WLGoTCUXLOOw6H7tqXtVtWlcCE/Y=
+github.com/decred/dcrd/blockchain/stake/v2 v2.0.0/go.mod h1:jv/rKMcZ87lhvVkHot/tElxeAYEUJ3mnKPHJ7WPq86U=
+github.com/decred/dcrd/blockchain/stake/v2 v2.0.2 h1:tRrJTywABGsUpf6qrTrtdIOKXyZflA51b0sqWf7p5gk=
+github.com/decred/dcrd/blockchain/stake/v2 v2.0.2/go.mod h1:o2TT/l/YFdrt15waUdlZ3g90zfSwlA0WgQqHV9UGJF4=
+github.com/decred/dcrd/blockchain/stake/v3 v3.0.0-20200902060700-d2f6d921245e h1:WEdiTbLtiH6T9oG6vPVNwbsVsT0nkcurCDLmBHb26mU=
+github.com/decred/dcrd/blockchain/stake/v3 v3.0.0-20200902060700-d2f6d921245e/go.mod h1:1e94ovQXEcOjIn7BRzkXpswA7pWQXqB2el5l0w0Srf8=
+>>>>>>> update code to vspd v3 api
 github.com/decred/dcrd/blockchain/standalone v1.1.0 h1:yclvVGEY09Gf8A4GSAo+NCtL1dW2TYJ4OKp4+g0ICI0=
 github.com/decred/dcrd/blockchain/standalone v1.1.0/go.mod h1:6K8ZgzlWM1Kz2TwXbrtiAvfvIwfAmlzrtpA7CVPCUPE=
 github.com/decred/dcrd/blockchain/standalone/v2 v2.0.0 h1:9gUuH0u/IZNPWBK9K3CxgAWPG7nTqVSsZefpGY4Okns=
@@ -59,10 +80,20 @@ github.com/decred/dcrd/chaincfg/chainhash v1.0.2 h1:rt5Vlq/jM3ZawwiacWjPa+smINyL
 github.com/decred/dcrd/chaincfg/chainhash v1.0.2/go.mod h1:BpbrGgrPTr3YJYRN3Bm+D9NuaFd+zGyNeIKgrhCXK60=
 github.com/decred/dcrd/chaincfg/v2 v2.3.0 h1:ItmU+7DeUtyiabrcW+16MJFgY/BBeeYaPfkBLrFLyjo=
 github.com/decred/dcrd/chaincfg/v2 v2.3.0/go.mod h1:7qUJTvn+y/kswSRZ4sT2+EmvlDTDyy2InvNFtX/hxk0=
+<<<<<<< HEAD
 github.com/decred/dcrd/chaincfg/v3 v3.0.0 h1:+TFbu7ZmvBwM+SZz5mrj6cun9ts/6DAL5sqnsaFBHGQ=
 github.com/decred/dcrd/chaincfg/v3 v3.0.0/go.mod h1:EspyubQ7D2w6tjP7rBGDIE7OTbuMgBjR2F2kZFnh31A=
 github.com/decred/dcrd/connmgr/v3 v3.0.0 h1:Z0fWa3PYIzaxAM5SHTC+wqJVHgoWwP4TSDTvNek/PGY=
 github.com/decred/dcrd/connmgr/v3 v3.0.0/go.mod h1:cPI43Aggp1lOhrVG75eJ3c3BwuFx0NhT77FK34ky+ak=
+=======
+github.com/decred/dcrd/chaincfg/v3 v3.0.0-20200215015031-3283587e6add/go.mod h1:v4oyBPQ/ZstYCV7+B0y6HogFByW76xTjr+72fOm66Y8=
+github.com/decred/dcrd/chaincfg/v3 v3.0.0-20200215023918-6247af01d5e3/go.mod h1:v4oyBPQ/ZstYCV7+B0y6HogFByW76xTjr+72fOm66Y8=
+github.com/decred/dcrd/chaincfg/v3 v3.0.0-20200215031403-6b2ce76f0986/go.mod h1:v4oyBPQ/ZstYCV7+B0y6HogFByW76xTjr+72fOm66Y8=
+github.com/decred/dcrd/chaincfg/v3 v3.0.0-20200902060700-d2f6d921245e h1:Ff5LzgutWb65l+vCRClVbKRVRItCjy0mPObRlw95Fqs=
+github.com/decred/dcrd/chaincfg/v3 v3.0.0-20200902060700-d2f6d921245e/go.mod h1:OHbKBa6UZZOXCU1Y8f9Ta3O+GShto7nB1O0nuEutKq4=
+github.com/decred/dcrd/connmgr/v2 v2.0.0 h1:GjDy9KD5m8uBs34yDXriwj4dvf5VLo/JeiPkUHwFg0k=
+github.com/decred/dcrd/connmgr/v2 v2.0.0/go.mod h1:HJ2q+m7DaMlNmQlY3WtbV3zETZfo4dfAi78z0ILLdqA=
+>>>>>>> update code to vspd v3 api
 github.com/decred/dcrd/crypto/blake256 v1.0.0 h1:/8DMNYp9SGi5f0w7uCm6d6M4OU2rGFK09Y2A4Xv7EE0=
 github.com/decred/dcrd/crypto/blake256 v1.0.0/go.mod h1:sQl2p6Y26YV+ZOcSTP6thNdn47hh8kt6rqSlvmrXFAc=
 github.com/decred/dcrd/crypto/ripemd160 v1.0.0 h1:MciTnR4NfBqDFRFjFkrn8WPLP4Vo7t6ww6ghfn6wcXQ=
@@ -89,8 +120,19 @@ github.com/decred/dcrd/dcrjson/v3 v3.1.0 h1:Y2VjCXCNWbNIa52wMKEuNiU+9rUgnjYb5c1J
 github.com/decred/dcrd/dcrjson/v3 v3.1.0/go.mod h1:fnTHev/ABGp8IxFudDhjGi9ghLiXRff1qZz/wvq12Mg=
 github.com/decred/dcrd/dcrutil/v2 v2.0.1 h1:aL+c7o7Q66HV1gIif+XkNYo9DeorN3l01Vns8mh0mqs=
 github.com/decred/dcrd/dcrutil/v2 v2.0.1/go.mod h1:JdEgF6eh0TTohPeiqDxqDSikTSvAczq0J7tFMyyeD+k=
+<<<<<<< HEAD
 github.com/decred/dcrd/dcrutil/v3 v3.0.0 h1:n6uQaTQynIhCY89XsoDk2WQqcUcnbD+zUM9rnZcIOZo=
 github.com/decred/dcrd/dcrutil/v3 v3.0.0/go.mod h1:iVsjcqVzLmYFGCZLet2H7Nq+7imV9tYcuY+0lC2mNsY=
+=======
+github.com/decred/dcrd/dcrutil/v3 v3.0.0-20200215023918-6247af01d5e3/go.mod h1:48ZLpNNrRIYfqYxmvzMgOZrnTZUU3aTJveWtamCkOxo=
+github.com/decred/dcrd/dcrutil/v3 v3.0.0-20200215031403-6b2ce76f0986 h1:oT+4AnwK68i+xJlMUAh7G2wiazWY7ZaMWbBdXvV29mA=
+github.com/decred/dcrd/dcrutil/v3 v3.0.0-20200215031403-6b2ce76f0986/go.mod h1:jFxEd2LWDLvrWlrIiyx9ZGTQjvoFHZ0OVfBdyIX7jSw=
+github.com/decred/dcrd/gcs v1.0.1/go.mod h1:YwutGzusSdJM79CJtxCo9t7WRCvnkLtWSD19TPo1i9g=
+github.com/decred/dcrd/gcs v1.0.2 h1:wZjxeC9WPBoRApaAQpBrzvN9NA0iS2KWrTJa9IiDgc8=
+github.com/decred/dcrd/gcs v1.0.2/go.mod h1:eLCvrzUsWro48TlTyrmFcZAZqnllYFz0vEv5VZtufF4=
+github.com/decred/dcrd/gcs v1.1.0 h1:djuYzaFUzUTJR+6ulMSRZOQ+P9rxtIyuxQeViAEfB8s=
+github.com/decred/dcrd/gcs v1.1.0/go.mod h1:yBjhj217Vw5lw3aKnCdHip7fYb9zwMos8bCy5s79M9w=
+>>>>>>> update code to vspd v3 api
 github.com/decred/dcrd/gcs/v2 v2.0.0/go.mod h1:3XjKcrtvB+r2ezhIsyNCLk6dRnXRJVyYmsd1P3SkU3o=
 github.com/decred/dcrd/gcs/v2 v2.1.0 h1:foECqwfE3UJztU4CYtqUYqvR254x1Z9clXVfNdOjBQ8=
 github.com/decred/dcrd/gcs/v2 v2.1.0/go.mod h1:MbnJOINFcp42NMRAQ+CjX/xGz+53AwNgMzKZhwBibdM=
@@ -108,16 +150,52 @@ github.com/decred/dcrd/rpcclient/v5 v5.0.0 h1:dQAPuZU9D+/CP8DcyVjtNxLjT4Ew+L6QhY
 github.com/decred/dcrd/rpcclient/v5 v5.0.0/go.mod h1:lg7e2kpulSpynHkS2JXJ+trQ4PWHaHLQcp/Q0eSIvBc=
 github.com/decred/dcrd/txscript/v2 v2.1.0 h1:IKIpNm0lPmNQoaZ2zxZm1qMwfmLb/XXeahxXlfc+MrA=
 github.com/decred/dcrd/txscript/v2 v2.1.0/go.mod h1:XaJAVrZU4NWRx4UEzTiDAs86op1m8GRJLz24SDBKOi0=
+<<<<<<< HEAD
 github.com/decred/dcrd/txscript/v3 v3.0.0 h1:74NmirXAIskbGP0g9OWtrmN7OxDbWJ9G73a5uoxTkcM=
 github.com/decred/dcrd/txscript/v3 v3.0.0/go.mod h1:pdvnlD4KGdDoc09cvWRJ8EoRQUaiUz41uDevOWuEfII=
+=======
+github.com/decred/dcrd/txscript/v3 v3.0.0-20200215031403-6b2ce76f0986 h1:TJaHYmmlMfASPO+o6DtM8NAIDCSFGgT8i1KPTKZ2xVg=
+github.com/decred/dcrd/txscript/v3 v3.0.0-20200215031403-6b2ce76f0986/go.mod h1:KsDS7McU1yFaCYR9LCIwk6YnE15YN3wJUDxhKdFqlsc=
+github.com/decred/dcrd/wire v1.1.0 h1:G+3CugtxNbToUN8RKWqm74yLfzJJ2BKMOr2RgWc4TyY=
+github.com/decred/dcrd/wire v1.1.0/go.mod h1:/JKOsLInOJu6InN+/zH5AyCq3YDIOW/EqcffvU8fJHM=
+github.com/decred/dcrd/wire v1.2.0 h1:HqJVB7vcklIguzFWgRXw/WYCQ9cD3bUC5TKj53i1Hng=
+github.com/decred/dcrd/wire v1.2.0/go.mod h1:/JKOsLInOJu6InN+/zH5AyCq3YDIOW/EqcffvU8fJHM=
+>>>>>>> update code to vspd v3 api
 github.com/decred/dcrd/wire v1.3.0 h1:X76I2/a8esUmxXmFpJpAvXEi014IA4twgwcOBeIS8lE=
 github.com/decred/dcrd/wire v1.3.0/go.mod h1:fnKGlUY2IBuqnpxx5dYRU5Oiq392OBqAuVjRVSkIoXM=
 github.com/decred/dcrd/wire v1.4.0 h1:KmSo6eTQIvhXS0fLBQ/l7hG7QLcSJQKSwSyzSqJYDk0=
 github.com/decred/dcrd/wire v1.4.0/go.mod h1:WxC/0K+cCAnBh+SKsRjIX9YPgvrjhmE+6pZlel1G7Ro=
 github.com/decred/dcrdata/semver v1.0.0 h1:DBqYU/x+4LqHq/3r4xKdF6xG5ewktG2KDC+g/p3f8mc=
 github.com/decred/dcrdata/semver v1.0.0/go.mod h1:z+nQqiAd9fYkHhBLbejysZ2FPHtgkrErWDgMf+JlZWE=
+<<<<<<< HEAD
 github.com/decred/dcrdata/txhelpers/v4 v4.0.1 h1:jNPPSP5HzE4cfddj5zIJhrIEus/Tvd28Xvl/uVGjrMI=
 github.com/decred/dcrdata/txhelpers/v4 v4.0.1/go.mod h1:cUJbgsIzzI42llHDS0nkPlG49vPJ0cW6IZGbfu5sFrA=
+=======
+github.com/decred/dcrdata/txhelpers v1.1.0 h1:xKK+1/OASkSxMe/KDLaLJeJjJdopgC+FV8+EFPpJAGk=
+github.com/decred/dcrdata/txhelpers v1.1.0/go.mod h1:IyxuqUxIPrHnOmRy9DCl90oqw7FxYHde/fkIkF21B7w=
+github.com/decred/dcrwallet/deployments/v2 v2.0.0 h1:sSjkc87hcDFGoLMTIwNt5ze+rCHbholqyM8Z3H9k5CE=
+github.com/decred/dcrwallet/deployments/v2 v2.0.0/go.mod h1:fY1HV1vIeeY5bHjrMknUhB/ZOVIfthBiUlSgRqFFKrg=
+github.com/decred/dcrwallet/errors v1.0.0 h1:XjSILZ2mK5HqWYlhdBpsm+CimFDqDB+hY3tuX0Yh0Jo=
+github.com/decred/dcrwallet/errors v1.0.0/go.mod h1:XUm95dWmm9XmQGvneBXJkkIaFeRsQVBB6ni/KTy1hrY=
+github.com/decred/dcrwallet/errors v1.0.1 h1:8EF7IY6twRlo9sqWaSfm8abfi2/rHZ1wacOiGvBy+bM=
+github.com/decred/dcrwallet/errors v1.0.1/go.mod h1:XUm95dWmm9XmQGvneBXJkkIaFeRsQVBB6ni/KTy1hrY=
+github.com/decred/dcrwallet/errors v1.1.0 h1:xDzE4l8AGLcL1CGigPR9vYHP/rBmMm34ZatolleOS9A=
+github.com/decred/dcrwallet/errors v1.1.0/go.mod h1:XUm95dWmm9XmQGvneBXJkkIaFeRsQVBB6ni/KTy1hrY=
+github.com/decred/dcrwallet/errors/v2 v2.0.0 h1:b3QHoQNjKkrcO0GSpueeHvFKp5eqtRv9aw649MDyejA=
+github.com/decred/dcrwallet/errors/v2 v2.0.0/go.mod h1:2HYvtRuCE9XqDNCWhKmBuzLG364xUgcUIsJu02r0F5Q=
+github.com/decred/dcrwallet/lru v1.0.0 h1:vz71/Wa2890CUQeWsOTI6u6iGGfXGAhIQ/hnqMUh6Xc=
+github.com/decred/dcrwallet/lru v1.0.0/go.mod h1:jEty7mdT5VaaV06DEV2Avv0R3HpGvUwvDW4lw8ECtiY=
+github.com/decred/dcrwallet/p2p/v2 v2.0.0 h1:YFnzIhJITUmFcTU1PzuJ0Wenz/1s8ijDtu0LtpIo4z4=
+github.com/decred/dcrwallet/p2p/v2 v2.0.0/go.mod h1:5/sskXRO69fGsuBcCekirXZCC/cZ5MwjNmj/wEPoLe0=
+github.com/decred/dcrwallet/pgpwordlist v1.0.0 h1:H7Y3+yRZq7PXMPfpKLMnY5TKTjTWhc0oJmyN7v8tC/M=
+github.com/decred/dcrwallet/pgpwordlist v1.0.0/go.mod h1:Fek3uYn+9DnEFIreA/8PnTIXUl2lBO64JpEBkL9BXtk=
+github.com/decred/dcrwallet/rpc/client/dcrd v1.0.0 h1:xRx6XdG3IFWDVL4XMBzy41dz6Gtff/suzQggSR6uKyw=
+github.com/decred/dcrwallet/rpc/client/dcrd v1.0.0/go.mod h1:qrJri+p+cn+obQ8nkW5hTtagPcOnCqKPGBq1t02gBc0=
+github.com/decred/dcrwallet/rpc/jsonrpc/types v1.0.0 h1:FPVohgxZHHwi7qTOBki/Dw9j5cgGsZYiktGSfgqHR0w=
+github.com/decred/dcrwallet/rpc/jsonrpc/types v1.0.0/go.mod h1:k+IOPnUY0YqlwhSDhczzaUN17NX/gMtztwl3UxKgVZY=
+github.com/decred/dcrwallet/rpc/jsonrpc/types v1.1.0 h1:ZOMpbSK/Cz8D8Yfrt7/yNfS+myBUWMNOdgAg31ND7bM=
+github.com/decred/dcrwallet/rpc/jsonrpc/types v1.1.0/go.mod h1:xUT7XXATLOzE0pwwmvgfRWtZdrB+PsWFilo+jkH5/Ig=
+>>>>>>> update code to vspd v3 api
 github.com/decred/dcrwallet/rpc/jsonrpc/types v1.3.0 h1:yCxtFqK7X6GvZWQzHXjCwoGCy9YVe3tGEwxCjW5rYQk=
 github.com/decred/dcrwallet/rpc/jsonrpc/types v1.3.0/go.mod h1:Xvekb43GtfMiRbyIY4ZJ9Uhd9HRIAcnp46f3q2eIExU=
 github.com/decred/go-socks v1.1.0 h1:dnENcc0KIqQo3HSXdgboXAHgqsCIutkqq6ntQjYtm2U=

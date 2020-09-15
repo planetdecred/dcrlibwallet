@@ -338,6 +338,7 @@ type GetVspInfoResponse struct {
 type GetFeeAddressRequest struct {
 	Timestamp  int64  `json:"timestamp"`
 	TicketHash string `json:"tickethash"`
+	TicketHex  string `json:"tickethex"`
 }
 
 type GetFeeAddressResponse struct {
@@ -358,6 +359,15 @@ type PayFeeRequest struct {
 type TicketStatusRequest struct {
 	Timestamp  int64  `json:"timestamp"`
 	TicketHash string `json:"tickethash"`
+}
+
+type TicketStatusResponse struct {
+	Timestamp       int64               `json:"timestamp"`
+	TicketConfirmed bool                `json:"ticketconfirmed"`
+	FeeTxStatus     string              `json:"feetxstatus"`
+	FeeTxHash       string              `json:"feetxhash"`
+	VoteChoices     map[string]string   `json:"votechoices"`
+	Request         TicketStatusRequest `json:"request"`
 }
 
 type SetVoteChoicesRequest struct {
