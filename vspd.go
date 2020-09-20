@@ -2,6 +2,7 @@ package dcrlibwallet
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
@@ -11,27 +12,25 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"context"
-	"encoding/base64"
 
+	"github.com/decred/dcrd/blockchain/stake/v3"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v2"
-	"github.com/decred/dcrd/blockchain/stake/v3"
-	"github.com/planetdecred/dcrlibwallet/txhelper"
-	"github.com/planetdecred/dcrlibwallet/addresshelper"
-	"github.com/decred/dcrd/txscript/v3"
 	"github.com/decred/dcrd/dcrutil/v3"
+	"github.com/decred/dcrd/txscript/v3"
 	"github.com/decred/dcrd/wire"
+	"github.com/planetdecred/dcrlibwallet/addresshelper"
+	"github.com/planetdecred/dcrlibwallet/txhelper"
 )
 
 type VSPD struct {
 	baseURL             string
-	pubKey          []byte
+	pubKey              []byte
 	sourceWallet        *Wallet
 	mwRef               *MultiWallet
 	sourceAccountNumber int32
 	httpClient          http.Client
-	params          *chaincfg.Params
+	params              *chaincfg.Params
 }
 
 func (mw *MultiWallet) NewVSPD(baseURL string, sourceWallet *Wallet, sourceAccountNumber int32,
@@ -42,7 +41,7 @@ func (mw *MultiWallet) NewVSPD(baseURL string, sourceWallet *Wallet, sourceAccou
 		mwRef:               mw,
 		sourceAccountNumber: sourceAccountNumber,
 		httpClient:          httpClient,
-		params:          params,
+		params:              params,
 	}
 }
 
@@ -101,7 +100,7 @@ func (v *VSPD) SubmitTicket(ctx context.Context, ticketHash string, passphrase [
 		return err
 	}
 
-	commitmentAddr, err	:= v.getcommitmentAddr(ticketHash, pkScript)
+	commitmentAddr, err := v.getcommitmentAddr(ticketHash, pkScript)
 	if err != nil {
 		return err
 	}
@@ -115,7 +114,7 @@ func (v *VSPD) SubmitTicket(ctx context.Context, ticketHash string, passphrase [
 
 	if len(submissionAddr) > 0 {
 		return errors.New("submissionAddr is not greater 0")
-	}	
+	}
 
 	votingKey, err := v.sourceWallet.internal.DumpWIFPrivateKey(ctx, submissionAddr[0])
 	if err != nil {
@@ -137,16 +136,15 @@ func (v *VSPD) GetVSPFeeAddress(ctx context.Context, ticketHash string, passphra
 		return nil, fmt.Errorf("no ticketHash provided")
 	}
 
-	txs, _, err := v.getMsgTx(ticketHash)
+	txs, msgTx, err := v.getMsgTx(ticketHash)
 	if err != nil {
 		return nil, err
 	}
 
-	// fmt.Println(msgTx.TxOut[0].PkScript)
-	// commitmentAddr, err	:= v.getcommitmentAddr(ticketHash, msgTx.TxOut[0].PkScript)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	commitmentAddr, err := v.getcommitmentAddr(ticketHash, msgTx.TxOut[0].PkScript)
+	if err != nil {
+		return nil, err
+	}
 
 	req := GetFeeAddressRequest{
 		Timestamp:  time.Now().Unix(),
@@ -154,7 +152,7 @@ func (v *VSPD) GetVSPFeeAddress(ctx context.Context, ticketHash string, passphra
 		TicketHex:  txs.Hex,
 	}
 
-	resp, err := v.signedVSP_HTTP(ctx, "/api/v3/feeaddress", http.MethodPost, "TsnArBJ9CmrW3UUNNHB1n9M7ceyBYnvb38X"/*commitmentAddr.String()*/, passphrase, req)
+	resp, err := v.signedVSP_HTTP(ctx, "/api/v3/feeaddress", http.MethodPost, commitmentAddr.String(), passphrase, req)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +199,7 @@ func (v *VSPD) GetTicketStatus(ctx context.Context, ticketHash string, passphras
 		return nil, err
 	}
 
-	commitmentAddr, err	:= v.getcommitmentAddr(ticketHash, msgTx.TxOut[0].PkScript)
+	commitmentAddr, err := v.getcommitmentAddr(ticketHash, msgTx.TxOut[0].PkScript)
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +209,7 @@ func (v *VSPD) GetTicketStatus(ctx context.Context, ticketHash string, passphras
 		TicketHash: ticketHash,
 	}
 
-	resp, err := v.signedVSP_HTTP(ctx, "/api/v3/ticketstatus", http.MethodGet, commitmentAddr.String(), passphrase, req)
+	resp, err := v.signedVSP_HTTP(ctx, "/api/v3/ticketstatus", http.MethodPost, commitmentAddr.String(), passphrase, req)
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +233,7 @@ func (v *VSPD) SetVoteChoices(ctx context.Context, ticketHash string, passphrase
 		return err
 	}
 
-	commitmentAddr, err	:= v.getcommitmentAddr(ticketHash, msgTx.TxOut[0].PkScript)
+	commitmentAddr, err := v.getcommitmentAddr(ticketHash, msgTx.TxOut[1].PkScript)
 	if err != nil {
 		return err
 	}
@@ -275,8 +273,8 @@ func (v *VSPD) signedVSP_HTTP(ctx context.Context, url, method, commitmentAddr s
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(signature)
-	req.Header.Add("VSP-Client-Signature", base64.StdEncoding.EncodeToString(signature))
+
+	req.Header.Add("VSP-Client-Signature", hex.EncodeToString(signature))
 
 	var httpClient http.Client
 	resp, err := httpClient.Do(req)
