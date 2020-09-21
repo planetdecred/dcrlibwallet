@@ -2,11 +2,16 @@ package dcrlibwallet
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/decred/dcrd/chaincfg/v2"
+	"github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/dcrwallet/errors/v2"
+	dcrwallet "github.com/decred/dcrwallet/wallet/v3"
+	"github.com/planetdecred/dcrlibwallet/addresshelper"
 )
 
 func (wallet *Wallet) GetAccounts() (string, error) {
@@ -119,7 +124,73 @@ func (wallet *Wallet) SpendableForAccount(account int32) (int64, error) {
 	return int64(bals.Spendable), nil
 }
 
-func (wallet *Wallet) NextAccount(accountName string, privPass []byte) (int32, error) {
+func (wallet *Wallet) AllUnspentOutputs(account int32, requiredConfirmations int32) ([]*UnspentOutput, error) {
+	policy := dcrwallet.OutputSelectionPolicy{
+		Account:               uint32(account),
+		RequiredConfirmations: requiredConfirmations,
+	}
+
+	// fetch all utxos in account to extract details for the utxos selected by user
+	// use targetAmount = 0 to fetch ALL utxos in account
+	inputDetail, err := wallet.internal.SelectInputs(wallet.shutdownContext(), dcrutil.Amount(0), policy)
+
+	if err != nil {
+		return nil, err
+	}
+
+	unspentOutputs := make([]*UnspentOutput, len(inputDetail.Inputs))
+
+	for i, input := range inputDetail.Inputs {
+		outputInfo, err := wallet.internal.OutputInfo(wallet.shutdownContext(), &input.PreviousOutPoint)
+		if err != nil {
+			return nil, err
+		}
+
+		// unique key to identify utxo
+		outputKey := fmt.Sprintf("%s:%d", input.PreviousOutPoint.Hash, input.PreviousOutPoint.Index)
+
+		addresses, err := addresshelper.PkScriptAddresses(lw.activeNet.Params, inputDetail.Scripts[i])
+		if err != nil {
+			return nil, fmt.Errorf("error reading address details for unspent output: %v", err)
+		}
+
+		previousTx, err := lw.GetTransactionRaw(input.PreviousOutPoint.Hash[:])
+		if err != nil {
+			return nil, fmt.Errorf("error reading tx details for unspent output: %v", err)
+		}
+
+		var confirmations int32 = 0
+		if previousTx.BlockHeight != -1 {
+			confirmations = lw.GetBestBlock() - previousTx.BlockHeight + 1
+		}
+
+		unspentOutputs[i] = &UnspentOutput{
+			TransactionHash: input.PreviousOutPoint.Hash[:],
+			OutputIndex:     input.PreviousOutPoint.Index,
+			OutputKey:       outputKey,
+			Tree:            int32(input.PreviousOutPoint.Tree),
+			Amount:          int64(outputInfo.Amount),
+			PkScript:        inputDetail.Scripts[i],
+			ReceiveTime:     outputInfo.Received.Unix(),
+			FromCoinbase:    outputInfo.FromCoinbase,
+			Address:         strings.Join(addresses, ", "),
+			Confirmations:   confirmations,
+		}
+	}
+
+	return unspentOutputs, nil
+}
+
+func (wallet *Wallet) NextAccount(accountName string, privPass []byte) error {
+	_, err := wallet.internal.NextAccount(accountName)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	return nil
+}
+
+func (lw *LibWallet) NextAccountRaw(accountName string, privPass []byte) (uint32, error) {
 	lock := make(chan time.Time, 1)
 	defer func() {
 		for i := range privPass {

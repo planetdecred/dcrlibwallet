@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/dcrd/txscript/v2"
 	"github.com/decred/dcrd/wire"
@@ -21,6 +22,8 @@ type TxAuthor struct {
 	sourceAccountNumber uint32
 	destinations        []TransactionDestination
 	changeAddress       string
+	inputs              []*wire.TxIn
+	changeDestinations  []TransactionDestination
 }
 
 func (mw *MultiWallet) NewUnsignedTx(sourceWallet *Wallet, sourceAccountNumber int32) *TxAuthor {
@@ -111,6 +114,47 @@ func (tx *TxAuthor) EstimateMaxSendAmount() (*Amount, error) {
 		AtomValue: maxSendableAmount,
 		DcrValue:  dcrutil.Amount(maxSendableAmount).ToCoin(),
 	}, nil
+}
+
+func (tx *TxAuthor) UseInputs(utxoKeys []string) error {
+	// first clear any previously set inputs
+	// so that an outdated set of inputs isn't used if an error occurs from this function
+	tx.inputs = nil
+	requiredConfirmations := tx.sourceWallet.RequiredConfirmations()
+	accountUtxos, err := tx.sourceWallet.AllUnspentOutputs(int32(tx.sourceAccountNumber), requiredConfirmations)
+	if err != nil {
+		return fmt.Errorf("error reading unspent outputs in account: %v", err)
+	}
+
+	retrieveAccountUtxo := func(utxoKey string) *UnspentOutput {
+		for _, accountUtxo := range accountUtxos {
+			if accountUtxo.OutputKey == utxoKey {
+				return accountUtxo
+			}
+		}
+		return nil
+	}
+
+	inputs := make([]*wire.TxIn, 0, len(utxoKeys))
+
+	// retrieve utxo details for each key in the provided slice of utxoKeys
+	for _, utxoKey := range utxoKeys {
+		utxo := retrieveAccountUtxo(utxoKey)
+		if utxo == nil {
+			return fmt.Errorf("no valid utxo found for '%s' in the source account", utxoKey)
+		}
+
+		// this is a reverse conversion and should not throw an error
+		// this []byte was originally converted from chainhash.Hash using chainhash.Hash[:]
+		txHash, _ := chainhash.NewHash(utxo.TransactionHash)
+
+		outpoint := wire.NewOutPoint(txHash, utxo.OutputIndex, int8(utxo.Tree))
+		input := wire.NewTxIn(outpoint, int64(utxo.Amount), nil)
+		inputs = append(inputs, input)
+	}
+
+	tx.inputs = inputs
+	return nil
 }
 
 func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
@@ -204,6 +248,11 @@ func (tx *TxAuthor) constructTransaction() (*txauthor.AuthoredTx, error) {
 	var outputSelectionAlgorithm w.OutputSelectionAlgorithm = w.OutputSelectionAlgorithmDefault
 	var changeSource txauthor.ChangeSource
 
+	if len(tx.inputs) != 0 {
+		// custom transaction
+		return tx.constructCustomTransaction()
+	}
+
 	ctx := tx.sourceWallet.shutdownContext()
 
 	for _, destination := range tx.destinations {
@@ -278,4 +327,20 @@ func (tx *TxAuthor) changeSource(ctx context.Context) (txauthor.ChangeSource, er
 	}
 
 	return changeSource, nil
+}
+
+func (tx *TxAuthor) constructCustomTransaction() (*txauthor.AuthoredTx, error) {
+	// Used to generate an internal address for change,
+	// if no change destination is provided and
+	// no recipient is set to receive max amount.
+	changeAddressFn := func() (string, error) {
+		ctx := tx.sourceWallet.shutdownContext()
+		addr, err := tx.sourceWallet.internal.NewChangeAddress(ctx, tx.sourceAccountNumber)
+		if err != nil {
+			return "", err
+		}
+		return addr.Address(), nil
+	}
+
+	return NewUnsignedTx(tx.inputs, tx.destinations, tx.changeDestinations, changeAddressFn)
 }
