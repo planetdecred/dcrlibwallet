@@ -124,10 +124,10 @@ func (wallet *Wallet) SpendableForAccount(account int32) (int64, error) {
 	return int64(bals.Spendable), nil
 }
 
-func (wallet *Wallet) AllUnspentOutputs(account int32, requiredConfirmations int32) ([]*UnspentOutput, error) {
+func (wallet *Wallet) UnspentOutputs(account int32) ([]*UnspentOutput, error) {
 	policy := dcrwallet.OutputSelectionPolicy{
 		Account:               uint32(account),
-		RequiredConfirmations: requiredConfirmations,
+		RequiredConfirmations: wallet.RequiredConfirmations(),
 	}
 
 	// fetch all utxos in account to extract details for the utxos selected by user
@@ -149,19 +149,19 @@ func (wallet *Wallet) AllUnspentOutputs(account int32, requiredConfirmations int
 		// unique key to identify utxo
 		outputKey := fmt.Sprintf("%s:%d", input.PreviousOutPoint.Hash, input.PreviousOutPoint.Index)
 
-		addresses, err := addresshelper.PkScriptAddresses(lw.activeNet.Params, inputDetail.Scripts[i])
+		addresses, err := addresshelper.PkScriptAddresses(wallet.chainParams, inputDetail.Scripts[i])
 		if err != nil {
 			return nil, fmt.Errorf("error reading address details for unspent output: %v", err)
 		}
 
-		previousTx, err := lw.GetTransactionRaw(input.PreviousOutPoint.Hash[:])
+		previousTx, err := wallet.GetTransactionRaw(input.PreviousOutPoint.Hash[:])
 		if err != nil {
 			return nil, fmt.Errorf("error reading tx details for unspent output: %v", err)
 		}
 
 		var confirmations int32 = 0
 		if previousTx.BlockHeight != -1 {
-			confirmations = lw.GetBestBlock() - previousTx.BlockHeight + 1
+			confirmations = wallet.GetBestBlock() - previousTx.BlockHeight + 1
 		}
 
 		unspentOutputs[i] = &UnspentOutput{
@@ -181,16 +181,7 @@ func (wallet *Wallet) AllUnspentOutputs(account int32, requiredConfirmations int
 	return unspentOutputs, nil
 }
 
-func (wallet *Wallet) NextAccount(accountName string, privPass []byte) error {
-	_, err := wallet.internal.NextAccount(accountName)
-	if err != nil {
-		log.Error(err)
-		return err
-	}
-	return nil
-}
-
-func (lw *LibWallet) NextAccountRaw(accountName string, privPass []byte) (uint32, error) {
+func (wallet *Wallet) NextAccount(accountName string, privPass []byte) (int32, error) {
 	lock := make(chan time.Time, 1)
 	defer func() {
 		for i := range privPass {

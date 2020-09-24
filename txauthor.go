@@ -14,6 +14,7 @@ import (
 	w "github.com/decred/dcrwallet/wallet/v3"
 	"github.com/decred/dcrwallet/wallet/v3/txauthor"
 	"github.com/decred/dcrwallet/wallet/v3/txrules"
+	"github.com/decred/dcrwallet/wallet/v3/txsizes"
 	"github.com/planetdecred/dcrlibwallet/txhelper"
 )
 
@@ -120,8 +121,7 @@ func (tx *TxAuthor) UseInputs(utxoKeys []string) error {
 	// first clear any previously set inputs
 	// so that an outdated set of inputs isn't used if an error occurs from this function
 	tx.inputs = nil
-	requiredConfirmations := tx.sourceWallet.RequiredConfirmations()
-	accountUtxos, err := tx.sourceWallet.AllUnspentOutputs(int32(tx.sourceAccountNumber), requiredConfirmations)
+	accountUtxos, err := tx.sourceWallet.UnspentOutputs(int32(tx.sourceAccountNumber))
 	if err != nil {
 		return fmt.Errorf("error reading unspent outputs in account: %v", err)
 	}
@@ -333,7 +333,7 @@ func (tx *TxAuthor) constructCustomTransaction() (*txauthor.AuthoredTx, error) {
 	// Used to generate an internal address for change,
 	// if no change destination is provided and
 	// no recipient is set to receive max amount.
-	changeAddressFn := func() (string, error) {
+	nextInternalAddress := func() (string, error) {
 		ctx := tx.sourceWallet.shutdownContext()
 		addr, err := tx.sourceWallet.internal.NewChangeAddress(ctx, tx.sourceAccountNumber)
 		if err != nil {
@@ -342,5 +342,106 @@ func (tx *TxAuthor) constructCustomTransaction() (*txauthor.AuthoredTx, error) {
 		return addr.Address(), nil
 	}
 
-	return NewUnsignedTx(tx.inputs, tx.destinations, tx.changeDestinations, changeAddressFn)
+	outputs, totalSendAmount, maxAmountRecipientAddress, err := tx.ParseOutputsAndChangeDestination(tx.destinations)
+	if err != nil {
+		return nil, err
+	}
+
+	if maxAmountRecipientAddress != "" && len(tx.changeDestinations) > 0 {
+		return nil, errors.E(errors.Invalid, "no change is generated when sending max amount,"+
+			" change destinations must not be provided")
+	}
+
+	if maxAmountRecipientAddress == "" && len(tx.changeDestinations) == 0 {
+		// no change specified, generate new internal address to use as change (max amount recipient)
+		maxAmountRecipientAddress, err = nextInternalAddress()
+		if err != nil {
+			return nil, fmt.Errorf("error generating internal address to use as change: %s", err.Error())
+		}
+	}
+
+	var totalInputAmount int64
+	inputScriptSizes := make([]int, len(tx.inputs))
+	inputScripts := make([][]byte, len(tx.inputs))
+	for i, input := range tx.inputs {
+		totalInputAmount += input.ValueIn
+		inputScriptSizes[i] = txsizes.RedeemP2PKHSigScriptSize
+		inputScripts[i] = input.SignatureScript
+	}
+
+	var changeScriptSize int
+	if maxAmountRecipientAddress != "" {
+		changeScriptSize, err = tx.calculateChangeScriptSize(maxAmountRecipientAddress)
+	} else {
+		changeScriptSize, err = tx.calculateMultipleChangeScriptSize(tx.changeDestinations)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	maxSignedSize := txsizes.EstimateSerializeSize(inputScriptSizes, outputs, changeScriptSize)
+	maxRequiredFee := txrules.FeeForSerializeSize(txrules.DefaultRelayFeePerKb, maxSignedSize)
+	changeAmount := totalInputAmount - totalSendAmount - int64(maxRequiredFee)
+
+	if changeAmount < 0 {
+		excessSpending := 0 - changeAmount // equivalent to math.Abs()
+		return nil, fmt.Errorf("total send amount plus tx fee is higher than the total input amount by %s",
+			dcrutil.Amount(excessSpending).String())
+	}
+
+	if changeAmount != 0 && !txrules.IsDustAmount(dcrutil.Amount(changeAmount), changeScriptSize, txrules.DefaultRelayFeePerKb) {
+		if changeScriptSize > txscript.MaxScriptElementSize {
+			return nil, fmt.Errorf("script size exceed maximum bytes pushable to the stack")
+		}
+
+		if maxAmountRecipientAddress != "" {
+			singleChangeDestination := TransactionDestination{
+				Address:    maxAmountRecipientAddress,
+				AtomAmount: changeAmount,
+			}
+			tx.changeDestinations = []TransactionDestination{singleChangeDestination}
+		}
+
+		var totalChangeAmount int64
+		for _, changeDestination := range tx.changeDestinations {
+			changeOutput, err := txhelper.MakeTxOutput(changeDestination.Address, changeDestination.AtomAmount, tx.sourceWallet.chainParams)
+			if err != nil {
+				return nil, fmt.Errorf("change address error: %v", err)
+			}
+
+			totalChangeAmount += changeOutput.Value
+			outputs = append(outputs, changeOutput)
+
+			// randomize the change output that was just added
+			changeOutputIndex := len(outputs) - 1
+			txauthor.RandomizeOutputPosition(outputs, changeOutputIndex)
+		}
+
+		if totalChangeAmount > changeAmount {
+			return nil, fmt.Errorf("total amount allocated to change addresses (%s) is higher than"+
+				" actual change amount for transaction (%s)", dcrutil.Amount(totalChangeAmount).String(),
+				dcrutil.Amount(changeAmount).String())
+		}
+	}
+	// else {
+	// 	maxSignedSize = txsizes.EstimateSerializeSize(inputScriptSizes, outputs, 0)
+	// }
+
+	return &txauthor.AuthoredTx{
+		Tx: &wire.MsgTx{
+			SerType:  wire.TxSerializeFull,
+			Version:  wire.TxVersion,
+			TxIn:     tx.inputs,
+			TxOut:    outputs,
+			LockTime: 0,
+			Expiry:   0,
+		}}, nil
+	// return &wire.MsgTx{
+	// 	SerType:  wire.TxSerializeFull,
+	// 	Version:  wire.TxVersion,
+	// 	TxIn:     tx.inputs,
+	// 	TxOut:    outputs,
+	// 	LockTime: 0,
+	// 	Expiry:   0,
+	// }, nil
 }
