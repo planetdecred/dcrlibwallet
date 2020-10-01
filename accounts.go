@@ -163,7 +163,6 @@ func (wallet *Wallet) UnspentOutputs(account int32) ([]*UnspentOutput, error) {
 		if previousTx.BlockHeight != -1 {
 			confirmations = wallet.GetBestBlock() - previousTx.BlockHeight + 1
 		}
-
 		unspentOutputs[i] = &UnspentOutput{
 			TransactionHash: input.PreviousOutPoint.Hash[:],
 			OutputIndex:     input.PreviousOutPoint.Index,
