@@ -80,8 +80,7 @@ func (v *VSPD) GetInfo() (*GetVspInfoResponse, error) {
 }
 
 // GetVSPFeeAddress is the first part of submiting ticket to a VSP. It returns a
-// fee address and an amount that must be paid. The fee Tx details must be sent
-// in the PayFee method for the submittion to be recorded
+// fee address and an amount that must be paid.
 func (v *VSPD) GetVSPFeeAddress(ticketHash string, passphrase []byte) (*GetFeeAddressResponse, error) {
 	if ticketHash == "" {
 		return nil, errors.New("no ticketHash provided")
@@ -119,7 +118,7 @@ func (v *VSPD) GetVSPFeeAddress(ticketHash string, passphrase []byte) (*GetFeeAd
 	return &feeAddressResponse, nil
 }
 
-// CreateTicketTeeTx gets fee info from GetVSPFeeAddress makes payment and returns tx hash for PayVSPFee
+// CreateTicketTeeTx gets fee info and fee address from GetVSPFeeAddress makes payment and returns fee tx hash for PayVSPFee
 // ticket verification
 // Before calling this function kindly ensure you are connected to the decred network by calling SpvSync().
 func (v *VSPD) CreateTicketTeeTx(feeAmount int64, feeAddress string, passphrase []byte) ([]byte, string, error) {
