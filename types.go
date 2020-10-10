@@ -324,41 +324,53 @@ type UnspentOutput struct {
 	Addresses       string // separated by commas
 	Confirmations   int32
 }
+
 /** end politea proposal types */
 
 /** begin vspd-related types */
 type GetVspInfoResponse struct {
+	APIVersions   []int64 `json:"apiversions"`
 	Timestamp     int64   `json:"timestamp"`
 	PubKey        []byte  `json:"pubkey"`
 	FeePercentage float64 `json:"feepercentage"`
-	Closed        bool    `json:"closed"`
+	VspClosed     bool    `json:"vspclosed"`
 	Network       string  `json:"network"`
+	VspdVersion   string  `json:"vspdversion"`
+	Voting        int64   `json:"voting"`
+	Voted         int64   `json:"voted"`
+	Revoked       int64   `json:"revoked"`
 }
 
 type GetFeeAddressRequest struct {
-	Timestamp  int64  `json:"timestamp"`
-	TicketHash string `json:"tickethash"`
-	TicketHex  string `json:"tickethex"`
+	Timestamp  int64  `json:"timestamp" binding:"required"`
+	TicketHash string `json:"tickethash" binding:"required"`
+	TicketHex  string `json:"tickethex" binding:"required"`
 }
 
 type GetFeeAddressResponse struct {
-	TicketHash string `json:"tickethash"`
-	FeeAddress string `json:"feeaddress"`
-	FeeAmount  int64  `json:"feeamount"`
-	Expiration int64  `json:"expiration"`
+	Timestamp  int64                `json:"timestamp"`
+	FeeAddress string               `json:"feeaddress"`
+	FeeAmount  int64                `json:"feeamount"`
+	Expiration int64                `json:"expiration"`
+	Request    GetFeeAddressRequest `json:"request"`
 }
 
 type PayFeeRequest struct {
-	Timestamp   int64             `json:"timestamp"`
-	TicketHash  string            `json:"tickethash"`
-	FeeTx       string            `json:"feetx"`
-	VotingKey   string            `json:"votingkey"`
-	VoteChoices map[string]string `json:"votechoices"`
+	Timestamp   int64             `json:"timestamp" binding:"required"`
+	TicketHash  string            `json:"tickethash" binding:"required"`
+	FeeTx       string            `json:"feetx" binding:"required"`
+	VotingKey   string            `json:"votingkey" binding:"required"`
+	VoteChoices map[string]string `json:"votechoices" binding:"required"`
+}
+
+type PayFeeResponse struct {
+	Timestamp int64         `json:"timestamp"`
+	Request   PayFeeRequest `json:"request"`
 }
 
 type TicketStatusRequest struct {
-	Timestamp  int64  `json:"timestamp"`
-	TicketHash string `json:"tickethash"`
+	Timestamp  int64  `json:"timestamp" binding:"required"`
+	TicketHash string `json:"tickethash" binding:"required"`
 }
 
 type TicketStatusResponse struct {
@@ -371,9 +383,14 @@ type TicketStatusResponse struct {
 }
 
 type SetVoteChoicesRequest struct {
-	Timestamp   int64             `json:"timestamp"`
-	TicketHash  string            `json:"tickethash"`
-	VoteChoices map[string]string `json:"votechoices"`
+	Timestamp   int64             `json:"timestamp" binding:"required"`
+	TicketHash  string            `json:"tickethash" binding:"required"`
+	VoteChoices map[string]string `json:"votechoices" binding:"required"`
+}
+
+type SetVoteChoicesResponse struct {
+	Timestamp int64                 `json:"timestamp"`
+	Request   SetVoteChoicesRequest `json:"request"`
 }
 
 /** end vspd-related types */
