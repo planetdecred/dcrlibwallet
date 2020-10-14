@@ -17,7 +17,7 @@ import (
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v2"
 	"github.com/decred/dcrd/dcrutil/v3"
-	"github.com/decred/dcrd/txscript/v3"
+	"github.com/decred/dcrd/txscript/v2"
 	"github.com/decred/dcrd/wire"
 )
 
@@ -80,7 +80,7 @@ func (v *VSPD) GetInfo() (*GetVspInfoResponse, error) {
 }
 
 // GetVSPFeeAddress is the first part of submiting ticket to a VSP. It returns a
-// fee address and an amount that must be paid.
+// fee address and an amount that must be paid by calling CreateTicketFeeTx.
 func (v *VSPD) GetVSPFeeAddress(ticketHash string, passphrase []byte) (*GetFeeAddressResponse, error) {
 	if ticketHash == "" {
 		return nil, errors.New("no ticketHash provided")
@@ -118,31 +118,69 @@ func (v *VSPD) GetVSPFeeAddress(ticketHash string, passphrase []byte) (*GetFeeAd
 	return &feeAddressResponse, nil
 }
 
-// CreateTicketTeeTx gets fee info and fee address from GetVSPFeeAddress makes payment and returns fee tx hash for PayVSPFee
+// CreateTicketFeeTx gets fee info from GetVSPFeeAddress makes payment and returns tx hash for PayVSPFee
 // ticket verification
-// Before calling this function kindly ensure you are connected to the decred network by calling SpvSync().
-func (v *VSPD) CreateTicketTeeTx(feeAmount int64, feeAddress string, passphrase []byte) ([]byte, string, error) {
+func (v *VSPD) CreateTicketFeeTx(feeAmount int64, feeAddress string, passphrase []byte) (string, error) {
 	if feeAmount == 0 {
-		return nil, "", errors.New("no feeAmount provided")
+		return "", errors.New("no feeAmount provided")
 	}
 
 	if feeAddress == "" {
-		return nil, "", errors.New("no feeAddress provided")
+		return "", errors.New("no feeAddress provided")
 	}
 
 	txAuthor := v.mwRef.NewUnsignedTx(v.sourceWallet, v.sourceAccountNumber)
 	txAuthor.AddSendDestination(feeAddress, feeAmount, false)
-	feeTxHash, err := txAuthor.Broadcast(passphrase)
+
+	defer func() {
+		for i := range passphrase {
+			passphrase[i] = 0
+		}
+	}()
+
+	unsignedTx, err := txAuthor.constructTransaction()
 	if err != nil {
-		return nil, "", err
+		return "", translateError(err)
 	}
 
-	feeTxString := hex.EncodeToString(feeTxHash)
-	return feeTxHash, feeTxString, nil
+	if unsignedTx.ChangeIndex >= 0 {
+		unsignedTx.RandomizeChangePosition()
+	}
+
+	lock := make(chan time.Time, 1)
+	defer func() {
+		lock <- time.Time{}
+	}()
+
+	ctx := txAuthor.sourceWallet.shutdownContext()
+	err = txAuthor.sourceWallet.internal.Unlock(ctx, passphrase, lock)
+	if err != nil {
+		log.Error(err)
+		return "", errors.New(ErrInvalidPassphrase)
+	}
+
+	invalidSigs, err := txAuthor.sourceWallet.internal.SignTransaction(ctx, unsignedTx.Tx, txscript.SigHashAll, nil, nil, nil)
+	if err != nil {
+		log.Errorf("failed to sign transaction: %v", err)
+		for _, sigErr := range invalidSigs {
+			log.Errorf("\t%v", sigErr)
+		}
+		return "", err
+	}
+
+	txBuf := new(bytes.Buffer)
+	txBuf.Grow(unsignedTx.Tx.SerializeSize())
+	err = unsignedTx.Tx.Serialize(txBuf)
+	if err != nil {
+		log.Errorf("failed to serialize fee transaction: %v", err)
+		return "", err
+	}
+
+	return hex.EncodeToString(txBuf.Bytes()), nil
 }
 
-// PayVSPFee is the second part of submitting ticket to a VSP. The fee amount is
-// gotten from GetVSPFeeAddress
+// PayVSPFee is the second part of submitting ticket to a VSP. The feeTx is gotton from CreateTicketFeeTx
+// and feeAddress from GetVSPFeeAddress
 func (v *VSPD) PayVSPFee(feeTx, ticketHash, feeAddress string, passphrase []byte) (*PayFeeResponse, error) {
 	if ticketHash == "" {
 		return nil, errors.New("no ticketHash provided")
@@ -167,9 +205,16 @@ func (v *VSPD) PayVSPFee(feeTx, ticketHash, feeAddress string, passphrase []byte
 		return nil, errors.New("votingAddress is not greater 0")
 	}
 
-	err = v.sourceWallet.UnlockWallet(passphrase)
+	lock := make(chan time.Time, 1)
+	defer func() {
+		lock <- time.Time{}
+	}()
+
+	// unlock wallet
+	ctx := v.sourceWallet.shutdownContext()
+	err = v.sourceWallet.internal.Unlock(ctx, passphrase, lock)
 	if err != nil {
-		return nil, err
+		return nil, translateError(err)
 	}
 
 	votingKey, err := v.sourceWallet.internal.DumpWIFPrivateKey(v.sourceWallet.shutdownContext(), votingAddress[0])
@@ -203,7 +248,7 @@ func (v *VSPD) PayVSPFee(feeTx, ticketHash, feeAddress string, passphrase []byte
 	return &payFeeResponse, nil
 }
 
-// GetTicketStatus returns the status of the specified ticket from the VSP
+// GetTicketStatus returns the status of the specified ticket from the VSP, after calling PayVSPFee
 func (v *VSPD) GetTicketStatus(ticketHash string, passphrase []byte) (*TicketStatusResponse, error) {
 	if ticketHash == "" {
 		return nil, errors.New("no ticketHash provided")
@@ -232,7 +277,7 @@ func (v *VSPD) GetTicketStatus(ticketHash string, passphrase []byte) (*TicketSta
 	return &ticketStatusResponse, nil
 }
 
-// SetVoteChoices updates the vote choice of the specified ticket on the VSP
+// SetVoteChoices updates the vote choice of the specified ticket on the VSP, after calling PayVSPFee
 func (v *VSPD) SetVoteChoices(ticketHash string, passphrase []byte, choices map[string]string) (*SetVoteChoicesResponse, error) {
 	if ticketHash == "" {
 		return nil, fmt.Errorf("no ticketHash provided")
