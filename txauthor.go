@@ -67,6 +67,26 @@ func (tx *TxAuthor) SendDestination(atIndex int) *TransactionDestination {
 	return &tx.destinations[atIndex]
 }
 
+func (tx *TxAuthor) AddChangeDestination(address string, atomAmount int64) {
+	tx.changeDestinations = append(tx.changeDestinations, TransactionDestination{
+		Address:    address,
+		AtomAmount: atomAmount,
+	})
+}
+
+func (tx *TxAuthor) UpdateChangeDestination(index int, address string, atomAmount int64) {
+	tx.changeDestinations[index] = TransactionDestination{
+		Address:    address,
+		AtomAmount: atomAmount,
+	}
+}
+
+func (tx *TxAuthor) RemoveChangeDestination(index int) {
+	if len(tx.changeDestinations) > index {
+		tx.changeDestinations = append(tx.changeDestinations[:index], tx.changeDestinations[index+1:]...)
+	}
+}
+
 func (tx *TxAuthor) TotalSendAmount() *Amount {
 	var totalSendAmountAtom int64 = 0
 	for _, destination := range tx.destinations {

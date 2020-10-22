@@ -3,6 +3,7 @@ package dcrlibwallet
 import (
 	"fmt"
 
+	"github.com/decred/dcrd/chaincfg/v2"
 	"github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrd/wire"
@@ -15,18 +16,19 @@ import (
 
 type NextAddressFunc func() (address string, err error)
 
-func (tx *TxAuthor) calculateChangeScriptSize(changeAddress string) (int, error) {
-	changeSource, err := txhelper.MakeTxChangeSource(changeAddress, tx.sourceWallet.chainParams)
+func calculateChangeScriptSize(changeAddress string, chainParams *chaincfg.Params) (int, error) {
+	changeSource, err := txhelper.MakeTxChangeSource(changeAddress, chainParams)
 	if err != nil {
 		return 0, fmt.Errorf("change address error: %v", err)
 	}
 	return changeSource.ScriptSize(), nil
 }
 
-func (tx *TxAuthor) calculateMultipleChangeScriptSize(changeDestinations []TransactionDestination) (int, error) {
+func calculateMultipleChangeScriptSize(changeDestinations []TransactionDestination,
+	chainParams *chaincfg.Params) (int, error) {
 	var totalChangeScriptSize int
 	for _, changeDestination := range changeDestinations {
-		changeScriptSize, err := tx.calculateChangeScriptSize(changeDestination.Address)
+		changeScriptSize, err := calculateChangeScriptSize(changeDestination.Address, chainParams)
 		if err != nil {
 			return 0, err
 		}
@@ -116,15 +118,11 @@ func (tx *TxAuthor) constructCustomTransaction() (*txauthor.AuthoredTx, error) {
 			inputScripts[i] = input.SignatureScript
 		}
 
-		log.Info("________________________________")
-		log.Info("[totalInputAmount]", dcrutil.Amount(totalInputAmount).String())
-		log.Info("[totalSendAmount]", dcrutil.Amount(totalSendAmount).String())
-
 		var changeScriptSize int
 		if maxAmountRecipientAddress != "" {
-			changeScriptSize, err = tx.calculateChangeScriptSize(maxAmountRecipientAddress)
+			changeScriptSize, err = calculateChangeScriptSize(maxAmountRecipientAddress, tx.sourceWallet.chainParams)
 		} else {
-			changeScriptSize, err = tx.calculateMultipleChangeScriptSize(changeDestinations)
+			changeScriptSize, err = calculateMultipleChangeScriptSize(changeDestinations, tx.sourceWallet.chainParams)
 		}
 		if err != nil {
 			return nil, 0, err
@@ -134,7 +132,6 @@ func (tx *TxAuthor) constructCustomTransaction() (*txauthor.AuthoredTx, error) {
 		maxRequiredFee := txrules.FeeForSerializeSize(txrules.DefaultRelayFeePerKb, maxSignedSize)
 		changeAmount := totalInputAmount - totalSendAmount - int64(maxRequiredFee)
 
-		log.Info("[changeAmount]", dcrutil.Amount(changeAmount).String())
 		if changeAmount < 0 {
 			excessSpending := 0 - changeAmount // equivalent to math.Abs()
 			return nil, 0, fmt.Errorf("total send amount plus tx fee is higher than the total input amount by %s",
@@ -157,14 +154,12 @@ func (tx *TxAuthor) constructCustomTransaction() (*txauthor.AuthoredTx, error) {
 
 			var totalChangeAmount int64
 			for _, changeDestination := range changeDestinations {
-				log.Info("[maxAmountRecipientAddress]", changeDestination.Address, changeDestination.AtomAmount)
 				changeOutput, err := txhelper.MakeTxOutput(changeDestination.Address,
 					changeDestination.AtomAmount, tx.sourceWallet.chainParams)
 				if err != nil {
 					return nil, 0, fmt.Errorf("change address error: %v", err)
 				}
 
-				log.Info("[changeOutput.Value]", changeOutput.Value)
 				totalChangeAmount += changeOutput.Value
 				outputs = append(outputs, changeOutput)
 
@@ -172,8 +167,6 @@ func (tx *TxAuthor) constructCustomTransaction() (*txauthor.AuthoredTx, error) {
 				changeOutputIndex := len(outputs) - 1
 				txauthor.RandomizeOutputPosition(outputs, changeOutputIndex)
 			}
-
-			log.Info("[totalChangeAmount]", dcrutil.Amount(totalChangeAmount).String())
 
 			if totalChangeAmount > changeAmount {
 				return nil, 0, fmt.Errorf("total amount allocated to change addresses (%s) is higher than"+
