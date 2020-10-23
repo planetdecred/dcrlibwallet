@@ -168,7 +168,7 @@ func (tx *TxAuthor) UseInputs(utxoKeys []string) error {
 		txHash, _ := chainhash.NewHash(utxo.TransactionHash)
 
 		outpoint := wire.NewOutPoint(txHash, utxo.OutputIndex, int8(utxo.Tree))
-		input := wire.NewTxIn(outpoint, int64(utxo.Amount), nil)
+		input := wire.NewTxIn(outpoint, utxo.Amount, nil)
 		inputs = append(inputs, input)
 	}
 
