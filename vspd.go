@@ -449,9 +449,9 @@ func (v *VSPD) getTxAndAddress(ticketHash string) (*wire.MsgTx, dcrutil.Address,
 	return txs[0], commitmentAddr, nil
 }
 
-// insert or update VSPD ticket
+// insert or update VSPD ticket info
 func (v *VSPD) updateVspdDBRecord(data interface{}, ticketHash string) error {
-	overwritten, err := v.w.txDB.SaveOrUpdate(&VspdTicketInfo{}, data)
+	overwritten, err := v.w.walletDataDB.SaveOrUpdate(&VspdTicketInfo{}, data)
 	if err != nil {
 		log.Errorf("[%d] new vspd save err : %v", v.w.ID, err)
 		return err

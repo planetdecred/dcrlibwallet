@@ -1,4 +1,4 @@
-package txindex
+package walletdata
 
 import (
 	"fmt"
@@ -9,19 +9,19 @@ import (
 )
 
 const (
-	DbName = "tx.db"
+	DbName = "walletData.db"
 
-	TxBucketName = "TxIndexInfo"
+	WDBucketName = "walletDataInfo"
 	KeyDbVersion = "DbVersion"
 
 	// Necessary to force re-indexing if changes are made to the structure of data being stored.
 	// Increment this version number if db structure changes such that client apps need to re-index.
-	TxDbVersion uint32 = 1
+	WDbVersion uint32 = 1
 )
 
 type DB struct {
-	txDB  *storm.DB
-	Close func() error
+	walletDataDB *storm.DB
+	Close        func() error
 }
 
 // Initialize opens the existing storm db at `dbPath`
@@ -29,31 +29,31 @@ type DB struct {
 // If there is a version mismatch or the db does not exist at `dbPath`,
 // a new db is created and the current db version number saved to the db.
 func Initialize(dbPath string, txData, vspdData interface{}) (*DB, error) {
-	txDB, err := openOrCreateDB(dbPath)
+	walletDataDB, err := openOrCreateDB(dbPath)
 	if err != nil {
 		return nil, err
 	}
 
-	txDB, err = ensureDatabaseVersion(txDB, dbPath)
+	walletDataDB, err = ensureDatabaseVersion(walletDataDB, dbPath)
 	if err != nil {
 		return nil, err
 	}
 
-	// init database for saving/reading transaction objects
-	err = txDB.Init(txData)
+	// init bucket for saving/reading transaction objects
+	err = walletDataDB.Init(txData)
 	if err != nil {
-		return nil, fmt.Errorf("error initializing tx database for wallet: %s", err.Error())
+		return nil, fmt.Errorf("error initializing tx bucket for wallet: %s", err.Error())
 	}
 
 	// init bucket for saving/reading vspd ticket objects
-	err = txDB.Init(vspdData)
+	err = walletDataDB.Init(vspdData)
 	if err != nil {
 		return nil, fmt.Errorf("error initializing vspd ticket database for wallet: %s", err.Error())
 	}
 
 	return &DB{
-		txDB,
-		txDB.Close,
+		walletDataDB,
+		walletDataDB.Close,
 	}, nil
 }
 
@@ -69,44 +69,44 @@ func openOrCreateDB(dbPath string) (*storm.DB, error) {
 		}
 	}
 
-	txDB, err := storm.Open(dbPath)
+	walletDataDB, err := storm.Open(dbPath)
 	if err != nil {
 		switch err {
 		case bolt.ErrTimeout:
 			// timeout error occurs if storm fails to acquire a lock on the database file
-			return nil, fmt.Errorf("tx index database is in use by another process")
+			return nil, fmt.Errorf("wallet data database is in use by another process")
 		default:
-			return nil, fmt.Errorf("error opening tx index database: %s", err.Error())
+			return nil, fmt.Errorf("error opening wallet data database: %s", err.Error())
 		}
 	}
 
 	if isNewDbFile {
-		err = txDB.Set(TxBucketName, KeyDbVersion, TxDbVersion)
+		err = walletDataDB.Set(WDBucketName, KeyDbVersion, WDbVersion)
 		if err != nil {
 			os.RemoveAll(dbPath)
-			return nil, fmt.Errorf("error initializing tx index db: %s", err.Error())
+			return nil, fmt.Errorf("error initializing wallet data db: %s", err.Error())
 		}
 	}
 
-	return txDB, nil
+	return walletDataDB, nil
 }
 
-// ensureDatabaseVersion checks the version of the existing db against `TxDbVersion`.
-// If there's a difference, the current tx index db file is deleted and a new one created.
-func ensureDatabaseVersion(txDB *storm.DB, dbPath string) (*storm.DB, error) {
+// ensureDatabaseVersion checks the version of the existing db against `WDbVersion`.
+// If there's a difference, the current wallet data db file is deleted and a new one created.
+func ensureDatabaseVersion(walletDataDB *storm.DB, dbPath string) (*storm.DB, error) {
 	var currentDbVersion uint32
-	err := txDB.Get(TxBucketName, KeyDbVersion, &currentDbVersion)
+	err := walletDataDB.Get(WDBucketName, KeyDbVersion, &currentDbVersion)
 	if err != nil && err != storm.ErrNotFound {
 		// ignore key not found errors as earlier db versions did not set a version number in the db.
-		return nil, fmt.Errorf("error checking tx index database version: %s", err.Error())
+		return nil, fmt.Errorf("error checking wallet data database version: %s", err.Error())
 	}
 
-	if currentDbVersion != TxDbVersion {
+	if currentDbVersion != WDbVersion {
 		if err = os.RemoveAll(dbPath); err != nil {
-			return nil, fmt.Errorf("error deleting outdated tx index database: %s", err.Error())
+			return nil, fmt.Errorf("error deleting outdated wallet data database: %s", err.Error())
 		}
 		return openOrCreateDB(dbPath)
 	}
 
-	return txDB, nil
+	return walletDataDB, nil
 }

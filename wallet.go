@@ -13,7 +13,7 @@ import (
 	"decred.org/dcrwallet/walletseed"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/planetdecred/dcrlibwallet/internal/loader"
-	"github.com/planetdecred/dcrlibwallet/txindex"
+	"github.com/planetdecred/dcrlibwallet/walletdata"
 )
 
 type Wallet struct {
@@ -26,11 +26,11 @@ type Wallet struct {
 	HasDiscoveredAccounts bool
 	PrivatePassphraseType int32
 
-	internal    *w.Wallet
-	chainParams *chaincfg.Params
-	dataDir     string
-	loader      *loader.Loader
-	txDB        *txindex.DB
+	internal     *w.Wallet
+	chainParams  *chaincfg.Params
+	dataDir      string
+	loader       *loader.Loader
+	walletDataDB *walletdata.DB
 
 	synced  bool
 	syncing bool
@@ -63,8 +63,8 @@ func (wallet *Wallet) prepare(rootDir string, chainParams *chaincfg.Params,
 	wallet.readUserConfigValue = readUserConfigValueFn
 
 	// open database for indexing transactions for faster loading
-	txDBPath := filepath.Join(wallet.dataDir, txindex.DbName)
-	wallet.txDB, err = txindex.Initialize(txDBPath, &Transaction{}, &VspdTicketInfo{})
+	walletDataDBPath := filepath.Join(wallet.dataDir, walletdata.DbName)
+	wallet.walletDataDB, err = walletdata.Initialize(walletDataDBPath, &Transaction{}, &VspdTicketInfo{})
 	if err != nil {
 		log.Error(err.Error())
 		return err
@@ -101,8 +101,8 @@ func (wallet *Wallet) Shutdown() {
 		}
 	}
 
-	if wallet.txDB != nil {
-		err := wallet.txDB.Close()
+	if wallet.walletDataDB != nil {
+		err := wallet.walletDataDB.Close()
 		if err != nil {
 			log.Errorf("tx db closed with error: %v", err)
 		} else {

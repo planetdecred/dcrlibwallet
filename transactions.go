@@ -7,19 +7,19 @@ import (
 	"github.com/asdine/storm"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/planetdecred/dcrlibwallet/txhelper"
-	"github.com/planetdecred/dcrlibwallet/txindex"
+	"github.com/planetdecred/dcrlibwallet/walletdata"
 )
 
 const (
 	// Export constants for use in mobile apps
 	// since gomobile excludes fields from sub packages.
-	TxFilterAll         = txindex.TxFilterAll
-	TxFilterSent        = txindex.TxFilterSent
-	TxFilterReceived    = txindex.TxFilterReceived
-	TxFilterTransferred = txindex.TxFilterTransferred
-	TxFilterStaking     = txindex.TxFilterStaking
-	TxFilterCoinBase    = txindex.TxFilterCoinBase
-	TxFilterRegular     = txindex.TxFilterRegular
+	TxFilterAll         = walletdata.TxFilterAll
+	TxFilterSent        = walletdata.TxFilterSent
+	TxFilterReceived    = walletdata.TxFilterReceived
+	TxFilterTransferred = walletdata.TxFilterTransferred
+	TxFilterStaking     = walletdata.TxFilterStaking
+	TxFilterCoinBase    = walletdata.TxFilterCoinBase
+	TxFilterRegular     = walletdata.TxFilterRegular
 
 	TxDirectionInvalid     = txhelper.TxDirectionInvalid
 	TxDirectionSent        = txhelper.TxDirectionSent
@@ -89,7 +89,7 @@ func (wallet *Wallet) GetTransactions(offset, limit, txFilter int32, newestFirst
 }
 
 func (wallet *Wallet) GetTransactionsRaw(offset, limit, txFilter int32, newestFirst bool) (transactions []Transaction, err error) {
-	err = wallet.txDB.Read(offset, limit, txFilter, newestFirst, &transactions)
+	err = wallet.walletDataDB.Read(offset, limit, txFilter, newestFirst, &transactions)
 	return
 }
 
@@ -125,11 +125,11 @@ func (mw *MultiWallet) GetTransactions(offset, limit, txFilter int32, newestFirs
 }
 
 func (wallet *Wallet) CountTransactions(txFilter int32) (int, error) {
-	return wallet.txDB.Count(txFilter, &Transaction{})
+	return wallet.walletDataDB.Count(txFilter, &Transaction{})
 }
 
 func (wallet *Wallet) TicketHasVotedOrRevoked(ticketHash string) (bool, error) {
-	err := wallet.txDB.FindOne("TicketSpentHash", ticketHash, &Transaction{})
+	err := wallet.walletDataDB.FindOne("TicketSpentHash", ticketHash, &Transaction{})
 	if err != nil {
 		if err == storm.ErrNotFound {
 			return false, nil
@@ -141,5 +141,5 @@ func (wallet *Wallet) TicketHasVotedOrRevoked(ticketHash string) (bool, error) {
 }
 
 func TxMatchesFilter(txType string, txDirection, txFilter int32) bool {
-	return txindex.TxMatchesFilter(txType, txDirection, txFilter)
+	return walletdata.TxMatchesFilter(txType, txDirection, txFilter)
 }
