@@ -28,7 +28,7 @@ type DB struct {
 // and checks the database version for compatibility.
 // If there is a version mismatch or the db does not exist at `dbPath`,
 // a new db is created and the current db version number saved to the db.
-func Initialize(dbPath string, data interface{}) (*DB, error) {
+func Initialize(dbPath string, txData, vspdData interface{}) (*DB, error) {
 	txDB, err := openOrCreateDB(dbPath)
 	if err != nil {
 		return nil, err
@@ -40,9 +40,15 @@ func Initialize(dbPath string, data interface{}) (*DB, error) {
 	}
 
 	// init database for saving/reading transaction objects
-	err = txDB.Init(data)
+	err = txDB.Init(txData)
 	if err != nil {
 		return nil, fmt.Errorf("error initializing tx database for wallet: %s", err.Error())
+	}
+
+	// init bucket for saving/reading vspd ticket objects
+	err = txDB.Init(vspdData)
+	if err != nil {
+		return nil, fmt.Errorf("error initializing vspd ticket database for wallet: %s", err.Error())
 	}
 
 	return &DB{

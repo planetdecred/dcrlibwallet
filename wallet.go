@@ -64,7 +64,7 @@ func (wallet *Wallet) prepare(rootDir string, chainParams *chaincfg.Params,
 
 	// open database for indexing transactions for faster loading
 	txDBPath := filepath.Join(wallet.dataDir, txindex.DbName)
-	wallet.txDB, err = txindex.Initialize(txDBPath, &Transaction{})
+	wallet.txDB, err = txindex.Initialize(txDBPath, &Transaction{}, &VspdTicketInfo{})
 	if err != nil {
 		log.Error(err.Error())
 		return err

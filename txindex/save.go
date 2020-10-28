@@ -12,12 +12,12 @@ const KeyEndBlock = "EndBlock"
 
 // SaveOrUpdate saves a transaction to the database and would overwrite
 // if a transaction with same hash exists
-func (db *DB) SaveOrUpdate(emptyTxPointer, tx interface{}) (overwritten bool, err error) {
-	v := reflect.ValueOf(tx)
+func (db *DB) SaveOrUpdate(emptyTxPointer, record interface{}) (overwritten bool, err error) {
+	v := reflect.ValueOf(record)
 	txHash := reflect.Indirect(v).FieldByName("Hash").String()
 	err = db.txDB.One("Hash", txHash, emptyTxPointer)
 	if err != nil && err != storm.ErrNotFound {
-		err = errors.Errorf("error checking if tx was already indexed: %s", err.Error())
+		err = errors.Errorf("error checking if record was already indexed: %s", err.Error())
 		return
 	}
 
@@ -25,11 +25,11 @@ func (db *DB) SaveOrUpdate(emptyTxPointer, tx interface{}) (overwritten bool, er
 	timestamp := reflect.Indirect(v2).FieldByName("Timestamp").Int()
 	if timestamp > 0 {
 		overwritten = true
-		// delete old tx before saving new (if it exists)
+		// delete old record before saving new (if it exists)
 		db.txDB.DeleteStruct(emptyTxPointer)
 	}
 
-	err = db.txDB.Save(tx)
+	err = db.txDB.Save(record)
 	return
 }
 

@@ -24,7 +24,7 @@ import (
 type VSPD struct {
 	baseURL             string
 	pubKey              []byte
-	sourceWallet        *Wallet
+	w                   *Wallet
 	mwRef               *MultiWallet
 	sourceAccountNumber int32
 	httpClient          *http.Client
@@ -39,7 +39,7 @@ func (mw *MultiWallet) NewVSPD(baseURL string, walletID int, sourceAccountNumber
 
 	return &VSPD{
 		baseURL:             baseURL,
-		sourceWallet:        sourceWallet,
+		w:                   sourceWallet,
 		mwRef:               mw,
 		sourceAccountNumber: sourceAccountNumber,
 		httpClient:          new(http.Client),
@@ -115,6 +115,25 @@ func (v *VSPD) GetVSPFeeAddress(ticketHash string, passphrase []byte) (*GetFeeAd
 	if err != nil {
 		return nil, err
 	}
+
+	err = verifyResponse(feeAddressResponse.Request, req)
+	if err != nil {
+		return nil, err
+	}
+
+	data := &VspdTicketInfo{
+		Timestamp:  feeAddressResponse.Timestamp,
+		Hash:       feeAddressResponse.Request.TicketHash,
+		FeeAddress: feeAddressResponse.FeeAddress,
+		FeeAmount:  feeAddressResponse.FeeAmount,
+		Expiration: feeAddressResponse.Expiration,
+	}
+
+	err = v.updateVspdDBRecord(data, ticketHash)
+	if err != nil {
+		return nil, err
+	}
+
 	return &feeAddressResponse, nil
 }
 
@@ -129,7 +148,7 @@ func (v *VSPD) CreateTicketFeeTx(feeAmount int64, feeAddress string, passphrase 
 		return "", errors.New("no feeAddress provided")
 	}
 
-	txAuthor := v.mwRef.NewUnsignedTx(v.sourceWallet, v.sourceAccountNumber)
+	txAuthor := v.mwRef.NewUnsignedTx(v.w, v.sourceAccountNumber)
 	txAuthor.AddSendDestination(feeAddress, feeAmount, false)
 
 	defer func() {
@@ -211,13 +230,13 @@ func (v *VSPD) PayVSPFee(feeTx, ticketHash, feeAddress string, passphrase []byte
 	}()
 
 	// unlock wallet
-	ctx := v.sourceWallet.shutdownContext()
-	err = v.sourceWallet.internal.Unlock(ctx, passphrase, lock)
+	ctx := v.w.shutdownContext()
+	err = v.w.internal.Unlock(ctx, passphrase, lock)
 	if err != nil {
 		return nil, translateError(err)
 	}
 
-	votingKey, err := v.sourceWallet.internal.DumpWIFPrivateKey(v.sourceWallet.shutdownContext(), votingAddress[0])
+	votingKey, err := v.w.internal.DumpWIFPrivateKey(v.w.shutdownContext(), votingAddress[0])
 	if err != nil {
 		log.Warnf("failed to get votingKeyWIF for %v: %v", votingAddress[0], err)
 		return nil, err
@@ -245,6 +264,23 @@ func (v *VSPD) PayVSPFee(feeTx, ticketHash, feeAddress string, passphrase []byte
 		return nil, err
 	}
 
+	err = verifyResponse(payFeeResponse.Request, req)
+	if err != nil {
+		return nil, err
+	}
+
+	data := &VspdTicketInfo{
+		Timestamp:   payFeeResponse.Timestamp,
+		Hash:        payFeeResponse.Request.TicketHash,
+		FeeTx:       payFeeResponse.Request.FeeTx,
+		VoteChoices: payFeeResponse.Request.VoteChoices,
+	}
+
+	err = v.updateVspdDBRecord(data, ticketHash)
+	if err != nil {
+		return nil, err
+	}
+
 	return &payFeeResponse, nil
 }
 
@@ -260,7 +296,6 @@ func (v *VSPD) GetTicketStatus(ticketHash string, passphrase []byte) (*TicketSta
 	}
 
 	req := TicketStatusRequest{
-		Timestamp:  time.Now().Unix(),
 		TicketHash: ticketHash,
 	}
 
@@ -274,6 +309,26 @@ func (v *VSPD) GetTicketStatus(ticketHash string, passphrase []byte) (*TicketSta
 	if err != nil {
 		return nil, err
 	}
+
+	err = verifyResponse(ticketStatusResponse.Request, req)
+	if err != nil {
+		return nil, err
+	}
+
+	data := &VspdTicketInfo{
+		Timestamp:       ticketStatusResponse.Timestamp,
+		Hash:            ticketStatusResponse.Request.TicketHash,
+		TicketConfirmed: ticketStatusResponse.TicketConfirmed,
+		VoteChoices:     ticketStatusResponse.VoteChoices,
+		FeeTxStatus:     ticketStatusResponse.FeeTxStatus,
+		FeeTxHash:       ticketStatusResponse.FeeTxHash,
+	}
+
+	err = v.updateVspdDBRecord(data, ticketHash)
+	if err != nil {
+		return nil, err
+	}
+
 	return &ticketStatusResponse, nil
 }
 
@@ -304,6 +359,23 @@ func (v *VSPD) SetVoteChoices(ticketHash string, passphrase []byte, choices map[
 	if err != nil {
 		return nil, err
 	}
+
+	err = verifyResponse(setVoteChoicesResponse.Request, req)
+	if err != nil {
+		return nil, err
+	}
+
+	data := &VspdTicketInfo{
+		Timestamp:   setVoteChoicesResponse.Timestamp,
+		Hash:        setVoteChoicesResponse.Request.TicketHash,
+		VoteChoices: setVoteChoicesResponse.Request.VoteChoices,
+	}
+
+	err = v.updateVspdDBRecord(data, ticketHash)
+	if err != nil {
+		return nil, err
+	}
+
 	return &setVoteChoicesResponse, nil
 }
 
@@ -317,13 +389,13 @@ func (v *VSPD) signedVSP_HTTP(url, method, commitmentAddr string, passphrase []b
 	}
 
 	url = strings.TrimSuffix(v.baseURL, "/") + url
-	ctx := v.sourceWallet.shutdownContext()
+	ctx := v.w.shutdownContext()
 	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewBuffer(reqBytes))
 	if err != nil {
 		return nil, err
 	}
 
-	signature, err := v.sourceWallet.SignMessage(passphrase, commitmentAddr, string(reqBytes))
+	signature, err := v.w.SignMessage(passphrase, commitmentAddr, string(reqBytes))
 	if err != nil {
 		return nil, err
 	}
@@ -361,8 +433,8 @@ func (v *VSPD) getTxAndAddress(ticketHash string) (*wire.MsgTx, dcrutil.Address,
 		return nil, nil, err
 	}
 
-	ctx := v.sourceWallet.shutdownContext()
-	txs, _, err := v.sourceWallet.internal.GetTransactionsByHashes(ctx, []*chainhash.Hash{hash})
+	ctx := v.w.shutdownContext()
+	txs, _, err := v.w.internal.GetTransactionsByHashes(ctx, []*chainhash.Hash{hash})
 	if err != nil {
 		log.Errorf("failed to retrieve transaction for %v: %v", hash, err)
 		return nil, nil, err
@@ -375,6 +447,46 @@ func (v *VSPD) getTxAndAddress(ticketHash string) (*wire.MsgTx, dcrutil.Address,
 	}
 
 	return txs[0], commitmentAddr, nil
+}
+
+// insert or update VSPD ticket
+func (v *VSPD) updateVspdDBRecord(data interface{}, ticketHash string) error {
+	overwritten, err := v.w.txDB.SaveOrUpdate(&VspdTicketInfo{}, data)
+	if err != nil {
+		log.Errorf("[%d] new vspd save err : %v", v.w.ID, err)
+		return err
+	}
+
+	if !overwritten {
+		log.Infof("[%d] New vspd ticket %s added", v.w.ID, ticketHash)
+	} else {
+		log.Infof("[%d] vspd ticket %s updated", v.w.ID, ticketHash)
+	}
+
+	return nil
+}
+
+// verify initial request matches vspd server
+func verifyResponse(serverResp, serverReq interface{}) error {
+	resp, err := json.Marshal(serverResp)
+	if err != nil {
+		log.Warnf("failed to marshal response request: %v", err)
+		return err
+	}
+
+	req, err := json.Marshal(serverReq)
+	if err != nil {
+		log.Warnf("failed to marshal request: %v", err)
+		return err
+	}
+
+	if !bytes.Equal(resp, req) {
+		log.Warnf("server response has differing request: %#v != %#v",
+			resp, req)
+		return fmt.Errorf("server response contains differing request")
+	}
+
+	return nil
 }
 
 func validateVSPServerSignature(resp *http.Response, pubKey, body []byte) error {
