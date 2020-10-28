@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
@@ -67,24 +69,32 @@ func (tx *TxAuthor) SendDestination(atIndex int) *TransactionDestination {
 	return &tx.destinations[atIndex]
 }
 
-func (tx *TxAuthor) AddChangeDestination(address string, atomAmount int64) {
+func (tx *TxAuthor) AddChangeDestination(address string) int {
 	tx.changeDestinations = append(tx.changeDestinations, TransactionDestination{
-		Address:    address,
-		AtomAmount: atomAmount,
+		Address: address,
 	})
+	return len(tx.changeDestinations) - 1
 }
 
-func (tx *TxAuthor) UpdateChangeDestination(index int, address string, atomAmount int64) {
+func (tx *TxAuthor) UpdateChangeDestination(index int, address string, atomAmount int64) error {
+	if len(tx.changeDestinations) < index {
+		return errors.New(ErrIndexOutOfRange)
+	}
 	tx.changeDestinations[index] = TransactionDestination{
 		Address:    address,
 		AtomAmount: atomAmount,
 	}
+	return nil
 }
 
-func (tx *TxAuthor) RemoveChangeDestination(index int) {
+func (tx *TxAuthor) RemoveChangeDestination(index int) error {
+	if len(tx.changeDestinations) < index {
+		return errors.New(ErrIndexOutOfRange)
+	}
 	if len(tx.changeDestinations) > index {
 		tx.changeDestinations = append(tx.changeDestinations[:index], tx.changeDestinations[index+1:]...)
 	}
+	return nil
 }
 
 func (tx *TxAuthor) TotalSendAmount() *Amount {
@@ -140,35 +150,35 @@ func (tx *TxAuthor) UseInputs(utxoKeys []string) error {
 	// first clear any previously set inputs
 	// so that an outdated set of inputs isn't used if an error occurs from this function
 	tx.inputs = nil
-	accountUtxos, err := tx.sourceWallet.UnspentOutputs(int32(tx.sourceAccountNumber))
-	if err != nil {
-		return fmt.Errorf("error reading unspent outputs in account: %v", err)
-	}
-
-	retrieveAccountUtxo := func(utxoKey string) *UnspentOutput {
-		for _, accountUtxo := range accountUtxos {
-			if accountUtxo.OutputKey == utxoKey {
-				return accountUtxo
-			}
-		}
-		return nil
-	}
-
 	inputs := make([]*wire.TxIn, 0, len(utxoKeys))
-
-	// retrieve utxo details for each key in the provided slice of utxoKeys
 	for _, utxoKey := range utxoKeys {
-		utxo := retrieveAccountUtxo(utxoKey)
-		if utxo == nil {
+		idx := strings.Index(utxoKey, ":")
+		hash := utxoKey[:idx]
+		hashIndex := utxoKey[idx+1:]
+		index, err := strconv.Atoi(hashIndex)
+		if err != nil {
+			return fmt.Errorf("no valid utxo found for '%s' in the source account at index %d", utxoKey, index)
+		}
+
+		txHash, err := chainhash.NewHashFromStr(hash)
+		if err != nil {
+			return err
+		}
+
+		op := &wire.OutPoint{
+			Hash:  *txHash,
+			Index: uint32(index),
+		}
+		outputInfo, err := tx.sourceWallet.internal.OutputInfo(tx.sourceWallet.shutdownContext(), op)
+		if err != nil {
+			return err
+		}
+
+		if err != nil {
 			return fmt.Errorf("no valid utxo found for '%s' in the source account", utxoKey)
 		}
 
-		// this is a reverse conversion and should not throw an error
-		// this []byte was originally converted from chainhash.Hash using chainhash.Hash[:]
-		txHash, _ := chainhash.NewHash(utxo.TransactionHash)
-
-		outpoint := wire.NewOutPoint(txHash, utxo.OutputIndex, int8(utxo.Tree))
-		input := wire.NewTxIn(outpoint, utxo.Amount, nil)
+		input := wire.NewTxIn(op, int64(outputInfo.Amount), nil)
 		inputs = append(inputs, input)
 	}
 

@@ -14,7 +14,7 @@ import (
 	"github.com/planetdecred/dcrlibwallet/txhelper"
 )
 
-type NextAddressFunc func() (address string, err error)
+type nextAddressFunc func() (address string, err error)
 
 func calculateChangeScriptSize(changeAddress string, chainParams *chaincfg.Params) (int, error) {
 	changeSource, err := txhelper.MakeTxChangeSource(changeAddress, chainParams)
@@ -88,111 +88,105 @@ func (tx *TxAuthor) constructCustomTransaction() (*txauthor.AuthoredTx, error) {
 		}
 		return addr.Address(), nil
 	}
+
+	return tx.newUnsignedTxUTXO(tx.inputs, tx.destinations, tx.changeDestinations, nextInternalAddress)
+}
+
+func (tx *TxAuthor) newUnsignedTxUTXO(inputs []*wire.TxIn, sendDestinations, changeDestinations []TransactionDestination,
+	nextInternalAddress nextAddressFunc) (*txauthor.AuthoredTx, error) {
+	outputs, totalSendAmount, maxAmountRecipientAddress, err := tx.ParseOutputsAndChangeDestination(sendDestinations)
+	if err != nil {
+		return nil, err
+	}
+
+	if maxAmountRecipientAddress != "" && len(changeDestinations) > 0 {
+		return nil, errors.E(errors.Invalid, "no change is generated when sending max amount,"+
+			" change destinations must not be provided")
+	}
+
+	if maxAmountRecipientAddress == "" && len(changeDestinations) == 0 {
+		// no change specified, generate new internal address to use as change (max amount recipient)
+		maxAmountRecipientAddress, err = nextInternalAddress()
+		if err != nil {
+			return nil, fmt.Errorf("error generating internal address to use as change: %s", err.Error())
+		}
+	}
+
 	var totalInputAmount int64
+	inputScriptSizes := make([]int, len(inputs))
+	inputScripts := make([][]byte, len(inputs))
+	for i, input := range inputs {
+		totalInputAmount += input.ValueIn
+		inputScriptSizes[i] = txsizes.RedeemP2PKHSigScriptSize
+		inputScripts[i] = input.SignatureScript
+	}
 
-	msgTx, maxSignedSize, err := func(inputs []*wire.TxIn, sendDestinations, changeDestinations []TransactionDestination,
-		nextInternalAddress NextAddressFunc) (*wire.MsgTx, int, error) {
-		outputs, totalSendAmount, maxAmountRecipientAddress, err := tx.ParseOutputsAndChangeDestination(sendDestinations)
-		if err != nil {
-			return nil, 0, err
+	var changeScriptSize int
+	if maxAmountRecipientAddress != "" {
+		changeScriptSize, err = calculateChangeScriptSize(maxAmountRecipientAddress, tx.sourceWallet.chainParams)
+	} else {
+		changeScriptSize, err = calculateMultipleChangeScriptSize(changeDestinations, tx.sourceWallet.chainParams)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	maxSignedSize := txsizes.EstimateSerializeSize(inputScriptSizes, outputs, changeScriptSize)
+	maxRequiredFee := txrules.FeeForSerializeSize(txrules.DefaultRelayFeePerKb, maxSignedSize)
+	changeAmount := totalInputAmount - totalSendAmount - int64(maxRequiredFee)
+
+	if changeAmount < 0 {
+		return nil, errors.New(ErrInsufficientBalance)
+	}
+
+	if changeAmount != 0 && !txrules.IsDustAmount(dcrutil.Amount(changeAmount), changeScriptSize, txrules.DefaultRelayFeePerKb) {
+		if changeScriptSize > txscript.MaxScriptElementSize {
+			return nil, fmt.Errorf("script size exceed maximum bytes pushable to the stack")
 		}
-
-		if maxAmountRecipientAddress != "" && len(changeDestinations) > 0 {
-			return nil, 0, errors.E(errors.Invalid, "no change is generated when sending max amount,"+
-				" change destinations must not be provided")
-		}
-
-		if maxAmountRecipientAddress == "" && len(changeDestinations) == 0 {
-			// no change specified, generate new internal address to use as change (max amount recipient)
-			maxAmountRecipientAddress, err = nextInternalAddress()
-			if err != nil {
-				return nil, 0, fmt.Errorf("error generating internal address to use as change: %s", err.Error())
-			}
-		}
-
-		inputScriptSizes := make([]int, len(inputs))
-		inputScripts := make([][]byte, len(inputs))
-		for i, input := range inputs {
-			totalInputAmount += input.ValueIn
-			inputScriptSizes[i] = txsizes.RedeemP2PKHSigScriptSize
-			inputScripts[i] = input.SignatureScript
-		}
-
-		var changeScriptSize int
+		var totalChangeAmount int64
 		if maxAmountRecipientAddress != "" {
-			changeScriptSize, err = calculateChangeScriptSize(maxAmountRecipientAddress, tx.sourceWallet.chainParams)
-		} else {
-			changeScriptSize, err = calculateMultipleChangeScriptSize(changeDestinations, tx.sourceWallet.chainParams)
-		}
-		if err != nil {
-			return nil, 0, err
-		}
-
-		maxSignedSize := txsizes.EstimateSerializeSize(inputScriptSizes, outputs, changeScriptSize)
-		maxRequiredFee := txrules.FeeForSerializeSize(txrules.DefaultRelayFeePerKb, maxSignedSize)
-		changeAmount := totalInputAmount - totalSendAmount - int64(maxRequiredFee)
-
-		if changeAmount < 0 {
-			excessSpending := 0 - changeAmount // equivalent to math.Abs()
-			return nil, 0, fmt.Errorf("total send amount plus tx fee is higher than the total input amount by %s",
-				dcrutil.Amount(excessSpending).String())
-		}
-
-		if changeAmount != 0 && !txrules.IsDustAmount(dcrutil.Amount(changeAmount),
-			changeScriptSize, txrules.DefaultRelayFeePerKb) {
-			if changeScriptSize > txscript.MaxScriptElementSize {
-				return nil, 0, fmt.Errorf("script size exceed maximum bytes pushable to the stack")
+			totalChangeAmount, outputs, err = tx.changeOutput(changeAmount, maxAmountRecipientAddress, outputs)
+			if err != nil {
+				return nil, fmt.Errorf("change address error: %v", err)
 			}
-
-			if maxAmountRecipientAddress != "" {
-				singleChangeDestination := TransactionDestination{
-					Address:    maxAmountRecipientAddress,
-					AtomAmount: changeAmount,
-				}
-				changeDestinations = []TransactionDestination{singleChangeDestination}
-			}
-
-			var totalChangeAmount int64
+		} else if len(changeDestinations) > 0 {
 			for _, changeDestination := range changeDestinations {
-				changeOutput, err := txhelper.MakeTxOutput(changeDestination.Address,
-					changeDestination.AtomAmount, tx.sourceWallet.chainParams)
+				newChangeAmount, newOutputs, err := tx.changeOutput(changeDestination.AtomAmount, changeDestination.Address, outputs)
 				if err != nil {
-					return nil, 0, fmt.Errorf("change address error: %v", err)
+					return nil, fmt.Errorf("change address error: %v", err)
 				}
-
-				totalChangeAmount += changeOutput.Value
-				outputs = append(outputs, changeOutput)
-
-				// randomize the change output that was just added
-				changeOutputIndex := len(outputs) - 1
-				txauthor.RandomizeOutputPosition(outputs, changeOutputIndex)
+				totalChangeAmount += newChangeAmount
+				outputs = newOutputs
 			}
-
-			if totalChangeAmount > changeAmount {
-				return nil, 0, fmt.Errorf("total amount allocated to change addresses (%s) is higher than"+
-					" actual change amount for transaction (%s)", dcrutil.Amount(totalChangeAmount).String(),
-					dcrutil.Amount(changeAmount).String())
-			}
-		} else {
-			maxSignedSize = txsizes.EstimateSerializeSize(inputScriptSizes, outputs, 0)
 		}
+		if totalChangeAmount > changeAmount {
+			return nil, fmt.Errorf("total amount allocated to change addresses (%s) is higher than"+
+				" actual change amount for transaction (%s)", dcrutil.Amount(totalChangeAmount).String(),
+				dcrutil.Amount(changeAmount).String())
+		}
+	}
 
-		return &wire.MsgTx{
+	return &txauthor.AuthoredTx{
+		TotalInput:                   dcrutil.Amount(totalInputAmount),
+		EstimatedSignedSerializeSize: maxSignedSize,
+		Tx: &wire.MsgTx{
 			SerType:  wire.TxSerializeFull,
 			Version:  wire.TxVersion,
 			TxIn:     inputs,
 			TxOut:    outputs,
 			LockTime: 0,
 			Expiry:   0,
-		}, maxSignedSize, nil
-	}(tx.inputs, tx.destinations, tx.changeDestinations, nextInternalAddress)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &txauthor.AuthoredTx{
-		TotalInput:                   dcrutil.Amount(totalInputAmount),
-		EstimatedSignedSerializeSize: maxSignedSize, Tx: msgTx,
+		},
 	}, nil
+}
+
+func (tx *TxAuthor) changeOutput(changeAmount int64, maxAmountRecipientAddress string, outputs []*wire.TxOut) (int64, []*wire.TxOut, error) {
+	changeOutput, err := txhelper.MakeTxOutput(maxAmountRecipientAddress, changeAmount, tx.sourceWallet.chainParams)
+	if err != nil {
+		return 0, nil, err
+	}
+	outputs = append(outputs, changeOutput)
+	changeOutputIndex := len(outputs) - 1
+	txauthor.RandomizeOutputPosition(outputs, changeOutputIndex)
+	return changeOutput.Value, outputs, nil
 }

@@ -10,7 +10,7 @@ import (
 	"github.com/decred/dcrd/chaincfg/v2"
 	"github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/dcrwallet/errors/v2"
-	dcrwallet "github.com/decred/dcrwallet/wallet/v3"
+	w "github.com/decred/dcrwallet/wallet/v3"
 	"github.com/planetdecred/dcrlibwallet/addresshelper"
 )
 
@@ -125,7 +125,7 @@ func (wallet *Wallet) SpendableForAccount(account int32) (int64, error) {
 }
 
 func (wallet *Wallet) UnspentOutputs(account int32) ([]*UnspentOutput, error) {
-	policy := dcrwallet.OutputSelectionPolicy{
+	policy := w.OutputSelectionPolicy{
 		Account:               uint32(account),
 		RequiredConfirmations: wallet.RequiredConfirmations(),
 	}
@@ -154,15 +154,12 @@ func (wallet *Wallet) UnspentOutputs(account int32) ([]*UnspentOutput, error) {
 			return nil, fmt.Errorf("error reading address details for unspent output: %v", err)
 		}
 
-		previousTx, err := wallet.GetTransactionRaw(input.PreviousOutPoint.Hash[:])
-		if err != nil {
-			return nil, fmt.Errorf("error reading tx details for unspent output: %v", err)
+		var confirmations int32
+		inputBlockHeight := int32(input.BlockHeight)
+		if inputBlockHeight != -1 {
+			confirmations = wallet.GetBestBlock() - inputBlockHeight + 1
 		}
 
-		var confirmations int32 = 0
-		if previousTx.BlockHeight != -1 {
-			confirmations = wallet.GetBestBlock() - previousTx.BlockHeight + 1
-		}
 		unspentOutputs[i] = &UnspentOutput{
 			TransactionHash: input.PreviousOutPoint.Hash[:],
 			OutputIndex:     input.PreviousOutPoint.Index,
@@ -172,7 +169,7 @@ func (wallet *Wallet) UnspentOutputs(account int32) ([]*UnspentOutput, error) {
 			PkScript:        inputDetail.Scripts[i],
 			ReceiveTime:     outputInfo.Received.Unix(),
 			FromCoinbase:    outputInfo.FromCoinbase,
-			Address:         strings.Join(addresses, ", "),
+			Addresses:       strings.Join(addresses, ", "),
 			Confirmations:   confirmations,
 		}
 	}
