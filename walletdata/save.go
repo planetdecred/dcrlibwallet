@@ -10,8 +10,8 @@ import (
 
 const KeyEndBlock = "EndBlock"
 
-// SaveOrUpdate saves a record to the database and would overwrite
-// if a record with same hash exists
+// SaveOrUpdate saves a transaction to the database and would overwrite
+// if a transaction with same hash exists
 func (db *DB) SaveOrUpdate(emptyTxPointer, record interface{}) (overwritten bool, err error) {
 	v := reflect.ValueOf(record)
 	txHash := reflect.Indirect(v).FieldByName("Hash").String()
@@ -30,6 +30,24 @@ func (db *DB) SaveOrUpdate(emptyTxPointer, record interface{}) (overwritten bool
 	}
 
 	err = db.walletDataDB.Save(record)
+	return
+}
+
+func (db *DB) SaveOrUpdateVspdRecord(emptyTxPointer, record interface{}) (updated bool, err error) {
+	v := reflect.ValueOf(record)
+	txHash := reflect.Indirect(v).FieldByName("Hash").String()
+	err = db.walletDataDB.One("Hash", txHash, emptyTxPointer)
+	if err != nil && err != storm.ErrNotFound {
+		err = errors.Errorf("error checking if record was already indexed: %s", err.Error())
+		return
+	}
+	if err == storm.ErrNotFound {
+		err = db.walletDataDB.Save(record)
+		return
+	}
+
+	updated = true
+	err = db.walletDataDB.Update(record)
 	return
 }
 

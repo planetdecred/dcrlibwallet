@@ -10,9 +10,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"reflect"
 	"strings"
 	"time"
 
+	"github.com/asdine/storm"
 	"github.com/decred/dcrd/blockchain/stake/v3"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v2"
@@ -139,13 +141,23 @@ func (v *VSPD) GetVSPFeeAddress(ticketHash string, passphrase []byte) (*GetFeeAd
 
 // CreateTicketFeeTx gets fee info from GetVSPFeeAddress makes payment and returns tx hash for PayVSPFee
 // ticket verification
-func (v *VSPD) CreateTicketFeeTx(feeAmount int64, feeAddress string, passphrase []byte) (string, error) {
-	if feeAmount == 0 {
-		return "", errors.New("no feeAmount provided")
+func (v *VSPD) CreateTicketFeeTx(feeAmount int64, ticketHash, feeAddress string, passphrase []byte) (string, error) {
+	if ticketHash == "" || feeAmount == 0 || feeAddress == "" {
+		return "", errors.New("missing required parameters")
 	}
 
-	if feeAddress == "" {
-		return "", errors.New("no feeAddress provided")
+	record, err := v.getVspdDBRecord(ticketHash, &VspdTicketInfo{})
+	if err != nil {
+		return "", err
+	}
+
+	// feeAmount := reflect.Indirect(*record).FieldByName("FeeAmount").Int()
+	// feeAddress := reflect.Indirect(*record).FieldByName("FeeAddress").String()
+	feeTx := reflect.Indirect(*record).FieldByName("FeeTx").String()
+
+	if feeTx != "" {
+		log.Errorf("vspd ticket for %v has feeTx %v confirm fees by calling PayVSPFee()", ticketHash, feeTx)
+		return "", errors.New("vspd ticket fee has been created. Use PayVSPFee() to register ticket")
 	}
 
 	txAuthor := v.mwRef.NewUnsignedTx(v.w, v.sourceAccountNumber)
@@ -192,6 +204,17 @@ func (v *VSPD) CreateTicketFeeTx(feeAmount int64, feeAddress string, passphrase 
 	err = unsignedTx.Tx.Serialize(txBuf)
 	if err != nil {
 		log.Errorf("failed to serialize fee transaction: %v", err)
+		return "", err
+	}
+
+	//update db with feetx data
+	data := &VspdTicketInfo{
+		Hash:  ticketHash,
+		FeeTx: hex.EncodeToString(txBuf.Bytes()),
+	}
+
+	err = v.updateVspdDBRecord(data, ticketHash)
+	if err != nil {
 		return "", err
 	}
 
@@ -415,7 +438,7 @@ func (v *VSPD) signedVSP_HTTP(url, method, commitmentAddr string, passphrase []b
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Non 200 response from server: %v", string(b))
+		return nil, fmt.Errorf("vsp responded with an error: %v", string(b))
 	}
 
 	err = validateVSPServerSignature(resp, v.pubKey, b)
@@ -451,19 +474,35 @@ func (v *VSPD) getTxAndAddress(ticketHash string) (*wire.MsgTx, dcrutil.Address,
 
 // insert or update VSPD ticket info
 func (v *VSPD) updateVspdDBRecord(data interface{}, ticketHash string) error {
-	overwritten, err := v.w.walletDataDB.SaveOrUpdate(&VspdTicketInfo{}, data)
+	updated, err := v.w.walletDataDB.SaveOrUpdateVspdRecord(&VspdTicketInfo{}, data)
 	if err != nil {
 		log.Errorf("[%d] new vspd save err : %v", v.w.ID, err)
 		return err
 	}
 
-	if !overwritten {
+	if !updated {
 		log.Infof("[%d] New vspd ticket %s added", v.w.ID, ticketHash)
 	} else {
 		log.Infof("[%d] vspd ticket %s updated", v.w.ID, ticketHash)
 	}
 
 	return nil
+}
+
+// get VSPD ticket info
+func (v *VSPD) getVspdDBRecord(txHash string, dataPointer interface{}) (*reflect.Value, error) {
+	err := v.w.walletDataDB.FindOne("Hash", txHash, dataPointer)
+	if err != nil {
+		log.Errorf("failed to find vspd ticket for %v: %v", txHash, err)
+		if err == storm.ErrNotFound {
+			return nil, fmt.Errorf("vspd ticket: " + txHash + " " + err.Error() + ". ensure you first call GetVSPFeeAddress()")
+		}
+		return nil, err
+	}
+
+	val := reflect.ValueOf(dataPointer)
+	fmt.Println(val)
+	return &val, nil
 }
 
 // verify initial request matches vspd server
