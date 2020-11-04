@@ -76,13 +76,12 @@ func (tx *TxAuthor) AddChangeDestination(address string) int {
 	return len(tx.changeDestinations) - 1
 }
 
-func (tx *TxAuthor) UpdateChangeDestination(index int, address string, atomAmount int64) error {
+func (tx *TxAuthor) UpdateChangeDestination(index int, address string) error {
 	if len(tx.changeDestinations) < index {
 		return errors.New(ErrIndexOutOfRange)
 	}
 	tx.changeDestinations[index] = TransactionDestination{
-		Address:    address,
-		AtomAmount: atomAmount,
+		Address: address,
 	}
 	return nil
 }
@@ -170,10 +169,6 @@ func (tx *TxAuthor) UseInputs(utxoKeys []string) error {
 			Index: uint32(index),
 		}
 		outputInfo, err := tx.sourceWallet.internal.OutputInfo(tx.sourceWallet.shutdownContext(), op)
-		if err != nil {
-			return err
-		}
-
 		if err != nil {
 			return fmt.Errorf("no valid utxo found for '%s' in the source account", utxoKey)
 		}

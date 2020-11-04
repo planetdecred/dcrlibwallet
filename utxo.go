@@ -145,17 +145,19 @@ func (tx *TxAuthor) newUnsignedTxUTXO(inputs []*wire.TxIn, sendDestinations, cha
 		}
 		var totalChangeAmount int64
 		if maxAmountRecipientAddress != "" {
-			totalChangeAmount, outputs, err = tx.changeOutput(changeAmount, maxAmountRecipientAddress, outputs)
+			outputs, err = tx.changeOutput(changeAmount, maxAmountRecipientAddress, outputs)
 			if err != nil {
 				return nil, fmt.Errorf("change address error: %v", err)
 			}
+			totalChangeAmount = changeAmount
 		} else if len(changeDestinations) > 0 {
+			changeDestinations[0].AtomAmount = changeAmount
 			for _, changeDestination := range changeDestinations {
-				newChangeAmount, newOutputs, err := tx.changeOutput(changeDestination.AtomAmount, changeDestination.Address, outputs)
+				newOutputs, err := tx.changeOutput(changeDestination.AtomAmount, changeDestination.Address, outputs)
 				if err != nil {
 					return nil, fmt.Errorf("change address error: %v", err)
 				}
-				totalChangeAmount += newChangeAmount
+				totalChangeAmount += changeDestination.AtomAmount
 				outputs = newOutputs
 			}
 		}
@@ -180,13 +182,12 @@ func (tx *TxAuthor) newUnsignedTxUTXO(inputs []*wire.TxIn, sendDestinations, cha
 	}, nil
 }
 
-func (tx *TxAuthor) changeOutput(changeAmount int64, maxAmountRecipientAddress string, outputs []*wire.TxOut) (int64, []*wire.TxOut, error) {
+func (tx *TxAuthor) changeOutput(changeAmount int64, maxAmountRecipientAddress string, outputs []*wire.TxOut) ([]*wire.TxOut, error) {
 	changeOutput, err := txhelper.MakeTxOutput(maxAmountRecipientAddress, changeAmount, tx.sourceWallet.chainParams)
 	if err != nil {
-		return 0, nil, err
+		return nil, err
 	}
 	outputs = append(outputs, changeOutput)
-	changeOutputIndex := len(outputs) - 1
-	txauthor.RandomizeOutputPosition(outputs, changeOutputIndex)
-	return changeOutput.Value, outputs, nil
+	txauthor.RandomizeOutputPosition(outputs, len(outputs)-1)
+	return outputs, nil
 }
