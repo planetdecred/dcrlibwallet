@@ -25,7 +25,7 @@ type TxAuthor struct {
 	destinations        []TransactionDestination
 	changeAddress       string
 	inputs              []*wire.TxIn
-	changeDestinations  []TransactionDestination
+	changeDestination   *TransactionDestination
 }
 
 func (mw *MultiWallet) NewUnsignedTx(sourceWallet *Wallet, sourceAccountNumber int32) *TxAuthor {
@@ -42,6 +42,10 @@ func (tx *TxAuthor) AddSendDestination(address string, atomAmount int64, sendMax
 		return translateError(err)
 	}
 
+	if err := tx.validateAmount(sendMax, atomAmount); err != nil {
+		return err
+	}
+
 	tx.destinations = append(tx.destinations, TransactionDestination{
 		Address:    address,
 		AtomAmount: atomAmount,
@@ -51,12 +55,21 @@ func (tx *TxAuthor) AddSendDestination(address string, atomAmount int64, sendMax
 	return nil
 }
 
-func (tx *TxAuthor) UpdateSendDestination(index int, address string, atomAmount int64, sendMax bool) {
+func (tx *TxAuthor) UpdateSendDestination(index int, address string, atomAmount int64, sendMax bool) error {
+	if err := tx.validateAmount(sendMax, atomAmount); err != nil {
+		return err
+	}
+
+	if len(tx.destinations) < index {
+		return errors.New(ErrIndexOutOfRange)
+	}
+
 	tx.destinations[index] = TransactionDestination{
 		Address:    address,
 		AtomAmount: atomAmount,
 		SendMax:    sendMax,
 	}
+	return nil
 }
 
 func (tx *TxAuthor) RemoveSendDestination(index int) {
@@ -69,31 +82,14 @@ func (tx *TxAuthor) SendDestination(atIndex int) *TransactionDestination {
 	return &tx.destinations[atIndex]
 }
 
-func (tx *TxAuthor) AddChangeDestination(address string) int {
-	tx.changeDestinations = append(tx.changeDestinations, TransactionDestination{
-		Address: address,
-	})
-	return len(tx.changeDestinations) - 1
-}
-
-func (tx *TxAuthor) UpdateChangeDestination(index int, address string) error {
-	if len(tx.changeDestinations) < index {
-		return errors.New(ErrIndexOutOfRange)
-	}
-	tx.changeDestinations[index] = TransactionDestination{
+func (tx *TxAuthor) SetChangeDestination(address string) {
+	tx.changeDestination = &TransactionDestination{
 		Address: address,
 	}
-	return nil
 }
 
-func (tx *TxAuthor) RemoveChangeDestination(index int) error {
-	if len(tx.changeDestinations) < index {
-		return errors.New(ErrIndexOutOfRange)
-	}
-	if len(tx.changeDestinations) > index {
-		tx.changeDestinations = append(tx.changeDestinations[:index], tx.changeDestinations[index+1:]...)
-	}
-	return nil
+func (tx *TxAuthor) RemoveChangeDestination() {
+	tx.changeDestination = nil
 }
 
 func (tx *TxAuthor) TotalSendAmount() *Amount {
@@ -279,9 +275,8 @@ func (tx *TxAuthor) constructTransaction() (*txauthor.AuthoredTx, error) {
 	ctx := tx.sourceWallet.shutdownContext()
 
 	for _, destination := range tx.destinations {
-		// validate the amount to send to this destination address
-		if !destination.SendMax && (destination.AtomAmount <= 0 || destination.AtomAmount > MaxAmountAtom) {
-			return nil, errors.E(errors.Invalid, "invalid amount")
+		if err := tx.validateAmount(destination.SendMax, destination.AtomAmount); err != nil {
+			return nil, err
 		}
 
 		// check if multiple destinations are set to receive max amount
@@ -350,4 +345,12 @@ func (tx *TxAuthor) changeSource(ctx context.Context) (txauthor.ChangeSource, er
 	}
 
 	return changeSource, nil
+}
+
+// validateAmount validate the amount to send to a destination address
+func (tx *TxAuthor) validateAmount(sendMax bool, atomAmount int64) error {
+	if !sendMax && (atomAmount <= 0 || atomAmount > MaxAmountAtom) {
+		return errors.E(errors.Invalid, "invalid amount")
+	}
+	return nil
 }

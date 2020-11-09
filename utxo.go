@@ -24,19 +24,6 @@ func calculateChangeScriptSize(changeAddress string, chainParams *chaincfg.Param
 	return changeSource.ScriptSize(), nil
 }
 
-func calculateMultipleChangeScriptSize(changeDestinations []TransactionDestination,
-	chainParams *chaincfg.Params) (int, error) {
-	var totalChangeScriptSize int
-	for _, changeDestination := range changeDestinations {
-		changeScriptSize, err := calculateChangeScriptSize(changeDestination.Address, chainParams)
-		if err != nil {
-			return 0, err
-		}
-		totalChangeScriptSize += changeScriptSize
-	}
-	return totalChangeScriptSize, nil
-}
-
 // ParseOutputsAndChangeDestination generates and returns TxOuts
 // using the provided slice of transaction destinations.
 // Any destination set to receive max amount is not included in the TxOuts returned,
@@ -49,9 +36,8 @@ func (tx *TxAuthor) ParseOutputsAndChangeDestination(txDestinations []Transactio
 	var maxAmountRecipientAddress string
 
 	for _, destination := range txDestinations {
-		// validate the amount to send to this destination address
-		if !destination.SendMax && (destination.AtomAmount <= 0 || destination.AtomAmount > dcrutil.MaxAmount) {
-			return nil, 0, "", errors.E(errors.Invalid, "invalid amount")
+		if err := tx.validateAmount(destination.SendMax, destination.AtomAmount); err != nil {
+			return nil, 0, "", err
 		}
 
 		// check if multiple destinations are set to receive max amount
@@ -89,22 +75,22 @@ func (tx *TxAuthor) constructCustomTransaction() (*txauthor.AuthoredTx, error) {
 		return addr.Address(), nil
 	}
 
-	return tx.newUnsignedTxUTXO(tx.inputs, tx.destinations, tx.changeDestinations, nextInternalAddress)
+	return tx.newUnsignedTxUTXO(tx.inputs, tx.destinations, tx.changeDestination, nextInternalAddress)
 }
 
-func (tx *TxAuthor) newUnsignedTxUTXO(inputs []*wire.TxIn, sendDestinations, changeDestinations []TransactionDestination,
+func (tx *TxAuthor) newUnsignedTxUTXO(inputs []*wire.TxIn, sendDestinations []TransactionDestination, changeDestination *TransactionDestination,
 	nextInternalAddress nextAddressFunc) (*txauthor.AuthoredTx, error) {
 	outputs, totalSendAmount, maxAmountRecipientAddress, err := tx.ParseOutputsAndChangeDestination(sendDestinations)
 	if err != nil {
 		return nil, err
 	}
 
-	if maxAmountRecipientAddress != "" && len(changeDestinations) > 0 {
+	if maxAmountRecipientAddress != "" && changeDestination != nil {
 		return nil, errors.E(errors.Invalid, "no change is generated when sending max amount,"+
 			" change destinations must not be provided")
 	}
 
-	if maxAmountRecipientAddress == "" && len(changeDestinations) == 0 {
+	if maxAmountRecipientAddress == "" && changeDestination == nil {
 		// no change specified, generate new internal address to use as change (max amount recipient)
 		maxAmountRecipientAddress, err = nextInternalAddress()
 		if err != nil {
@@ -125,7 +111,7 @@ func (tx *TxAuthor) newUnsignedTxUTXO(inputs []*wire.TxIn, sendDestinations, cha
 	if maxAmountRecipientAddress != "" {
 		changeScriptSize, err = calculateChangeScriptSize(maxAmountRecipientAddress, tx.sourceWallet.chainParams)
 	} else {
-		changeScriptSize, err = calculateMultipleChangeScriptSize(changeDestinations, tx.sourceWallet.chainParams)
+		changeScriptSize, err = calculateChangeScriptSize(changeDestination.Address, tx.sourceWallet.chainParams)
 	}
 	if err != nil {
 		return nil, err
@@ -143,28 +129,13 @@ func (tx *TxAuthor) newUnsignedTxUTXO(inputs []*wire.TxIn, sendDestinations, cha
 		if changeScriptSize > txscript.MaxScriptElementSize {
 			return nil, fmt.Errorf("script size exceed maximum bytes pushable to the stack")
 		}
-		var totalChangeAmount int64
 		if maxAmountRecipientAddress != "" {
 			outputs, err = tx.changeOutput(changeAmount, maxAmountRecipientAddress, outputs)
-			if err != nil {
-				return nil, fmt.Errorf("change address error: %v", err)
-			}
-			totalChangeAmount = changeAmount
-		} else if len(changeDestinations) > 0 {
-			changeDestinations[0].AtomAmount = changeAmount
-			for _, changeDestination := range changeDestinations {
-				newOutputs, err := tx.changeOutput(changeDestination.AtomAmount, changeDestination.Address, outputs)
-				if err != nil {
-					return nil, fmt.Errorf("change address error: %v", err)
-				}
-				totalChangeAmount += changeDestination.AtomAmount
-				outputs = newOutputs
-			}
+		} else if changeDestination != nil {
+			outputs, err = tx.changeOutput(changeAmount, changeDestination.Address, outputs)
 		}
-		if totalChangeAmount > changeAmount {
-			return nil, fmt.Errorf("total amount allocated to change addresses (%s) is higher than"+
-				" actual change amount for transaction (%s)", dcrutil.Amount(totalChangeAmount).String(),
-				dcrutil.Amount(changeAmount).String())
+		if err != nil {
+			return nil, fmt.Errorf("change address error: %v", err)
 		}
 	}
 
