@@ -36,7 +36,7 @@ func (tx *TxAuthor) ParseOutputsAndChangeDestination(txDestinations []Transactio
 	var maxAmountRecipientAddress string
 
 	for _, destination := range txDestinations {
-		if err := tx.validateAmount(destination.SendMax, destination.AtomAmount); err != nil {
+		if err := tx.validateSendAmount(destination.SendMax, destination.AtomAmount); err != nil {
 			return nil, 0, "", err
 		}
 

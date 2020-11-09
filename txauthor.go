@@ -42,7 +42,7 @@ func (tx *TxAuthor) AddSendDestination(address string, atomAmount int64, sendMax
 		return translateError(err)
 	}
 
-	if err := tx.validateAmount(sendMax, atomAmount); err != nil {
+	if err := tx.validateSendAmount(sendMax, atomAmount); err != nil {
 		return err
 	}
 
@@ -56,7 +56,7 @@ func (tx *TxAuthor) AddSendDestination(address string, atomAmount int64, sendMax
 }
 
 func (tx *TxAuthor) UpdateSendDestination(index int, address string, atomAmount int64, sendMax bool) error {
-	if err := tx.validateAmount(sendMax, atomAmount); err != nil {
+	if err := tx.validateSendAmount(sendMax, atomAmount); err != nil {
 		return err
 	}
 
@@ -275,7 +275,7 @@ func (tx *TxAuthor) constructTransaction() (*txauthor.AuthoredTx, error) {
 	ctx := tx.sourceWallet.shutdownContext()
 
 	for _, destination := range tx.destinations {
-		if err := tx.validateAmount(destination.SendMax, destination.AtomAmount); err != nil {
+		if err := tx.validateSendAmount(destination.SendMax, destination.AtomAmount); err != nil {
 			return nil, err
 		}
 
@@ -347,8 +347,8 @@ func (tx *TxAuthor) changeSource(ctx context.Context) (txauthor.ChangeSource, er
 	return changeSource, nil
 }
 
-// validateAmount validate the amount to send to a destination address
-func (tx *TxAuthor) validateAmount(sendMax bool, atomAmount int64) error {
+// validateSendAmount validate the amount to send to a destination address
+func (tx *TxAuthor) validateSendAmount(sendMax bool, atomAmount int64) error {
 	if !sendMax && (atomAmount <= 0 || atomAmount > MaxAmountAtom) {
 		return errors.E(errors.Invalid, "invalid amount")
 	}
