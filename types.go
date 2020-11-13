@@ -309,3 +309,16 @@ type Proposal struct {
 type Proposals struct {
 	Proposals []Proposal `json:"proposals"`
 }
+
+type UnspentOutput struct {
+	TransactionHash []byte
+	OutputIndex     uint32
+	OutputKey       string
+	ReceiveTime     int64
+	Amount          int64
+	FromCoinbase    bool
+	Tree            int32
+	PkScript        []byte
+	Addresses       string // separated by commas
+	Confirmations   int32
+}

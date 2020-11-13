@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
+	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/dcrd/txscript/v2"
 	"github.com/decred/dcrd/wire"
@@ -21,6 +24,8 @@ type TxAuthor struct {
 	sourceAccountNumber uint32
 	destinations        []TransactionDestination
 	changeAddress       string
+	inputs              []*wire.TxIn
+	changeDestination   *TransactionDestination
 }
 
 func (mw *MultiWallet) NewUnsignedTx(sourceWallet *Wallet, sourceAccountNumber int32) *TxAuthor {
@@ -37,6 +42,10 @@ func (tx *TxAuthor) AddSendDestination(address string, atomAmount int64, sendMax
 		return translateError(err)
 	}
 
+	if err := tx.validateSendAmount(sendMax, atomAmount); err != nil {
+		return err
+	}
+
 	tx.destinations = append(tx.destinations, TransactionDestination{
 		Address:    address,
 		AtomAmount: atomAmount,
@@ -46,12 +55,21 @@ func (tx *TxAuthor) AddSendDestination(address string, atomAmount int64, sendMax
 	return nil
 }
 
-func (tx *TxAuthor) UpdateSendDestination(index int, address string, atomAmount int64, sendMax bool) {
+func (tx *TxAuthor) UpdateSendDestination(index int, address string, atomAmount int64, sendMax bool) error {
+	if err := tx.validateSendAmount(sendMax, atomAmount); err != nil {
+		return err
+	}
+
+	if len(tx.destinations) < index {
+		return errors.New(ErrIndexOutOfRange)
+	}
+
 	tx.destinations[index] = TransactionDestination{
 		Address:    address,
 		AtomAmount: atomAmount,
 		SendMax:    sendMax,
 	}
+	return nil
 }
 
 func (tx *TxAuthor) RemoveSendDestination(index int) {
@@ -62,6 +80,16 @@ func (tx *TxAuthor) RemoveSendDestination(index int) {
 
 func (tx *TxAuthor) SendDestination(atIndex int) *TransactionDestination {
 	return &tx.destinations[atIndex]
+}
+
+func (tx *TxAuthor) SetChangeDestination(address string) {
+	tx.changeDestination = &TransactionDestination{
+		Address: address,
+	}
+}
+
+func (tx *TxAuthor) RemoveChangeDestination() {
+	tx.changeDestination = nil
 }
 
 func (tx *TxAuthor) TotalSendAmount() *Amount {
@@ -111,6 +139,42 @@ func (tx *TxAuthor) EstimateMaxSendAmount() (*Amount, error) {
 		AtomValue: maxSendableAmount,
 		DcrValue:  dcrutil.Amount(maxSendableAmount).ToCoin(),
 	}, nil
+}
+
+func (tx *TxAuthor) UseInputs(utxoKeys []string) error {
+	// first clear any previously set inputs
+	// so that an outdated set of inputs isn't used if an error occurs from this function
+	tx.inputs = nil
+	inputs := make([]*wire.TxIn, 0, len(utxoKeys))
+	for _, utxoKey := range utxoKeys {
+		idx := strings.Index(utxoKey, ":")
+		hash := utxoKey[:idx]
+		hashIndex := utxoKey[idx+1:]
+		index, err := strconv.Atoi(hashIndex)
+		if err != nil {
+			return fmt.Errorf("no valid utxo found for '%s' in the source account at index %d", utxoKey, index)
+		}
+
+		txHash, err := chainhash.NewHashFromStr(hash)
+		if err != nil {
+			return err
+		}
+
+		op := &wire.OutPoint{
+			Hash:  *txHash,
+			Index: uint32(index),
+		}
+		outputInfo, err := tx.sourceWallet.internal.OutputInfo(tx.sourceWallet.shutdownContext(), op)
+		if err != nil {
+			return fmt.Errorf("no valid utxo found for '%s' in the source account", utxoKey)
+		}
+
+		input := wire.NewTxIn(op, int64(outputInfo.Amount), nil)
+		inputs = append(inputs, input)
+	}
+
+	tx.inputs = inputs
+	return nil
 }
 
 func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
@@ -199,6 +263,10 @@ func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
 }
 
 func (tx *TxAuthor) constructTransaction() (*txauthor.AuthoredTx, error) {
+	if len(tx.inputs) != 0 {
+		return tx.constructCustomTransaction()
+	}
+
 	var err error
 	var outputs = make([]*wire.TxOut, 0)
 	var outputSelectionAlgorithm w.OutputSelectionAlgorithm = w.OutputSelectionAlgorithmDefault
@@ -207,9 +275,8 @@ func (tx *TxAuthor) constructTransaction() (*txauthor.AuthoredTx, error) {
 	ctx := tx.sourceWallet.shutdownContext()
 
 	for _, destination := range tx.destinations {
-		// validate the amount to send to this destination address
-		if !destination.SendMax && (destination.AtomAmount <= 0 || destination.AtomAmount > MaxAmountAtom) {
-			return nil, errors.E(errors.Invalid, "invalid amount")
+		if err := tx.validateSendAmount(destination.SendMax, destination.AtomAmount); err != nil {
+			return nil, err
 		}
 
 		// check if multiple destinations are set to receive max amount
@@ -278,4 +345,12 @@ func (tx *TxAuthor) changeSource(ctx context.Context) (txauthor.ChangeSource, er
 	}
 
 	return changeSource, nil
+}
+
+// validateSendAmount validate the amount to send to a destination address
+func (tx *TxAuthor) validateSendAmount(sendMax bool, atomAmount int64) error {
+	if !sendMax && (atomAmount <= 0 || atomAmount > MaxAmountAtom) {
+		return errors.E(errors.Invalid, "invalid amount")
+	}
+	return nil
 }
