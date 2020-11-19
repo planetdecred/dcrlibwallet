@@ -3,10 +3,10 @@ package dcrlibwallet
 import (
 	"time"
 
+	"decred.org/dcrwallet/errors"
 	w "decred.org/dcrwallet/wallet"
 	"github.com/decred/dcrd/dcrec"
 	"github.com/decred/dcrd/dcrutil/v3"
-	"decred.org/dcrwallet/errors"
 )
 
 func (wallet *Wallet) SignMessage(passphrase []byte, address string, message string) ([]byte, error) {

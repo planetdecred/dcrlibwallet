@@ -16,10 +16,10 @@ import (
 	"decred.org/dcrwallet/errors"
 	"decred.org/dcrwallet/wallet"
 	"decred.org/dcrwallet/wallet/txrules"
+	"decred.org/dcrwallet/walletseed"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/dcrutil/v3"
 	"github.com/decred/dcrd/hdkeychain/v3"
-	"decred.org/dcrwallet/walletseed"
 	"github.com/planetdecred/dcrlibwallet/internal/loader"
 )
 
