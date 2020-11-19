@@ -4,7 +4,7 @@ import (
 	"math"
 
 	"decred.org/dcrwallet/wallet"
-	"github.com/decred/dcrd/dcrutil/v2"
+	"github.com/decred/dcrd/dcrutil/v3"
 	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrdata/txhelpers/v4"
 )
@@ -16,7 +16,8 @@ func MsgTxFeeSizeRate(transactionHex string) (msgTx *wire.MsgTx, fee dcrutil.Amo
 	}
 
 	size = msgTx.SerializeSize()
-	fee, feeRate = txhelpers.TxFeeRate(msgTx)
+	f, r := txhelpers.TxFeeRate(msgTx)
+	fee, feeRate = dcrutil.Amount(f), dcrutil.Amount(r)
 	return
 }
 

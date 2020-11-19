@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"decred.org/dcrwallet/errors"
 	w "decred.org/dcrwallet/wallet"
 	"decred.org/dcrwallet/wallet/txauthor"
 	"decred.org/dcrwallet/wallet/txrules"
@@ -15,7 +16,6 @@ import (
 	"github.com/decred/dcrd/dcrutil/v3"
 	"github.com/decred/dcrd/txscript/v3"
 	"github.com/decred/dcrd/wire"
-	"github.com/decred/dcrwallet/errors/v2"
 	"github.com/planetdecred/dcrlibwallet/txhelper"
 )
 

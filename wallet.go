@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"time"
 
+	"decred.org/dcrwallet/errors"
 	w "decred.org/dcrwallet/wallet"
+	"decred.org/dcrwallet/walletseed"
 	"github.com/decred/dcrd/chaincfg/v3"
-	"github.com/decred/dcrwallet/errors/v2"
-	"github.com/decred/dcrwallet/walletseed"
 	"github.com/planetdecred/dcrlibwallet/internal/loader"
 	"github.com/planetdecred/dcrlibwallet/txindex"
 )

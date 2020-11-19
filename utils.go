@@ -13,13 +13,13 @@ import (
 	"strings"
 	"time"
 
+	"decred.org/dcrwallet/errors"
 	"decred.org/dcrwallet/wallet"
 	"decred.org/dcrwallet/wallet/txrules"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/dcrutil/v3"
-	"github.com/decred/dcrd/hdkeychain/v2"
-	"github.com/decred/dcrwallet/errors/v2"
-	"github.com/decred/dcrwallet/walletseed"
+	"github.com/decred/dcrd/hdkeychain/v3"
+	"decred.org/dcrwallet/walletseed"
 	"github.com/planetdecred/dcrlibwallet/internal/loader"
 )
 

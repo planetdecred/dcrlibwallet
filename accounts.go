@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"decred.org/dcrwallet/errors"
+	w "decred.org/dcrwallet/wallet"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/dcrutil/v3"
-	"github.com/decred/dcrwallet/errors/v2"
-	w "decred.org/dcrwallet/wallet"
 	"github.com/planetdecred/dcrlibwallet/addresshelper"
 )
 

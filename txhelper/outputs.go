@@ -1,7 +1,7 @@
 package txhelper
 
 import (
-	dcrutil "github.com/decred/dcrd/dcrutil/v2"
+	dcrutil "github.com/decred/dcrd/dcrutil/v3"
 	"github.com/decred/dcrd/wire"
 	"github.com/planetdecred/dcrlibwallet/addresshelper"
 )

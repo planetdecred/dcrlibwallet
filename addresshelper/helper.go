@@ -20,7 +20,7 @@ func PkScript(address string, net dcrutil.AddressParams) ([]byte, error) {
 }
 
 func PkScriptAddresses(params *chaincfg.Params, pkScript []byte) ([]string, error) {
-	_, addresses, _, err := txscript.ExtractPkScriptAddrs(scriptVersion, pkScript, params)
+	_, addresses, _, err := txscript.ExtractPkScriptAddrs(scriptVersion, pkScript, params, true)
 	if err != nil {
 		return nil, err
 	}

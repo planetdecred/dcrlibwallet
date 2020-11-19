@@ -8,8 +8,8 @@ package badgerdb
 import (
 	"fmt"
 
+	"decred.org/dcrwallet/errors"
 	"decred.org/dcrwallet/wallet/walletdb"
-	"github.com/decred/dcrwallet/errors/v2"
 )
 
 const (

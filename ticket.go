@@ -10,13 +10,13 @@ import (
 	"strings"
 	"time"
 
+	"decred.org/dcrwallet/errors"
 	"decred.org/dcrwallet/rpc/client/dcrd"
 	w "decred.org/dcrwallet/wallet"
 	"decred.org/dcrwallet/wallet/txrules"
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrd/dcrutil/v2"
+	"github.com/decred/dcrd/dcrutil/v3"
 	"github.com/decred/dcrd/wire"
-	"github.com/decred/dcrwallet/errors/v2"
 )
 
 // StakeInfo returns information about wallet stakes, tickets and their statuses.

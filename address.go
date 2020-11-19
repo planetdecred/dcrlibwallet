@@ -3,9 +3,9 @@ package dcrlibwallet
 import (
 	"fmt"
 
+	"decred.org/dcrwallet/errors"
 	w "decred.org/dcrwallet/wallet"
-	"github.com/decred/dcrd/dcrutil/v2"
-	"github.com/decred/dcrwallet/errors/v2"
+	"github.com/decred/dcrd/dcrutil/v3"
 )
 
 // AddressInfo holds information about an address
