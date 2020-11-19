@@ -3,14 +3,14 @@ package dcrlibwallet
 import (
 	"fmt"
 
-	"github.com/decred/dcrd/chaincfg/v3"
-	"github.com/decred/dcrd/dcrutil/v3"
-	"github.com/decred/dcrd/txscript/v3"
-	"github.com/decred/dcrd/wire"
 	"decred.org/dcrwallet/errors"
 	"decred.org/dcrwallet/wallet/txauthor"
 	"decred.org/dcrwallet/wallet/txrules"
 	"decred.org/dcrwallet/wallet/txsizes"
+	"github.com/decred/dcrd/chaincfg/v3"
+	"github.com/decred/dcrd/dcrutil/v3"
+	"github.com/decred/dcrd/txscript/v3"
+	"github.com/decred/dcrd/wire"
 	"github.com/planetdecred/dcrlibwallet/txhelper"
 )
 
