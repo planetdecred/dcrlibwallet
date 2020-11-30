@@ -14,6 +14,8 @@ import (
 	"github.com/planetdecred/dcrlibwallet/addresshelper"
 )
 
+const AddressGapLimit uint32 = 20
+
 func (wallet *Wallet) GetAccounts() (string, error) {
 	accountsResponse, err := wallet.GetAccountsRaw()
 	if err != nil {
@@ -29,14 +31,24 @@ func (wallet *Wallet) GetAccountsRaw() (*Accounts, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	accounts := make([]*Account, len(resp.Accounts))
 	for i, a := range resp.Accounts {
-		account, err := wallet.GetAccount(int32(a.AccountNumber))
+		balance, err := wallet.GetAccountBalance(int32(a.AccountNumber))
 		if err != nil {
 			return nil, err
 		}
 
-		accounts[i] = account
+		accounts[i] = &Account{
+			WalletID:         wallet.ID,
+			Number:           int32(a.AccountNumber),
+			Name:             a.AccountName,
+			Balance:          balance,
+			TotalBalance:     int64(a.TotalBalance),
+			ExternalKeyCount: int32(a.LastUsedExternalIndex + AddressGapLimit), // Add gap limit
+			InternalKeyCount: int32(a.LastUsedInternalIndex + AddressGapLimit),
+			ImportedKeyCount: int32(a.ImportedKeyCount),
+		}
 	}
 
 	return &Accounts{

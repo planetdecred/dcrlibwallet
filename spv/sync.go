@@ -19,6 +19,7 @@ import (
 	"decred.org/dcrwallet/validate"
 	"decred.org/dcrwallet/wallet"
 	"github.com/decred/dcrd/addrmgr"
+	"github.com/decred/dcrd/blockchain/stake/v3"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/gcs/v2/blockcf2"
 	"github.com/decred/dcrd/wire"
@@ -28,7 +29,7 @@ import (
 // reqSvcs defines the services that must be supported by outbounded peers.
 // After fetching more addresses (if needed), peers are disconnected from if
 // they do not provide each of these services.
-const reqSvcs = wire.SFNodeNetwork | wire.SFNodeCF
+const reqSvcs = wire.SFNodeNetwork
 
 // Syncer implements wallet synchronization services by over the Decred wire
 // protocol using Simplified Payment Verification (SPV) with compact filters.
@@ -276,6 +277,17 @@ func (s *Syncer) tipChanged(tip *wire.BlockHeader, reorgDepth int32, matchingTxs
 	}
 }
 
+// setRequiredHeight sets the required height a peer must advertise as their
+// last height.  Initial height 6 blocks below the current chain tip height
+// result in a handshake error.
+func (s *Syncer) setRequiredHeight(tipHeight int32) {
+	requireHeight := tipHeight
+	if requireHeight > 6 {
+		requireHeight -= 6
+	}
+	s.lp.RequirePeerHeight(requireHeight)
+}
+
 func (s *Syncer) lowestChainTip(ctx context.Context) (chainhash.Hash, int32, *wallet.Wallet) {
 	var lowestTip int32 = -1
 	var lowestTipHash chainhash.Hash
@@ -311,9 +323,14 @@ func (s *Syncer) highestChainTip(ctx context.Context) (chainhash.Hash, int32, *w
 func (s *Syncer) Run(ctx context.Context) error {
 	log.Infof("Syncing %d wallets", len(s.wallets))
 
+	var highestTipHeight int32
 	for id, w := range s.wallets {
 		tipHash, tipHeight := w.MainChainTip(ctx)
 		log.Infof("[%d] Headers synced through block %v height %d", id, &tipHash, tipHeight)
+
+		if tipHeight > highestTipHeight {
+			highestTipHeight = tipHeight
+		}
 
 		rescanPoint, err := w.RescanPoint(ctx)
 		if err != nil {
@@ -331,6 +348,7 @@ func (s *Syncer) Run(ctx context.Context) error {
 			log.Infof("[%d] Transactions synced through block %v height %d", id, &tipHash, tipHeight)
 		}
 	}
+	s.setRequiredHeight(highestTipHeight)
 
 	_, _, lowestChainWallet := s.lowestChainTip(ctx)
 	locators, err := lowestChainWallet.BlockLocators(ctx, nil)
@@ -370,10 +388,23 @@ func (s *Syncer) Run(ctx context.Context) error {
 
 	g.Go(func() error { return s.handleMempool(ctx) })
 
+	for walletID, w := range s.wallets {
+		walletBackend := &WalletBackend{
+			Syncer:   s,
+			WalletID: walletID,
+		}
+
+		w.SetNetworkBackend(walletBackend)
+		defer w.SetNetworkBackend(nil)
+	}
+
 	// Wait until cancellation or a handler errors.
 	return g.Wait()
 }
 
+// peerCandidate returns a peer address that we shall attempt to connect to.
+// Only peers not already remotes or in the process of connecting are returned.
+// Any address returned is marked in s.connectingRemotes before returning.
 func (s *Syncer) peerCandidate(svcs wire.ServiceFlag) (*wire.NetAddress, error) {
 	// Try to obtain peer candidates at random, decreasing the requirements
 	// as more tries are performed.
@@ -384,26 +415,27 @@ func (s *Syncer) peerCandidate(svcs wire.ServiceFlag) (*wire.NetAddress, error) 
 		}
 		na := kaddr.NetAddress()
 
-		// Skip peer if already connected
-		// TODO: this should work with network blocks, not exact addresses.
 		k := addrmgr.NetAddressKey(na)
 		s.remotesMu.Lock()
 		_, isConnecting := s.connectingRemotes[k]
 		_, isRemote := s.remotes[k]
-		s.remotesMu.Unlock()
-		if isConnecting || isRemote {
-			continue
-		}
 
+		switch {
+		// Skip peer if already connected, or in process of connecting
+		// TODO: this should work with network blocks, not exact addresses.
+		case isConnecting || isRemote:
+			fallthrough
 		// Only allow recent nodes (10mins) after we failed 30 times
-		if tries < 30 && time.Since(kaddr.LastAttempt()) < 10*time.Minute {
+		case tries < 30 && time.Since(kaddr.LastAttempt()) < 10*time.Minute:
+			fallthrough
+		// Skip peers without matching service flags for the first 50 tries.
+		case tries < 50 && kaddr.NetAddress().Services&svcs != svcs:
+			s.remotesMu.Unlock()
 			continue
 		}
 
-		// Skip peers without matching service flags for the first 50 tries.
-		if tries < 50 && kaddr.NetAddress().Services&svcs != svcs {
-			continue
-		}
+		s.connectingRemotes[k] = struct{}{}
+		s.remotesMu.Unlock()
 
 		return na, nil
 	}
@@ -500,10 +532,6 @@ func (s *Syncer) connectToCandidates(ctx context.Context) error {
 			port := strconv.FormatUint(uint64(na.Port), 10)
 			raddr := net.JoinHostPort(na.IP.String(), port)
 			k := addrmgr.NetAddressKey(na)
-
-			s.remotesMu.Lock()
-			s.connectingRemotes[k] = struct{}{}
-			s.remotesMu.Unlock()
 
 			rp, err := s.lp.ConnectOutbound(ctx, raddr, reqSvcs)
 			if err != nil {
@@ -841,6 +869,10 @@ ProcessTx:
 	for walletID, w := range s.wallets {
 		relevant := s.filterRelevant(txs, walletID)
 		for _, tx := range relevant {
+
+			if w.ManualTickets() && stake.IsSStx(tx) {
+				continue
+			}
 			err := w.AddTransaction(ctx, tx, nil)
 			if err != nil {
 				op := errors.Opf(opf, rp.RemoteAddr())
@@ -1022,7 +1054,7 @@ func (s *Syncer) handleBlockAnnouncements(ctx context.Context, rp *p2p.RemotePee
 		return err
 	}
 
-	for key, w := range s.wallets {
+	for walletID, w := range s.wallets {
 		newBlocks := make([]*wallet.BlockNode, 0, len(headers))
 		var bestChain []*wallet.BlockNode
 		var matchingTxs map[chainhash.Hash][]*wire.MsgTx
@@ -1074,7 +1106,7 @@ func (s *Syncer) handleBlockAnnouncements(ctx context.Context, rp *p2p.RemotePee
 				return err
 			}
 			if rpt == nil {
-				matchingTxs, err = s.scanChain(ctx, rp, bestChain, bmap, key)
+				matchingTxs, err = s.scanChain(ctx, rp, bestChain, bmap, walletID)
 				if err != nil {
 					return err
 				}
@@ -1086,12 +1118,14 @@ func (s *Syncer) handleBlockAnnouncements(ctx context.Context, rp *p2p.RemotePee
 			}
 			if len(prevChain) != 0 {
 				log.Infof("[%d] Reorganize from %v to %v (total %d block(s) reorged)",
-					key, prevChain[len(prevChain)-1].Hash, bestChain[len(bestChain)-1].Hash, len(prevChain))
+					walletID, prevChain[len(prevChain)-1].Hash, bestChain[len(bestChain)-1].Hash, len(prevChain))
 				for _, n := range prevChain {
 					s.sidechains.AddBlockNode(n)
 				}
 			}
-			s.tipChanged(bestChain[len(bestChain)-1].Header, int32(len(prevChain)), matchingTxs)
+			tipHeader := bestChain[len(bestChain)-1].Header
+			s.setRequiredHeight(int32(tipHeader.Height))
+			s.tipChanged(tipHeader, int32(len(prevChain)), matchingTxs)
 
 			return nil
 		}()
@@ -1109,7 +1143,7 @@ func (s *Syncer) handleBlockAnnouncements(ctx context.Context, rp *p2p.RemotePee
 		// Log connected blocks.
 		for _, n := range bestChain {
 			log.Infof("[%d] Connected block %v, height %d, %d wallet transaction(s)",
-				key, n.Hash, n.Header.Height, len(matchingTxs[*n.Hash]))
+				walletID, n.Hash, n.Header.Height, len(matchingTxs[*n.Hash]))
 		}
 		// Announced blocks not in the main chain are logged as sidechain or orphan
 		// blocks.
@@ -1121,7 +1155,7 @@ func (s *Syncer) handleBlockAnnouncements(ctx context.Context, rp *p2p.RemotePee
 			if haveBlock {
 				continue
 			}
-			log.Infof("[%d] Received sidechain or orphan block %v, height %v", key, n.Hash, n.Header.Height)
+			log.Infof("[%d] Received sidechain or orphan block %v, height %v", walletID, n.Hash, n.Header.Height)
 		}
 	}
 

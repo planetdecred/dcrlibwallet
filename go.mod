@@ -34,6 +34,6 @@ require (
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 )
 
-replace decred.org/dcrwallet => decred.org/dcrwallet v1.6.0-rc3
+replace decred.org/dcrwallet => decred.org/dcrwallet v1.6.0-rc4
 
 go 1.13
