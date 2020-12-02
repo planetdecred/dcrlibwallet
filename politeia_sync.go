@@ -1,6 +1,7 @@
 package dcrlibwallet
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -9,36 +10,24 @@ import (
 	"github.com/asdine/storm"
 	"github.com/asdine/storm/q"
 	www "github.com/decred/politeia/politeiawww/api/www/v1"
+	"golang.org/x/sync/errgroup"
 )
-
-type proposalSyncData struct {
-	syncStage int32
-
-	synced   bool
-	syncing  bool
-	quitChan chan struct{}
-}
 
 const (
 	updateInterval = 10 // 10 mins
 )
 
-const (
-	ProposalsDiscoverySyncState = iota
-	ProposalsFetchSyncState
-)
+func (p *Politeia) Sync() error {
+	g, _ := errgroup.WithContext(context.Background())
+	g.Go(func() error {
+		return p.sync()
+	})
 
-func (p *Politeia) resetSyncData() {
-	p.syncData = &proposalSyncData{
-		syncStage: ProposalsDiscoverySyncState,
-		synced:    false,
-		syncing:   false,
-		quitChan:  make(chan struct{}),
-	}
+	return g.Wait()
 }
 
-func (p *Politeia) Sync() error {
-	log.Info("Politeia sync: starting")
+func (p *Politeia) sync() error {
+	log.Info("Politeia sync: started")
 
 	// fetch server policy if it's not been fetched
 	if p.client.policy == nil {
@@ -61,7 +50,6 @@ func (p *Politeia) Sync() error {
 
 	// fetch remote token inventory
 	log.Info("Politeia sync: fetching token inventory")
-	p.syncData.syncStage = ProposalsDiscoverySyncState
 	tokenInventory, err := p.client.tokenInventory()
 	if err != nil {
 		return err
@@ -80,15 +68,20 @@ func (p *Politeia) Sync() error {
 			case <-ticker.C:
 				log.Info("Politeia sync: checking for proposal updates")
 				p.checkForUpdates()
-			case <-p.syncData.quitChan:
+			case <-p.quitChan:
 				ticker.Stop()
 				return
 			}
 		}
 	}()
-	<-p.syncData.quitChan
+	<-p.quitChan
 
 	return nil
+}
+
+func (p *Politeia) CancelSync() {
+	close(p.quitChan)
+	log.Info("Politeia sync: stopped")
 }
 
 func (p *Politeia) fetchAllUnfetchedProposals(tokenInventory *proposalTokenInventory, savedTokens []string) error {
@@ -104,7 +97,6 @@ func (p *Politeia) fetchAllUnfetchedProposals(tokenInventory *proposalTokenInven
 	for _, v := range inventoryMap {
 		totalNumProposalsToFetch += len(v)
 	}
-	p.syncData.syncStage = ProposalsFetchSyncState
 
 	if totalNumProposalsToFetch > 0 {
 		log.Infof("Politeia sync: fetching %d new proposals", totalNumProposalsToFetch)
