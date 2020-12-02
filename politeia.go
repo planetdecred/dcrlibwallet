@@ -16,7 +16,7 @@ type Politeia struct {
 	readConfigFunc          func(string, bool) bool
 	notificationListenersMu sync.RWMutex
 	notificationListeners   map[string]ProposalNotificationListener
-	syncData                *proposalSyncData
+	quitChan                chan struct{}
 }
 
 const (
@@ -49,7 +49,6 @@ func newPoliteia(rootDir string, readConfigFunc func(string, bool) bool) (*Polit
 		readConfigFunc:        readConfigFunc,
 		notificationListeners: make(map[string]ProposalNotificationListener),
 	}
-	p.resetSyncData()
 
 	return p, nil
 }
