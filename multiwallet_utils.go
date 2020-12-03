@@ -5,12 +5,11 @@ import (
 	"os"
 	"path/filepath"
 
+	"decred.org/dcrwallet/errors"
+	w "decred.org/dcrwallet/wallet"
 	"github.com/asdine/storm"
-	"github.com/decred/dcrwallet/errors/v2"
-	w "github.com/decred/dcrwallet/wallet/v3"
 	"github.com/kevinburke/nacl"
 	"github.com/kevinburke/nacl/secretbox"
-	"github.com/planetdecred/dcrlibwallet/spv"
 	"golang.org/x/crypto/scrypt"
 )
 
@@ -85,18 +84,6 @@ func (mw *MultiWallet) markWalletAsDiscoveredAccounts(walletID int) error {
 	}
 
 	return nil
-}
-
-func (mw *MultiWallet) setNetworkBackend(syncer *spv.Syncer) {
-	for walletID, wallet := range mw.wallets {
-		if wallet.WalletOpened() {
-			walletBackend := &spv.WalletBackend{
-				Syncer:   syncer,
-				WalletID: walletID,
-			}
-			wallet.internal.SetNetworkBackend(walletBackend)
-		}
-	}
 }
 
 // RootDirFileSizeInBytes returns the total directory size of

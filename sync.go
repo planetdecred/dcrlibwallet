@@ -6,10 +6,10 @@ import (
 	"strings"
 	"sync"
 
+	"decred.org/dcrwallet/errors"
+	"decred.org/dcrwallet/p2p"
+	w "decred.org/dcrwallet/wallet"
 	"github.com/decred/dcrd/addrmgr"
-	"github.com/decred/dcrwallet/errors/v2"
-	"github.com/decred/dcrwallet/p2p/v2"
-	w "github.com/decred/dcrwallet/wallet/v3"
 	"github.com/planetdecred/dcrlibwallet/spv"
 )
 
@@ -220,8 +220,6 @@ func (mw *MultiWallet) SpvSync() error {
 		syncer.SetPersistentPeers(validPeerAddresses)
 	}
 
-	mw.setNetworkBackend(syncer)
-
 	ctx, cancel := mw.contextWithShutdownCancel()
 
 	var restartSyncRequested bool
@@ -288,15 +286,6 @@ func (mw *MultiWallet) CancelSync() {
 		<-mw.syncData.syncCanceled
 
 		log.Info("Sync fully canceled.")
-	}
-
-	for _, libWallet := range mw.wallets {
-		loadedWallet, walletLoaded := libWallet.loader.LoadedWallet()
-		if !walletLoaded {
-			continue
-		}
-
-		loadedWallet.SetNetworkBackend(nil)
 	}
 }
 

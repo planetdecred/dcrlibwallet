@@ -1,5 +1,5 @@
 // Copyright (c) 2015-2018 The btcsuite developers
-// Copyright (c) 2017-2019 The Decred developers
+// Copyright (c) 2017-2020 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -11,12 +11,12 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/decred/dcrd/chaincfg/v2"
-	"github.com/decred/dcrd/dcrutil/v2"
-	"github.com/decred/dcrwallet/errors/v2"
-	"github.com/decred/dcrwallet/wallet/v3"
-	_ "github.com/decred/dcrwallet/wallet/v3/drivers/bdb" // driver loaded during init
-	_ "github.com/planetdecred/dcrlibwallet/badgerdb"     // initialize badger driver
+	"decred.org/dcrwallet/errors"
+	"decred.org/dcrwallet/wallet"
+	_ "decred.org/dcrwallet/wallet/drivers/bdb" // driver loaded during init
+	"github.com/decred/dcrd/chaincfg/v3"
+	"github.com/decred/dcrd/dcrutil/v3"
+	_ "github.com/planetdecred/dcrlibwallet/badgerdb" // initialize badger driver
 )
 
 const (
@@ -40,11 +40,11 @@ type Loader struct {
 	dbDriver    string
 
 	stakeOptions            *StakeOptions
-	gapLimit                int
+	gapLimit                uint32
 	accountGapLimit         int
 	disableCoinTypeUpgrades bool
 	allowHighFees           bool
-	relayFee                float64
+	relayFee                dcrutil.Amount
 
 	mu sync.Mutex
 }
@@ -52,7 +52,6 @@ type Loader struct {
 // StakeOptions contains the various options necessary for stake mining.
 type StakeOptions struct {
 	VotingEnabled       bool
-	TicketFee           float64
 	AddressReuse        bool
 	VotingAddress       dcrutil.Address
 	PoolAddress         dcrutil.Address
@@ -61,8 +60,8 @@ type StakeOptions struct {
 }
 
 // NewLoader constructs a Loader.
-func NewLoader(chainParams *chaincfg.Params, dbDirPath string, stakeOptions *StakeOptions, gapLimit int,
-	allowHighFees bool, relayFee float64, accountGapLimit int, disableCoinTypeUpgrades bool) *Loader {
+func NewLoader(chainParams *chaincfg.Params, dbDirPath string, stakeOptions *StakeOptions, gapLimit uint32,
+	allowHighFees bool, relayFee dcrutil.Amount, accountGapLimit int, disableCoinTypeUpgrades bool) *Loader {
 
 	return &Loader{
 		chainParams:             chainParams,
@@ -181,7 +180,6 @@ func (l *Loader) CreateWatchingOnlyWallet(ctx context.Context, extendedPubKey st
 		VotingAddress:           so.VotingAddress,
 		PoolAddress:             so.PoolAddress,
 		PoolFees:                so.PoolFees,
-		TicketFee:               so.TicketFee,
 		GapLimit:                l.gapLimit,
 		AccountGapLimit:         l.accountGapLimit,
 		DisableCoinTypeUpgrades: l.disableCoinTypeUpgrades,
@@ -272,7 +270,6 @@ func (l *Loader) CreateNewWallet(ctx context.Context, pubPassphrase, privPassphr
 		VotingAddress:           so.VotingAddress,
 		PoolAddress:             so.PoolAddress,
 		PoolFees:                so.PoolFees,
-		TicketFee:               so.TicketFee,
 		GapLimit:                l.gapLimit,
 		AccountGapLimit:         l.accountGapLimit,
 		DisableCoinTypeUpgrades: l.disableCoinTypeUpgrades,
@@ -333,7 +330,6 @@ func (l *Loader) OpenExistingWallet(ctx context.Context, pubPassphrase []byte) (
 		VotingAddress:           so.VotingAddress,
 		PoolAddress:             so.PoolAddress,
 		PoolFees:                so.PoolFees,
-		TicketFee:               so.TicketFee,
 		GapLimit:                l.gapLimit,
 		AccountGapLimit:         l.accountGapLimit,
 		DisableCoinTypeUpgrades: l.disableCoinTypeUpgrades,

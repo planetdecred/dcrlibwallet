@@ -1,8 +1,8 @@
 package dcrlibwallet
 
 import (
+	"decred.org/dcrwallet/errors"
 	"github.com/asdine/storm"
-	"github.com/decred/dcrwallet/errors/v2"
 )
 
 func (wallet *Wallet) SaveUserConfigValue(key string, value interface{}) {

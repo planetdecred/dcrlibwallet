@@ -3,7 +3,7 @@ package dcrlibwallet
 import (
 	"encoding/json"
 
-	"github.com/decred/dcrwallet/errors/v2"
+	"decred.org/dcrwallet/errors"
 )
 
 func (mw *MultiWallet) listenForTransactions(walletID int) {
