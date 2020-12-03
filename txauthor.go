@@ -8,14 +8,14 @@ import (
 	"strings"
 	"time"
 
+	"decred.org/dcrwallet/errors"
+	w "decred.org/dcrwallet/wallet"
+	"decred.org/dcrwallet/wallet/txauthor"
+	"decred.org/dcrwallet/wallet/txrules"
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrd/dcrutil/v2"
-	"github.com/decred/dcrd/txscript/v2"
+	"github.com/decred/dcrd/dcrutil/v3"
+	"github.com/decred/dcrd/txscript/v3"
 	"github.com/decred/dcrd/wire"
-	"github.com/decred/dcrwallet/errors/v2"
-	w "github.com/decred/dcrwallet/wallet/v3"
-	"github.com/decred/dcrwallet/wallet/v3/txauthor"
-	"github.com/decred/dcrwallet/wallet/v3/txrules"
 	"github.com/planetdecred/dcrlibwallet/txhelper"
 )
 
@@ -255,7 +255,7 @@ func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	txHash, err := tx.sourceWallet.internal.PublishTransaction(ctx, &msgTx, serializedTransaction.Bytes(), n)
+	txHash, err := tx.sourceWallet.internal.PublishTransaction(ctx, &msgTx, n)
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -321,7 +321,7 @@ func (tx *TxAuthor) constructTransaction() (*txauthor.AuthoredTx, error) {
 
 	requiredConfirmations := tx.sourceWallet.RequiredConfirmations()
 	return tx.sourceWallet.internal.NewUnsignedTransaction(ctx, outputs, txrules.DefaultRelayFeePerKb, tx.sourceAccountNumber,
-		requiredConfirmations, outputSelectionAlgorithm, changeSource)
+		requiredConfirmations, outputSelectionAlgorithm, changeSource, nil)
 }
 
 // changeSource derives an internal address from the source wallet and account

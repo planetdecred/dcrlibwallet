@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"reflect"
 
+	"decred.org/dcrwallet/errors"
 	"github.com/asdine/storm"
-	"github.com/decred/dcrwallet/errors/v2"
 )
 
 const KeyEndBlock = "EndBlock"

@@ -6,9 +6,9 @@
 package spv
 
 import (
-	"github.com/decred/dcrd/blockchain/stake/v2"
-	"github.com/decred/dcrd/gcs/blockcf"
-	"github.com/decred/dcrd/txscript/v2"
+	"github.com/decred/dcrd/blockchain/stake/v3"
+	"github.com/decred/dcrd/gcs/v2/blockcf2"
+	"github.com/decred/dcrd/txscript/v3"
 	"github.com/decred/dcrd/wire"
 )
 
@@ -19,7 +19,7 @@ import (
 // added to fadded.
 //
 // This function may only be called with the filter mutex held.
-func (s *Syncer) rescanCheckTransactions(matches *[]*wire.MsgTx, fadded *blockcf.Entries, txs []*wire.MsgTx, tree int8, walletID int) {
+func (s *Syncer) rescanCheckTransactions(matches *[]*wire.MsgTx, fadded *blockcf2.Entries, txs []*wire.MsgTx, tree int8, walletID int) {
 	for i, tx := range txs {
 		// Keep track of whether the transaction has already been added
 		// to the result.  It shouldn't be added twice.
@@ -27,7 +27,7 @@ func (s *Syncer) rescanCheckTransactions(matches *[]*wire.MsgTx, fadded *blockcf
 
 		txty := stake.TxTypeRegular
 		if tree == wire.TxTreeStake {
-			txty = stake.DetermineTxType(tx)
+			txty = stake.DetermineTxType(tx, true)
 		}
 
 		// Coinbases and stakebases are handled specially: all inputs of a
@@ -55,7 +55,7 @@ func (s *Syncer) rescanCheckTransactions(matches *[]*wire.MsgTx, fadded *blockcf
 		for i, output := range tx.TxOut {
 			_, addrs, _, err := txscript.ExtractPkScriptAddrs(
 				output.Version, output.PkScript,
-				s.wallets[walletID].ChainParams())
+				s.wallets[walletID].ChainParams(), true)
 			if err != nil {
 				continue
 			}
@@ -71,8 +71,6 @@ func (s *Syncer) rescanCheckTransactions(matches *[]*wire.MsgTx, fadded *blockcf
 				}
 				if !s.rescanFilter[walletID].ExistsUnspentOutPoint(&op) {
 					s.rescanFilter[walletID].AddUnspentOutPoint(&op)
-					s.filterData[walletID].AddOutPoint(&op)
-					fadded.AddOutPoint(&op)
 				}
 
 				if !added {
@@ -87,7 +85,7 @@ func (s *Syncer) rescanCheckTransactions(matches *[]*wire.MsgTx, fadded *blockcf
 // rescanBlock rescans a block for any relevant transactions for the passed
 // lookup keys.  Returns any discovered transactions and any new data added to
 // the filter.
-func (s *Syncer) rescanBlock(block *wire.MsgBlock, walletID int) (matches []*wire.MsgTx, fadded blockcf.Entries) {
+func (s *Syncer) rescanBlock(block *wire.MsgBlock, walletID int) (matches []*wire.MsgTx, fadded blockcf2.Entries) {
 	s.filterMu.Lock()
 	s.rescanCheckTransactions(&matches, &fadded, block.STransactions, wire.TxTreeStake, walletID)
 	s.rescanCheckTransactions(&matches, &fadded, block.Transactions, wire.TxTreeRegular, walletID)
@@ -112,7 +110,7 @@ Txs:
 		}
 		for _, out := range tx.TxOut {
 			_, addrs, _, err := txscript.ExtractPkScriptAddrs(out.Version,
-				out.PkScript, s.wallets[walletID].ChainParams())
+				out.PkScript, s.wallets[walletID].ChainParams(), true)
 			if err != nil {
 				continue
 			}

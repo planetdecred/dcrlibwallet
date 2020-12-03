@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2019 The Decred developers
+// Copyright (c) 2018-2020 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -13,22 +13,23 @@ import (
 	"sync/atomic"
 	"time"
 
+	"decred.org/dcrwallet/errors"
+	"decred.org/dcrwallet/lru"
+	"decred.org/dcrwallet/p2p"
+	"decred.org/dcrwallet/validate"
+	"decred.org/dcrwallet/wallet"
 	"github.com/decred/dcrd/addrmgr"
+	"github.com/decred/dcrd/blockchain/stake/v3"
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrd/gcs/blockcf"
+	"github.com/decred/dcrd/gcs/v2/blockcf2"
 	"github.com/decred/dcrd/wire"
-	"github.com/decred/dcrwallet/errors/v2"
-	"github.com/decred/dcrwallet/lru"
-	"github.com/decred/dcrwallet/p2p/v2"
-	"github.com/decred/dcrwallet/validate"
-	"github.com/decred/dcrwallet/wallet/v3"
 	"golang.org/x/sync/errgroup"
 )
 
 // reqSvcs defines the services that must be supported by outbounded peers.
 // After fetching more addresses (if needed), peers are disconnected from if
 // they do not provide each of these services.
-const reqSvcs = wire.SFNodeNetwork | wire.SFNodeCF
+const reqSvcs = wire.SFNodeNetwork
 
 // Syncer implements wallet synchronization services by over the Decred wire
 // protocol using Simplified Payment Verification (SPV) with compact filters.
@@ -54,7 +55,7 @@ type Syncer struct {
 	// TODO: Replace precise rescan filter with wallet db accesses to avoid
 	// needing to keep all relevant data in memory.
 	rescanFilter map[int]*wallet.RescanFilter
-	filterData   map[int]*blockcf.Entries
+	filterData   map[int]*blockcf2.Entries
 	filterMu     sync.Mutex
 
 	// seenTxs records hashes of received inventoried transactions.  Once a
@@ -73,6 +74,10 @@ type Syncer struct {
 
 	// Holds all potential callbacks used to notify clients
 	notifications *Notifications
+
+	// Mempool for non-wallet-relevant transactions.
+	mempool     sync.Map // k=chainhash.Hash v=*wire.MsgTx
+	mempoolAdds chan *chainhash.Hash
 }
 
 // Notifications struct to contain all of the upcoming callbacks that will
@@ -110,12 +115,12 @@ type Notifications struct {
 // NewSyncer creates a Syncer that will sync the wallet using SPV.
 func NewSyncer(wallets map[int]*wallet.Wallet, lp *p2p.LocalPeer) *Syncer {
 	rescanFilter := make(map[int]*wallet.RescanFilter)
-	filterData := make(map[int]*blockcf.Entries)
+	filterData := make(map[int]*blockcf2.Entries)
 	atomicWalletsSynced := make(map[int]*uint32, len(wallets))
 
 	for walletID := range wallets {
 		rescanFilter[walletID] = wallet.NewRescanFilter(nil, nil)
-		filterData[walletID] = &blockcf.Entries{}
+		filterData[walletID] = &blockcf2.Entries{}
 		atomicWalletsSynced[walletID] = new(uint32)
 	}
 
@@ -129,6 +134,7 @@ func NewSyncer(wallets map[int]*wallet.Wallet, lp *p2p.LocalPeer) *Syncer {
 		filterData:          filterData,
 		seenTxs:             lru.NewCache(2000),
 		lp:                  lp,
+		mempoolAdds:         make(chan *chainhash.Hash),
 	}
 }
 
@@ -152,6 +158,18 @@ func (s *Syncer) synced(walletID int) {
 		s.notifications.Synced != nil {
 		s.notifications.Synced(walletID, true)
 	}
+}
+
+// GetRemotePeers returns a map of connected remote peers.
+func (s *Syncer) GetRemotePeers() map[string]*p2p.RemotePeer {
+	s.remotesMu.Lock()
+	defer s.remotesMu.Unlock()
+
+	remotes := make(map[string]*p2p.RemotePeer, len(s.remotes))
+	for k, rp := range s.remotes {
+		remotes[k] = rp
+	}
+	return remotes
 }
 
 // unsynced checks the atomic that controls wallet syncness and if previously
@@ -259,6 +277,17 @@ func (s *Syncer) tipChanged(tip *wire.BlockHeader, reorgDepth int32, matchingTxs
 	}
 }
 
+// setRequiredHeight sets the required height a peer must advertise as their
+// last height.  Initial height 6 blocks below the current chain tip height
+// result in a handshake error.
+func (s *Syncer) setRequiredHeight(tipHeight int32) {
+	requireHeight := tipHeight
+	if requireHeight > 6 {
+		requireHeight -= 6
+	}
+	s.lp.RequirePeerHeight(requireHeight)
+}
+
 func (s *Syncer) lowestChainTip(ctx context.Context) (chainhash.Hash, int32, *wallet.Wallet) {
 	var lowestTip int32 = -1
 	var lowestTipHash chainhash.Hash
@@ -294,9 +323,14 @@ func (s *Syncer) highestChainTip(ctx context.Context) (chainhash.Hash, int32, *w
 func (s *Syncer) Run(ctx context.Context) error {
 	log.Infof("Syncing %d wallets", len(s.wallets))
 
+	var highestTipHeight int32
 	for id, w := range s.wallets {
 		tipHash, tipHeight := w.MainChainTip(ctx)
 		log.Infof("[%d] Headers synced through block %v height %d", id, &tipHash, tipHeight)
+
+		if tipHeight > highestTipHeight {
+			highestTipHeight = tipHeight
+		}
 
 		rescanPoint, err := w.RescanPoint(ctx)
 		if err != nil {
@@ -314,6 +348,7 @@ func (s *Syncer) Run(ctx context.Context) error {
 			log.Infof("[%d] Transactions synced through block %v height %d", id, &tipHash, tipHeight)
 		}
 	}
+	s.setRequiredHeight(highestTipHeight)
 
 	_, _, lowestChainWallet := s.lowestChainTip(ctx)
 	locators, err := lowestChainWallet.BlockLocators(ctx, nil)
@@ -332,7 +367,7 @@ func (s *Syncer) Run(ctx context.Context) error {
 
 	// Seed peers over DNS when not disabled by persistent peers.
 	if len(s.persistentPeers) == 0 {
-		s.lp.DNSSeed(wire.SFNodeNetwork | wire.SFNodeCF)
+		s.lp.SeedPeers(ctx, wire.SFNodeNetwork|wire.SFNodeCF)
 	}
 
 	// Start background handlers to read received messages from remote peers
@@ -351,10 +386,25 @@ func (s *Syncer) Run(ctx context.Context) error {
 		g.Go(func() error { return s.connectToCandidates(ctx) })
 	}
 
+	g.Go(func() error { return s.handleMempool(ctx) })
+
+	for walletID, w := range s.wallets {
+		walletBackend := &WalletBackend{
+			Syncer:   s,
+			WalletID: walletID,
+		}
+
+		w.SetNetworkBackend(walletBackend)
+		defer w.SetNetworkBackend(nil)
+	}
+
 	// Wait until cancellation or a handler errors.
 	return g.Wait()
 }
 
+// peerCandidate returns a peer address that we shall attempt to connect to.
+// Only peers not already remotes or in the process of connecting are returned.
+// Any address returned is marked in s.connectingRemotes before returning.
 func (s *Syncer) peerCandidate(svcs wire.ServiceFlag) (*wire.NetAddress, error) {
 	// Try to obtain peer candidates at random, decreasing the requirements
 	// as more tries are performed.
@@ -365,26 +415,27 @@ func (s *Syncer) peerCandidate(svcs wire.ServiceFlag) (*wire.NetAddress, error) 
 		}
 		na := kaddr.NetAddress()
 
-		// Skip peer if already connected
-		// TODO: this should work with network blocks, not exact addresses.
 		k := addrmgr.NetAddressKey(na)
 		s.remotesMu.Lock()
 		_, isConnecting := s.connectingRemotes[k]
 		_, isRemote := s.remotes[k]
-		s.remotesMu.Unlock()
-		if isConnecting || isRemote {
-			continue
-		}
 
+		switch {
+		// Skip peer if already connected, or in process of connecting
+		// TODO: this should work with network blocks, not exact addresses.
+		case isConnecting || isRemote:
+			fallthrough
 		// Only allow recent nodes (10mins) after we failed 30 times
-		if tries < 30 && time.Since(kaddr.LastAttempt()) < 10*time.Minute {
+		case tries < 30 && time.Since(kaddr.LastAttempt()) < 10*time.Minute:
+			fallthrough
+		// Skip peers without matching service flags for the first 50 tries.
+		case tries < 50 && kaddr.NetAddress().Services&svcs != svcs:
+			s.remotesMu.Unlock()
 			continue
 		}
 
-		// Skip peers without matching service flags for the first 50 tries.
-		if tries < 50 && kaddr.NetAddress().Services&svcs != svcs {
-			continue
-		}
+		s.connectingRemotes[k] = struct{}{}
+		s.remotesMu.Unlock()
 
 		return na, nil
 	}
@@ -481,10 +532,6 @@ func (s *Syncer) connectToCandidates(ctx context.Context) error {
 			port := strconv.FormatUint(uint64(na.Port), 10)
 			raddr := net.JoinHostPort(na.IP.String(), port)
 			k := addrmgr.NetAddressKey(na)
-
-			s.remotesMu.Lock()
-			s.connectingRemotes[k] = struct{}{}
-			s.remotesMu.Unlock()
 
 			rp, err := s.lp.ConnectOutbound(ctx, raddr, reqSvcs)
 			if err != nil {
@@ -638,8 +685,16 @@ func (s *Syncer) receiveGetData(ctx context.Context) error {
 						rp.RemoteAddr(), err)
 					return
 				}
-				if len(missing) != 0 {
-					notFound = append(notFound, missing...)
+
+				// For the missing ones, attempt to search in
+				// the non-wallet-relevant syncer mempool.
+				for _, miss := range missing {
+					if v, ok := s.mempool.Load(miss.Hash); ok {
+						tx := v.(*wire.MsgTx)
+						foundTxs = append(foundTxs, tx)
+						continue
+					}
+					notFound = append(notFound, miss)
 				}
 			}
 
@@ -814,7 +869,11 @@ ProcessTx:
 	for walletID, w := range s.wallets {
 		relevant := s.filterRelevant(txs, walletID)
 		for _, tx := range relevant {
-			err := w.AcceptMempoolTx(ctx, tx)
+
+			if w.ManualTickets() && stake.IsSStx(tx) {
+				continue
+			}
+			err := w.AddTransaction(ctx, tx, nil)
 			if err != nil {
 				op := errors.Opf(opf, rp.RemoteAddr())
 				log.Warn(errors.E(op, err))
@@ -888,8 +947,8 @@ FilterLoop:
 		worker := func() {
 			for i := range c {
 				n := chain[i]
-				f := n.Filter
-				k := blockcf.Key(n.Hash)
+				f := n.FilterV2
+				k := blockcf2.Key(&n.Header.MerkleRoot)
 				if f.N() != 0 && f.MatchAny(k, filterData) {
 					fmatchMu.Lock()
 					fmatches = append(fmatches, n.Hash)
@@ -932,11 +991,6 @@ FilterLoop:
 				if err != nil {
 					err = validate.DCP0005MerkleRoot(b)
 				}
-				if err != nil {
-					rp.Disconnect(err)
-					return nil, err
-				}
-				err = validate.RegularCFilter(b, chain[i].Filter)
 				if err != nil {
 					rp.Disconnect(err)
 					return nil, err
@@ -992,7 +1046,7 @@ func (s *Syncer) handleBlockAnnouncements(ctx context.Context, rp *p2p.RemotePee
 		hash := h.BlockHash()
 		blockHashes = append(blockHashes, &hash)
 	}
-	filters, err := rp.CFilters(ctx, blockHashes)
+	filters, err := rp.CFiltersV2(ctx, blockHashes)
 	if err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -1000,10 +1054,11 @@ func (s *Syncer) handleBlockAnnouncements(ctx context.Context, rp *p2p.RemotePee
 		return err
 	}
 
-	for key, w := range s.wallets {
+	for walletID, w := range s.wallets {
 		newBlocks := make([]*wallet.BlockNode, 0, len(headers))
 		var bestChain []*wallet.BlockNode
 		var matchingTxs map[chainhash.Hash][]*wire.MsgTx
+		cnet := w.ChainParams().Net
 		err = func() error {
 			defer s.sidechainMu.Unlock()
 			s.sidechainMu.Lock()
@@ -1016,7 +1071,17 @@ func (s *Syncer) handleBlockAnnouncements(ctx context.Context, rp *p2p.RemotePee
 				if haveBlock {
 					continue
 				}
-				n := wallet.NewBlockNode(headers[i], blockHashes[i], filters[i])
+
+				cf := filters[i]
+				filter, proofIndex, proof := cf.Filter, cf.ProofIndex, cf.Proof
+
+				err = validate.CFilterV2HeaderCommitment(cnet, headers[i],
+					filter, proofIndex, proof)
+				if err != nil {
+					return err
+				}
+
+				n := wallet.NewBlockNode(headers[i], blockHashes[i], filter)
 				if s.sidechains.AddBlockNode(n) {
 					newBlocks = append(newBlocks, n)
 				}
@@ -1041,7 +1106,7 @@ func (s *Syncer) handleBlockAnnouncements(ctx context.Context, rp *p2p.RemotePee
 				return err
 			}
 			if rpt == nil {
-				matchingTxs, err = s.scanChain(ctx, rp, bestChain, bmap, key)
+				matchingTxs, err = s.scanChain(ctx, rp, bestChain, bmap, walletID)
 				if err != nil {
 					return err
 				}
@@ -1053,12 +1118,14 @@ func (s *Syncer) handleBlockAnnouncements(ctx context.Context, rp *p2p.RemotePee
 			}
 			if len(prevChain) != 0 {
 				log.Infof("[%d] Reorganize from %v to %v (total %d block(s) reorged)",
-					key, prevChain[len(prevChain)-1].Hash, bestChain[len(bestChain)-1].Hash, len(prevChain))
+					walletID, prevChain[len(prevChain)-1].Hash, bestChain[len(bestChain)-1].Hash, len(prevChain))
 				for _, n := range prevChain {
 					s.sidechains.AddBlockNode(n)
 				}
 			}
-			s.tipChanged(bestChain[len(bestChain)-1].Header, int32(len(prevChain)), matchingTxs)
+			tipHeader := bestChain[len(bestChain)-1].Header
+			s.setRequiredHeight(int32(tipHeader.Height))
+			s.tipChanged(tipHeader, int32(len(prevChain)), matchingTxs)
 
 			return nil
 		}()
@@ -1076,7 +1143,7 @@ func (s *Syncer) handleBlockAnnouncements(ctx context.Context, rp *p2p.RemotePee
 		// Log connected blocks.
 		for _, n := range bestChain {
 			log.Infof("[%d] Connected block %v, height %d, %d wallet transaction(s)",
-				key, n.Hash, n.Header.Height, len(matchingTxs[*n.Hash]))
+				walletID, n.Hash, n.Header.Height, len(matchingTxs[*n.Hash]))
 		}
 		// Announced blocks not in the main chain are logged as sidechain or orphan
 		// blocks.
@@ -1088,7 +1155,7 @@ func (s *Syncer) handleBlockAnnouncements(ctx context.Context, rp *p2p.RemotePee
 			if haveBlock {
 				continue
 			}
-			log.Infof("[%d] Received sidechain or orphan block %v, height %v", key, n.Hash, n.Header.Height)
+			log.Infof("[%d] Received sidechain or orphan block %v, height %v", walletID, n.Hash, n.Header.Height)
 		}
 	}
 
@@ -1122,6 +1189,7 @@ func (s *Syncer) getHeaders(ctx context.Context, rp *p2p.RemotePeer) error {
 	s.locatorMu.Unlock()
 
 	var lastHeight int32
+	cnet := lowestChainWallet.ChainParams().Net
 
 	for {
 		headers, err := rp.Headers(ctx, locators, &hashStop)
@@ -1155,10 +1223,17 @@ func (s *Syncer) getHeaders(ctx context.Context, rp *p2p.RemotePeer) error {
 			g.Go(func() error {
 				header := headers[i]
 				hash := header.BlockHash()
-				filter, err := rp.CFilter(ctx, &hash)
+				filter, proofIndex, proof, err := rp.CFilterV2(ctx, &hash)
 				if err != nil {
 					return err
 				}
+
+				err = validate.CFilterV2HeaderCommitment(cnet, header,
+					filter, proofIndex, proof)
+				if err != nil {
+					return err
+				}
+
 				nodes[i] = wallet.NewBlockNode(header, &hash, filter)
 				return nil
 			})
@@ -1307,7 +1382,7 @@ func (s *Syncer) startupSync(ctx context.Context, rp *p2p.RemotePeer) error {
 				s.unsynced(walletID)
 
 				s.discoverAddressesStart(walletID)
-				err = w.DiscoverActiveAddresses(ctx, rp, rescanPoint, !w.Locked())
+				err = w.DiscoverActiveAddresses(ctx, rp, rescanPoint, !w.Locked(), w.GapLimit())
 				if err != nil {
 					return err
 				}
@@ -1366,4 +1441,25 @@ func (s *Syncer) startupSync(ctx context.Context, rp *p2p.RemotePeer) error {
 	}
 
 	return nil
+}
+
+// handleMempool handles eviction from the local mempool of non-wallet-backed
+// transactions. It MUST be run as a goroutine.
+func (s *Syncer) handleMempool(ctx context.Context) error {
+	const mempoolEvictionTimeout = 60 * time.Minute
+
+	for {
+		select {
+		case txHash := <-s.mempoolAdds:
+			go func() {
+				select {
+				case <-ctx.Done():
+				case <-time.After(mempoolEvictionTimeout):
+					s.mempool.Delete(txHash)
+				}
+			}()
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 }
