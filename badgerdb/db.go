@@ -642,13 +642,13 @@ func openDB(dbPath string, create bool) (walletdb.DB, error) {
 		WithValueDir(dbPath).
 		WithValueLogLoadingMode(options.FileIO).
 		WithTableLoadingMode(options.FileIO).
-		WithValueLogFileSize(256 << 20).
+		WithValueLogFileSize(200 << 20).
 		WithMaxTableSize(64 << 20).
-		WithLevelOneSize(256 << 20).
-		WithNumMemtables(3).
+		WithLevelOneSize(200 << 20).
+		WithNumMemtables(1).
 		WithNumCompactors(1).
-		WithNumLevelZeroTables(3).
-		WithNumLevelZeroTablesStall(5)
+		WithNumLevelZeroTables(1).
+		WithNumLevelZeroTablesStall(2)
 
 	d := &db{
 		closed: false,
