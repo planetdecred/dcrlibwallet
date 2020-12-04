@@ -17,7 +17,7 @@ require (
 	github.com/decred/dcrd/wire v1.4.0
 	github.com/decred/dcrdata/txhelpers/v4 v4.0.1
 	github.com/decred/slog v1.1.0
-	github.com/dgraph-io/badger v1.6.1
+	github.com/dgraph-io/badger v1.6.2
 	github.com/jrick/logrotate v1.0.0
 	github.com/kevinburke/nacl v0.0.0-20190829012316-f3ed23dbd7f8
 	github.com/onsi/ginkgo v1.14.0
