@@ -7,7 +7,6 @@ package badgerdb
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"os"
 
@@ -637,7 +636,6 @@ func openDB(dbPath string, create bool) (walletdb.DB, error) {
 		return nil, errors.E(errors.NotExist, "missing database file")
 	}
 
-	fmt.Println("Running new badger v1.6.1, new config config")
 	opts := badger.DefaultOptions(dbPath).
 		WithValueDir(dbPath).
 		WithValueLogLoadingMode(options.FileIO).
