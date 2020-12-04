@@ -32,9 +32,9 @@ type Wallet struct {
 	loader      *loader.Loader
 	txDB        *txindex.DB
 
-	synced  bool
-	syncing bool
-	waiting bool
+	synced            bool
+	syncing           bool
+	waitingForHeaders bool
 
 	shuttingDown chan bool
 	cancelFuncs  []context.CancelFunc

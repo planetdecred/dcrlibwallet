@@ -68,6 +68,7 @@ type Accounts struct {
 type SyncProgressListener interface {
 	OnSyncStarted(wasRestarted bool)
 	OnPeerConnectedOrDisconnected(numberOfConnectedPeers int32)
+	OnCFiltersFetchProgress(cfiltersFetchProgress *CFiltersFetchProgressReport)
 	OnHeadersFetchProgress(headersFetchProgress *HeadersFetchProgressReport)
 	OnAddressDiscoveryProgress(addressDiscoveryProgress *AddressDiscoveryProgressReport)
 	OnHeadersRescanProgress(headersRescanProgress *HeadersRescanProgressReport)
@@ -80,6 +81,13 @@ type SyncProgressListener interface {
 type GeneralSyncProgress struct {
 	TotalSyncProgress         int32 `json:"totalSyncProgress"`
 	TotalTimeRemainingSeconds int64 `json:"totalTimeRemainingSeconds"`
+}
+
+type CFiltersFetchProgressReport struct {
+	*GeneralSyncProgress
+	TotalCFiltersToFetch  int32 `json:"totalCFiltersToFetch"`
+	CurrentCFilterHeight  int32 `json:"currentCFilterHeight"`
+	CFiltersFetchProgress int32 `json:"headersFetchProgress"`
 }
 
 type HeadersFetchProgressReport struct {

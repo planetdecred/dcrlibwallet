@@ -26,6 +26,9 @@ import (
 const (
 	walletDbName = "wallet.db"
 
+	// FetchPercentage is used to increase the initial estimate gotten during cfilters stage
+	FetchPercentage = 0.38
+
 	// Use 10% of estimated total headers fetch time to estimate rescan time
 	RescanPercentage = 0.1
 

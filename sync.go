@@ -39,9 +39,15 @@ type syncData struct {
 type activeSyncData struct {
 	syncStage int32
 
+	cfiltersFetchProgress    CFiltersFetchProgressReport
 	headersFetchProgress     HeadersFetchProgressReport
 	addressDiscoveryProgress AddressDiscoveryProgressReport
 	headersRescanProgress    HeadersRescanProgressReport
+
+	beginFetchCFiltersTimeStamp int64
+	startCFiltersHeight         int32
+	cfiltersFetchTimeSpent      int64
+	totalFetchedCFiltersCount   int32
 
 	beginFetchTimeStamp   int64
 	startHeaderHeight     int32
@@ -60,12 +66,17 @@ type activeSyncData struct {
 
 const (
 	InvalidSyncStage          = -1
-	HeadersFetchSyncStage     = 0
-	AddressDiscoverySyncStage = 1
-	HeadersRescanSyncStage    = 2
+	CFiltersFetchSyncStage    = 0
+	HeadersFetchSyncStage     = 1
+	AddressDiscoverySyncStage = 2
+	HeadersRescanSyncStage    = 3
 )
 
 func (mw *MultiWallet) initActiveSyncData() {
+
+	cfiltersFetchProgress := CFiltersFetchProgressReport{}
+	cfiltersFetchProgress.GeneralSyncProgress = &GeneralSyncProgress{}
+
 	headersFetchProgress := HeadersFetchProgressReport{}
 	headersFetchProgress.GeneralSyncProgress = &GeneralSyncProgress{}
 
@@ -79,9 +90,15 @@ func (mw *MultiWallet) initActiveSyncData() {
 	mw.syncData.activeSyncData = &activeSyncData{
 		syncStage: InvalidSyncStage,
 
+		cfiltersFetchProgress:    cfiltersFetchProgress,
 		headersFetchProgress:     headersFetchProgress,
 		addressDiscoveryProgress: addressDiscoveryProgress,
 		headersRescanProgress:    headersRescanProgress,
+
+		beginFetchCFiltersTimeStamp: -1,
+		startCFiltersHeight:         -1,
+		cfiltersFetchTimeSpent:      -1,
+		totalFetchedCFiltersCount:   0,
 
 		beginFetchTimeStamp:       -1,
 		headersFetchTimeSpent:     -1,
@@ -210,7 +227,7 @@ func (mw *MultiWallet) SpvSync() error {
 	wallets := make(map[int]*w.Wallet)
 	for id, wallet := range mw.wallets {
 		wallets[id] = wallet.internal
-		wallet.waiting = true
+		wallet.waitingForHeaders = true
 		wallet.syncing = true
 	}
 
@@ -290,7 +307,7 @@ func (mw *MultiWallet) CancelSync() {
 }
 
 func (wallet *Wallet) IsWaiting() bool {
-	return wallet.waiting
+	return wallet.waitingForHeaders
 }
 
 func (wallet *Wallet) IsSynced() bool {
