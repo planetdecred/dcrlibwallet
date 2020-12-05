@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"io"
 	"os"
-	"time"
 
 	"decred.org/dcrwallet/errors"
 	"decred.org/dcrwallet/wallet/walletdb"
@@ -24,7 +23,7 @@ func convertErr(err error) error {
 	}
 	var kind errors.Kind
 	switch err {
-	case badger.ErrValueLogSize, badger.ErrValueThreshold, badger.ErrTxnTooBig, badger.ErrReadOnlyTxn, badger.ErrDiscardedTxn, badger.ErrEmptyKey, badger.ErrThresholdZero,
+	case badger.ErrValueLogSize, badger.ErrTxnTooBig, badger.ErrReadOnlyTxn, badger.ErrDiscardedTxn, badger.ErrEmptyKey, badger.ErrThresholdZero,
 		badger.ErrRejected, badger.ErrInvalidRequest, badger.ErrManagedTxn, badger.ErrInvalidDump, badger.ErrZeroBandwidth, badger.ErrInvalidLoadingMode, badger.ErrWindowsNotSupported, badger.ErrReplayNeeded, badger.ErrTruncateNeeded:
 		kind = errors.Invalid
 	case badger.ErrKeyNotFound:
@@ -103,7 +102,7 @@ func (tx *transaction) DeleteTopLevelBucket(key []byte) error {
 	defer it.Close()
 	for it.Seek(key); it.ValidForPrefix(key); it.Next() {
 		item = it.Item()
-		val, err := item.Value()
+		val, err := item.ValueCopy(nil)
 		if err != nil {
 			continue
 		}
@@ -130,7 +129,7 @@ func (tx *transaction) Commit() error {
 		return errors.E(errors.Invalid)
 	}
 
-	err := tx.badgerTx.Commit(nil)
+	err := tx.badgerTx.Commit()
 	if err != nil {
 		return convertErr(err)
 	}
@@ -305,7 +304,6 @@ func (b *Bucket) ReadCursor() walletdb.ReadCursor {
 	if !b.dbTransaction.writable {
 		txn := b.dbTransaction.db.NewTransaction(false)
 		opts := badger.DefaultIteratorOptions
-		opts.PrefetchSize = 100
 		it := txn.NewIterator(opts)
 		reverseOptions := badger.DefaultIteratorOptions
 		//Key-only iteration for faster search. Value gets fetched when item.Value() is called.
@@ -573,7 +571,6 @@ func (c *Cursor) Close() {
 type db struct {
 	*badger.DB
 	closed bool
-	ticker *time.Ticker
 }
 
 // Enforce db implements the walletdb.DB interface.
@@ -615,12 +612,6 @@ func (db *db) Close() error {
 
 	db.closed = true // setting this to true to pause all operations that will happen while db is closing
 
-	if db.ticker != nil {
-		db.ticker.Stop()
-	}
-
-	time.Sleep(2 * time.Second) // sleep for 2 seconds to ensure any db operation completes before proceeding
-
 	err := db.DB.Close()
 	if err != nil {
 		return convertErr(err)
@@ -644,18 +635,18 @@ func openDB(dbPath string, create bool) (walletdb.DB, error) {
 	if !create && !fileExists(dbPath) {
 		return nil, errors.E(errors.NotExist, "missing database file")
 	}
-	opts := badger.DefaultOptions
-	opts.Dir = dbPath
-	opts.ValueDir = dbPath
-	opts.ValueLogLoadingMode = options.FileIO
-	opts.TableLoadingMode = options.MemoryMap
-	opts.ValueLogFileSize = 209715200
-	opts.MaxTableSize = 40000000
-	opts.LevelOneSize = 209715200
-	opts.NumMemtables = 1
-	opts.NumCompactors = 1
-	opts.NumLevelZeroTables = 1
-	opts.NumLevelZeroTablesStall = 2
+
+	opts := badger.DefaultOptions(dbPath).
+		WithValueDir(dbPath).
+		WithValueLogLoadingMode(options.FileIO).
+		WithTableLoadingMode(options.FileIO).
+		WithValueLogFileSize(200 << 20).
+		WithMaxTableSize(64 << 20).
+		WithLevelOneSize(200 << 20).
+		WithNumMemtables(1).
+		WithNumCompactors(1).
+		WithNumLevelZeroTables(1).
+		WithNumLevelZeroTablesStall(2)
 
 	d := &db{
 		closed: false,
@@ -663,16 +654,6 @@ func openDB(dbPath string, create bool) (walletdb.DB, error) {
 	badgerDB, err := badger.Open(opts)
 	if err == nil {
 		d.DB = badgerDB
-		go func() {
-			d.ticker = time.NewTicker(20 * time.Second)
-			for range d.ticker.C {
-			again:
-				err := d.RunValueLogGC(0.7)
-				if err == nil {
-					goto again
-				}
-			}
-		}()
 	}
 
 	return d, convertErr(err)
