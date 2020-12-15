@@ -487,7 +487,7 @@ func (v *VSPD) getTxAndAddress(ticketHash string) (*wire.MsgTx, dcrutil.Address,
 func (v *VSPD) updateVspdDBRecord(data interface{}, ticketHash string) error {
 	updated, err := v.w.walletDataDB.SaveOrUpdateVspdRecord(&VspdTicketInfo{}, data)
 	if err != nil {
-		fmt.Errorf("[%d] new vspd save err : %v", v.w.ID, err)
+		log.Errorf("[%d] new vspd save err : %v", v.w.ID, err)
 		return err
 	}
 
