@@ -14,12 +14,13 @@ import (
 	"strings"
 	"time"
 
+	w "decred.org/dcrwallet/wallet"
 	"github.com/asdine/storm"
 	"github.com/decred/dcrd/blockchain/stake/v3"
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrd/chaincfg/v2"
+	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/dcrutil/v3"
-	"github.com/decred/dcrd/txscript/v2"
+	"github.com/decred/dcrd/txscript/v3"
 	"github.com/decred/dcrd/wire"
 )
 
@@ -71,12 +72,12 @@ func (v *VSPD) GetInfo() (*GetVspInfoResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	v.pubKey = vspInfoResponse.PubKey
 
-	err = validateVSPServerSignature(resp, v.pubKey, b)
+	err = validateVSPServerSignature(resp, vspInfoResponse.PubKey, b)
 	if err != nil {
 		return nil, err
 	}
+	v.pubKey = vspInfoResponse.PubKey
 
 	return &vspInfoResponse, nil
 }
@@ -93,21 +94,36 @@ func (v *VSPD) GetVSPFeeAddress(ticketHash string, passphrase []byte) (*GetFeeAd
 		return nil, err
 	}
 
-	txBuf := new(bytes.Buffer)
-	txBuf.Grow(txs.SerializeSize())
-	err = txs.Serialize(txBuf)
+	txBuf, err := txs.Bytes()
 	if err != nil {
 		log.Errorf("failed to serialize ticket %v: %v", ticketHash, err)
 		return nil, err
 	}
+	ticketHex := hex.EncodeToString(txBuf)
 
+	parentHash := txs.TxIn[0].PreviousOutPoint.Hash
+	parentTxs, err := v.getTxFromHash(parentHash.String())
+	if err != nil {
+		log.Errorf("failed to retrieve parent %v of ticket %v: %v", parentHash, ticketHash, err)
+		return nil, err
+	}
+	parentTx := parentTxs[0]
+
+	// Serialize parent
+	parentTxBuf, err := parentTx.Bytes()
+	if err != nil {
+		log.Errorf("failed to serialize parent %v of ticket %v: %v", parentHash, ticketHash, err)
+		return nil, err
+	}
+	parentHex := hex.EncodeToString(parentTxBuf)
 	req := GetFeeAddressRequest{
 		Timestamp:  time.Now().Unix(),
 		TicketHash: ticketHash,
-		TicketHex:  hex.EncodeToString(txBuf.Bytes()),
+		TicketHex:  ticketHex,
+		ParentHex:  parentHex,
 	}
 
-	resp, err := v.signedVSP_HTTP("/api/v3/feeaddress", http.MethodPost, commitmentAddr.String(), passphrase, req)
+	resp, err := v.signedVSP_HTTP("/api/v3/feeaddress", commitmentAddr.String(), passphrase, req)
 	if err != nil {
 		return nil, err
 	}
@@ -151,8 +167,6 @@ func (v *VSPD) CreateTicketFeeTx(feeAmount int64, ticketHash, feeAddress string,
 		return "", err
 	}
 
-	// feeAmount := reflect.Indirect(*record).FieldByName("FeeAmount").Int()
-	// feeAddress := reflect.Indirect(*record).FieldByName("FeeAddress").String()
 	feeTx := reflect.Indirect(*record).FieldByName("FeeTx").String()
 
 	if feeTx != "" {
@@ -162,12 +176,6 @@ func (v *VSPD) CreateTicketFeeTx(feeAmount int64, ticketHash, feeAddress string,
 
 	txAuthor := v.mwRef.NewUnsignedTx(v.w, v.sourceAccountNumber)
 	txAuthor.AddSendDestination(feeAddress, feeAmount, false)
-
-	defer func() {
-		for i := range passphrase {
-			passphrase[i] = 0
-		}
-	}()
 
 	unsignedTx, err := txAuthor.constructTransaction()
 	if err != nil {
@@ -237,7 +245,7 @@ func (v *VSPD) PayVSPFee(feeTx, ticketHash, feeAddress string, passphrase []byte
 		return nil, err
 	}
 
-	_, votingAddress, _, err := txscript.ExtractPkScriptAddrs(0, txs.TxOut[0].PkScript, v.params)
+	_, votingAddress, _, err := txscript.ExtractPkScriptAddrs(0, txs.TxOut[0].PkScript, v.params, true)
 	if err != nil {
 		log.Warnf("failed to get voting Address: %v", err)
 		return nil, err
@@ -265,8 +273,15 @@ func (v *VSPD) PayVSPFee(feeTx, ticketHash, feeAddress string, passphrase []byte
 		return nil, err
 	}
 
+	agendaChoices, err := v.getAgenda(ticketHash)
+	if err != nil {
+		return nil, err
+	}
+
 	voteChoices := make(map[string]string)
-	voteChoices[chaincfg.VoteIDHeaderCommitments] = "yes"
+	for _, agendaChoice := range agendaChoices {
+		voteChoices[agendaChoice.AgendaID] = agendaChoice.ChoiceID
+	}
 
 	req := PayFeeRequest{
 		FeeTx:       feeTx,
@@ -276,7 +291,7 @@ func (v *VSPD) PayVSPFee(feeTx, ticketHash, feeAddress string, passphrase []byte
 		VoteChoices: voteChoices,
 	}
 
-	resp, err := v.signedVSP_HTTP("/api/v3/payfee", http.MethodPost, commitmentAddr.String(), passphrase, req)
+	resp, err := v.signedVSP_HTTP("/api/v3/payfee", commitmentAddr.String(), passphrase, req)
 	if err != nil {
 		return nil, err
 	}
@@ -322,7 +337,7 @@ func (v *VSPD) GetTicketStatus(ticketHash string, passphrase []byte) (*TicketSta
 		TicketHash: ticketHash,
 	}
 
-	resp, err := v.signedVSP_HTTP("/api/v3/ticketstatus", http.MethodPost, commitmentAddr.String(), passphrase, req)
+	resp, err := v.signedVSP_HTTP("/api/v3/ticketstatus", commitmentAddr.String(), passphrase, req)
 	if err != nil {
 		return nil, err
 	}
@@ -372,7 +387,7 @@ func (v *VSPD) SetVoteChoices(ticketHash string, passphrase []byte, choices map[
 		VoteChoices: choices,
 	}
 
-	resp, err := v.signedVSP_HTTP("/api/v3/setvotechoices", http.MethodPost, commitmentAddr.String(), passphrase, req)
+	resp, err := v.signedVSP_HTTP("/api/v3/setvotechoices", commitmentAddr.String(), passphrase, req)
 	if err != nil {
 		return nil, err
 	}
@@ -405,15 +420,15 @@ func (v *VSPD) SetVoteChoices(ticketHash string, passphrase []byte, choices map[
 // signedVSP_HTTP makes a request against a VSP API. The request will be JSON
 // encoded and signed using the provided commitment address. The signature of
 // the response is also validated using the VSP pubkey.
-func (v *VSPD) signedVSP_HTTP(url, method, commitmentAddr string, passphrase []byte, request interface{}) ([]byte, error) {
+func (v *VSPD) signedVSP_HTTP(path, commitmentAddr string, passphrase []byte, request interface{}) ([]byte, error) {
 	reqBytes, err := json.Marshal(request)
 	if err != nil {
 		return nil, err
 	}
 
-	url = strings.TrimSuffix(v.baseURL, "/") + url
+	path = strings.TrimSuffix(v.baseURL, "/") + path
 	ctx := v.w.shutdownContext()
-	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewBuffer(reqBytes))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, path, bytes.NewBuffer(reqBytes))
 	if err != nil {
 		return nil, err
 	}
@@ -425,8 +440,7 @@ func (v *VSPD) signedVSP_HTTP(url, method, commitmentAddr string, passphrase []b
 
 	req.Header.Add("VSP-Client-Signature", base64.StdEncoding.EncodeToString(signature))
 
-	var httpClient http.Client
-	resp, err := httpClient.Do(req)
+	resp, err := v.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -450,33 +464,30 @@ func (v *VSPD) signedVSP_HTTP(url, method, commitmentAddr string, passphrase []b
 }
 
 func (v *VSPD) getTxAndAddress(ticketHash string) (*wire.MsgTx, dcrutil.Address, error) {
-	hash, err := chainhash.NewHashFromStr(ticketHash)
+	txs, err := v.getTxFromHash(ticketHash)
 	if err != nil {
-		log.Errorf("failed to retrieve hash from %s: %v", ticketHash, err)
 		return nil, nil, err
 	}
 
-	ctx := v.w.shutdownContext()
-	txs, _, err := v.w.internal.GetTransactionsByHashes(ctx, []*chainhash.Hash{hash})
-	if err != nil {
-		log.Errorf("failed to retrieve transaction for %v: %v", hash, err)
-		return nil, nil, err
+	if len(txs) == 0 {
+		return nil, nil, fmt.Errorf("ticket has not found: %s", ticketHash)
 	}
 
-	commitmentAddr, err := stake.AddrFromSStxPkScrCommitment(txs[0].TxOut[1].PkScript, v.params)
+	tx := txs[0]
+	ticketCommitmentOutput := tx.TxOut[1]
+	commitmentAddr, err := stake.AddrFromSStxPkScrCommitment(ticketCommitmentOutput.PkScript, v.params)
 	if err != nil {
-		log.Errorf("failed to extract script addr from %v: %v", ticketHash, err)
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to extract script addr from %v: %v", ticketHash, err)
 	}
 
-	return txs[0], commitmentAddr, nil
+	return tx, commitmentAddr, nil
 }
 
 // insert or update VSPD ticket info
 func (v *VSPD) updateVspdDBRecord(data interface{}, ticketHash string) error {
 	updated, err := v.w.walletDataDB.SaveOrUpdateVspdRecord(&VspdTicketInfo{}, data)
 	if err != nil {
-		log.Errorf("[%d] new vspd save err : %v", v.w.ID, err)
+		fmt.Errorf("[%d] new vspd save err : %v", v.w.ID, err)
 		return err
 	}
 
@@ -501,8 +512,48 @@ func (v *VSPD) getVspdDBRecord(txHash string, dataPointer interface{}) (*reflect
 	}
 
 	val := reflect.ValueOf(dataPointer)
-	fmt.Println(val)
 	return &val, nil
+}
+
+// get VSPD ticket info
+func (v *VSPD) getAgenda(txHash string) ([]w.AgendaChoice, error) {
+	hash, err := getHashFromStr(txHash)
+	if err != nil {
+		return nil, err
+	}
+
+	agendaChoices, _, err := v.w.internal.AgendaChoices(v.w.shutdownContext(), hash)
+	if err != nil {
+		log.Errorf("failed to retrieve agenda choices for %v: %v", txHash, err)
+		return nil, err
+	}
+
+	return agendaChoices, nil
+}
+
+func (v *VSPD) getTxFromHash(txHash string) ([]*wire.MsgTx, error) {
+	hash, err := getHashFromStr(txHash)
+	if err != nil {
+		return nil, err
+	}
+
+	txs, _, err := v.w.internal.GetTransactionsByHashes(v.w.shutdownContext(), []*chainhash.Hash{hash})
+	if err != nil {
+		log.Errorf("failed to retrieve transaction for %v: %v", hash, err)
+		return nil, err
+	}
+
+	return txs, nil
+}
+
+func getHashFromStr(txHash string) (*chainhash.Hash, error) {
+	hash, err := chainhash.NewHashFromStr(txHash)
+	if err != nil {
+		log.Errorf("failed to retrieve hash from %s: %v", txHash, err)
+		return nil, err
+	}
+
+	return hash, nil
 }
 
 // verify initial request matches vspd server
@@ -530,7 +581,7 @@ func verifyResponse(serverResp, serverReq interface{}) error {
 
 func validateVSPServerSignature(resp *http.Response, pubKey, body []byte) error {
 	sigStr := resp.Header.Get("VSP-Server-Signature")
-	sig, err := hex.DecodeString(sigStr)
+	sig, err := base64.StdEncoding.DecodeString(sigStr)
 	if err != nil {
 		return fmt.Errorf("Error validating VSP signature: %v", err)
 	}

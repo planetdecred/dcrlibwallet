@@ -11,12 +11,12 @@ import (
 const (
 	DbName = "walletData.db"
 
-	WDBucketName = "walletDataInfo"
+	TxBucketName = "TxIndexInfo"
 	KeyDbVersion = "DbVersion"
 
 	// Necessary to force re-indexing if changes are made to the structure of data being stored.
 	// Increment this version number if db structure changes such that client apps need to re-index.
-	WDbVersion uint32 = 1
+	TxDbVersion uint32 = 1
 )
 
 type DB struct {
@@ -81,7 +81,7 @@ func openOrCreateDB(dbPath string) (*storm.DB, error) {
 	}
 
 	if isNewDbFile {
-		err = walletDataDB.Set(WDBucketName, KeyDbVersion, WDbVersion)
+		err = walletDataDB.Set(TxBucketName, KeyDbVersion, TxDbVersion)
 		if err != nil {
 			os.RemoveAll(dbPath)
 			return nil, fmt.Errorf("error initializing wallet data db: %s", err.Error())
@@ -91,17 +91,17 @@ func openOrCreateDB(dbPath string) (*storm.DB, error) {
 	return walletDataDB, nil
 }
 
-// ensureDatabaseVersion checks the version of the existing db against `WDbVersion`.
+// ensureDatabaseVersion checks the version of the existing db against `TxDbVersion`.
 // If there's a difference, the current wallet data db file is deleted and a new one created.
 func ensureDatabaseVersion(walletDataDB *storm.DB, dbPath string) (*storm.DB, error) {
 	var currentDbVersion uint32
-	err := walletDataDB.Get(WDBucketName, KeyDbVersion, &currentDbVersion)
+	err := walletDataDB.Get(TxBucketName, KeyDbVersion, &currentDbVersion)
 	if err != nil && err != storm.ErrNotFound {
 		// ignore key not found errors as earlier db versions did not set a version number in the db.
 		return nil, fmt.Errorf("error checking wallet data database version: %s", err.Error())
 	}
 
-	if currentDbVersion != WDbVersion {
+	if currentDbVersion != TxDbVersion {
 		if err = os.RemoveAll(dbPath); err != nil {
 			return nil, fmt.Errorf("error deleting outdated wallet data database: %s", err.Error())
 		}
