@@ -85,23 +85,33 @@ type GeneralSyncProgress struct {
 
 type CFiltersFetchProgressReport struct {
 	*GeneralSyncProgress
-	TotalCFiltersToFetch  int32 `json:"totalCFiltersToFetch"`
-	CurrentCFilterHeight  int32 `json:"currentCFilterHeight"`
-	CFiltersFetchProgress int32 `json:"headersFetchProgress"`
+	beginFetchCFiltersTimeStamp int64
+	startCFiltersHeight         int32
+	cfiltersFetchTimeSpent      int64
+	totalFetchedCFiltersCount   int32
+	TotalCFiltersToFetch        int32 `json:"totalCFiltersToFetch"`
+	CurrentCFilterHeight        int32 `json:"currentCFilterHeight"`
+	CFiltersFetchProgress       int32 `json:"headersFetchProgress"`
 }
 
 type HeadersFetchProgressReport struct {
 	*GeneralSyncProgress
-	TotalHeadersToFetch    int32 `json:"totalHeadersToFetch"`
-	CurrentHeaderHeight    int32 `json:"currentHeaderHeight"`
-	CurrentHeaderTimestamp int64 `json:"currentHeaderTimestamp"`
-	HeadersFetchProgress   int32 `json:"headersFetchProgress"`
+	headersFetchTimeSpent    int64
+	beginFetchTimeStamp      int64
+	startHeaderHeight        int32
+	totalFetchedHeadersCount int32
+	TotalHeadersToFetch      int32 `json:"totalHeadersToFetch"`
+	CurrentHeaderHeight      int32 `json:"currentHeaderHeight"`
+	CurrentHeaderTimestamp   int64 `json:"currentHeaderTimestamp"`
+	HeadersFetchProgress     int32 `json:"headersFetchProgress"`
 }
 
 type AddressDiscoveryProgressReport struct {
 	*GeneralSyncProgress
-	AddressDiscoveryProgress int32 `json:"addressDiscoveryProgress"`
-	WalletID                 int   `json:"walletID"`
+	addressDiscoveryStartTime int64
+	totalDiscoveryTimeSpent   int64
+	AddressDiscoveryProgress  int32 `json:"addressDiscoveryProgress"`
+	WalletID                  int   `json:"walletID"`
 }
 
 type HeadersRescanProgressReport struct {

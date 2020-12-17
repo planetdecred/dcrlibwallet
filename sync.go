@@ -44,24 +44,11 @@ type activeSyncData struct {
 	addressDiscoveryProgress AddressDiscoveryProgressReport
 	headersRescanProgress    HeadersRescanProgressReport
 
-	beginFetchCFiltersTimeStamp int64
-	startCFiltersHeight         int32
-	cfiltersFetchTimeSpent      int64
-	totalFetchedCFiltersCount   int32
-
-	beginFetchTimeStamp   int64
-	startHeaderHeight     int32
-	headersFetchTimeSpent int64
-
-	addressDiscoveryStartTime int64
-	totalDiscoveryTimeSpent   int64
-
 	addressDiscoveryCompletedOrCanceled chan bool
 
 	rescanStartTime int64
 
-	totalInactiveSeconds     int64
-	totalFetchedHeadersCount int32
+	totalInactiveSeconds int64
 }
 
 const (
@@ -74,13 +61,25 @@ const (
 
 func (mw *MultiWallet) initActiveSyncData() {
 
-	cfiltersFetchProgress := CFiltersFetchProgressReport{}
+	cfiltersFetchProgress := CFiltersFetchProgressReport{
+		beginFetchCFiltersTimeStamp: -1,
+		startCFiltersHeight:         -1,
+		cfiltersFetchTimeSpent:      -1,
+		totalFetchedCFiltersCount:   0,
+	}
 	cfiltersFetchProgress.GeneralSyncProgress = &GeneralSyncProgress{}
 
-	headersFetchProgress := HeadersFetchProgressReport{}
+	headersFetchProgress := HeadersFetchProgressReport{
+		beginFetchTimeStamp:      -1,
+		headersFetchTimeSpent:    -1,
+		totalFetchedHeadersCount: 0,
+	}
 	headersFetchProgress.GeneralSyncProgress = &GeneralSyncProgress{}
 
-	addressDiscoveryProgress := AddressDiscoveryProgressReport{}
+	addressDiscoveryProgress := AddressDiscoveryProgressReport{
+		addressDiscoveryStartTime: -1,
+		totalDiscoveryTimeSpent:   -1,
+	}
 	addressDiscoveryProgress.GeneralSyncProgress = &GeneralSyncProgress{}
 
 	headersRescanProgress := HeadersRescanProgressReport{}
@@ -94,17 +93,6 @@ func (mw *MultiWallet) initActiveSyncData() {
 		headersFetchProgress:     headersFetchProgress,
 		addressDiscoveryProgress: addressDiscoveryProgress,
 		headersRescanProgress:    headersRescanProgress,
-
-		beginFetchCFiltersTimeStamp: -1,
-		startCFiltersHeight:         -1,
-		cfiltersFetchTimeSpent:      -1,
-		totalFetchedCFiltersCount:   0,
-
-		beginFetchTimeStamp:       -1,
-		headersFetchTimeSpent:     -1,
-		addressDiscoveryStartTime: -1,
-		totalDiscoveryTimeSpent:   -1,
-		totalFetchedHeadersCount:  0,
 	}
 	mw.syncData.mu.Unlock()
 }

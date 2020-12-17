@@ -55,8 +55,8 @@ func (mw *MultiWallet) handlePeerCountUpdate(peerCount int32) {
 func (mw *MultiWallet) fetchCFiltersStarted(walletID int) {
 	mw.syncData.mu.Lock()
 	mw.syncData.activeSyncData.syncStage = CFiltersFetchSyncStage
-	mw.syncData.activeSyncData.beginFetchCFiltersTimeStamp = time.Now().Unix()
-	mw.syncData.activeSyncData.totalFetchedCFiltersCount = 0
+	mw.syncData.activeSyncData.cfiltersFetchProgress.beginFetchCFiltersTimeStamp = time.Now().Unix()
+	mw.syncData.activeSyncData.cfiltersFetchProgress.totalFetchedCFiltersCount = 0
 	showLogs := mw.syncData.showLogs
 	mw.syncData.mu.Unlock()
 
@@ -70,32 +70,32 @@ func (mw *MultiWallet) fetchCFiltersProgress(walletID int, startCFiltersHeight, 
 	// lock the mutex before reading and writing to mw.syncData.*
 	mw.syncData.mu.Lock()
 
-	if mw.syncData.activeSyncData.startCFiltersHeight == -1 {
-		mw.syncData.activeSyncData.startCFiltersHeight = startCFiltersHeight
+	if mw.syncData.activeSyncData.cfiltersFetchProgress.startCFiltersHeight == -1 {
+		mw.syncData.activeSyncData.cfiltersFetchProgress.startCFiltersHeight = startCFiltersHeight
 	}
 
 	wallet := mw.WalletWithID(walletID)
-	mw.syncData.activeSyncData.totalFetchedCFiltersCount += endCFiltersHeight - startCFiltersHeight
+	mw.syncData.activeSyncData.cfiltersFetchProgress.totalFetchedCFiltersCount += endCFiltersHeight - startCFiltersHeight
 
-	totalCFiltersToFetch := wallet.GetBestBlock() - mw.syncData.activeSyncData.startCFiltersHeight
-	// cfiltersLeftToFetch := totalCFiltersToFetch - mw.syncData.activeSyncData.totalFetchedCFiltersCount
+	totalCFiltersToFetch := wallet.GetBestBlock() - mw.syncData.activeSyncData.cfiltersFetchProgress.startCFiltersHeight
+	// cfiltersLeftToFetch := totalCFiltersToFetch - mw.syncData.activeSyncData.cfiltersFetchProgress.totalFetchedCFiltersCount
 
-	cfiltersFetchProgress := float64(mw.syncData.activeSyncData.totalFetchedCFiltersCount) / float64(totalCFiltersToFetch)
+	cfiltersFetchProgress := float64(mw.syncData.activeSyncData.cfiltersFetchProgress.totalFetchedCFiltersCount) / float64(totalCFiltersToFetch)
 
 	// If there was some period of inactivity,
 	// assume that this process started at some point in the future,
 	// thereby accounting for the total reported time of inactivity.
-	mw.syncData.activeSyncData.beginFetchCFiltersTimeStamp += mw.syncData.activeSyncData.totalInactiveSeconds
+	mw.syncData.activeSyncData.cfiltersFetchProgress.beginFetchCFiltersTimeStamp += mw.syncData.activeSyncData.totalInactiveSeconds
 	mw.syncData.activeSyncData.totalInactiveSeconds = 0
 
-	timeTakenSoFar := time.Now().Unix() - mw.syncData.activeSyncData.beginFetchCFiltersTimeStamp
+	timeTakenSoFar := time.Now().Unix() - mw.syncData.activeSyncData.cfiltersFetchProgress.beginFetchCFiltersTimeStamp
 	if timeTakenSoFar < 1 {
 		timeTakenSoFar = 1
 	}
 	estimatedTotalCFiltersFetchTime := float64(timeTakenSoFar) / cfiltersFetchProgress
 
 	// Use CFilters fetch rate to estimate headers fetch time.
-	cfiltersFetchRate := float64(mw.syncData.activeSyncData.totalFetchedCFiltersCount) / float64(timeTakenSoFar)
+	cfiltersFetchRate := float64(mw.syncData.activeSyncData.cfiltersFetchProgress.totalFetchedCFiltersCount) / float64(timeTakenSoFar)
 	estimatedHeadersLeftToFetch := mw.estimateBlockHeadersCountAfter(wallet.GetBestBlockTimeStamp())
 	estimatedTotalHeadersFetchTime := float64(estimatedHeadersLeftToFetch) / cfiltersFetchRate
 	// increase estimated value by FetchPercentage
@@ -146,7 +146,7 @@ func (mw *MultiWallet) fetchHeadersStarted(peerInitialHeight int32) {
 	}
 
 	mw.syncData.mu.RLock()
-	headersFetchingStarted := mw.syncData.beginFetchTimeStamp != -1
+	headersFetchingStarted := mw.syncData.headersFetchProgress.beginFetchTimeStamp != -1
 	showLogs := mw.syncData.showLogs
 	mw.syncData.mu.RUnlock()
 
@@ -164,9 +164,9 @@ func (mw *MultiWallet) fetchHeadersStarted(peerInitialHeight int32) {
 
 	mw.syncData.mu.Lock()
 	mw.syncData.activeSyncData.syncStage = HeadersFetchSyncStage
-	mw.syncData.activeSyncData.beginFetchTimeStamp = time.Now().Unix()
-	mw.syncData.activeSyncData.startHeaderHeight = lowestBlockHeight
-	mw.syncData.totalFetchedHeadersCount = 0
+	mw.syncData.activeSyncData.headersFetchProgress.beginFetchTimeStamp = time.Now().Unix()
+	mw.syncData.activeSyncData.headersFetchProgress.startHeaderHeight = lowestBlockHeight
+	mw.syncData.headersFetchProgress.totalFetchedHeadersCount = 0
 	mw.syncData.activeSyncData.totalInactiveSeconds = 0
 	mw.syncData.mu.Unlock()
 
@@ -181,7 +181,7 @@ func (mw *MultiWallet) fetchHeadersProgress(lastFetchedHeaderHeight int32, lastF
 	}
 
 	mw.syncData.mu.RLock()
-	headersFetchingCompleted := mw.syncData.activeSyncData.headersFetchTimeSpent != -1
+	headersFetchingCompleted := mw.syncData.activeSyncData.headersFetchProgress.headersFetchTimeSpent != -1
 	mw.syncData.mu.RUnlock()
 
 	if headersFetchingCompleted {
@@ -199,21 +199,21 @@ func (mw *MultiWallet) fetchHeadersProgress(lastFetchedHeaderHeight int32, lastF
 	// lock the mutex before reading and writing to mw.syncData.*
 	mw.syncData.mu.Lock()
 
-	if lastFetchedHeaderHeight > mw.syncData.activeSyncData.startHeaderHeight {
-		mw.syncData.activeSyncData.totalFetchedHeadersCount = lastFetchedHeaderHeight - mw.syncData.activeSyncData.startHeaderHeight
+	if lastFetchedHeaderHeight > mw.syncData.activeSyncData.headersFetchProgress.startHeaderHeight {
+		mw.syncData.activeSyncData.headersFetchProgress.totalFetchedHeadersCount = lastFetchedHeaderHeight - mw.syncData.activeSyncData.headersFetchProgress.startHeaderHeight
 	}
 
 	headersLeftToFetch := mw.estimateBlockHeadersCountAfter(lastFetchedHeaderTime)
 	totalHeadersToFetch := lastFetchedHeaderHeight + headersLeftToFetch
-	headersFetchProgress := float64(mw.syncData.activeSyncData.totalFetchedHeadersCount) / float64(totalHeadersToFetch)
+	headersFetchProgress := float64(mw.syncData.activeSyncData.headersFetchProgress.totalFetchedHeadersCount) / float64(totalHeadersToFetch)
 
 	// If there was some period of inactivity,
 	// assume that this process started at some point in the future,
 	// thereby accounting for the total reported time of inactivity.
-	mw.syncData.activeSyncData.beginFetchTimeStamp += mw.syncData.activeSyncData.totalInactiveSeconds
+	mw.syncData.activeSyncData.headersFetchProgress.beginFetchTimeStamp += mw.syncData.activeSyncData.totalInactiveSeconds
 	mw.syncData.activeSyncData.totalInactiveSeconds = 0
 
-	timeTakenSoFar := time.Now().Unix() - mw.syncData.activeSyncData.beginFetchTimeStamp
+	timeTakenSoFar := time.Now().Unix() - mw.syncData.activeSyncData.headersFetchProgress.beginFetchTimeStamp
 	if timeTakenSoFar < 1 {
 		timeTakenSoFar = 1
 	}
@@ -277,18 +277,18 @@ func (mw *MultiWallet) fetchHeadersFinished() {
 		return
 	}
 
-	mw.syncData.activeSyncData.startHeaderHeight = -1
-	mw.syncData.totalFetchedHeadersCount = 0
-	mw.syncData.activeSyncData.headersFetchTimeSpent = time.Now().Unix() - mw.syncData.beginFetchTimeStamp
+	mw.syncData.activeSyncData.headersFetchProgress.startHeaderHeight = -1
+	mw.syncData.headersFetchProgress.totalFetchedHeadersCount = 0
+	mw.syncData.activeSyncData.headersFetchProgress.headersFetchTimeSpent = time.Now().Unix() - mw.syncData.headersFetchProgress.beginFetchTimeStamp
 
 	// If there is some period of inactivity reported at this stage,
 	// subtract it from the total stage time.
-	mw.syncData.activeSyncData.headersFetchTimeSpent -= mw.syncData.totalInactiveSeconds
+	mw.syncData.activeSyncData.headersFetchProgress.headersFetchTimeSpent -= mw.syncData.totalInactiveSeconds
 	mw.syncData.activeSyncData.totalInactiveSeconds = 0
 
-	if mw.syncData.activeSyncData.headersFetchTimeSpent < 150 {
+	if mw.syncData.activeSyncData.headersFetchProgress.headersFetchTimeSpent < 150 {
 		// This ensures that minimum ETA used for stage 2 (address discovery) is 120 seconds (80% of 150 seconds).
-		mw.syncData.activeSyncData.headersFetchTimeSpent = 150
+		mw.syncData.activeSyncData.headersFetchProgress.headersFetchTimeSpent = 150
 	}
 
 	if mw.syncData.showLogs && mw.syncData.syncing {
@@ -304,8 +304,8 @@ func (mw *MultiWallet) discoverAddressesStarted(walletID int) {
 	}
 
 	mw.syncData.mu.RLock()
-	addressDiscoveryAlreadyStarted := mw.syncData.activeSyncData.addressDiscoveryStartTime != -1
-	totalHeadersFetchTime := float64(mw.syncData.headersFetchTimeSpent)
+	addressDiscoveryAlreadyStarted := mw.syncData.activeSyncData.addressDiscoveryProgress.addressDiscoveryStartTime != -1
+	totalHeadersFetchTime := float64(mw.syncData.activeSyncData.headersFetchProgress.headersFetchTimeSpent)
 	mw.syncData.mu.RUnlock()
 
 	if addressDiscoveryAlreadyStarted {
@@ -314,7 +314,7 @@ func (mw *MultiWallet) discoverAddressesStarted(walletID int) {
 
 	mw.syncData.mu.Lock()
 	mw.syncData.activeSyncData.syncStage = AddressDiscoverySyncStage
-	mw.syncData.activeSyncData.addressDiscoveryStartTime = time.Now().Unix()
+	mw.syncData.activeSyncData.addressDiscoveryProgress.addressDiscoveryStartTime = time.Now().Unix()
 	mw.syncData.activeSyncData.addressDiscoveryProgress.WalletID = walletID
 	mw.syncData.addressDiscoveryCompletedOrCanceled = make(chan bool)
 	mw.syncData.mu.Unlock()
@@ -347,9 +347,9 @@ func (mw *MultiWallet) updateAddressDiscoveryProgress(totalHeadersFetchTime floa
 		// assume that this process started at some point in the future,
 		// thereby accounting for the total reported time of inactivity.
 		mw.syncData.mu.Lock()
-		mw.syncData.addressDiscoveryStartTime += mw.syncData.totalInactiveSeconds
+		mw.syncData.addressDiscoveryProgress.addressDiscoveryStartTime += mw.syncData.totalInactiveSeconds
 		mw.syncData.totalInactiveSeconds = 0
-		addressDiscoveryStartTime := mw.syncData.addressDiscoveryStartTime
+		addressDiscoveryStartTime := mw.syncData.addressDiscoveryProgress.addressDiscoveryStartTime
 		showLogs := mw.syncData.showLogs
 		mw.syncData.mu.Unlock()
 
@@ -435,7 +435,7 @@ func (mw *MultiWallet) stopUpdatingAddressDiscoveryProgress() {
 	if mw.syncData.activeSyncData != nil && mw.syncData.activeSyncData.addressDiscoveryCompletedOrCanceled != nil {
 		close(mw.syncData.activeSyncData.addressDiscoveryCompletedOrCanceled)
 		mw.syncData.activeSyncData.addressDiscoveryCompletedOrCanceled = nil
-		mw.syncData.activeSyncData.totalDiscoveryTimeSpent = time.Now().Unix() - mw.syncData.addressDiscoveryStartTime
+		mw.syncData.activeSyncData.addressDiscoveryProgress.totalDiscoveryTimeSpent = time.Now().Unix() - mw.syncData.addressDiscoveryProgress.addressDiscoveryStartTime
 	}
 	mw.syncData.mu.Unlock()
 }
@@ -488,7 +488,7 @@ func (mw *MultiWallet) rescanProgress(walletID int, rescannedThrough int32) {
 	elapsedRescanTime := time.Now().Unix() - mw.syncData.activeSyncData.rescanStartTime
 	estimatedTotalRescanTime := int64(math.Round(float64(elapsedRescanTime) / rescanRate))
 	totalTimeRemainingSeconds := estimatedTotalRescanTime - elapsedRescanTime
-	totalElapsedTime := mw.syncData.activeSyncData.headersFetchTimeSpent + mw.syncData.activeSyncData.totalDiscoveryTimeSpent + elapsedRescanTime
+	totalElapsedTime := mw.syncData.activeSyncData.headersFetchProgress.headersFetchTimeSpent + mw.syncData.activeSyncData.addressDiscoveryProgress.totalDiscoveryTimeSpent + elapsedRescanTime
 
 	mw.syncData.activeSyncData.headersRescanProgress.WalletID = walletID
 	mw.syncData.activeSyncData.headersRescanProgress.TotalHeadersToScan = totalHeadersToScan
@@ -501,7 +501,7 @@ func (mw *MultiWallet) rescanProgress(walletID int, rescannedThrough int32) {
 	// which will make the estimatedTotalSyncTime equal to totalElapsedTime
 	// giving the wrong impression that the process is complete
 	if elapsedRescanTime > 0 {
-		estimatedTotalSyncTime := mw.syncData.activeSyncData.headersFetchTimeSpent + mw.syncData.activeSyncData.totalDiscoveryTimeSpent + estimatedTotalRescanTime
+		estimatedTotalSyncTime := mw.syncData.activeSyncData.headersFetchProgress.headersFetchTimeSpent + mw.syncData.activeSyncData.addressDiscoveryProgress.totalDiscoveryTimeSpent + estimatedTotalRescanTime
 		totalProgress := (float64(totalElapsedTime) / float64(estimatedTotalSyncTime)) * 100
 
 		mw.syncData.activeSyncData.headersRescanProgress.TotalTimeRemainingSeconds = totalTimeRemainingSeconds
@@ -551,8 +551,8 @@ func (mw *MultiWallet) rescanFinished(walletID int) {
 
 	// Reset these value so that address discovery would
 	// not be skipped for the next wallet.
-	mw.syncData.activeSyncData.addressDiscoveryStartTime = -1
-	mw.syncData.activeSyncData.totalDiscoveryTimeSpent = -1
+	mw.syncData.activeSyncData.addressDiscoveryProgress.addressDiscoveryStartTime = -1
+	mw.syncData.activeSyncData.addressDiscoveryProgress.totalDiscoveryTimeSpent = -1
 	mw.syncData.mu.Unlock()
 
 	mw.publishHeadersRescanProgress()
