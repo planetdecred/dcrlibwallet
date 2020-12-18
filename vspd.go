@@ -64,7 +64,7 @@ func (v *VSPD) GetInfo() (*GetVspInfoResponse, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Non 200 response from server: %v", string(b))
+		return nil, fmt.Errorf("non 200 response from server: %v", string(b))
 	}
 
 	var vspInfoResponse GetVspInfoResponse
@@ -96,24 +96,21 @@ func (v *VSPD) GetVSPFeeAddress(ticketHash string, passphrase []byte) (*GetFeeAd
 
 	txBuf, err := txs.Bytes()
 	if err != nil {
-		log.Errorf("failed to serialize ticket %v: %v", ticketHash, err)
-		return nil, err
+		return nil, fmt.Errorf("failed to serialize ticket %v: %v", ticketHash, err)
 	}
 	ticketHex := hex.EncodeToString(txBuf)
 
 	parentHash := txs.TxIn[0].PreviousOutPoint.Hash
 	parentTxs, err := v.getTxFromHash(parentHash.String())
 	if err != nil {
-		log.Errorf("failed to retrieve parent %v of ticket %v: %v", parentHash, ticketHash, err)
-		return nil, err
+		return nil, fmt.Errorf("failed to retrieve parent %v of ticket %v: %v", parentHash, ticketHash, err)
 	}
 	parentTx := parentTxs[0]
 
 	// Serialize parent
 	parentTxBuf, err := parentTx.Bytes()
 	if err != nil {
-		log.Errorf("failed to serialize parent %v of ticket %v: %v", parentHash, ticketHash, err)
-		return nil, err
+		return nil, fmt.Errorf("failed to serialize parent %v of ticket %v: %v", parentHash, ticketHash, err)
 	}
 	parentHex := hex.EncodeToString(parentTxBuf)
 	req := GetFeeAddressRequest{
@@ -123,7 +120,7 @@ func (v *VSPD) GetVSPFeeAddress(ticketHash string, passphrase []byte) (*GetFeeAd
 		ParentHex:  parentHex,
 	}
 
-	resp, err := v.signedVSP_HTTP("/api/v3/feeaddress", commitmentAddr.String(), passphrase, req)
+	resp, err := v.signedVSPHTTP("/api/v3/feeaddress", commitmentAddr.String(), passphrase, req)
 	if err != nil {
 		return nil, err
 	}
@@ -168,9 +165,7 @@ func (v *VSPD) CreateTicketFeeTx(feeAmount int64, ticketHash, feeAddress string,
 	}
 
 	feeTx := reflect.Indirect(*record).FieldByName("FeeTx").String()
-
 	if feeTx != "" {
-		log.Errorf("vspd ticket for %v has feeTx %v confirm fees by calling PayVSPFee()", ticketHash, feeTx)
 		return "", errors.New("vspd ticket fee has been created. Use PayVSPFee() to register ticket")
 	}
 
@@ -200,19 +195,17 @@ func (v *VSPD) CreateTicketFeeTx(feeAmount int64, ticketHash, feeAddress string,
 
 	invalidSigs, err := txAuthor.sourceWallet.internal.SignTransaction(ctx, unsignedTx.Tx, txscript.SigHashAll, nil, nil, nil)
 	if err != nil {
-		log.Errorf("failed to sign transaction: %v", err)
 		for _, sigErr := range invalidSigs {
 			log.Errorf("\t%v", sigErr)
 		}
-		return "", err
+		return "", fmt.Errorf("failed to sign transaction: %v", err)
 	}
 
 	txBuf := new(bytes.Buffer)
 	txBuf.Grow(unsignedTx.Tx.SerializeSize())
 	err = unsignedTx.Tx.Serialize(txBuf)
 	if err != nil {
-		log.Errorf("failed to serialize fee transaction: %v", err)
-		return "", err
+		return "", fmt.Errorf("failed to serialize fee transaction: %v", err)
 	}
 
 	//update db with feetx data
@@ -247,12 +240,11 @@ func (v *VSPD) PayVSPFee(feeTx, ticketHash, feeAddress string, passphrase []byte
 
 	_, votingAddress, _, err := txscript.ExtractPkScriptAddrs(0, txs.TxOut[0].PkScript, v.params, true)
 	if err != nil {
-		log.Warnf("failed to get voting Address: %v", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to get voting Address: %v", err)
 	}
 
-	if len(votingAddress) < 0 {
-		return nil, errors.New("votingAddress is not greater 0")
+	if len(votingAddress) == 0 {
+		return nil, errors.New("voting address not found")
 	}
 
 	lock := make(chan time.Time, 1)
@@ -269,8 +261,7 @@ func (v *VSPD) PayVSPFee(feeTx, ticketHash, feeAddress string, passphrase []byte
 
 	votingKey, err := v.w.internal.DumpWIFPrivateKey(v.w.shutdownContext(), votingAddress[0])
 	if err != nil {
-		log.Warnf("failed to get votingKeyWIF for %v: %v", votingAddress[0], err)
-		return nil, err
+		return nil, fmt.Errorf("failed to get votingKeyWIF for %v: %v", votingAddress[0], err)
 	}
 
 	agendaChoices, err := v.getAgenda(ticketHash)
@@ -291,7 +282,7 @@ func (v *VSPD) PayVSPFee(feeTx, ticketHash, feeAddress string, passphrase []byte
 		VoteChoices: voteChoices,
 	}
 
-	resp, err := v.signedVSP_HTTP("/api/v3/payfee", commitmentAddr.String(), passphrase, req)
+	resp, err := v.signedVSPHTTP("/api/v3/payfee", commitmentAddr.String(), passphrase, req)
 	if err != nil {
 		return nil, err
 	}
@@ -337,7 +328,7 @@ func (v *VSPD) GetTicketStatus(ticketHash string, passphrase []byte) (*TicketSta
 		TicketHash: ticketHash,
 	}
 
-	resp, err := v.signedVSP_HTTP("/api/v3/ticketstatus", commitmentAddr.String(), passphrase, req)
+	resp, err := v.signedVSPHTTP("/api/v3/ticketstatus", commitmentAddr.String(), passphrase, req)
 	if err != nil {
 		return nil, err
 	}
@@ -387,7 +378,7 @@ func (v *VSPD) SetVoteChoices(ticketHash string, passphrase []byte, choices map[
 		VoteChoices: choices,
 	}
 
-	resp, err := v.signedVSP_HTTP("/api/v3/setvotechoices", commitmentAddr.String(), passphrase, req)
+	resp, err := v.signedVSPHTTP("/api/v3/setvotechoices", commitmentAddr.String(), passphrase, req)
 	if err != nil {
 		return nil, err
 	}
@@ -417,10 +408,10 @@ func (v *VSPD) SetVoteChoices(ticketHash string, passphrase []byte, choices map[
 	return &setVoteChoicesResponse, nil
 }
 
-// signedVSP_HTTP makes a request against a VSP API. The request will be JSON
+// signedVSPHTTP makes a request against a VSP API. The request will be JSON
 // encoded and signed using the provided commitment address. The signature of
 // the response is also validated using the VSP pubkey.
-func (v *VSPD) signedVSP_HTTP(path, commitmentAddr string, passphrase []byte, request interface{}) ([]byte, error) {
+func (v *VSPD) signedVSPHTTP(path, commitmentAddr string, passphrase []byte, request interface{}) ([]byte, error) {
 	reqBytes, err := json.Marshal(request)
 	if err != nil {
 		return nil, err
@@ -487,8 +478,7 @@ func (v *VSPD) getTxAndAddress(ticketHash string) (*wire.MsgTx, dcrutil.Address,
 func (v *VSPD) updateVspdDBRecord(data interface{}, ticketHash string) error {
 	updated, err := v.w.walletDataDB.SaveOrUpdateVspdRecord(&VspdTicketInfo{}, data)
 	if err != nil {
-		log.Errorf("[%d] new vspd save err : %v", v.w.ID, err)
-		return err
+		return fmt.Errorf("[%d] new vspd save err : %v", v.w.ID, err)
 	}
 
 	if !updated {
@@ -504,11 +494,11 @@ func (v *VSPD) updateVspdDBRecord(data interface{}, ticketHash string) error {
 func (v *VSPD) getVspdDBRecord(txHash string, dataPointer interface{}) (*reflect.Value, error) {
 	err := v.w.walletDataDB.FindOne("Hash", txHash, dataPointer)
 	if err != nil {
-		log.Errorf("failed to find vspd ticket for %v: %v", txHash, err)
 		if err == storm.ErrNotFound {
 			return nil, fmt.Errorf("vspd ticket: " + txHash + " " + err.Error() + ". ensure you first call GetVSPFeeAddress()")
 		}
-		return nil, err
+
+		return nil, fmt.Errorf("failed to find vspd ticket for %v: %v", txHash, err)
 	}
 
 	val := reflect.ValueOf(dataPointer)
@@ -524,8 +514,7 @@ func (v *VSPD) getAgenda(txHash string) ([]w.AgendaChoice, error) {
 
 	agendaChoices, _, err := v.w.internal.AgendaChoices(v.w.shutdownContext(), hash)
 	if err != nil {
-		log.Errorf("failed to retrieve agenda choices for %v: %v", txHash, err)
-		return nil, err
+		return nil, fmt.Errorf("failed to retrieve agenda choices for %v: %v", txHash, err)
 	}
 
 	return agendaChoices, nil
@@ -539,8 +528,7 @@ func (v *VSPD) getTxFromHash(txHash string) ([]*wire.MsgTx, error) {
 
 	txs, _, err := v.w.internal.GetTransactionsByHashes(v.w.shutdownContext(), []*chainhash.Hash{hash})
 	if err != nil {
-		log.Errorf("failed to retrieve transaction for %v: %v", hash, err)
-		return nil, err
+		return nil, fmt.Errorf("failed to retrieve transaction for %v: %v", hash, err)
 	}
 
 	return txs, nil
@@ -549,8 +537,7 @@ func (v *VSPD) getTxFromHash(txHash string) ([]*wire.MsgTx, error) {
 func getHashFromStr(txHash string) (*chainhash.Hash, error) {
 	hash, err := chainhash.NewHashFromStr(txHash)
 	if err != nil {
-		log.Errorf("failed to retrieve hash from %s: %v", txHash, err)
-		return nil, err
+		return nil, fmt.Errorf("failed to retrieve hash from %s: %v", txHash, err)
 	}
 
 	return hash, nil
@@ -560,18 +547,16 @@ func getHashFromStr(txHash string) (*chainhash.Hash, error) {
 func verifyResponse(serverResp, serverReq interface{}) error {
 	resp, err := json.Marshal(serverResp)
 	if err != nil {
-		log.Warnf("failed to marshal response request: %v", err)
-		return err
+		return fmt.Errorf("failed to marshal response request: %v", err)
 	}
 
 	req, err := json.Marshal(serverReq)
 	if err != nil {
-		log.Warnf("failed to marshal request: %v", err)
-		return err
+		return fmt.Errorf("failed to marshal request: %v", err)
 	}
 
 	if !bytes.Equal(resp, req) {
-		log.Warnf("server response has differing request: %#v != %#v",
+		log.Debugf("server response has differing request: %#v != %#v",
 			resp, req)
 		return fmt.Errorf("server response contains differing request")
 	}
@@ -583,11 +568,11 @@ func validateVSPServerSignature(resp *http.Response, pubKey, body []byte) error 
 	sigStr := resp.Header.Get("VSP-Server-Signature")
 	sig, err := base64.StdEncoding.DecodeString(sigStr)
 	if err != nil {
-		return fmt.Errorf("Error validating VSP signature: %v", err)
+		return fmt.Errorf("error validating VSP signature: %v", err)
 	}
 
 	if !ed25519.Verify(pubKey, body, sig) {
-		return errors.New("Bad signature from VSP")
+		return errors.New("bad signature from VSP")
 	}
 
 	return nil
