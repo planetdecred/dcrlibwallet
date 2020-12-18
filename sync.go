@@ -62,25 +62,25 @@ const (
 func (mw *MultiWallet) initActiveSyncData() {
 
 	cfiltersFetchProgress := CFiltersFetchProgressReport{
-		beginFetchCFiltersTimeStamp: -1,
+		GeneralSyncProgress:         &GeneralSyncProgress{},
+		beginFetchCFiltersTimeStamp: 0,
 		startCFiltersHeight:         -1,
-		cfiltersFetchTimeSpent:      -1,
+		cfiltersFetchTimeSpent:      0,
 		totalFetchedCFiltersCount:   0,
 	}
-	cfiltersFetchProgress.GeneralSyncProgress = &GeneralSyncProgress{}
 
 	headersFetchProgress := HeadersFetchProgressReport{
+		GeneralSyncProgress:      &GeneralSyncProgress{},
 		beginFetchTimeStamp:      -1,
 		headersFetchTimeSpent:    -1,
 		totalFetchedHeadersCount: 0,
 	}
-	headersFetchProgress.GeneralSyncProgress = &GeneralSyncProgress{}
 
 	addressDiscoveryProgress := AddressDiscoveryProgressReport{
+		GeneralSyncProgress:       &GeneralSyncProgress{},
 		addressDiscoveryStartTime: -1,
 		totalDiscoveryTimeSpent:   -1,
 	}
-	addressDiscoveryProgress.GeneralSyncProgress = &GeneralSyncProgress{}
 
 	headersRescanProgress := HeadersRescanProgressReport{}
 	headersRescanProgress.GeneralSyncProgress = &GeneralSyncProgress{}

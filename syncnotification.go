@@ -136,7 +136,17 @@ func (mw *MultiWallet) publishFetchCFiltersProgress() {
 	}
 }
 
-func (mw *MultiWallet) fetchCFiltersEnded(walletID int) {}
+func (mw *MultiWallet) fetchCFiltersEnded(walletID int) {
+	mw.syncData.mu.Lock()
+	defer mw.syncData.mu.Unlock()
+
+	mw.syncData.activeSyncData.cfiltersFetchProgress.cfiltersFetchTimeSpent = time.Now().Unix() - mw.syncData.cfiltersFetchProgress.beginFetchCFiltersTimeStamp
+
+	// If there is some period of inactivity reported at this stage,
+	// subtract it from the total stage time.
+	mw.syncData.activeSyncData.cfiltersFetchProgress.cfiltersFetchTimeSpent -= mw.syncData.totalInactiveSeconds
+	mw.syncData.activeSyncData.totalInactiveSeconds = 0
+}
 
 // Fetch Headers Callbacks
 
@@ -213,11 +223,11 @@ func (mw *MultiWallet) fetchHeadersProgress(lastFetchedHeaderHeight int32, lastF
 	mw.syncData.activeSyncData.headersFetchProgress.beginFetchTimeStamp += mw.syncData.activeSyncData.totalInactiveSeconds
 	mw.syncData.activeSyncData.totalInactiveSeconds = 0
 
-	timeTakenSoFar := time.Now().Unix() - mw.syncData.activeSyncData.headersFetchProgress.beginFetchTimeStamp
-	if timeTakenSoFar < 1 {
-		timeTakenSoFar = 1
+	fetchTimeTakenSoFar := time.Now().Unix() - mw.syncData.activeSyncData.headersFetchProgress.beginFetchTimeStamp
+	if fetchTimeTakenSoFar < 1 {
+		fetchTimeTakenSoFar = 1
 	}
-	estimatedTotalHeadersFetchTime := float64(timeTakenSoFar) / headersFetchProgress
+	estimatedTotalHeadersFetchTime := float64(fetchTimeTakenSoFar) / headersFetchProgress
 
 	// For some reason, the actual total headers fetch time is more than the predicted/estimated time.
 	// Account for this difference by multiplying the estimatedTotalHeadersFetchTime by an incrementing factor.
@@ -230,10 +240,11 @@ func (mw *MultiWallet) fetchHeadersProgress(lastFetchedHeaderHeight int32, lastF
 
 	estimatedDiscoveryTime := estimatedTotalHeadersFetchTime * DiscoveryPercentage
 	estimatedRescanTime := estimatedTotalHeadersFetchTime * RescanPercentage
-	estimatedTotalSyncTime := estimatedTotalHeadersFetchTime + estimatedDiscoveryTime + estimatedRescanTime
+	estimatedTotalSyncTime := float64(mw.syncData.activeSyncData.cfiltersFetchProgress.cfiltersFetchTimeSpent) +
+		estimatedTotalHeadersFetchTime + estimatedDiscoveryTime + estimatedRescanTime
 
-	totalSyncProgress := float64(timeTakenSoFar) / estimatedTotalSyncTime
-	totalTimeRemainingSeconds := int64(math.Round(estimatedTotalSyncTime)) - timeTakenSoFar
+	totalSyncProgress := float64(fetchTimeTakenSoFar) / estimatedTotalSyncTime
+	totalTimeRemainingSeconds := int64(math.Round(estimatedTotalSyncTime)) - fetchTimeTakenSoFar
 
 	// update headers fetching progress report including total progress percentage and total time remaining
 	mw.syncData.activeSyncData.headersFetchProgress.TotalHeadersToFetch = totalHeadersToFetch
@@ -251,12 +262,12 @@ func (mw *MultiWallet) fetchHeadersProgress(lastFetchedHeaderHeight int32, lastF
 	mw.publishFetchHeadersProgress()
 
 	// todo: also log report if showLog == true
-
-	headersFetchTimeRemaining := estimatedTotalHeadersFetchTime - float64(timeTakenSoFar)
+	timeTakenSoFar := mw.syncData.activeSyncData.cfiltersFetchProgress.cfiltersFetchTimeSpent + fetchTimeTakenSoFar
+	headersFetchTimeRemaining := estimatedTotalHeadersFetchTime - float64(fetchTimeTakenSoFar)
 	debugInfo := &DebugInfo{
-		timeTakenSoFar, //TODO account for cfilters
-		totalTimeRemainingSeconds,
 		timeTakenSoFar,
+		totalTimeRemainingSeconds,
+		fetchTimeTakenSoFar,
 		int64(math.Round(headersFetchTimeRemaining)),
 	}
 	mw.publishDebugInfo(debugInfo)
@@ -350,6 +361,7 @@ func (mw *MultiWallet) updateAddressDiscoveryProgress(totalHeadersFetchTime floa
 		mw.syncData.addressDiscoveryProgress.addressDiscoveryStartTime += mw.syncData.totalInactiveSeconds
 		mw.syncData.totalInactiveSeconds = 0
 		addressDiscoveryStartTime := mw.syncData.addressDiscoveryProgress.addressDiscoveryStartTime
+		totalCfiltersFetchTime := float64(mw.syncData.cfiltersFetchProgress.cfiltersFetchTimeSpent)
 		showLogs := mw.syncData.showLogs
 		mw.syncData.mu.Unlock()
 
@@ -369,12 +381,12 @@ func (mw *MultiWallet) updateAddressDiscoveryProgress(totalHeadersFetchTime floa
 
 			var totalSyncTime float64
 			if elapsedDiscoveryTime > estimatedDiscoveryTime {
-				totalSyncTime = totalHeadersFetchTime + elapsedDiscoveryTime + estimatedRescanTime
+				totalSyncTime = totalCfiltersFetchTime + totalHeadersFetchTime + elapsedDiscoveryTime + estimatedRescanTime
 			} else {
-				totalSyncTime = totalHeadersFetchTime + estimatedDiscoveryTime + estimatedRescanTime
+				totalSyncTime = totalCfiltersFetchTime + totalHeadersFetchTime + estimatedDiscoveryTime + estimatedRescanTime
 			}
 
-			totalElapsedTime := totalHeadersFetchTime + elapsedDiscoveryTime
+			totalElapsedTime := totalCfiltersFetchTime + totalHeadersFetchTime + elapsedDiscoveryTime
 			totalProgress := (totalElapsedTime / totalSyncTime) * 100
 
 			remainingAccountDiscoveryTime := math.Round(estimatedDiscoveryTime - elapsedDiscoveryTime)
@@ -488,7 +500,8 @@ func (mw *MultiWallet) rescanProgress(walletID int, rescannedThrough int32) {
 	elapsedRescanTime := time.Now().Unix() - mw.syncData.activeSyncData.rescanStartTime
 	estimatedTotalRescanTime := int64(math.Round(float64(elapsedRescanTime) / rescanRate))
 	totalTimeRemainingSeconds := estimatedTotalRescanTime - elapsedRescanTime
-	totalElapsedTime := mw.syncData.activeSyncData.headersFetchProgress.headersFetchTimeSpent + mw.syncData.activeSyncData.addressDiscoveryProgress.totalDiscoveryTimeSpent + elapsedRescanTime
+	totalElapsedTime := mw.syncData.activeSyncData.cfiltersFetchProgress.cfiltersFetchTimeSpent + mw.syncData.activeSyncData.headersFetchProgress.headersFetchTimeSpent +
+		mw.syncData.activeSyncData.addressDiscoveryProgress.totalDiscoveryTimeSpent + elapsedRescanTime
 
 	mw.syncData.activeSyncData.headersRescanProgress.WalletID = walletID
 	mw.syncData.activeSyncData.headersRescanProgress.TotalHeadersToScan = totalHeadersToScan
@@ -501,7 +514,8 @@ func (mw *MultiWallet) rescanProgress(walletID int, rescannedThrough int32) {
 	// which will make the estimatedTotalSyncTime equal to totalElapsedTime
 	// giving the wrong impression that the process is complete
 	if elapsedRescanTime > 0 {
-		estimatedTotalSyncTime := mw.syncData.activeSyncData.headersFetchProgress.headersFetchTimeSpent + mw.syncData.activeSyncData.addressDiscoveryProgress.totalDiscoveryTimeSpent + estimatedTotalRescanTime
+		estimatedTotalSyncTime := mw.syncData.activeSyncData.cfiltersFetchProgress.cfiltersFetchTimeSpent + mw.syncData.activeSyncData.headersFetchProgress.headersFetchTimeSpent +
+			mw.syncData.activeSyncData.addressDiscoveryProgress.totalDiscoveryTimeSpent + estimatedTotalRescanTime
 		totalProgress := (float64(totalElapsedTime) / float64(estimatedTotalSyncTime)) * 100
 
 		mw.syncData.activeSyncData.headersRescanProgress.TotalTimeRemainingSeconds = totalTimeRemainingSeconds
