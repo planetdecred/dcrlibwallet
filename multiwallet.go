@@ -15,8 +15,8 @@ import (
 	"github.com/asdine/storm"
 	"github.com/asdine/storm/q"
 	"github.com/decred/dcrd/chaincfg/v3"
-	"github.com/planetdecred/dcrlibwallet/txindex"
 	"github.com/planetdecred/dcrlibwallet/utils"
+	"github.com/planetdecred/dcrlibwallet/walletdata"
 	bolt "go.etcd.io/bbolt"
 
 	"golang.org/x/crypto/bcrypt"
@@ -350,8 +350,8 @@ func (mw *MultiWallet) LinkExistingWallet(walletName, walletDataDir, originalPub
 			return err
 		}
 
-		currentTxDbFilePath := filepath.Join(walletDataDir, txindex.DbName)
-		newTxDbFilePath := filepath.Join(wallet.dataDir, txindex.DbName)
+		currentTxDbFilePath := filepath.Join(walletDataDir, "tx.db")
+		newTxDbFilePath := filepath.Join(wallet.dataDir, walletdata.DbName)
 		if err := moveFile(currentTxDbFilePath, newTxDbFilePath); err != nil {
 			return err
 		}
