@@ -3,7 +3,7 @@ package dcrlibwallet
 import (
 	w "decred.org/dcrwallet/wallet"
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/planetdecred/dcrlibwallet/txindex"
+	"github.com/planetdecred/dcrlibwallet/walletdata"
 )
 
 func (wallet *Wallet) IndexTransactions() error {
@@ -27,7 +27,7 @@ func (wallet *Wallet) IndexTransactions() error {
 				return false, err
 			}
 
-			_, err = wallet.txDB.SaveOrUpdate(&Transaction{}, tx)
+			_, err = wallet.walletDataDB.SaveOrUpdate(&Transaction{}, tx)
 			if err != nil {
 				log.Errorf("[%d] Index tx replace tx err : %v", wallet.ID, err)
 				return false, err
@@ -38,7 +38,7 @@ func (wallet *Wallet) IndexTransactions() error {
 
 		if block.Header != nil {
 			txEndHeight = block.Header.Height
-			err := wallet.txDB.SaveLastIndexPoint(int32(txEndHeight))
+			err := wallet.walletDataDB.SaveLastIndexPoint(int32(txEndHeight))
 			if err != nil {
 				log.Errorf("[%d] Set tx index end block height error: ", wallet.ID, err)
 				return false, err
@@ -55,7 +55,7 @@ func (wallet *Wallet) IndexTransactions() error {
 		}
 	}
 
-	beginHeight, err := wallet.txDB.ReadIndexingStartBlock()
+	beginHeight, err := wallet.walletDataDB.ReadIndexingStartBlock()
 	if err != nil {
 		log.Errorf("[%d] Get tx indexing start point error: %v", wallet.ID, err)
 		return err
@@ -67,7 +67,7 @@ func (wallet *Wallet) IndexTransactions() error {
 	endBlock := w.NewBlockIdentifierFromHeight(endHeight)
 
 	defer func() {
-		count, err := wallet.txDB.Count(txindex.TxFilterAll, &Transaction{})
+		count, err := wallet.walletDataDB.Count(walletdata.TxFilterAll, &Transaction{})
 		if err != nil {
 			log.Errorf("[%d] Post-indexing tx count error :%v", wallet.ID, err)
 		} else if count > 0 {
@@ -80,7 +80,7 @@ func (wallet *Wallet) IndexTransactions() error {
 }
 
 func (wallet *Wallet) reindexTransactions() error {
-	err := wallet.txDB.ClearSavedTransactions(&Transaction{})
+	err := wallet.walletDataDB.ClearSavedTransactions(&Transaction{})
 	if err != nil {
 		return err
 	}

@@ -177,7 +177,7 @@ func (wallet *Wallet) TicketPrice(ctx context.Context) (*TicketPriceResponse, er
 }
 
 // PurchaseTickets purchases tickets from the wallet. Returns a slice of hashes for tickets purchased
-func (wallet *Wallet) PurchaseTickets(ctx context.Context, request *PurchaseTicketsRequest, vspHost string) ([]string, error) {
+func (wallet *Wallet) PurchaseTickets(request *PurchaseTicketsRequest, vspHost string) ([]string, error) {
 	var err error
 
 	// fetch redeem script, ticket address, pool address and pool fee if vsp host isn't empty
@@ -234,7 +234,7 @@ func (wallet *Wallet) PurchaseTickets(ctx context.Context, request *PurchaseTick
 	defer func() {
 		lock <- time.Time{} // send matters, not the value
 	}()
-	err = wallet.internal.Unlock(ctx, request.Passphrase, lock)
+	err = wallet.internal.Unlock(wallet.shutdownContext(), request.Passphrase, lock)
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -252,7 +252,7 @@ func (wallet *Wallet) PurchaseTickets(ctx context.Context, request *PurchaseTick
 		return nil, err
 	}
 
-	purchasedTickets, err := wallet.internal.PurchaseTickets(ctx, netBackend, purchaseTicketsRequest)
+	purchasedTickets, err := wallet.internal.PurchaseTickets(wallet.shutdownContext(), netBackend, purchaseTicketsRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to purchase tickets: %s", err.Error())
 	}

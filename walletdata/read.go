@@ -1,4 +1,4 @@
-package txindex
+package walletdata
 
 import (
 	"github.com/asdine/storm"
@@ -11,7 +11,7 @@ const MaxReOrgBlocks = 6
 // Otherwise, 0 is returned to begin indexing from height 0.
 func (db *DB) ReadIndexingStartBlock() (int32, error) {
 	var startBlockHeight int32
-	err := db.txDB.Get(TxBucketName, KeyEndBlock, &startBlockHeight)
+	err := db.walletDataDB.Get(TxBucketName, KeyEndBlock, &startBlockHeight)
 	if err != nil && err != storm.ErrNotFound {
 		return 0, err
 	}
@@ -61,5 +61,5 @@ func (db *DB) Count(txFilter int32, txObj interface{}) (int, error) {
 }
 
 func (db *DB) FindOne(fieldName string, value interface{}, txObj interface{}) error {
-	return db.txDB.One(fieldName, value, txObj)
+	return db.walletDataDB.One(fieldName, value, txObj)
 }
