@@ -154,6 +154,7 @@ func (b *Bucket) dropBucket(key []byte) error {
 	if err != nil {
 		return err
 	}
+
 	item, err := b.txn.Get(prefix)
 	if err != nil {
 		return convertErr(err)
@@ -162,23 +163,54 @@ func (b *Bucket) dropBucket(key []byte) error {
 	if item.UserMeta() != metaBucket {
 		return errors.E(errors.Invalid, "key is not associated with a bucket")
 	}
-	b.txn.Delete(item.Key()[:])
-	txn := b.dbTransaction.db.NewTransaction(false)
-	it := txn.NewIterator(badger.DefaultIteratorOptions)
 
+	iteratorTxn := b.dbTransaction.db.NewTransaction(true)
+	it := iteratorTxn.NewIterator(badger.DefaultIteratorOptions)
+
+	it.Rewind()
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		item = it.Item()
-		val, err := item.ValueCopy(nil)
-		if err != nil {
+		item := it.Item()
+		if bytes.Equal(item.Key(), prefix) {
 			continue
 		}
-		prefixLength := int(val[0])
-		if bytes.Equal(item.Key()[:prefixLength], b.prefix) {
-			b.txn.Delete(item.Key()[:])
+
+		v, err := item.ValueCopy(nil)
+		if err != nil {
+			return convertErr(err)
+		}
+
+		prefixLength := int(v[0])
+		if bytes.Equal(item.Key()[:prefixLength], prefix) {
+		retryDelete:
+			err = b.txn.Delete(item.KeyCopy(nil))
+			if err != nil {
+				if err == badger.ErrTxnTooBig {
+					err = b.txn.Commit()
+					if err != nil {
+						return err
+					}
+					*b.txn = *b.dbTransaction.db.NewTransaction(true)
+					goto retryDelete
+				}
+				return err
+			}
 		}
 	}
 	it.Close()
-	txn.Discard()
+	iteratorTxn.Discard()
+
+	err = b.txn.Commit()
+	if err != nil {
+		return convertErr(err)
+	}
+
+	*b.txn = *b.dbTransaction.db.NewTransaction(true)
+
+	err = b.txn.Delete(item.Key()[:])
+	if err != nil {
+		return convertErr(err)
+	}
+
 	return nil
 }
 

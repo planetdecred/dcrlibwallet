@@ -39,38 +39,48 @@ type syncData struct {
 type activeSyncData struct {
 	syncStage int32
 
+	cfiltersFetchProgress    CFiltersFetchProgressReport
 	headersFetchProgress     HeadersFetchProgressReport
 	addressDiscoveryProgress AddressDiscoveryProgressReport
 	headersRescanProgress    HeadersRescanProgressReport
-
-	beginFetchTimeStamp   int64
-	startHeaderHeight     int32
-	headersFetchTimeSpent int64
-
-	addressDiscoveryStartTime int64
-	totalDiscoveryTimeSpent   int64
 
 	addressDiscoveryCompletedOrCanceled chan bool
 
 	rescanStartTime int64
 
-	totalInactiveSeconds     int64
-	totalFetchedHeadersCount int32
+	totalInactiveSeconds int64
 }
 
 const (
 	InvalidSyncStage          = -1
-	HeadersFetchSyncStage     = 0
-	AddressDiscoverySyncStage = 1
-	HeadersRescanSyncStage    = 2
+	CFiltersFetchSyncStage    = 0
+	HeadersFetchSyncStage     = 1
+	AddressDiscoverySyncStage = 2
+	HeadersRescanSyncStage    = 3
 )
 
 func (mw *MultiWallet) initActiveSyncData() {
-	headersFetchProgress := HeadersFetchProgressReport{}
-	headersFetchProgress.GeneralSyncProgress = &GeneralSyncProgress{}
 
-	addressDiscoveryProgress := AddressDiscoveryProgressReport{}
-	addressDiscoveryProgress.GeneralSyncProgress = &GeneralSyncProgress{}
+	cfiltersFetchProgress := CFiltersFetchProgressReport{
+		GeneralSyncProgress:         &GeneralSyncProgress{},
+		beginFetchCFiltersTimeStamp: 0,
+		startCFiltersHeight:         -1,
+		cfiltersFetchTimeSpent:      0,
+		totalFetchedCFiltersCount:   0,
+	}
+
+	headersFetchProgress := HeadersFetchProgressReport{
+		GeneralSyncProgress:      &GeneralSyncProgress{},
+		beginFetchTimeStamp:      -1,
+		headersFetchTimeSpent:    -1,
+		totalFetchedHeadersCount: 0,
+	}
+
+	addressDiscoveryProgress := AddressDiscoveryProgressReport{
+		GeneralSyncProgress:       &GeneralSyncProgress{},
+		addressDiscoveryStartTime: -1,
+		totalDiscoveryTimeSpent:   -1,
+	}
 
 	headersRescanProgress := HeadersRescanProgressReport{}
 	headersRescanProgress.GeneralSyncProgress = &GeneralSyncProgress{}
@@ -79,15 +89,10 @@ func (mw *MultiWallet) initActiveSyncData() {
 	mw.syncData.activeSyncData = &activeSyncData{
 		syncStage: InvalidSyncStage,
 
+		cfiltersFetchProgress:    cfiltersFetchProgress,
 		headersFetchProgress:     headersFetchProgress,
 		addressDiscoveryProgress: addressDiscoveryProgress,
 		headersRescanProgress:    headersRescanProgress,
-
-		beginFetchTimeStamp:       -1,
-		headersFetchTimeSpent:     -1,
-		addressDiscoveryStartTime: -1,
-		totalDiscoveryTimeSpent:   -1,
-		totalFetchedHeadersCount:  0,
 	}
 	mw.syncData.mu.Unlock()
 }
@@ -210,7 +215,7 @@ func (mw *MultiWallet) SpvSync() error {
 	wallets := make(map[int]*w.Wallet)
 	for id, wallet := range mw.wallets {
 		wallets[id] = wallet.internal
-		wallet.waiting = true
+		wallet.waitingForHeaders = true
 		wallet.syncing = true
 	}
 
@@ -290,7 +295,7 @@ func (mw *MultiWallet) CancelSync() {
 }
 
 func (wallet *Wallet) IsWaiting() bool {
-	return wallet.waiting
+	return wallet.waitingForHeaders
 }
 
 func (wallet *Wallet) IsSynced() bool {
