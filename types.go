@@ -182,7 +182,6 @@ type TxInput struct {
 	PreviousTransactionIndex int32  `json:"previous_transaction_index"`
 	PreviousOutpoint         string `json:"previous_outpoint"`
 	Amount                   int64  `json:"amount"`
-	AccountName              string `json:"account_name"`
 	AccountNumber            int32  `json:"account_number"`
 }
 
@@ -193,7 +192,6 @@ type TxOutput struct {
 	ScriptType    string `json:"script_type"`
 	Address       string `json:"address"`
 	Internal      bool   `json:"internal"`
-	AccountName   string `json:"account_name"`
 	AccountNumber int32  `json:"account_number"`
 }
 

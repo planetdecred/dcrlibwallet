@@ -77,14 +77,12 @@ func decodeTxInputs(mtx *wire.MsgTx, walletInputs []*WalletInput) (inputs []*TxI
 			PreviousTransactionIndex: int32(txIn.PreviousOutPoint.Index),
 			PreviousOutpoint:         txIn.PreviousOutPoint.String(),
 			Amount:                   txIn.ValueIn,
-			AccountName:              "external", // correct account name and number set below if this is a wallet output
-			AccountNumber:            -1,
+			AccountNumber:            -1, // correct account number is set below if this is a wallet output
 		}
 
 		// override account details if this is wallet input
 		for _, walletInput := range walletInputs {
 			if walletInput.Index == int32(i) {
-				input.AccountName = walletInput.AccountName
 				input.AccountNumber = walletInput.AccountNumber
 				break
 			}
@@ -126,7 +124,6 @@ func decodeTxOutputs(mtx *wire.MsgTx, netParams *chaincfg.Params, walletOutputs 
 			Version:       int32(txOut.Version),
 			ScriptType:    scriptType,
 			Address:       address, // correct address, account name and number set below if this is a wallet output
-			AccountName:   "external",
 			AccountNumber: -1,
 		}
 
@@ -135,7 +132,6 @@ func decodeTxOutputs(mtx *wire.MsgTx, netParams *chaincfg.Params, walletOutputs 
 			if walletOutput.Index == output.Index {
 				output.Internal = walletOutput.Internal
 				output.Address = walletOutput.Address
-				output.AccountName = walletOutput.AccountName
 				output.AccountNumber = walletOutput.AccountNumber
 				break
 			}
