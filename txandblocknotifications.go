@@ -6,8 +6,6 @@ import (
 	"decred.org/dcrwallet/errors"
 )
 
-
-
 func (mw *MultiWallet) listenForTransactions(walletID int) {
 	go func() {
 
