@@ -1,7 +1,6 @@
 package dcrlibwallet
 
 import (
-	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -107,15 +106,16 @@ func (wallet *Wallet) getTickets(req *GetTicketsRequest) (ticketInfos []*TicketI
 			// t.Spender and t.Spender.Hash are pointers, avoid using them directly
 			// as they could be re-used to hold information for some other ticket.
 			// See the doc on `wallet.GetTickets`.
-			spenderHash, _ := chainhash.NewHash(t.Spender.Hash[:])
-			spender := &w.TransactionSummary{
-				Hash:        spenderHash,
-				Transaction: t.Spender.Transaction,
-				MyInputs:    t.Spender.MyInputs,
-				MyOutputs:   t.Spender.MyOutputs,
-				Fee:         t.Spender.Fee,
-				Timestamp:   t.Spender.Timestamp,
-				Type:        t.Spender.Type,
+			spender := &w.TransactionSummary{}
+			if t.Spender != nil {
+				spenderHash, _ := chainhash.NewHash(t.Spender.Hash[:])
+				spender.Hash = spenderHash
+				spender.Transaction = t.Spender.Transaction
+				spender.MyInputs = t.Spender.MyInputs
+				spender.MyOutputs = t.Spender.MyOutputs
+				spender.Fee = t.Spender.Fee
+				spender.Timestamp = t.Spender.Timestamp
+				spender.Type = t.Spender.Type
 			}
 
 			ticketInfos = append(ticketInfos, &TicketInfo{
@@ -148,7 +148,8 @@ func (wallet *Wallet) getTickets(req *GetTicketsRequest) (ticketInfos []*TicketI
 
 // TicketPrice returns the price of a ticket for the next block, also known as the stake difficulty.
 // May be incorrect if blockchain sync is ongoing or if blockchain is not up-to-date.
-func (wallet *Wallet) TicketPrice(ctx context.Context) (*TicketPriceResponse, error) {
+func (wallet *Wallet) TicketPrice() (*TicketPriceResponse, error) {
+	ctx := wallet.shutdownContext()
 	sdiff, err := wallet.internal.NextStakeDifficulty(ctx)
 	if err == nil {
 		_, tipHeight := wallet.internal.MainChainTip(ctx)
