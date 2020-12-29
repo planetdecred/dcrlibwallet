@@ -2,7 +2,10 @@ package dcrlibwallet
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net"
+	"sort"
 	"strings"
 	"sync"
 
@@ -37,6 +40,8 @@ type syncData struct {
 
 // reading/writing of properties of this struct are protected by syncData.mu.
 type activeSyncData struct {
+	syncer *spv.Syncer
+
 	syncStage int32
 
 	cfiltersFetchProgress    CFiltersFetchProgressReport
@@ -235,6 +240,7 @@ func (mw *MultiWallet) SpvSync() error {
 	mw.syncData.syncing = true
 	mw.syncData.cancelSync = cancel
 	mw.syncData.syncCanceled = make(chan struct{})
+	mw.syncData.syncer = syncer
 	mw.syncData.mu.Unlock()
 
 	for _, listener := range mw.syncProgressListeners() {
@@ -356,6 +362,46 @@ func (mw *MultiWallet) ConnectedPeers() int32 {
 	mw.syncData.mu.RLock()
 	defer mw.syncData.mu.RUnlock()
 	return mw.syncData.connectedPeers
+}
+
+func (mw *MultiWallet) PeerInfoRaw() ([]PeerInfo, error) {
+	if !mw.IsConnectedToDecredNetwork() {
+		return nil, errors.New(ErrNotConnected)
+	}
+
+	syncer := mw.syncData.syncer
+
+	infos := make([]PeerInfo, 0, len(syncer.GetRemotePeers()))
+	for _, rp := range syncer.GetRemotePeers() {
+		info := PeerInfo{
+			ID:             int32(rp.ID()),
+			Addr:           rp.RemoteAddr().String(),
+			AddrLocal:      rp.LocalAddr().String(),
+			Services:       fmt.Sprintf("%08d", uint64(rp.Services())),
+			Version:        rp.Pver(),
+			SubVer:         rp.UA(),
+			StartingHeight: int64(rp.InitialHeight()),
+			BanScore:       int32(rp.BanScore()),
+		}
+
+		infos = append(infos, info)
+	}
+
+	sort.Slice(infos, func(i, j int) bool {
+		return infos[i].ID < infos[j].ID
+	})
+
+	return infos, nil
+}
+
+func (mw *MultiWallet) PeerInfo() (string, error) {
+	infos, err := mw.PeerInfoRaw()
+	if err != nil {
+		return "", err
+	}
+
+	result, _ := json.Marshal(infos)
+	return string(result), nil
 }
 
 func (mw *MultiWallet) GetBestBlock() *BlockInfo {
