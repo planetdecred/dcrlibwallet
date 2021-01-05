@@ -1,6 +1,9 @@
 package dcrlibwallet
 
-import "decred.org/dcrwallet/errors"
+import (
+	"decred.org/dcrwallet/errors"
+	"github.com/asdine/storm"
+)
 
 const (
 	// Error Codes
@@ -44,7 +47,7 @@ func translateError(err error) error {
 		switch err.Kind {
 		case errors.InsufficientBalance:
 			return errors.New(ErrInsufficientBalance)
-		case errors.NotExist:
+		case errors.NotExist, storm.ErrNotFound:
 			return errors.New(ErrNotExist)
 		case errors.Passphrase:
 			return errors.New(ErrInvalidPassphrase)

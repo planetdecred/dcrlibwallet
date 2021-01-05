@@ -79,16 +79,6 @@ type proposalTokens struct {
 	Tokens []string `json:"tokens"`
 }
 
-type proposalResponseError struct {
-	Code    uint16 `json:"code"`
-	Message string `json:"message"`
-}
-
-type proposalResponse struct {
-	Result interface{}            `json:"result"`
-	Error  *proposalResponseError `json:"error"`
-}
-
 type politeiaError struct {
 	Code    uint16   `json:"errorcode"`
 	Context []string `json:"errorcontext"`

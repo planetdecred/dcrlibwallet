@@ -73,7 +73,22 @@ func (p *Politeia) GetProposalsRaw(category int32, offset, limit int32, newestFi
 
 // GetProposals returns the result of GetProposalsRaw as a JSON string
 func (p *Politeia) GetProposals(category int32, offset, limit int32, newestFirst bool) (string, error) {
-	return p.marshalResult(p.GetProposalsRaw(category, offset, limit, newestFirst))
+
+	result, err := p.GetProposalsRaw(category, offset, limit, newestFirst)
+	if err != nil {
+		return "", err
+	}
+
+	if len(result) == 0 {
+		return "[]", nil
+	}
+
+	response, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("error marshalling result: %s", err.Error())
+	}
+
+	return string(response), nil
 }
 
 // GetProposalRaw fetches and returns a single proposal specified by it's censorship record token
@@ -110,21 +125,20 @@ func (p *Politeia) GetProposalByID(proposalID int) (string, error) {
 
 // Count returns the number of proposals of a specified category
 func (p *Politeia) Count(category int32) (int32, error) {
-	var proposals []Proposal
-	var query q.Matcher
+	var matcher q.Matcher
 
 	if category == ProposalCategoryAll {
-		query = q.True()
+		matcher = q.True()
 	} else {
-		query = q.Eq("Category", category)
+		matcher = q.Eq("Category", category)
 	}
 
-	err := p.db.Select(query).Find(&proposals)
+	count, err := p.db.Select(matcher).Count(&Proposal{})
 	if err != nil {
-		return int32(0), nil
+		return 0, err
 	}
 
-	return int32(len(proposals)), nil
+	return int32(count), nil
 }
 
 func (p *Politeia) prepareQuery(category int32, offset, limit int32, newestFirst bool) (query storm.Query) {
@@ -157,25 +171,15 @@ func (p *Politeia) prepareQuery(category int32, offset, limit int32, newestFirst
 }
 
 func (p *Politeia) marshalResult(result interface{}, err error) (string, error) {
-	var response proposalResponse
 
 	if err != nil {
-		response.Error = &proposalResponseError{}
-		if err == storm.ErrNotFound {
-			response.Error.Code = ErrNotFound
-			response.Error.Message = ErrorStatus[ErrNotFound]
-		} else {
-			response.Error.Code = ErrUnknownError
-			response.Error.Message = ErrorStatus[ErrUnknownError]
-		}
-	} else {
-		response.Result = result
+		return "", translateError(err)
 	}
 
-	responseB, err := json.Marshal(response)
+	response, err := json.Marshal(result)
 	if err != nil {
 		return "", fmt.Errorf("error marshalling result: %s", err.Error())
 	}
 
-	return string(responseB), nil
+	return string(response), nil
 }

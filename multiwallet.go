@@ -18,7 +18,6 @@ import (
 	"github.com/planetdecred/dcrlibwallet/utils"
 	"github.com/planetdecred/dcrlibwallet/walletdata"
 	bolt "go.etcd.io/bbolt"
-
 	"golang.org/x/crypto/bcrypt"
 )
 
