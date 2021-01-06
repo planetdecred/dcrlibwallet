@@ -15,79 +15,10 @@ import (
 	"github.com/decred/politeia/util"
 )
 
-type proposalServerVersion struct {
-	Version int32 `json:"version"`
-}
-
-type proposalServerPolicy struct {
-	ProposalListPageSize int `json:"proposallistpagesize"`
-}
-
-type proposalFile struct {
-	Name    string `json:"name"`
-	Mime    string `json:"mime"`
-	Digest  string `json:"digest"`
-	Payload string `json:"payload"`
-}
-
-type proposalMetaData struct {
-	Name   string `json:"name"`
-	LinkTo string `json:"linkto"`
-	LinkBy int64  `json:"linkby"`
-}
-
-type proposalCensorshipRecord struct {
-	Token     string `json:"token" storm:"index"`
-	Merkle    string `json:"merkle"`
-	Signature string `json:"signature"`
-}
-
-type proposalVoteOption struct {
-	ID          string `json:"id"`
-	Description string `json:"description"`
-	Bits        int32  `json:"bits"`
-}
-
-type ProposalVoteOptionResult struct {
-	Option        proposalVoteOption `json:"option"`
-	VotesReceived int64              `json:"votesreceived"`
-}
-
-type proposalVoteSummary struct {
-	Token            string                     `json:"token"`
-	Status           int32                      `json:"status"`
-	Approved         bool                       `json:"approved,omitempty"`
-	EligibleTickets  int32                      `json:"eligibletickets"`
-	Duration         int64                      `json:"duration,omitempty"`
-	EndHeight        int64                      `json:"endheight,omitempty"`
-	QuorumPercentage int32                      `json:"quorumpercentage,omitempty"`
-	PassPercentage   int32                      `json:"passpercentage,omitempty"`
-	YesCount         int32                      `json:"yes-count"`
-	NoCount          int32                      `json:"no-count"`
-	OptionsResult    []ProposalVoteOptionResult `json:"results,omitempty"`
-}
-
-type proposalTokenInventory struct {
-	Pre       []string `json:"pre"`
-	Active    []string `json:"active"`
-	Approved  []string `json:"approved"`
-	Rejected  []string `json:"rejected"`
-	Abandoned []string `json:"abandoned"`
-}
-
-type proposalTokens struct {
-	Tokens []string `json:"tokens"`
-}
-
-type politeiaError struct {
-	Code    uint16   `json:"errorcode"`
-	Context []string `json:"errorcontext"`
-}
-
 type politeiaClient struct {
 	httpClient *http.Client
 
-	policy             *proposalServerPolicy
+	policy             *www.PolicyReply
 	csrfToken          string
 	cookies            []*http.Cookie
 	csrfTokenExpiresAt time.Time
@@ -103,16 +34,6 @@ const (
 	tokenInventoryPath   = "/proposals/tokeninventory"
 	batchProposalsPath   = "/proposals/batch"
 	batchVoteSummaryPath = "/proposals/batchvotesummary"
-
-	ErrNotFound uint16 = iota + 1
-	ErrUnknownError
-)
-
-var (
-	ErrorStatus = map[uint16]string{
-		ErrNotFound:     "no record found",
-		ErrUnknownError: "an unknown error occurred",
-	}
 )
 
 func newPoliteiaClient() *politeiaClient {
@@ -226,23 +147,23 @@ func (c *politeiaClient) handleError(statusCode int, responseBody []byte) error 
 	case http.StatusForbidden:
 		return errors.New(string(responseBody))
 	case http.StatusUnauthorized:
-		var errResp politeiaError
+		var errResp www.ErrorReply
 		if err := json.Unmarshal(responseBody, &errResp); err != nil {
 			return err
 		}
-		return fmt.Errorf("unauthorized: %s", ErrorStatus[errResp.Code])
+		return fmt.Errorf("unauthorized: %d", errResp.ErrorCode)
 	case http.StatusBadRequest:
-		var errResp politeiaError
+		var errResp www.ErrorReply
 		if err := json.Unmarshal(responseBody, &errResp); err != nil {
 			return err
 		}
-		return fmt.Errorf("bad request: %s", ErrorStatus[errResp.Code])
+		return fmt.Errorf("bad request: %d", errResp.ErrorCode)
 	}
 
 	return errors.New("unknown error")
 }
 
-func (c *politeiaClient) version() (*proposalServerVersion, error) {
+func (c *politeiaClient) version() (*www.VersionReply, error) {
 	route := host + apiPath + versionPath
 	req, err := http.NewRequest(http.MethodGet, route, nil)
 	if err != nil {
@@ -266,8 +187,8 @@ func (c *politeiaClient) version() (*proposalServerVersion, error) {
 		return nil, c.handleError(r.StatusCode, responseBody)
 	}
 
-	var versionResponse proposalServerVersion
-	err = json.Unmarshal(responseBody, &versionResponse)
+	var versionReply www.VersionReply
+	err = json.Unmarshal(responseBody, &versionReply)
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshaling version response: %s", err.Error())
 	}
@@ -278,63 +199,78 @@ func (c *politeiaClient) version() (*proposalServerVersion, error) {
 	}
 	c.csrfTokenExpiresAt = time.Now().Add(time.Hour * 23)
 
-	return &versionResponse, nil
+	return &versionReply, nil
 }
 
-func (c *politeiaClient) serverPolicy() (proposalServerPolicy, error) {
-	var serverPolicyResponse proposalServerPolicy
-	err := c.makeRequest(http.MethodGet, policyPath, nil, &serverPolicyResponse)
-
-	return serverPolicyResponse, err
+func (c *politeiaClient) serverPolicy() (www.PolicyReply, error) {
+	var policyReply www.PolicyReply
+	err := c.makeRequest(http.MethodGet, policyPath, nil, &policyReply)
+	return policyReply, err
 }
 
-func (c *politeiaClient) batchProposals(censorshipTokens *proposalTokens) ([]Proposal, error) {
-	b, err := json.Marshal(censorshipTokens)
+func (c *politeiaClient) batchProposals(tokens []string) ([]Proposal, error) {
+	b, err := json.Marshal(&www.BatchProposals{Tokens: tokens})
 	if err != nil {
 		return nil, err
 	}
 
-	var result struct {
-		Proposals []Proposal `json:"proposals"`
-	}
+	var batchProposalsReply www.BatchProposalsReply
 
-	err = c.makeRequest(http.MethodPost, batchProposalsPath, b, &result)
+	err = c.makeRequest(http.MethodPost, batchProposalsPath, b, &batchProposalsReply)
 	if err != nil {
 		return nil, err
 	}
 
-	return result.Proposals, err
+	proposals := make([]Proposal, len(batchProposalsReply.Proposals))
+	for i, proposalRecord := range batchProposalsReply.Proposals {
+		proposal := Proposal{
+			Token:       proposalRecord.CensorshipRecord.Token,
+			Name:        proposalRecord.Name,
+			State:       int32(proposalRecord.State),
+			Status:      int32(proposalRecord.Status),
+			Timestamp:   proposalRecord.Timestamp,
+			UserID:      proposalRecord.UserId,
+			Username:    proposalRecord.Username,
+			NumComments: int32(proposalRecord.NumComments),
+			PublishedAt: proposalRecord.PublishedAt,
+		}
+
+		for _, file := range proposalRecord.Files {
+			if file.Name == "index.md" {
+				proposal.IndexFile = file.Payload
+				break
+			}
+		}
+
+		proposals[i] = proposal
+	}
+
+	return proposals, nil
 }
 
-func (c *politeiaClient) tokenInventory() (*proposalTokenInventory, error) {
-	var tokenInventory proposalTokenInventory
+func (c *politeiaClient) tokenInventory() (*www.TokenInventoryReply, error) {
+	var tokenInventoryReply www.TokenInventoryReply
 
-	err := c.makeRequest(http.MethodGet, tokenInventoryPath, nil, &tokenInventory)
+	err := c.makeRequest(http.MethodGet, tokenInventoryPath, nil, &tokenInventoryReply)
 	if err != nil {
 		return nil, err
 	}
 
-	return &tokenInventory, nil
+	return &tokenInventoryReply, nil
 }
 
-func (c *politeiaClient) batchVoteSummary(censorshipTokens *proposalTokens) (map[string]proposalVoteSummary, error) {
-	if censorshipTokens == nil {
-		return nil, errors.New("censorship token cannot be empty")
-	}
-
-	b, err := json.Marshal(censorshipTokens)
+func (c *politeiaClient) batchVoteSummary(tokens []string) (map[string]www.VoteSummary, error) {
+	b, err := json.Marshal(&www.BatchVoteSummary{Tokens: tokens})
 	if err != nil {
 		return nil, err
 	}
 
-	var result struct {
-		Summaries map[string]proposalVoteSummary `json:"summaries"`
-	}
+	var batchVoteSummaryReply www.BatchVoteSummaryReply
 
-	err = c.makeRequest(http.MethodPost, batchVoteSummaryPath, b, &result)
+	err = c.makeRequest(http.MethodPost, batchVoteSummaryPath, b, &batchVoteSummaryReply)
 	if err != nil {
 		return nil, err
 	}
 
-	return result.Summaries, err
+	return batchVoteSummaryReply.Summaries, err
 }

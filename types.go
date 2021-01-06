@@ -303,46 +303,30 @@ type VSPTicketPurchaseInfo struct {
 
 /** begin politeia types */
 type Proposal struct {
-	ID               int                      `storm:"id,increment"`
-	Token            string                   `json:"-" storm:"index"`
-	Category         int32                    `json:"category" storm:"index"`
-	Name             string                   `json:"name"`
-	State            int32                    `json:"state"`
-	Status           int32                    `json:"status"`
-	Timestamp        int64                    `json:"timestamp"`
-	UserID           string                   `json:"userid"`
-	Username         string                   `json:"username"`
-	PublicKey        string                   `json:"publickey"`
-	Signature        string                   `json:"signature"`
-	NumComments      int32                    `json:"numcomments"`
-	Version          string                   `json:"version"`
-	PublishedAt      int64                    `json:"publishedat"`
-	Files            []proposalFile           `json:"files"`
-	MetaData         []proposalMetaData       `json:"metadata"`
-	CensorshipRecord proposalCensorshipRecord `json:"censorshiprecord"`
-	VoteSummary      proposalVoteSummary      `json:"votesummary"`
+	ID             int    `storm:"id,increment"`
+	Token          string `json:"token" storm:"index"`
+	Category       int32  `json:"category" storm:"index"`
+	Name           string `json:"name"`
+	State          int32  `json:"state"`
+	Status         int32  `json:"status"`
+	Timestamp      int64  `json:"timestamp"`
+	UserID         string `json:"userid"`
+	Username       string `json:"username"`
+	NumComments    int32  `json:"numcomments"`
+	Version        string `json:"version"`
+	PublishedAt    int64  `json:"publishedat"`
+	IndexFile      string `json:"indexfile"`
+	VoteStatus     int32  `json:"votestatus"`
+	VoteApproved   bool   `json:"voteapproved"`
+	YesVotes       int32  `json:"yesvotes"`
+	NoVotes        int32  `json:"novotes"`
+	PassPercentage int32  `json:"passpercentage"`
 }
 
 type ProposalNotificationListener interface {
 	OnNewProposal(proposalID int, censorshipToken string)
 	OnProposalVoteStarted(proposalID int, censorshipToken string)
 	OnProposalVoteFinished(proposalID int, censorshipToken string)
-}
-
-type ProposalSyncProgressListener interface {
-	OnSyncStarted()
-	OnProposalsDiscovery()
-	OnProposalsFetched(proposalsFetchProgress *ProposalsFetchProgressReport)
-	OnSyncCompleted()
-	OnSyncCanceled()
-	OnSyncEndedWithError(err error)
-}
-
-type ProposalsFetchProgressReport struct {
-	TotalProposalsToFetch   int32 `json:"total_proposals_to_fetch"`
-	CurrentBatchLowerHeight int32 `json:"current_batch_lower_height"`
-	CurrentBatchUpperHeight int32 `json:"current_batch_upper_height"`
-	ProposalsFetchProgress  int32 `json:"proposals_fetch_progress"`
 }
 
 /** end politea proposal types */

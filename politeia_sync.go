@@ -1,7 +1,6 @@
 package dcrlibwallet
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -10,7 +9,6 @@ import (
 	"github.com/asdine/storm"
 	"github.com/asdine/storm/q"
 	www "github.com/decred/politeia/politeiawww/api/www/v1"
-	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -18,15 +16,6 @@ const (
 )
 
 func (p *Politeia) Sync() error {
-	g, _ := errgroup.WithContext(context.Background())
-	g.Go(func() error {
-		return p.sync()
-	})
-
-	return g.Wait()
-}
-
-func (p *Politeia) sync() error {
 	log.Info("Politeia sync: started")
 
 	// fetch server policy if it's not been fetched
@@ -41,7 +30,7 @@ func (p *Politeia) sync() error {
 	var savedTokens []string
 	err := p.db.Select(q.True()).Each(new(Proposal), func(record interface{}) error {
 		p := record.(*Proposal)
-		savedTokens = append(savedTokens, p.CensorshipRecord.Token)
+		savedTokens = append(savedTokens, p.Token)
 		return nil
 	})
 	if err != nil && err != storm.ErrNotFound {
@@ -84,7 +73,7 @@ func (p *Politeia) CancelSync() {
 	log.Info("Politeia sync: stopped")
 }
 
-func (p *Politeia) fetchAllUnfetchedProposals(tokenInventory *proposalTokenInventory, savedTokens []string) error {
+func (p *Politeia) fetchAllUnfetchedProposals(tokenInventory *www.TokenInventoryReply, savedTokens []string) error {
 	inventoryMap := map[int32][]string{
 		ProposalCategoryPre:       p.getUniqueTokens(tokenInventory.Pre, savedTokens),
 		ProposalCategoryActive:    p.getUniqueTokens(tokenInventory.Active, savedTokens),
@@ -121,31 +110,31 @@ func (p *Politeia) syncBatchProposals(category int32, proposalsInventory []strin
 			break
 		}
 
-		limit := p.client.policy.ProposalListPageSize
-		if len(proposalsInventory) <= p.client.policy.ProposalListPageSize {
+		limit := int(p.client.policy.ProposalListPageSize)
+		if len(proposalsInventory) <= limit {
 			limit = len(proposalsInventory)
 		}
 
-		var batch []string
-		batch, proposalsInventory = proposalsInventory[:limit], proposalsInventory[limit:]
+		var tokenBatch []string
+		tokenBatch, proposalsInventory = proposalsInventory[:limit], proposalsInventory[limit:]
 
-		batchTokens := &proposalTokens{batch}
-		proposals, err := p.client.batchProposals(batchTokens)
+		proposals, err := p.client.batchProposals(tokenBatch)
 		if err != nil {
 			return err
 		}
 
-		votesSummaries, err := p.client.batchVoteSummary(batchTokens)
+		votesSummaries, err := p.client.batchVoteSummary(tokenBatch)
 		if err != nil {
 			return err
 		}
 
 		for i := range proposals {
 			proposals[i].Category = category
-			proposals[i].Token = proposals[i].CensorshipRecord.Token
-			if voteSummary, ok := votesSummaries[proposals[i].CensorshipRecord.Token]; ok {
-				voteSummary.YesCount, voteSummary.NoCount = p.getVotesCount(voteSummary.OptionsResult)
-				proposals[i].VoteSummary = voteSummary
+			if voteSummary, ok := votesSummaries[proposals[i].Token]; ok {
+				proposals[i].VoteStatus = int32(voteSummary.Status)
+				proposals[i].VoteApproved = voteSummary.Approved
+				proposals[i].PassPercentage = int32(voteSummary.PassPercentage)
+				proposals[i].YesVotes, proposals[i].NoVotes = getVotesCount(voteSummary.Results)
 			}
 
 			err = p.db.Save(&proposals[i])
@@ -161,7 +150,7 @@ func (p *Politeia) syncBatchProposals(category int32, proposalsInventory []strin
 
 func (p *Politeia) checkForUpdates() error {
 	startID := 0
-	limit := p.client.policy.ProposalListPageSize
+	limit := int(p.client.policy.ProposalListPageSize)
 
 	var allProposals []Proposal
 
@@ -196,27 +185,29 @@ func (p *Politeia) checkForUpdates() error {
 func (p *Politeia) handleProposalsUpdate(proposals []Proposal) error {
 	tokens := make([]string, len(proposals))
 	for i := range proposals {
-		tokens[i] = proposals[i].CensorshipRecord.Token
+		tokens[i] = proposals[i].Token
 	}
 
-	batchTokens := &proposalTokens{tokens}
-	batchProposals, err := p.client.batchProposals(batchTokens)
+	batchProposals, err := p.client.batchProposals(tokens)
 	if err != nil {
 		return err
 	}
 
-	batchVotesSummaries, err := p.client.batchVoteSummary(batchTokens)
+	batchVotesSummaries, err := p.client.batchVoteSummary(tokens)
 	if err != nil {
 		return err
 	}
 
 	for i := range batchProposals {
-		if voteSummary, ok := batchVotesSummaries[batchProposals[i].CensorshipRecord.Token]; ok {
-			batchProposals[i].VoteSummary = voteSummary
+		if voteSummary, ok := batchVotesSummaries[batchProposals[i].Token]; ok {
+			batchProposals[i].VoteStatus = int32(voteSummary.Status)
+			batchProposals[i].VoteApproved = voteSummary.Approved
+			batchProposals[i].PassPercentage = int32(voteSummary.PassPercentage)
+			batchProposals[i].YesVotes, proposals[i].NoVotes = getVotesCount(voteSummary.Results)
 		}
 
 		for k := range proposals {
-			if proposals[k].CensorshipRecord.Token == batchProposals[i].CensorshipRecord.Token {
+			if proposals[k].Token == batchProposals[i].Token {
 				err := p.updateProposalDetails(proposals[k], batchProposals[i])
 				if err != nil {
 					return err
@@ -233,17 +224,17 @@ func (p *Politeia) updateProposalDetails(oldProposal, updatedProposal Proposal) 
 		return nil
 	}
 	updatedProposal.ID = oldProposal.ID
-	updatedProposal.VoteSummary.YesCount, updatedProposal.VoteSummary.NoCount = p.getVotesCount(updatedProposal.VoteSummary.OptionsResult)
+	// updatedProposal.VoteSummary.YesCount, updatedProposal.VoteSummary.NoCount = p.getVotesCount(updatedProposal.VoteSummary.OptionsResult)
 
 	var callback func(*Proposal)
 
 	if oldProposal.Status != updatedProposal.Status && www.PropStatusT(updatedProposal.Status) == www.PropStatusAbandoned {
 		updatedProposal.Category = ProposalCategoryAbandoned
-	} else if oldProposal.VoteSummary.Status != updatedProposal.VoteSummary.Status {
-		switch www.PropVoteStatusT(updatedProposal.VoteSummary.Status) {
+	} else if oldProposal.VoteStatus != updatedProposal.VoteStatus {
+		switch www.PropVoteStatusT(updatedProposal.VoteStatus) {
 		case www.PropVoteStatusFinished:
 			callback = p.publishVoteFinished
-			if updatedProposal.VoteSummary.Approved {
+			if updatedProposal.VoteApproved {
 				updatedProposal.Category = ProposalCategoryApproved
 			} else {
 				updatedProposal.Category = ProposalCategoryRejected
@@ -293,7 +284,7 @@ func (p *Politeia) publishNewProposal(proposal *Proposal) {
 		defer p.notificationListenersMu.Unlock()
 
 		for _, notificationListener := range p.notificationListeners {
-			notificationListener.OnNewProposal(proposal.ID, proposal.CensorshipRecord.Token)
+			notificationListener.OnNewProposal(proposal.ID, proposal.Token)
 		}
 	}
 }
@@ -304,7 +295,7 @@ func (p *Politeia) publishVoteStarted(proposal *Proposal) {
 		defer p.notificationListenersMu.Unlock()
 
 		for _, notificationListener := range p.notificationListeners {
-			notificationListener.OnProposalVoteStarted(proposal.ID, proposal.CensorshipRecord.Token)
+			notificationListener.OnProposalVoteStarted(proposal.ID, proposal.Token)
 		}
 	}
 }
@@ -315,16 +306,16 @@ func (p *Politeia) publishVoteFinished(proposal *Proposal) {
 		defer p.notificationListenersMu.Unlock()
 
 		for _, notificationListener := range p.notificationListeners {
-			notificationListener.OnProposalVoteFinished(proposal.ID, proposal.CensorshipRecord.Token)
+			notificationListener.OnProposalVoteFinished(proposal.ID, proposal.Token)
 		}
 	}
 }
 
-func (p *Politeia) getVotesCount(options []ProposalVoteOptionResult) (int32, int32) {
+func getVotesCount(options []www.VoteOptionResult) (int32, int32) {
 	var yes, no int32
 
 	for i := range options {
-		if options[i].Option.ID == "yes" {
+		if options[i].Option.Id == "yes" {
 			yes = int32(options[i].VotesReceived)
 		} else {
 			no = int32(options[i].VotesReceived)
@@ -337,7 +328,7 @@ func (p *Politeia) getVotesCount(options []ProposalVoteOptionResult) (int32, int
 func (p *Politeia) handleNewProposals(proposals []Proposal) error {
 	loadedTokens := make([]string, len(proposals))
 	for i := range proposals {
-		loadedTokens[i] = proposals[i].CensorshipRecord.Token
+		loadedTokens[i] = proposals[i].Token
 	}
 
 	tokenInventory, err := p.client.tokenInventory()
@@ -348,6 +339,7 @@ func (p *Politeia) handleNewProposals(proposals []Proposal) error {
 	return p.fetchAllUnfetchedProposals(tokenInventory, loadedTokens)
 }
 
+//TODO: Delete found tokens
 func (p *Politeia) getUniqueTokens(tokenInventory, savedTokens []string) []string {
 	var diff []string
 
