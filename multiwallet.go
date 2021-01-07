@@ -61,7 +61,7 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 		return nil, errors.Errorf("failed to init logRotator: %v", err.Error())
 	}
 
-	walletsDb, err := storm.Open(filepath.Join(rootDir, walletsDbName))
+	mwDB, err := storm.Open(filepath.Join(rootDir, walletsDbName))
 	if err != nil {
 		log.Errorf("Error opening wallets database: %s", err.Error())
 		if err == bolt.ErrTimeout {
@@ -72,7 +72,14 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 	}
 
 	// init database for saving/reading wallet objects
-	err = walletsDb.Init(&Wallet{})
+	err = mwDB.Init(&Wallet{})
+	if err != nil {
+		log.Errorf("Error initializing wallets database: %s", err.Error())
+		return nil, err
+	}
+
+	// init database for saving/reading proposal objects
+	err = mwDB.Init(&Proposal{})
 	if err != nil {
 		log.Errorf("Error initializing wallets database: %s", err.Error())
 		return nil, err
@@ -81,7 +88,7 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 	mw := &MultiWallet{
 		dbDriver:    dbDriver,
 		rootDir:     rootDir,
-		db:          walletsDb,
+		db:          mwDB,
 		chainParams: chainParams,
 		wallets:     make(map[int]*Wallet),
 		syncData: &syncData{
@@ -90,7 +97,7 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 		txAndBlockNotificationListeners: make(map[string]TxAndBlockNotificationListener),
 	}
 
-	mw.Politeia, err = newPoliteia(rootDir, mw.ReadBoolConfigValueForKey)
+	mw.Politeia, err = newPoliteia(mw)
 	if err != nil {
 		return nil, err
 	}

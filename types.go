@@ -324,9 +324,9 @@ type Proposal struct {
 }
 
 type ProposalNotificationListener interface {
-	OnNewProposal(proposalID int, censorshipToken string)
-	OnProposalVoteStarted(proposalID int, censorshipToken string)
-	OnProposalVoteFinished(proposalID int, censorshipToken string)
+	OnNewProposal(proposal *Proposal)
+	OnProposalVoteStarted(proposal *Proposal)
+	OnProposalVoteFinished(proposal *Proposal)
 }
 
 /** end politea proposal types */

@@ -7,14 +7,14 @@ import (
 	"time"
 
 	"github.com/asdine/storm"
-	"github.com/asdine/storm/q"
 	www "github.com/decred/politeia/politeiawww/api/www/v1"
 )
 
 const (
-	updateInterval = 10 // 10 mins
+	updateInterval = 30 // 30 mins
 )
 
+// Sync fetches all proposals from the server and
 func (p *Politeia) Sync() error {
 	log.Info("Politeia sync: started")
 
@@ -27,14 +27,14 @@ func (p *Politeia) Sync() error {
 		p.client.policy = &serverPolicy
 	}
 
-	var savedTokens []string
-	err := p.db.Select(q.True()).Each(new(Proposal), func(record interface{}) error {
-		p := record.(*Proposal)
-		savedTokens = append(savedTokens, p.Token)
-		return nil
-	})
+	proposals, err := p.GetProposalsRaw(ProposalCategoryAll, 0, 0, true)
 	if err != nil && err != storm.ErrNotFound {
 		return fmt.Errorf("error loading saved proposals: %s", err.Error())
+	}
+
+	savedTokens := make([]string, len(proposals))
+	for i, proposal := range proposals {
+		savedTokens[i] = proposal.Token
 	}
 
 	// fetch remote token inventory
@@ -74,12 +74,19 @@ func (p *Politeia) CancelSync() {
 }
 
 func (p *Politeia) fetchAllUnfetchedProposals(tokenInventory *www.TokenInventoryReply, savedTokens []string) error {
+
+	approvedTokens, savedTokens := p.getUniqueTokens(tokenInventory.Approved, savedTokens)
+	rejectedTokens, savedTokens := p.getUniqueTokens(tokenInventory.Rejected, savedTokens)
+	abandonedTokens, savedTokens := p.getUniqueTokens(tokenInventory.Abandoned, savedTokens)
+	preTokens, savedTokens := p.getUniqueTokens(tokenInventory.Pre, savedTokens)
+	activeTokens, savedTokens := p.getUniqueTokens(tokenInventory.Active, savedTokens)
+
 	inventoryMap := map[int32][]string{
-		ProposalCategoryPre:       p.getUniqueTokens(tokenInventory.Pre, savedTokens),
-		ProposalCategoryActive:    p.getUniqueTokens(tokenInventory.Active, savedTokens),
-		ProposalCategoryApproved:  p.getUniqueTokens(tokenInventory.Approved, savedTokens),
-		ProposalCategoryRejected:  p.getUniqueTokens(tokenInventory.Rejected, savedTokens),
-		ProposalCategoryAbandoned: p.getUniqueTokens(tokenInventory.Abandoned, savedTokens),
+		ProposalCategoryPre:       preTokens,
+		ProposalCategoryActive:    activeTokens,
+		ProposalCategoryApproved:  approvedTokens,
+		ProposalCategoryRejected:  rejectedTokens,
+		ProposalCategoryAbandoned: abandonedTokens,
 	}
 
 	totalNumProposalsToFetch := 0
@@ -94,8 +101,8 @@ func (p *Politeia) fetchAllUnfetchedProposals(tokenInventory *www.TokenInventory
 		return nil
 	}
 
-	for k, v := range inventoryMap {
-		err := p.syncBatchProposals(k, v)
+	for category, tokens := range inventoryMap {
+		err := p.fetchBatchProposals(category, tokens)
 		if err != nil {
 			return err
 		}
@@ -104,19 +111,19 @@ func (p *Politeia) fetchAllUnfetchedProposals(tokenInventory *www.TokenInventory
 	return nil
 }
 
-func (p *Politeia) syncBatchProposals(category int32, proposalsInventory []string) error {
+func (p *Politeia) fetchBatchProposals(category int32, tokens []string) error {
 	for {
-		if len(proposalsInventory) == 0 {
+		if len(tokens) == 0 {
 			break
 		}
 
 		limit := int(p.client.policy.ProposalListPageSize)
-		if len(proposalsInventory) <= limit {
-			limit = len(proposalsInventory)
+		if len(tokens) <= limit {
+			limit = len(tokens)
 		}
 
 		var tokenBatch []string
-		tokenBatch, proposalsInventory = proposalsInventory[:limit], proposalsInventory[limit:]
+		tokenBatch, tokens = tokens[:limit], tokens[limit:]
 
 		proposals, err := p.client.batchProposals(tokenBatch)
 		if err != nil {
@@ -137,11 +144,10 @@ func (p *Politeia) syncBatchProposals(category int32, proposalsInventory []strin
 				proposals[i].YesVotes, proposals[i].NoVotes = getVotesCount(voteSummary.Results)
 			}
 
-			err = p.db.Save(&proposals[i])
+			err = p.saveOrOverwiteProposal(proposals[i])
 			if err != nil {
 				return fmt.Errorf("error saving new proposal: %s", err.Error())
 			}
-			p.publishNewProposal(&proposals[i])
 		}
 	}
 
@@ -149,14 +155,13 @@ func (p *Politeia) syncBatchProposals(category int32, proposalsInventory []strin
 }
 
 func (p *Politeia) checkForUpdates() error {
-	startID := 0
-	limit := int(p.client.policy.ProposalListPageSize)
+	offset := 0
+	limit := int32(p.client.policy.ProposalListPageSize)
 
 	var allProposals []Proposal
 
 	for {
-		var proposals []Proposal
-		err := p.db.Range("ID", startID+1, startID+limit, &proposals)
+		proposals, err := p.GetProposalsRaw(ProposalCategoryAll, int32(offset), limit, true)
 		if err != nil && err != storm.ErrNotFound {
 			return err
 		}
@@ -165,13 +170,14 @@ func (p *Politeia) checkForUpdates() error {
 			break
 		}
 
+		offset += len(proposals)
+
 		err = p.handleProposalsUpdate(proposals)
 		if err != nil {
 			return err
 		}
 
 		allProposals = append(allProposals, proposals...)
-		startID = proposals[len(proposals)-1].ID
 	}
 
 	err := p.handleNewProposals(allProposals)
@@ -224,7 +230,6 @@ func (p *Politeia) updateProposalDetails(oldProposal, updatedProposal Proposal) 
 		return nil
 	}
 	updatedProposal.ID = oldProposal.ID
-	// updatedProposal.VoteSummary.YesCount, updatedProposal.VoteSummary.NoCount = p.getVotesCount(updatedProposal.VoteSummary.OptionsResult)
 
 	var callback func(*Proposal)
 
@@ -247,7 +252,7 @@ func (p *Politeia) updateProposalDetails(oldProposal, updatedProposal Proposal) 
 		}
 	}
 
-	err := p.db.Update(&updatedProposal)
+	err := p.mwRef.db.Update(&updatedProposal)
 	if err != nil {
 		return fmt.Errorf("error saving updated proposal: %s", err.Error())
 	}
@@ -279,34 +284,34 @@ func (p *Politeia) RemoveNotificationListener(uniqueIdentifier string) {
 }
 
 func (p *Politeia) publishNewProposal(proposal *Proposal) {
-	if p.readConfigFunc(PoliteiaNotificationConfigKey, false) {
+	if p.mwRef.ReadBoolConfigValueForKey(PoliteiaNotificationConfigKey, false) {
 		p.notificationListenersMu.Lock()
 		defer p.notificationListenersMu.Unlock()
 
 		for _, notificationListener := range p.notificationListeners {
-			notificationListener.OnNewProposal(proposal.ID, proposal.Token)
+			notificationListener.OnNewProposal(proposal)
 		}
 	}
 }
 
 func (p *Politeia) publishVoteStarted(proposal *Proposal) {
-	if p.readConfigFunc(PoliteiaNotificationConfigKey, false) {
+	if p.mwRef.ReadBoolConfigValueForKey(PoliteiaNotificationConfigKey, false) {
 		p.notificationListenersMu.Lock()
 		defer p.notificationListenersMu.Unlock()
 
 		for _, notificationListener := range p.notificationListeners {
-			notificationListener.OnProposalVoteStarted(proposal.ID, proposal.Token)
+			notificationListener.OnProposalVoteStarted(proposal)
 		}
 	}
 }
 
 func (p *Politeia) publishVoteFinished(proposal *Proposal) {
-	if p.readConfigFunc(PoliteiaNotificationConfigKey, false) {
+	if p.mwRef.ReadBoolConfigValueForKey(PoliteiaNotificationConfigKey, false) {
 		p.notificationListenersMu.Lock()
 		defer p.notificationListenersMu.Unlock()
 
 		for _, notificationListener := range p.notificationListeners {
-			notificationListener.OnProposalVoteFinished(proposal.ID, proposal.Token)
+			notificationListener.OnProposalVoteFinished(proposal)
 		}
 	}
 }
@@ -339,8 +344,7 @@ func (p *Politeia) handleNewProposals(proposals []Proposal) error {
 	return p.fetchAllUnfetchedProposals(tokenInventory, loadedTokens)
 }
 
-//TODO: Delete found tokens
-func (p *Politeia) getUniqueTokens(tokenInventory, savedTokens []string) []string {
+func (p *Politeia) getUniqueTokens(tokenInventory, savedTokens []string) ([]string, []string) {
 	var diff []string
 
 	for i := range tokenInventory {
@@ -349,6 +353,7 @@ func (p *Politeia) getUniqueTokens(tokenInventory, savedTokens []string) []strin
 		for k := range savedTokens {
 			if savedTokens[k] == tokenInventory[i] {
 				exists = true
+				savedTokens = append(savedTokens[:k], savedTokens[k+1:]...)
 				break
 			}
 		}
@@ -358,5 +363,5 @@ func (p *Politeia) getUniqueTokens(tokenInventory, savedTokens []string) []strin
 		}
 	}
 
-	return diff
+	return diff, savedTokens
 }

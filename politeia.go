@@ -3,17 +3,16 @@ package dcrlibwallet
 import (
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"sync"
 
+	"decred.org/dcrwallet/errors"
 	"github.com/asdine/storm"
 	"github.com/asdine/storm/q"
 )
 
 type Politeia struct {
+	mwRef                   *MultiWallet
 	client                  *politeiaClient
-	db                      *storm.DB
-	readConfigFunc          func(string, bool) bool
 	notificationListenersMu sync.RWMutex
 	notificationListeners   map[string]ProposalNotificationListener
 	quitChan                chan struct{}
@@ -32,35 +31,59 @@ const (
 	ProposalCategoryAbandoned
 )
 
-func newPoliteia(rootDir string, readConfigFunc func(string, bool) bool) (*Politeia, error) {
-	db, err := storm.Open(filepath.Join(rootDir, proposalsDbName))
-	if err != nil {
-		return nil, fmt.Errorf("error opening proposals database: %s", err.Error())
-	}
-
-	err = db.Init(&Proposal{})
-	if err != nil {
-		return nil, fmt.Errorf("error initializing proposals database: %s", err.Error())
-	}
-
+func newPoliteia(mwRef *MultiWallet) (*Politeia, error) {
 	p := &Politeia{
+		mwRef:                 mwRef,
 		client:                newPoliteiaClient(),
-		db:                    db,
-		readConfigFunc:        readConfigFunc,
 		notificationListeners: make(map[string]ProposalNotificationListener),
 	}
 
 	return p, nil
 }
 
-func (p *Politeia) Shutdown() {
-	//close(p.syncQuitChan)
-	p.db.Close()
+func (p *Politeia) saveOrOverwiteProposal(proposal Proposal) error {
+	var oldProposal Proposal
+	err := p.mwRef.db.One("Token", proposal.Token, &oldProposal)
+	if err != nil && err != storm.ErrNotFound {
+		return errors.Errorf("error checking if proposal was already indexed: %s", err.Error())
+	}
+
+	if oldProposal.Token != "" {
+		// delete old record before saving new (if it exists)
+		p.mwRef.db.DeleteStruct(oldProposal)
+	}
+
+	return p.mwRef.db.Save(&proposal)
 }
 
 // GetProposalsRaw fetches and returns a proposals from the db
 func (p *Politeia) GetProposalsRaw(category int32, offset, limit int32, newestFirst bool) ([]Proposal, error) {
-	query := p.prepareQuery(category, offset, limit, newestFirst)
+
+	var query storm.Query
+	switch category {
+	case ProposalCategoryAll:
+		query = p.mwRef.db.Select(
+			q.True(),
+		)
+	default:
+		query = p.mwRef.db.Select(
+			q.Eq("Category", category),
+		)
+	}
+
+	if offset > 0 {
+		query = query.Skip(int(offset))
+	}
+
+	if limit > 0 {
+		query = query.Limit(int(limit))
+	}
+
+	if newestFirst {
+		query = query.OrderBy("Timestamp").Reverse()
+	} else {
+		query = query.OrderBy("Timestamp")
+	}
 
 	var proposals []Proposal
 	err := query.Find(&proposals)
@@ -94,7 +117,7 @@ func (p *Politeia) GetProposals(category int32, offset, limit int32, newestFirst
 // GetProposalRaw fetches and returns a single proposal specified by it's censorship record token
 func (p *Politeia) GetProposalRaw(censorshipToken string) (*Proposal, error) {
 	var proposal Proposal
-	err := p.db.One("Token", censorshipToken, &proposal)
+	err := p.mwRef.db.One("Token", censorshipToken, &proposal)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +133,7 @@ func (p *Politeia) GetProposal(censorshipToken string) (string, error) {
 // GetProposalByIDRaw fetches and returns a single proposal specified by it's ID
 func (p *Politeia) GetProposalByIDRaw(proposalID int) (*Proposal, error) {
 	var proposal Proposal
-	err := p.db.One("ID", proposalID, &proposal)
+	err := p.mwRef.db.One("ID", proposalID, &proposal)
 	if err != nil {
 		return nil, err
 	}
@@ -133,41 +156,12 @@ func (p *Politeia) Count(category int32) (int32, error) {
 		matcher = q.Eq("Category", category)
 	}
 
-	count, err := p.db.Select(matcher).Count(&Proposal{})
+	count, err := p.mwRef.db.Select(matcher).Count(&Proposal{})
 	if err != nil {
 		return 0, err
 	}
 
 	return int32(count), nil
-}
-
-func (p *Politeia) prepareQuery(category int32, offset, limit int32, newestFirst bool) (query storm.Query) {
-	switch category {
-	case ProposalCategoryAll:
-		query = p.db.Select(
-			q.True(),
-		)
-	default:
-		query = p.db.Select(
-			q.Eq("Category", category),
-		)
-	}
-
-	if offset > 0 {
-		query = query.Skip(int(offset))
-	}
-
-	if limit > 0 {
-		query = query.Limit(int(limit))
-	}
-
-	if newestFirst {
-		query = query.OrderBy("Timestamp").Reverse()
-	} else {
-		query = query.OrderBy("Timestamp")
-	}
-
-	return
 }
 
 func (p *Politeia) marshalResult(result interface{}, err error) (string, error) {
