@@ -44,27 +44,31 @@ func (p *Politeia) Sync() error {
 		return err
 	}
 
+	log.Info("Politeia sync: fetching missing proposals")
 	err = p.fetchAllUnfetchedProposals(tokenInventory, savedTokens)
 	if err != nil {
 		return err
 	}
 
-	ticker := time.NewTicker(updateInterval * time.Minute)
-
 	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				log.Info("Politeia sync: checking for proposal updates")
-				p.checkForUpdates()
-			case <-p.quitChan:
-				ticker.Stop()
-				return
-			}
-		}
-	}()
-	<-p.quitChan
+		ticker := time.NewTicker(updateInterval * time.Minute)
 
+		go func() {
+			for {
+				select {
+				case <-ticker.C:
+					log.Info("Politeia sync: checking for proposal updates")
+					p.checkForUpdates()
+				case <-p.quitChan:
+					ticker.Stop()
+					return
+				}
+			}
+		}()
+		<-p.quitChan
+	}()
+
+	log.Info("Politeia sync: fetch complete")
 	return nil
 }
 
