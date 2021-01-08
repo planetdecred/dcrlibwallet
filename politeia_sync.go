@@ -16,16 +16,30 @@ const (
 
 // Sync fetches all proposals from the server and
 func (p *Politeia) Sync() error {
+
+	p.mu.Lock()
+
+	if p.client != nil {
+		p.mu.Unlock()
+		return errors.New(ErrSyncAlreadyInProgress)
+	}
+
 	log.Info("Politeia sync: started")
+
+	p.ctx, p.cancelSync = p.mwRef.contextWithShutdownCancel()
+	p.client = newPoliteiaClient()
 
 	// fetch server policy if it's not been fetched
 	if p.client.policy == nil {
 		serverPolicy, err := p.client.serverPolicy()
 		if err != nil {
+			p.mu.Unlock()
 			return err
 		}
 		p.client.policy = &serverPolicy
 	}
+
+	p.mu.Unlock()
 
 	proposals, err := p.GetProposalsRaw(ProposalCategoryAll, 0, 0, true)
 	if err != nil && err != storm.ErrNotFound {
@@ -37,11 +51,21 @@ func (p *Politeia) Sync() error {
 		savedTokens[i] = proposal.Token
 	}
 
+	if done(p.ctx) {
+		return errors.New(ErrContextCanceled)
+	}
+
 	// fetch remote token inventory
 	log.Info("Politeia sync: fetching token inventory")
+	p.mu.RLock()
 	tokenInventory, err := p.client.tokenInventory()
+	p.mu.RUnlock()
 	if err != nil {
 		return err
+	}
+
+	if done(p.ctx) {
+		return errors.New(ErrContextCanceled)
 	}
 
 	log.Info("Politeia sync: fetching missing proposals")
@@ -50,30 +74,58 @@ func (p *Politeia) Sync() error {
 		return err
 	}
 
+	if done(p.ctx) {
+		return errors.New(ErrContextCanceled)
+	}
+
+	log.Info("Politeia sync: synced")
+	p.mu.Lock()
+	p.synced = true
+	p.mu.Unlock()
+	p.publishSynced()
+
 	go func() {
 		ticker := time.NewTicker(updateInterval * time.Minute)
 
 		go func() {
 			for {
+				log.Info("For loop going")
 				select {
 				case <-ticker.C:
 					log.Info("Politeia sync: checking for proposal updates")
 					p.checkForUpdates()
-				case <-p.quitChan:
+				case <-p.ctx.Done():
 					ticker.Stop()
 					return
 				}
 			}
 		}()
-		<-p.quitChan
 	}()
 
 	log.Info("Politeia sync: fetch complete")
 	return nil
 }
 
-func (p *Politeia) CancelSync() {
-	close(p.quitChan)
+func (p *Politeia) IsConnected() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.cancelSync != nil
+}
+
+func (p *Politeia) Synced() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.synced
+}
+
+func (p *Politeia) StopSync() {
+	p.mu.Lock()
+	if p.cancelSync != nil {
+		p.cancelSync()
+		p.client = nil
+		p.cancelSync = nil
+	}
+	p.mu.Unlock()
 	log.Info("Politeia sync: stopped")
 }
 
@@ -83,7 +135,7 @@ func (p *Politeia) fetchAllUnfetchedProposals(tokenInventory *www.TokenInventory
 	rejectedTokens, savedTokens := p.getUniqueTokens(tokenInventory.Rejected, savedTokens)
 	abandonedTokens, savedTokens := p.getUniqueTokens(tokenInventory.Abandoned, savedTokens)
 	preTokens, savedTokens := p.getUniqueTokens(tokenInventory.Pre, savedTokens)
-	activeTokens, savedTokens := p.getUniqueTokens(tokenInventory.Active, savedTokens)
+	activeTokens, _ := p.getUniqueTokens(tokenInventory.Active, savedTokens)
 
 	inventoryMap := map[int32][]string{
 		ProposalCategoryPre:       preTokens,
@@ -105,6 +157,10 @@ func (p *Politeia) fetchAllUnfetchedProposals(tokenInventory *www.TokenInventory
 		return nil
 	}
 
+	if done(p.ctx) {
+		return errors.New(ErrContextCanceled)
+	}
+
 	for category, tokens := range inventoryMap {
 		err := p.fetchBatchProposals(category, tokens)
 		if err != nil {
@@ -120,7 +176,11 @@ func (p *Politeia) fetchBatchProposals(category int32, tokens []string) error {
 		if len(tokens) == 0 {
 			break
 		}
-
+		p.mu.RLock()
+		defer p.mu.RUnlock()
+		if done(p.ctx) {
+			return errors.New(ErrContextCanceled)
+		}
 		limit := int(p.client.policy.ProposalListPageSize)
 		if len(tokens) <= limit {
 			limit = len(tokens)
@@ -153,6 +213,8 @@ func (p *Politeia) fetchBatchProposals(category int32, tokens []string) error {
 				return fmt.Errorf("error saving new proposal: %s", err.Error())
 			}
 		}
+
+		log.Infof("Politeia sync: fetched %d proposals", limit)
 	}
 
 	return nil
@@ -160,7 +222,9 @@ func (p *Politeia) fetchBatchProposals(category int32, tokens []string) error {
 
 func (p *Politeia) checkForUpdates() error {
 	offset := 0
+	p.mu.RLock()
 	limit := int32(p.client.policy.ProposalListPageSize)
+	p.mu.RUnlock()
 
 	var allProposals []Proposal
 
@@ -197,7 +261,8 @@ func (p *Politeia) handleProposalsUpdate(proposals []Proposal) error {
 	for i := range proposals {
 		tokens[i] = proposals[i].Token
 	}
-
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 	batchProposals, err := p.client.batchProposals(tokens)
 	if err != nil {
 		return err
@@ -287,36 +352,39 @@ func (p *Politeia) RemoveNotificationListener(uniqueIdentifier string) {
 	delete(p.notificationListeners, uniqueIdentifier)
 }
 
-func (p *Politeia) publishNewProposal(proposal *Proposal) {
-	if p.mwRef.ReadBoolConfigValueForKey(PoliteiaNotificationConfigKey, false) {
-		p.notificationListenersMu.Lock()
-		defer p.notificationListenersMu.Unlock()
+func (p *Politeia) publishSynced() {
+	p.notificationListenersMu.Lock()
+	defer p.notificationListenersMu.Unlock()
 
-		for _, notificationListener := range p.notificationListeners {
-			notificationListener.OnNewProposal(proposal)
-		}
+	for _, notificationListener := range p.notificationListeners {
+		notificationListener.OnProposalsSynced()
+	}
+}
+
+func (p *Politeia) publishNewProposal(proposal *Proposal) {
+	p.notificationListenersMu.Lock()
+	defer p.notificationListenersMu.Unlock()
+
+	for _, notificationListener := range p.notificationListeners {
+		notificationListener.OnNewProposal(proposal)
 	}
 }
 
 func (p *Politeia) publishVoteStarted(proposal *Proposal) {
-	if p.mwRef.ReadBoolConfigValueForKey(PoliteiaNotificationConfigKey, false) {
-		p.notificationListenersMu.Lock()
-		defer p.notificationListenersMu.Unlock()
+	p.notificationListenersMu.Lock()
+	defer p.notificationListenersMu.Unlock()
 
-		for _, notificationListener := range p.notificationListeners {
-			notificationListener.OnProposalVoteStarted(proposal)
-		}
+	for _, notificationListener := range p.notificationListeners {
+		notificationListener.OnProposalVoteStarted(proposal)
 	}
 }
 
 func (p *Politeia) publishVoteFinished(proposal *Proposal) {
-	if p.mwRef.ReadBoolConfigValueForKey(PoliteiaNotificationConfigKey, false) {
-		p.notificationListenersMu.Lock()
-		defer p.notificationListenersMu.Unlock()
+	p.notificationListenersMu.Lock()
+	defer p.notificationListenersMu.Unlock()
 
-		for _, notificationListener := range p.notificationListeners {
-			notificationListener.OnProposalVoteFinished(proposal)
-		}
+	for _, notificationListener := range p.notificationListeners {
+		notificationListener.OnProposalVoteFinished(proposal)
 	}
 }
 
@@ -340,7 +408,9 @@ func (p *Politeia) handleNewProposals(proposals []Proposal) error {
 		loadedTokens[i] = proposals[i].Token
 	}
 
+	p.mu.RLock()
 	tokenInventory, err := p.client.tokenInventory()
+	p.mu.RUnlock()
 	if err != nil {
 		return err
 	}

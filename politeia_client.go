@@ -232,6 +232,7 @@ func (c *politeiaClient) batchProposals(tokens []string) ([]Proposal, error) {
 			UserID:      proposalRecord.UserId,
 			Username:    proposalRecord.Username,
 			NumComments: int32(proposalRecord.NumComments),
+			Version:     proposalRecord.Version,
 			PublishedAt: proposalRecord.PublishedAt,
 		}
 

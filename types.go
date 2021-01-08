@@ -324,6 +324,7 @@ type Proposal struct {
 }
 
 type ProposalNotificationListener interface {
+	OnProposalsSynced()
 	OnNewProposal(proposal *Proposal)
 	OnProposalVoteStarted(proposal *Proposal)
 	OnProposalVoteFinished(proposal *Proposal)

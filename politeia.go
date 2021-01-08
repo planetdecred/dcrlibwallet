@@ -1,6 +1,7 @@
 package dcrlibwallet
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sync"
@@ -12,10 +13,13 @@ import (
 
 type Politeia struct {
 	mwRef                   *MultiWallet
+	mu                      sync.RWMutex
+	ctx                     context.Context
+	cancelSync              context.CancelFunc
+	synced                  bool
 	client                  *politeiaClient
 	notificationListenersMu sync.RWMutex
 	notificationListeners   map[string]ProposalNotificationListener
-	quitChan                chan struct{}
 }
 
 const (
@@ -34,7 +38,7 @@ const (
 func newPoliteia(mwRef *MultiWallet) (*Politeia, error) {
 	p := &Politeia{
 		mwRef:                 mwRef,
-		client:                newPoliteiaClient(),
+		client:                nil,
 		notificationListeners: make(map[string]ProposalNotificationListener),
 	}
 
@@ -80,9 +84,9 @@ func (p *Politeia) GetProposalsRaw(category int32, offset, limit int32, newestFi
 	}
 
 	if newestFirst {
-		query = query.OrderBy("Timestamp").Reverse()
+		query = query.OrderBy("PublishedAt").Reverse()
 	} else {
-		query = query.OrderBy("Timestamp")
+		query = query.OrderBy("PublishedAt")
 	}
 
 	var proposals []Proposal
@@ -162,6 +166,10 @@ func (p *Politeia) Count(category int32) (int32, error) {
 	}
 
 	return int32(count), nil
+}
+
+func (p *Politeia) ClearSavedProposals() error {
+	return p.mwRef.db.Drop(&Proposal{})
 }
 
 func (p *Politeia) marshalResult(result interface{}, err error) (string, error) {
