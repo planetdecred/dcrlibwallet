@@ -221,8 +221,14 @@ func (wallet *Wallet) AccountNameRaw(accountNumber uint32) (string, error) {
 	return wallet.internal.AccountName(wallet.shutdownContext(), accountNumber)
 }
 
-func (wallet *Wallet) AccountNumber(accountName string) (uint32, error) {
-	return wallet.internal.AccountNumber(wallet.shutdownContext(), accountName)
+func (wallet *Wallet) AccountNumber(accountName string) (int32, error) {
+	accountNumber, err := wallet.internal.AccountNumber(wallet.shutdownContext(), accountName)
+	return int32(accountNumber), translateError(err)
+}
+
+func (wallet *Wallet) HasAccount(accountName string) bool {
+	_, err := wallet.internal.AccountNumber(wallet.shutdownContext(), accountName)
+	return err == nil
 }
 
 func (wallet *Wallet) HDPathForAccount(accountNumber int32) (string, error) {

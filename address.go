@@ -69,7 +69,7 @@ func (wallet *Wallet) AddressInfo(address string) (*AddressInfo, error) {
 		if err != nil {
 			return nil, err
 		}
-		addressInfo.AccountNumber = accountNumber
+		addressInfo.AccountNumber = uint32(accountNumber)
 	}
 
 	return addressInfo, nil
