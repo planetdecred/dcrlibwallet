@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"decred.org/dcrwallet/errors"
 	w "decred.org/dcrwallet/wallet"
@@ -180,16 +179,9 @@ func (wallet *Wallet) UnspentOutputs(account int32) ([]*UnspentOutput, error) {
 }
 
 func (wallet *Wallet) NextAccount(accountName string, privPass []byte) (int32, error) {
-	lock := make(chan time.Time, 1)
-	defer func() {
-		for i := range privPass {
-			privPass[i] = 0
-		}
-		lock <- time.Time{} // send matters, not the value
-	}()
-
 	ctx := wallet.shutdownContext()
-	err := wallet.internal.Unlock(ctx, privPass, lock)
+
+	err := wallet.UnlockWallet(privPass)
 	if err != nil {
 		log.Error(err)
 		return 0, errors.New(ErrInvalidPassphrase)

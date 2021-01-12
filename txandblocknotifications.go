@@ -98,7 +98,7 @@ func (mw *MultiWallet) RemoveTxAndBlockNotificationListener(uniqueIdentifier str
 func (mw *MultiWallet) checkWalletMixers() {
 	for _, wallet := range mw.wallets {
 		if wallet.IsAccountMixerActive() {
-			changeAccount := wallet.ReadInt32ConfigValueForKey(AccountMixerChangeAccount, -1)
+			changeAccount := wallet.ReadInt32ConfigValueForKey(AccountMixerUnmixedAccount, -1)
 			hasMixableOutput, err := wallet.accountHasMixableOutput(changeAccount)
 			if err != nil {
 				log.Errorf("Error checking for mixable outputs: %v", err)

@@ -10,34 +10,65 @@ import (
 	"github.com/decred/dcrd/dcrutil/v3"
 )
 
-const smalletSplitPoint = 000.00262144
+const (
+	smalletSplitPoint  = 000.00262144
+	ShuffleServer      = "cspp.decred.org"
+	ShufflePort        = "15760"
+	MixedAccountBranch = 0
+)
 
 func (mw *MultiWallet) SetAccountMixerNotification(accountMixerNotificationListener AccountMixerNotificationListener) {
 	mw.accountMixerNotificationListener = accountMixerNotificationListener
 }
 
-func (wallet *Wallet) SetAccountMixerConfig(mixedAccount, changeAccount int32) error {
+func (wallet *Wallet) SetAccountMixerConfig(mixedAccount, unmixedAccount, privPass string) error {
 
 	accountMixerConfigSet := wallet.ReadBoolConfigValueForKey(AccountMixerConfigSet, false)
 	if accountMixerConfigSet {
 		return errors.New(ErrInvalid)
 	}
 
-	_, err := wallet.GetAccount(mixedAccount)
+	if wallet.HasAccount(mixedAccount) || wallet.HasAccount(unmixedAccount) {
+		return errors.New(ErrExist)
+	}
+
+	mixedAccountNumber, err := wallet.NextAccount(mixedAccount, []byte(privPass))
 	if err != nil {
 		return err
 	}
 
-	_, err = wallet.GetAccount(changeAccount)
+	unmixedAccountNumber, err := wallet.NextAccount(unmixedAccount, []byte(privPass))
 	if err != nil {
 		return err
 	}
 
-	wallet.SetInt32ConfigValueForKey(AccountMixerMixedAccount, mixedAccount)
-	wallet.SetInt32ConfigValueForKey(AccountMixerChangeAccount, changeAccount)
+	wallet.SetInt32ConfigValueForKey(AccountMixerMixedAccount, mixedAccountNumber)
+	wallet.SetInt32ConfigValueForKey(AccountMixerUnmixedAccount, unmixedAccountNumber)
 	wallet.SetBoolConfigValueForKey(AccountMixerConfigSet, true)
 
 	return nil
+}
+
+func (wallet *Wallet) ClearMixerConfig() {
+	wallet.SetInt32ConfigValueForKey(AccountMixerMixedAccount, -1)
+	wallet.SetInt32ConfigValueForKey(AccountMixerUnmixedAccount, -1)
+	wallet.SetBoolConfigValueForKey(AccountMixerConfigSet, false)
+}
+
+func (mw *MultiWallet) ReadyToMix(walletID int) (bool, error) {
+	wallet := mw.WalletWithID(walletID)
+	if wallet == nil {
+		return false, errors.New(ErrNotExist)
+	}
+
+	unmixedAccount := wallet.ReadInt32ConfigValueForKey(AccountMixerUnmixedAccount, -1)
+
+	hasMixableOutput, err := wallet.accountHasMixableOutput(unmixedAccount)
+	if err != nil {
+		return false, translateError(err)
+	}
+
+	return hasMixableOutput, nil
 }
 
 // StartAccountMixer starts the automatic account mixer
@@ -55,9 +86,9 @@ func (mw *MultiWallet) StartAccountMixer(walletID int, walletPassphrase string) 
 	tb := ticketbuyer.New(wallet.internal)
 
 	mixedAccount := wallet.ReadInt32ConfigValueForKey(AccountMixerMixedAccount, -1)
-	changeAccount := wallet.ReadInt32ConfigValueForKey(AccountMixerChangeAccount, -1)
+	unmixedAccount := wallet.ReadInt32ConfigValueForKey(AccountMixerUnmixedAccount, -1)
 
-	hasMixableOutput, err := wallet.accountHasMixableOutput(changeAccount)
+	hasMixableOutput, err := wallet.accountHasMixableOutput(unmixedAccount)
 	if err != nil {
 		return translateError(err)
 	} else if !hasMixableOutput {
@@ -65,10 +96,10 @@ func (mw *MultiWallet) StartAccountMixer(walletID int, walletPassphrase string) 
 	}
 
 	tb.AccessConfig(func(c *ticketbuyer.Config) {
-		c.MixedAccountBranch = 0
+		c.MixedAccountBranch = MixedAccountBranch
 		c.MixedAccount = uint32(mixedAccount)
-		c.ChangeAccount = uint32(changeAccount)
-		c.CSPPServer = "cspp.decred.org:15760"
+		c.ChangeAccount = uint32(unmixedAccount)
+		c.CSPPServer = ShuffleServer + ":" + ShufflePort
 		c.BuyTickets = false
 		c.MixChange = true
 	})
@@ -140,12 +171,12 @@ func (wallet *Wallet) accountHasMixableOutput(accountNumber int32) (bool, error)
 	}
 
 	if !hasMixableOutput {
-		accoutnName, err := wallet.AccountName(accountNumber)
+		accountName, err := wallet.AccountName(accountNumber)
 		if err != nil {
 			return hasMixableOutput, nil
 		}
 
-		lockedOutpoints, err := wallet.internal.LockedOutpoints(wallet.shutdownContext(), accoutnName)
+		lockedOutpoints, err := wallet.internal.LockedOutpoints(wallet.shutdownContext(), accountName)
 		if err != nil {
 			return hasMixableOutput, nil
 		}
