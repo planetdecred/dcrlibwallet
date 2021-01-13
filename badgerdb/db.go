@@ -641,7 +641,7 @@ func openDB(dbPath string, create bool) (walletdb.DB, error) {
 		WithValueLogLoadingMode(options.FileIO).
 		WithTableLoadingMode(options.FileIO).
 		WithValueLogFileSize(200 << 20).
-		WithMaxTableSize(64 << 20).
+		WithMaxTableSize(40 << 20).
 		WithLevelOneSize(200 << 20).
 		WithNumMemtables(1).
 		WithNumCompactors(1).

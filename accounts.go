@@ -183,13 +183,17 @@ func (wallet *Wallet) NextAccount(accountName string, privPass []byte) (int32, e
 
 	err := wallet.UnlockWallet(privPass)
 	if err != nil {
-		log.Error(err)
-		return 0, errors.New(ErrInvalidPassphrase)
+		return -1, err
 	}
 
-	accountNumber, err := wallet.internal.NextAccount(ctx, accountName)
+	defer wallet.LockWallet()
 
-	return int32(accountNumber), err
+	accountNumber, err := wallet.internal.NextAccount(ctx, accountName)
+	if err != nil {
+		return -1, err
+	}
+
+	return int32(accountNumber), nil
 }
 
 func (wallet *Wallet) RenameAccount(accountNumber int32, newName string) error {

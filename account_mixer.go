@@ -1,12 +1,10 @@
 package dcrlibwallet
 
 import (
-	"encoding/json"
 	"errors"
 
 	"decred.org/dcrwallet/ticketbuyer"
 	w "decred.org/dcrwallet/wallet"
-	"github.com/asdine/storm"
 	"github.com/decred/dcrd/dcrutil/v3"
 )
 
@@ -189,50 +187,4 @@ func (wallet *Wallet) accountHasMixableOutput(accountNumber int32) (bool, error)
 // IsAccountMixerActive returns true if account mixer is active
 func (wallet *Wallet) IsAccountMixerActive() bool {
 	return wallet.cancelAccountMixer != nil
-}
-
-func (wallet *Wallet) FindLastUsedCSPPAccounts() (string, error) {
-	var mixedTransaction Transaction
-	err := wallet.walletDataDB.FindLast("IsMixed", true, &mixedTransaction)
-	if err != nil {
-		if err == storm.ErrNotFound {
-			return "[]", nil
-		}
-		return "", translateError(err)
-	}
-
-	var csppAccountNumbers []int32
-
-	addAcccountIfNotExist := func(accountNumber int32) {
-		found := false
-		for i := range csppAccountNumbers {
-			if csppAccountNumbers[i] == accountNumber {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			csppAccountNumbers = append(csppAccountNumbers, accountNumber)
-		}
-	}
-
-	for _, input := range mixedTransaction.Inputs {
-		if input.AccountNumber >= 0 {
-			addAcccountIfNotExist(input.AccountNumber)
-		}
-
-	}
-
-	for _, output := range mixedTransaction.Outputs {
-		if output.AccountNumber >= 0 {
-			addAcccountIfNotExist(output.AccountNumber)
-		}
-	}
-
-	accountNumbers, err := json.Marshal(csppAccountNumbers)
-	if err != nil {
-		return "", err
-	}
-	return string(accountNumbers), nil
 }
