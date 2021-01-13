@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"reflect"
@@ -113,14 +114,18 @@ func (v *VSPD) GetVSPFeeAddress(ticketHash string, passphrase []byte) (*GetFeeAd
 		return nil, fmt.Errorf("failed to serialize parent %v of ticket %v: %v", parentHash, ticketHash, err)
 	}
 	parentHex := hex.EncodeToString(parentTxBuf)
-	req := GetFeeAddressRequest{
+
+	req, err := json.Marshal(&GetFeeAddressRequest{
 		Timestamp:  time.Now().Unix(),
 		TicketHash: ticketHash,
 		TicketHex:  ticketHex,
 		ParentHex:  parentHex,
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	resp, err := v.signedVSPHTTP("/api/v3/feeaddress", commitmentAddr.String(), passphrase, req)
+	resp, err := v.signedVSPHTTP("/api/v3/feeaddress", commitmentAddr.String(), passphrase, json.RawMessage(req))
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +143,7 @@ func (v *VSPD) GetVSPFeeAddress(ticketHash string, passphrase []byte) (*GetFeeAd
 
 	data := &VspdTicketInfo{
 		Timestamp:  feeAddressResponse.Timestamp,
-		Hash:       feeAddressResponse.Request.TicketHash,
+		Hash:       ticketHash,
 		FeeAddress: feeAddressResponse.FeeAddress,
 		FeeAmount:  feeAddressResponse.FeeAmount,
 		Expiration: feeAddressResponse.Expiration,
@@ -274,15 +279,18 @@ func (v *VSPD) PayVSPFee(feeTx, ticketHash, feeAddress string, passphrase []byte
 		voteChoices[agendaChoice.AgendaID] = agendaChoice.ChoiceID
 	}
 
-	req := PayFeeRequest{
+	req, err := json.Marshal(&PayFeeRequest{
 		FeeTx:       feeTx,
 		VotingKey:   votingKey,
 		TicketHash:  ticketHash,
 		Timestamp:   time.Now().Unix(),
 		VoteChoices: voteChoices,
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	resp, err := v.signedVSPHTTP("/api/v3/payfee", commitmentAddr.String(), passphrase, req)
+	resp, err := v.signedVSPHTTP("/api/v3/payfee", commitmentAddr.String(), passphrase, json.RawMessage(req))
 	if err != nil {
 		return nil, err
 	}
@@ -300,9 +308,9 @@ func (v *VSPD) PayVSPFee(feeTx, ticketHash, feeAddress string, passphrase []byte
 
 	data := &VspdTicketInfo{
 		Timestamp:   payFeeResponse.Timestamp,
-		Hash:        payFeeResponse.Request.TicketHash,
-		FeeTx:       payFeeResponse.Request.FeeTx,
-		VoteChoices: payFeeResponse.Request.VoteChoices,
+		Hash:        ticketHash,
+		FeeTx:       feeTx,
+		VoteChoices: voteChoices,
 	}
 
 	err = v.updateVspdDBRecord(data, ticketHash)
@@ -324,11 +332,14 @@ func (v *VSPD) GetTicketStatus(ticketHash string, passphrase []byte) (*TicketSta
 		return nil, err
 	}
 
-	req := TicketStatusRequest{
+	req, err := json.Marshal(&TicketStatusRequest{
 		TicketHash: ticketHash,
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	resp, err := v.signedVSPHTTP("/api/v3/ticketstatus", commitmentAddr.String(), passphrase, req)
+	resp, err := v.signedVSPHTTP("/api/v3/ticketstatus", commitmentAddr.String(), passphrase, json.RawMessage(req))
 	if err != nil {
 		return nil, err
 	}
@@ -346,7 +357,7 @@ func (v *VSPD) GetTicketStatus(ticketHash string, passphrase []byte) (*TicketSta
 
 	data := &VspdTicketInfo{
 		Timestamp:       ticketStatusResponse.Timestamp,
-		Hash:            ticketStatusResponse.Request.TicketHash,
+		Hash:            ticketHash,
 		TicketConfirmed: ticketStatusResponse.TicketConfirmed,
 		VoteChoices:     ticketStatusResponse.VoteChoices,
 		FeeTxStatus:     ticketStatusResponse.FeeTxStatus,
@@ -372,13 +383,16 @@ func (v *VSPD) SetVoteChoices(ticketHash string, passphrase []byte, choices map[
 		return nil, err
 	}
 
-	req := SetVoteChoicesRequest{
+	req, err := json.Marshal(&SetVoteChoicesRequest{
 		Timestamp:   time.Now().Unix(),
 		TicketHash:  ticketHash,
 		VoteChoices: choices,
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	resp, err := v.signedVSPHTTP("/api/v3/setvotechoices", commitmentAddr.String(), passphrase, req)
+	resp, err := v.signedVSPHTTP("/api/v3/setvotechoices", commitmentAddr.String(), passphrase, json.RawMessage(req))
 	if err != nil {
 		return nil, err
 	}
@@ -396,8 +410,8 @@ func (v *VSPD) SetVoteChoices(ticketHash string, passphrase []byte, choices map[
 
 	data := &VspdTicketInfo{
 		Timestamp:   setVoteChoicesResponse.Timestamp,
-		Hash:        setVoteChoicesResponse.Request.TicketHash,
-		VoteChoices: setVoteChoicesResponse.Request.VoteChoices,
+		Hash:        ticketHash,
+		VoteChoices: choices,
 	}
 
 	err = v.updateVspdDBRecord(data, ticketHash)
@@ -412,14 +426,16 @@ func (v *VSPD) SetVoteChoices(ticketHash string, passphrase []byte, choices map[
 // encoded and signed using the provided commitment address. The signature of
 // the response is also validated using the VSP pubkey.
 func (v *VSPD) signedVSPHTTP(path, commitmentAddr string, passphrase []byte, request interface{}) ([]byte, error) {
+	var reqBody io.Reader
 	reqBytes, err := json.Marshal(request)
 	if err != nil {
 		return nil, err
 	}
+	reqBody = bytes.NewReader(reqBytes)
 
 	path = strings.TrimSuffix(v.baseURL, "/") + path
 	ctx := v.w.shutdownContext()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, path, bytes.NewBuffer(reqBytes))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, path, reqBody)
 	if err != nil {
 		return nil, err
 	}
@@ -555,9 +571,9 @@ func verifyResponse(serverResp, serverReq interface{}) error {
 		return fmt.Errorf("failed to marshal request: %v", err)
 	}
 
-	if !bytes.Equal(resp, req) {
-		log.Debugf("server response has differing request: %#v != %#v",
-			resp, req)
+	if !bytes.Equal(req, resp) {
+		log.Warnf("server response has differing request: %#v != %#v",
+			serverResp, serverReq)
 		return fmt.Errorf("server response contains differing request")
 	}
 
