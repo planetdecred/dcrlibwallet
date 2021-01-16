@@ -30,12 +30,19 @@ func (wallet *Wallet) SetAccountMixerConfig(mixedAccount, unmixedAccount, privPa
 		return errors.New(ErrExist)
 	}
 
-	mixedAccountNumber, err := wallet.NextAccount(mixedAccount, []byte(privPass))
+	err := wallet.UnlockWallet([]byte(privPass))
 	if err != nil {
 		return err
 	}
 
-	unmixedAccountNumber, err := wallet.NextAccount(unmixedAccount, []byte(privPass))
+	defer wallet.LockWallet()
+
+	mixedAccountNumber, err := wallet.NextAccount(mixedAccount)
+	if err != nil {
+		return err
+	}
+
+	unmixedAccountNumber, err := wallet.NextAccount(unmixedAccount)
 	if err != nil {
 		return err
 	}

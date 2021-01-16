@@ -178,15 +178,24 @@ func (wallet *Wallet) UnspentOutputs(account int32) ([]*UnspentOutput, error) {
 	return unspentOutputs, nil
 }
 
-func (wallet *Wallet) NextAccount(accountName string, privPass []byte) (int32, error) {
-	ctx := wallet.shutdownContext()
-
+func (wallet *Wallet) CreateNewAccount(accountName string, privPass []byte) (int32, error) {
 	err := wallet.UnlockWallet(privPass)
 	if err != nil {
 		return -1, err
 	}
 
 	defer wallet.LockWallet()
+
+	return wallet.NextAccount(accountName)
+}
+
+func (wallet *Wallet) NextAccount(accountName string) (int32, error) {
+
+	if wallet.IsLocked() {
+		return -1, errors.New(ErrWalletLocked)
+	}
+
+	ctx := wallet.shutdownContext()
 
 	accountNumber, err := wallet.internal.NextAccount(ctx, accountName)
 	if err != nil {
