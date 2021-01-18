@@ -89,7 +89,6 @@ func (p *Politeia) Sync() error {
 
 		go func() {
 			for {
-				log.Info("For loop going")
 				select {
 				case <-ticker.C:
 					log.Info("Politeia sync: checking for proposal updates")
@@ -205,6 +204,7 @@ func (p *Politeia) fetchBatchProposals(category int32, tokens []string) error {
 				proposals[i].VoteStatus = int32(voteSummary.Status)
 				proposals[i].VoteApproved = voteSummary.Approved
 				proposals[i].PassPercentage = int32(voteSummary.PassPercentage)
+				proposals[i].EligibleTickets = int32(voteSummary.EligibleTickets)
 				proposals[i].YesVotes, proposals[i].NoVotes = getVotesCount(voteSummary.Results)
 			}
 
@@ -278,6 +278,7 @@ func (p *Politeia) handleProposalsUpdate(proposals []Proposal) error {
 			batchProposals[i].VoteStatus = int32(voteSummary.Status)
 			batchProposals[i].VoteApproved = voteSummary.Approved
 			batchProposals[i].PassPercentage = int32(voteSummary.PassPercentage)
+			batchProposals[i].EligibleTickets = int32(voteSummary.EligibleTickets)
 			batchProposals[i].YesVotes, proposals[i].NoVotes = getVotesCount(voteSummary.Results)
 		}
 

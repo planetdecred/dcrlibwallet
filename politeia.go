@@ -169,7 +169,12 @@ func (p *Politeia) Count(category int32) (int32, error) {
 }
 
 func (p *Politeia) ClearSavedProposals() error {
-	return p.mwRef.db.Drop(&Proposal{})
+	err := p.mwRef.db.Drop(&Proposal{})
+	if err != nil {
+		return translateError(err)
+	}
+
+	return p.mwRef.db.Init(&Proposal{})
 }
 
 func (p *Politeia) marshalResult(result interface{}, err error) (string, error) {

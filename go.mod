@@ -24,7 +24,6 @@ require (
 	github.com/onsi/gomega v1.10.1
 	go.etcd.io/bbolt v1.3.5
 	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a
-	golang.org/x/mobile v0.0.0-20201217150744-e6ae53a27f4f // indirect
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
 )
 
