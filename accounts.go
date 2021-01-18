@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"decred.org/dcrwallet/errors"
 	w "decred.org/dcrwallet/wallet"
@@ -179,25 +178,31 @@ func (wallet *Wallet) UnspentOutputs(account int32) ([]*UnspentOutput, error) {
 	return unspentOutputs, nil
 }
 
-func (wallet *Wallet) NextAccount(accountName string, privPass []byte) (int32, error) {
-	lock := make(chan time.Time, 1)
-	defer func() {
-		for i := range privPass {
-			privPass[i] = 0
-		}
-		lock <- time.Time{} // send matters, not the value
-	}()
-
-	ctx := wallet.shutdownContext()
-	err := wallet.internal.Unlock(ctx, privPass, lock)
+func (wallet *Wallet) CreateNewAccount(accountName string, privPass []byte) (int32, error) {
+	err := wallet.UnlockWallet(privPass)
 	if err != nil {
-		log.Error(err)
-		return 0, errors.New(ErrInvalidPassphrase)
+		return -1, err
 	}
 
-	accountNumber, err := wallet.internal.NextAccount(ctx, accountName)
+	defer wallet.LockWallet()
 
-	return int32(accountNumber), err
+	return wallet.NextAccount(accountName)
+}
+
+func (wallet *Wallet) NextAccount(accountName string) (int32, error) {
+
+	if wallet.IsLocked() {
+		return -1, errors.New(ErrWalletLocked)
+	}
+
+	ctx := wallet.shutdownContext()
+
+	accountNumber, err := wallet.internal.NextAccount(ctx, accountName)
+	if err != nil {
+		return -1, err
+	}
+
+	return int32(accountNumber), nil
 }
 
 func (wallet *Wallet) RenameAccount(accountNumber int32, newName string) error {

@@ -219,6 +219,10 @@ func (wallet *Wallet) UnlockWallet(privPass []byte) error {
 }
 
 func (wallet *Wallet) LockWallet() {
+	if wallet.IsAccountMixerActive() {
+		log.Error("LockWallet ignored due to active account mixer")
+	}
+
 	if !wallet.internal.Locked() {
 		wallet.internal.Lock()
 	}

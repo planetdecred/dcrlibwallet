@@ -6,6 +6,7 @@ const (
 	// Error Codes
 	ErrInsufficientBalance          = "insufficient_balance"
 	ErrInvalid                      = "invalid"
+	ErrWalletLocked                 = "wallet_locked"
 	ErrWalletDatabaseInUse          = "wallet_db_in_use"
 	ErrWalletNotLoaded              = "wallet_not_loaded"
 	ErrWalletNameExist              = "wallet_name_exists"

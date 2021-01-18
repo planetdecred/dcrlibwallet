@@ -6,10 +6,10 @@ import (
 )
 
 const (
-	AccountMixerConfigSet     = "account_mixer_config_set"
-	AccountMixerMixedAccount  = "account_mixer_mixed_account"
-	AccountMixerChangeAccount = "account_mixer_change_account"
-	AccountMixerMixTxChange   = "account_mixer_mix_tx_change"
+	AccountMixerConfigSet      = "account_mixer_config_set"
+	AccountMixerMixedAccount   = "account_mixer_mixed_account"
+	AccountMixerUnmixedAccount = "account_mixer_unmixed_account"
+	AccountMixerMixTxChange    = "account_mixer_mix_tx_change"
 )
 
 func (wallet *Wallet) SaveUserConfigValue(key string, value interface{}) {

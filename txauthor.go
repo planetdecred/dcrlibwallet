@@ -334,7 +334,7 @@ func (tx *TxAuthor) changeSource(ctx context.Context) (txauthor.ChangeSource, er
 
 		mixChange := tx.sourceWallet.ReadBoolConfigValueForKey(AccountMixerMixTxChange, false)
 		if mixChange {
-			changeAccount = uint32(tx.sourceWallet.ReadInt32ConfigValueForKey(AccountMixerChangeAccount, -1))
+			changeAccount = uint32(tx.sourceWallet.ReadInt32ConfigValueForKey(AccountMixerUnmixedAccount, -1))
 		} else {
 			changeAccount = tx.sourceAccountNumber
 		}
