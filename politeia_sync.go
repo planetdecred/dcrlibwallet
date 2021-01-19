@@ -175,15 +175,18 @@ func (p *Politeia) fetchBatchProposals(category int32, tokens []string) error {
 		if len(tokens) == 0 {
 			break
 		}
+
 		p.mu.RLock()
-		defer p.mu.RUnlock()
 		if done(p.ctx) {
 			return errors.New(ErrContextCanceled)
 		}
+
 		limit := int(p.client.policy.ProposalListPageSize)
 		if len(tokens) <= limit {
 			limit = len(tokens)
 		}
+
+		p.mu.RUnlock()
 
 		var tokenBatch []string
 		tokenBatch, tokens = tokens[:limit], tokens[limit:]
@@ -193,9 +196,17 @@ func (p *Politeia) fetchBatchProposals(category int32, tokens []string) error {
 			return err
 		}
 
+		if done(p.ctx) {
+			return errors.New(ErrContextCanceled)
+		}
+
 		votesSummaries, err := p.client.batchVoteSummary(tokenBatch)
 		if err != nil {
 			return err
+		}
+
+		if done(p.ctx) {
+			return errors.New(ErrContextCanceled)
 		}
 
 		for i := range proposals {
@@ -212,6 +223,12 @@ func (p *Politeia) fetchBatchProposals(category int32, tokens []string) error {
 			if err != nil {
 				return fmt.Errorf("error saving new proposal: %s", err.Error())
 			}
+
+			p.mu.RLock()
+			if p.synced {
+				p.publishNewProposal(&proposals[i])
+			}
+			p.mu.RUnlock()
 		}
 
 		log.Infof("Politeia sync: fetched %d proposals", limit)
@@ -261,8 +278,10 @@ func (p *Politeia) handleProposalsUpdate(proposals []Proposal) error {
 	for i := range proposals {
 		tokens[i] = proposals[i].Token
 	}
+
 	p.mu.RLock()
 	defer p.mu.RUnlock()
+
 	batchProposals, err := p.client.batchProposals(tokens)
 	if err != nil {
 		return err
