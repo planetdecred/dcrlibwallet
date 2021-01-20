@@ -45,7 +45,7 @@ func newPoliteia(mwRef *MultiWallet) (*Politeia, error) {
 	return p, nil
 }
 
-func (p *Politeia) saveOrOverwiteProposal(proposal Proposal) error {
+func (p *Politeia) saveOrOverwiteProposal(proposal *Proposal) error {
 	var oldProposal Proposal
 	err := p.mwRef.db.One("Token", proposal.Token, &oldProposal)
 	if err != nil && err != storm.ErrNotFound {
@@ -57,7 +57,7 @@ func (p *Politeia) saveOrOverwiteProposal(proposal Proposal) error {
 		p.mwRef.db.DeleteStruct(oldProposal)
 	}
 
-	return p.mwRef.db.Save(&proposal)
+	return p.mwRef.db.Save(proposal)
 }
 
 // GetProposalsRaw fetches and returns a proposals from the db

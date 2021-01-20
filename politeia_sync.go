@@ -121,6 +121,7 @@ func (p *Politeia) StopSync() {
 	p.mu.Lock()
 	if p.cancelSync != nil {
 		p.cancelSync()
+		p.synced = false
 		p.client = nil
 		p.cancelSync = nil
 	}
@@ -219,7 +220,7 @@ func (p *Politeia) fetchBatchProposals(category int32, tokens []string) error {
 				proposals[i].YesVotes, proposals[i].NoVotes = getVotesCount(voteSummary.Results)
 			}
 
-			err = p.saveOrOverwiteProposal(proposals[i])
+			err = p.saveOrOverwiteProposal(&proposals[i])
 			if err != nil {
 				return fmt.Errorf("error saving new proposal: %s", err.Error())
 			}
