@@ -29,17 +29,20 @@ func (p *Politeia) Sync() error {
 	p.ctx, p.cancelSync = p.mwRef.contextWithShutdownCancel()
 	p.client = newPoliteiaClient()
 
+	p.mu.Unlock()
+
 	// fetch server policy if it's not been fetched
 	if p.client.policy == nil {
 		serverPolicy, err := p.client.serverPolicy()
 		if err != nil {
-			p.mu.Unlock()
 			return err
 		}
 		p.client.policy = &serverPolicy
 	}
 
-	p.mu.Unlock()
+	if done(p.ctx) {
+		return errors.New(ErrContextCanceled)
+	}
 
 	proposals, err := p.GetProposalsRaw(ProposalCategoryAll, 0, 0, true)
 	if err != nil && err != storm.ErrNotFound {
@@ -57,9 +60,7 @@ func (p *Politeia) Sync() error {
 
 	// fetch remote token inventory
 	log.Info("Politeia sync: fetching token inventory")
-	p.mu.RLock()
 	tokenInventory, err := p.client.tokenInventory()
-	p.mu.RUnlock()
 	if err != nil {
 		return err
 	}
