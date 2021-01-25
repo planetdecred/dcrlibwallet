@@ -16,7 +16,6 @@ type Politeia struct {
 	mu                      sync.RWMutex
 	ctx                     context.Context
 	cancelSync              context.CancelFunc
-	synced                  bool
 	client                  *politeiaClient
 	notificationListenersMu sync.RWMutex
 	notificationListeners   map[string]ProposalNotificationListener
