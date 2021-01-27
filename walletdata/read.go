@@ -61,8 +61,8 @@ func (db *DB) Count(txFilter int32, txObj interface{}) (int, error) {
 	return count, nil
 }
 
-func (db *DB) FindOne(fieldName string, value interface{}, txObj interface{}) error {
-	return db.walletDataDB.One(fieldName, value, txObj)
+func (db *DB) FindOne(fieldName string, value interface{}, obj interface{}) error {
+	return db.walletDataDB.One(fieldName, value, obj)
 }
 
 func (db *DB) FindLast(fieldName string, value interface{}, txObj interface{}) error {

@@ -18,7 +18,6 @@ import (
 	"github.com/planetdecred/dcrlibwallet/utils"
 	"github.com/planetdecred/dcrlibwallet/walletdata"
 	bolt "go.etcd.io/bbolt"
-
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -40,7 +39,7 @@ type MultiWallet struct {
 	shuttingDown chan bool
 	cancelFuncs  []context.CancelFunc
 
-	Politeia Politeia
+	Politeia *Politeia
 }
 
 func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
@@ -62,7 +61,7 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 		return nil, errors.Errorf("failed to init logRotator: %v", err.Error())
 	}
 
-	walletsDb, err := storm.Open(filepath.Join(rootDir, walletsDbName))
+	mwDB, err := storm.Open(filepath.Join(rootDir, walletsDbName))
 	if err != nil {
 		log.Errorf("Error opening wallets database: %s", err.Error())
 		if err == bolt.ErrTimeout {
@@ -73,7 +72,14 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 	}
 
 	// init database for saving/reading wallet objects
-	err = walletsDb.Init(&Wallet{})
+	err = mwDB.Init(&Wallet{})
+	if err != nil {
+		log.Errorf("Error initializing wallets database: %s", err.Error())
+		return nil, err
+	}
+
+	// init database for saving/reading proposal objects
+	err = mwDB.Init(&Proposal{})
 	if err != nil {
 		log.Errorf("Error initializing wallets database: %s", err.Error())
 		return nil, err
@@ -82,14 +88,18 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 	mw := &MultiWallet{
 		dbDriver:    dbDriver,
 		rootDir:     rootDir,
-		db:          walletsDb,
+		db:          mwDB,
 		chainParams: chainParams,
 		wallets:     make(map[int]*Wallet),
 		syncData: &syncData{
 			syncProgressListeners: make(map[string]SyncProgressListener),
 		},
 		txAndBlockNotificationListeners: make(map[string]TxAndBlockNotificationListener),
-		Politeia:                        newPoliteia(),
+	}
+
+	mw.Politeia, err = newPoliteia(mw)
+	if err != nil {
+		return nil, err
 	}
 
 	// read saved wallets info from db and initialize wallets
