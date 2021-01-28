@@ -19,8 +19,10 @@ func (mw *MultiWallet) SetAccountMixerNotification(accountMixerNotificationListe
 	mw.accountMixerNotificationListener = accountMixerNotificationListener
 }
 
-func (wallet *Wallet) SetAccountMixerConfig(mixedAccount, unmixedAccount, privPass string) error {
-
+// CreateMixerAccounts creates the two accounts needed for the account mixer. This function
+// is added to ease unlocking the wallet before creating accounts. This function should be
+// used with auto cspp mixer setup.
+func (wallet *Wallet) CreateMixerAccounts(mixedAccount, unmixedAccount, privPass string) error {
 	accountMixerConfigSet := wallet.ReadBoolConfigValueForKey(AccountMixerConfigSet, false)
 	if accountMixerConfigSet {
 		return errors.New(ErrInvalid)
@@ -49,6 +51,38 @@ func (wallet *Wallet) SetAccountMixerConfig(mixedAccount, unmixedAccount, privPa
 
 	wallet.SetInt32ConfigValueForKey(AccountMixerMixedAccount, mixedAccountNumber)
 	wallet.SetInt32ConfigValueForKey(AccountMixerUnmixedAccount, unmixedAccountNumber)
+	wallet.SetBoolConfigValueForKey(AccountMixerConfigSet, true)
+
+	return nil
+}
+
+// SetAccountMixerConfig sets the config for mixed and unmixed account. Private passphrase is verifed
+// for security even if not used. This function should be used with manual cspp mixer setup.
+func (wallet *Wallet) SetAccountMixerConfig(mixedAccount, unmixedAccount int32, privPass string) error {
+
+	if mixedAccount == unmixedAccount {
+		return errors.New(ErrInvalid)
+	}
+
+	// Verify that account numbers are correct
+	_, err := wallet.GetAccount(mixedAccount)
+	if err != nil {
+		return errors.New(ErrNotExist)
+	}
+
+	_, err = wallet.GetAccount(unmixedAccount)
+	if err != nil {
+		return errors.New(ErrNotExist)
+	}
+
+	err = wallet.UnlockWallet([]byte(privPass))
+	if err != nil {
+		return err
+	}
+	wallet.LockWallet()
+
+	wallet.SetInt32ConfigValueForKey(AccountMixerMixedAccount, mixedAccount)
+	wallet.SetInt32ConfigValueForKey(AccountMixerUnmixedAccount, unmixedAccount)
 	wallet.SetBoolConfigValueForKey(AccountMixerConfigSet, true)
 
 	return nil
