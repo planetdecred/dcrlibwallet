@@ -421,7 +421,8 @@ func (mw *MultiWallet) saveNewWallet(wallet *Wallet, setupWallet func() error) (
 	}
 
 	if mw.IsConnectedToDecredNetwork() {
-		return nil, errors.New(ErrSyncAlreadyInProgress)
+		mw.CancelSync()
+		defer mw.SpvSync()
 	}
 	// Perform database save operations in batch transaction
 	// for automatic rollback if error occurs at any point.
@@ -493,13 +494,18 @@ func (mw *MultiWallet) RenameWallet(walletID int, newName string) error {
 
 func (mw *MultiWallet) DeleteWallet(walletID int, privPass []byte) error {
 
-	if mw.IsConnectedToDecredNetwork() {
-		return errors.New(ErrSyncAlreadyInProgress)
-	}
-
 	wallet := mw.WalletWithID(walletID)
 	if wallet == nil {
 		return errors.New(ErrNotExist)
+	}
+
+	if mw.IsConnectedToDecredNetwork() {
+		mw.CancelSync()
+		defer func() {
+			if mw.OpenedWalletsCount() > 0 {
+				mw.SpvSync()
+			}
+		}()
 	}
 
 	err := wallet.deleteWallet(privPass)
