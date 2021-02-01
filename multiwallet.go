@@ -362,7 +362,7 @@ func (mw *MultiWallet) LinkExistingWallet(walletName, walletDataDir, originalPub
 			return err
 		}
 
-		currentTxDbFilePath := filepath.Join(walletDataDir, "tx.db")
+		currentTxDbFilePath := filepath.Join(walletDataDir, walletdata.OldDbName)
 		newTxDbFilePath := filepath.Join(wallet.dataDir, walletdata.DbName)
 		if err := moveFile(currentTxDbFilePath, newTxDbFilePath); err != nil {
 			return err

@@ -9,7 +9,8 @@ import (
 )
 
 const (
-	DbName = "walletData.db"
+	DbName    = "walletData.db"
+	OldDbName = "tx.db"
 
 	TxBucketName = "TxIndexInfo"
 	KeyDbVersion = "DbVersion"
