@@ -36,8 +36,9 @@ type Wallet struct {
 	syncing           bool
 	waitingForHeaders bool
 
-	shuttingDown chan bool
-	cancelFuncs  []context.CancelFunc
+	shuttingDown       chan bool
+	cancelFuncs        []context.CancelFunc
+	cancelAccountMixer context.CancelFunc
 
 	// setUserConfigValue saves the provided key-value pair to a config database.
 	// This function is ideally assigned when the `wallet.prepare` method is
@@ -218,6 +219,10 @@ func (wallet *Wallet) UnlockWallet(privPass []byte) error {
 }
 
 func (wallet *Wallet) LockWallet() {
+	if wallet.IsAccountMixerActive() {
+		log.Error("LockWallet ignored due to active account mixer")
+	}
+
 	if !wallet.internal.Locked() {
 		wallet.internal.Lock()
 	}

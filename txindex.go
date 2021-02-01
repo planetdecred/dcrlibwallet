@@ -71,11 +71,11 @@ func (wallet *Wallet) IndexTransactions() error {
 		if err != nil {
 			log.Errorf("[%d] Post-indexing tx count error :%v", wallet.ID, err)
 		} else if count > 0 {
-			log.Debugf("[%d] Transaction index finished at %d, %d transaction(s) indexed in total", wallet.ID, txEndHeight, count)
+			log.Infof("[%d] Transaction index finished at %d, %d transaction(s) indexed in total", wallet.ID, txEndHeight, count)
 		}
 	}()
 
-	log.Debugf("[%d] Indexing transactions start height: %d, end height: %d", wallet.ID, beginHeight, endHeight)
+	log.Infof("[%d] Indexing transactions start height: %d, end height: %d", wallet.ID, beginHeight, endHeight)
 	return wallet.internal.GetTransactions(ctx, rangeFn, startBlock, endBlock)
 }
 

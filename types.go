@@ -1,6 +1,10 @@
 package dcrlibwallet
 
-import "decred.org/dcrwallet/wallet"
+import (
+	"encoding/json"
+
+	"decred.org/dcrwallet/wallet"
+)
 
 type WalletsIterator struct {
 	currentIndex int
@@ -72,6 +76,11 @@ type PeerInfo struct {
 	SubVer         string `json:"sub_ver"`
 	StartingHeight int64  `json:"starting_height"`
 	BanScore       int32  `json:"ban_score"`
+}
+
+type AccountMixerNotificationListener interface {
+	OnAccountMixerStarted(walletID int)
+	OnAccountMixerEnded(walletID int)
 }
 
 /** begin sync-related types */
@@ -166,6 +175,10 @@ type Transaction struct {
 	Hex         string `json:"hex"`
 	Timestamp   int64  `json:"timestamp"`
 	BlockHeight int32  `json:"block_height"`
+
+	IsMixed         bool  `json:"is_mixed"`
+	MixDenomination int64 `json:"mix_denom"`
+	MixCount        int32 `json:"mix_count"`
 
 	Version  int32 `json:"version"`
 	LockTime int32 `json:"lock_time"`
@@ -288,53 +301,35 @@ type VSPTicketPurchaseInfo struct {
 
 /** end ticket-related types */
 
-/** begin politea proposal types */
-type ServerVersion struct {
-	Version int `json:"version"`
-}
-
-type ServerPolicy struct {
-	ProposalListPageSize int `json:"proposallistpagesize"`
-}
-
-type ProposalFile struct {
-	Name    string `json:"name"`
-	Mime    string `json:"mime"`
-	Digest  string `json:"digest"`
-	Payload string `json:"payload"`
-}
-
-type ProposalMetaData struct {
-	Name   string `json:"name"`
-	LinkTo string `json:"linkto"`
-	LinkBy int64  `json:"linkby"`
-}
-
-type ProposalCensorshipRecord struct {
-	Token     string `json:"token"`
-	Merkle    string `json:"merkle"`
-	Signature string `json:"signature"`
-}
-
+/** begin politeia types */
 type Proposal struct {
-	Name             string                   `json:"name"`
-	State            int                      `json:"state"`
-	Status           int                      `json:"status"`
-	Timestamp        int64                    `json:"timestamp"`
-	UserID           string                   `json:"userid"`
-	Username         string                   `json:"username"`
-	PublicKey        string                   `json:"publickey"`
-	Signature        string                   `json:"signature"`
-	NumComments      int                      `json:"numcomments"`
-	Version          string                   `json:"version"`
-	PublishedAt      int64                    `json:"publishedat"`
-	Files            []ProposalFile           `json:"files"`
-	MetaData         []ProposalMetaData       `json:"metadata"`
-	CensorshipRecord ProposalCensorshipRecord `json:"censorshiprecord"`
+	ID               int    `storm:"id,increment"`
+	Token            string `json:"token" storm:"index"`
+	Category         int32  `json:"category" storm:"index"`
+	Name             string `json:"name"`
+	State            int32  `json:"state"`
+	Status           int32  `json:"status"`
+	Timestamp        int64  `json:"timestamp"`
+	UserID           string `json:"userid"`
+	Username         string `json:"username"`
+	NumComments      int32  `json:"numcomments"`
+	Version          string `json:"version"`
+	PublishedAt      int64  `json:"publishedat"`
+	IndexFile        string `json:"indexfile"`
+	VoteStatus       int32  `json:"votestatus"`
+	VoteApproved     bool   `json:"voteapproved"`
+	YesVotes         int32  `json:"yesvotes"`
+	NoVotes          int32  `json:"novotes"`
+	EligibleTickets  int32  `json:"eligibletickets"`
+	QuorumPercentage int32  `json:"quorumpercentage"`
+	PassPercentage   int32  `json:"passpercentage"`
 }
 
-type Proposals struct {
-	Proposals []Proposal `json:"proposals"`
+type ProposalNotificationListener interface {
+	OnProposalsSynced()
+	OnNewProposal(proposal *Proposal)
+	OnProposalVoteStarted(proposal *Proposal)
+	OnProposalVoteFinished(proposal *Proposal)
 }
 
 /** end politea proposal types */
@@ -372,15 +367,15 @@ type GetFeeAddressRequest struct {
 	Timestamp  int64  `json:"timestamp" binding:"required"`
 	TicketHash string `json:"tickethash" binding:"required"`
 	TicketHex  string `json:"tickethex" binding:"required"`
-	ParentHex  string `json:"parenthex"`
+	ParentHex  string `json:"parenthex" binding:"required"`
 }
 
 type GetFeeAddressResponse struct {
-	Timestamp  int64                `json:"timestamp"`
-	FeeAddress string               `json:"feeaddress"`
-	FeeAmount  int64                `json:"feeamount"`
-	Expiration int64                `json:"expiration"`
-	Request    GetFeeAddressRequest `json:"request"`
+	Timestamp  int64           `json:"timestamp"`
+	FeeAddress string          `json:"feeaddress"`
+	FeeAmount  int64           `json:"feeamount"`
+	Expiration int64           `json:"expiration"`
+	Request    json.RawMessage `json:"request"`
 }
 
 type PayFeeRequest struct {
@@ -392,8 +387,8 @@ type PayFeeRequest struct {
 }
 
 type PayFeeResponse struct {
-	Timestamp int64         `json:"timestamp"`
-	Request   PayFeeRequest `json:"request"`
+	Timestamp int64           `json:"timestamp"`
+	Request   json.RawMessage `json:"request"`
 }
 
 type TicketStatusRequest struct {
@@ -401,12 +396,12 @@ type TicketStatusRequest struct {
 }
 
 type TicketStatusResponse struct {
-	Timestamp       int64               `json:"timestamp"`
-	TicketConfirmed bool                `json:"ticketconfirmed"`
-	FeeTxStatus     string              `json:"feetxstatus"`
-	FeeTxHash       string              `json:"feetxhash"`
-	VoteChoices     map[string]string   `json:"votechoices"`
-	Request         TicketStatusRequest `json:"request"`
+	Timestamp       int64             `json:"timestamp"`
+	TicketConfirmed bool              `json:"ticketconfirmed"`
+	FeeTxStatus     string            `json:"feetxstatus"`
+	FeeTxHash       string            `json:"feetxhash"`
+	VoteChoices     map[string]string `json:"votechoices"`
+	Request         json.RawMessage   `json:"request"`
 }
 
 type SetVoteChoicesRequest struct {
@@ -416,8 +411,8 @@ type SetVoteChoicesRequest struct {
 }
 
 type SetVoteChoicesResponse struct {
-	Timestamp int64                 `json:"timestamp"`
-	Request   SetVoteChoicesRequest `json:"request"`
+	Timestamp int64           `json:"timestamp"`
+	Request   json.RawMessage `json:"request"`
 }
 
 type VspdTicketInfo struct {

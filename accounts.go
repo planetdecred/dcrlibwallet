@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"decred.org/dcrwallet/errors"
 	w "decred.org/dcrwallet/wallet"
@@ -179,25 +178,31 @@ func (wallet *Wallet) UnspentOutputs(account int32) ([]*UnspentOutput, error) {
 	return unspentOutputs, nil
 }
 
-func (wallet *Wallet) NextAccount(accountName string, privPass []byte) (int32, error) {
-	lock := make(chan time.Time, 1)
-	defer func() {
-		for i := range privPass {
-			privPass[i] = 0
-		}
-		lock <- time.Time{} // send matters, not the value
-	}()
-
-	ctx := wallet.shutdownContext()
-	err := wallet.internal.Unlock(ctx, privPass, lock)
+func (wallet *Wallet) CreateNewAccount(accountName string, privPass []byte) (int32, error) {
+	err := wallet.UnlockWallet(privPass)
 	if err != nil {
-		log.Error(err)
-		return 0, errors.New(ErrInvalidPassphrase)
+		return -1, err
 	}
 
-	accountNumber, err := wallet.internal.NextAccount(ctx, accountName)
+	defer wallet.LockWallet()
 
-	return int32(accountNumber), err
+	return wallet.NextAccount(accountName)
+}
+
+func (wallet *Wallet) NextAccount(accountName string) (int32, error) {
+
+	if wallet.IsLocked() {
+		return -1, errors.New(ErrWalletLocked)
+	}
+
+	ctx := wallet.shutdownContext()
+
+	accountNumber, err := wallet.internal.NextAccount(ctx, accountName)
+	if err != nil {
+		return -1, err
+	}
+
+	return int32(accountNumber), nil
 }
 
 func (wallet *Wallet) RenameAccount(accountNumber int32, newName string) error {
@@ -221,8 +226,14 @@ func (wallet *Wallet) AccountNameRaw(accountNumber uint32) (string, error) {
 	return wallet.internal.AccountName(wallet.shutdownContext(), accountNumber)
 }
 
-func (wallet *Wallet) AccountNumber(accountName string) (uint32, error) {
-	return wallet.internal.AccountNumber(wallet.shutdownContext(), accountName)
+func (wallet *Wallet) AccountNumber(accountName string) (int32, error) {
+	accountNumber, err := wallet.internal.AccountNumber(wallet.shutdownContext(), accountName)
+	return int32(accountNumber), translateError(err)
+}
+
+func (wallet *Wallet) HasAccount(accountName string) bool {
+	_, err := wallet.internal.AccountNumber(wallet.shutdownContext(), accountName)
+	return err == nil
 }
 
 func (wallet *Wallet) HDPathForAccount(accountNumber int32) (string, error) {

@@ -1,11 +1,15 @@
 package dcrlibwallet
 
-import "decred.org/dcrwallet/errors"
+import (
+	"decred.org/dcrwallet/errors"
+	"github.com/asdine/storm"
+)
 
 const (
 	// Error Codes
 	ErrInsufficientBalance          = "insufficient_balance"
 	ErrInvalid                      = "invalid"
+	ErrWalletLocked                 = "wallet_locked"
 	ErrWalletDatabaseInUse          = "wallet_db_in_use"
 	ErrWalletNotLoaded              = "wallet_not_loaded"
 	ErrWalletNameExist              = "wallet_name_exists"
@@ -34,6 +38,7 @@ const (
 	ErrChangingPassphrase           = "err_changing_passphrase"
 	ErrSavingWallet                 = "err_saving_wallet"
 	ErrIndexOutOfRange              = "err_index_out_of_range"
+	ErrNoMixableOutput              = "err_no_mixable_output"
 )
 
 // todo, should update this method to translate more error kinds.
@@ -42,7 +47,7 @@ func translateError(err error) error {
 		switch err.Kind {
 		case errors.InsufficientBalance:
 			return errors.New(ErrInsufficientBalance)
-		case errors.NotExist:
+		case errors.NotExist, storm.ErrNotFound:
 			return errors.New(ErrNotExist)
 		case errors.Passphrase:
 			return errors.New(ErrInvalidPassphrase)

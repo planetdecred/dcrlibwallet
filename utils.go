@@ -264,6 +264,17 @@ func moveFile(sourcePath, destinationPath string) error {
 	return nil
 }
 
+// done returns whether the context's Done channel was closed due to
+// cancellation or exceeded deadline.
+func done(ctx context.Context) bool {
+	select {
+	case <-ctx.Done():
+		return true
+	default:
+		return false
+	}
+}
+
 func backupFile(fileName string, suffix int) (newName string, err error) {
 	newName = fileName + ".bak" + strconv.Itoa(suffix)
 	exists, err := fileExists(newName)

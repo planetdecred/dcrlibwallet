@@ -2,6 +2,7 @@ package walletdata
 
 import (
 	"github.com/asdine/storm"
+	"github.com/asdine/storm/q"
 )
 
 const MaxReOrgBlocks = 6
@@ -60,6 +61,15 @@ func (db *DB) Count(txFilter int32, txObj interface{}) (int, error) {
 	return count, nil
 }
 
-func (db *DB) FindOne(fieldName string, value interface{}, txObj interface{}) error {
-	return db.walletDataDB.One(fieldName, value, txObj)
+func (db *DB) FindOne(fieldName string, value interface{}, obj interface{}) error {
+	return db.walletDataDB.One(fieldName, value, obj)
+}
+
+func (db *DB) FindLast(fieldName string, value interface{}, txObj interface{}) error {
+	query := db.walletDataDB.Select(q.Eq(fieldName, value)).OrderBy("Timestamp").Reverse()
+	return query.First(txObj)
+}
+
+func (db *DB) FindAll(fieldName string, value interface{}, txObj interface{}) error {
+	return db.walletDataDB.Find(fieldName, value, txObj)
 }
