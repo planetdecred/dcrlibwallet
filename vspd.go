@@ -85,7 +85,7 @@ func (v *VSPD) GetInfo() (*GetVspInfoResponse, error) {
 
 // GetVSPFeeAddress is the first part of submiting ticket to a VSP. It returns a
 // fee address and an amount that must be paid by calling CreateTicketFeeTx.
-func (v *VSPD) GetVSPFeeAddress(ticketHash string, passphrase []byte) (*GetFeeAddressResponse, error) {
+func (v *VSPD) getVSPFeeAddress(ticketHash string, passphrase []byte) (*GetFeeAddressResponse, error) {
 	if ticketHash == "" {
 		return nil, errors.New("no ticketHash provided")
 	}
@@ -159,7 +159,7 @@ func (v *VSPD) GetVSPFeeAddress(ticketHash string, passphrase []byte) (*GetFeeAd
 
 // CreateTicketFeeTx gets fee info from GetVSPFeeAddress makes payment and returns tx hash for PayVSPFee
 // ticket verification
-func (v *VSPD) CreateTicketFeeTx(feeAmount int64, ticketHash, feeAddress string, passphrase []byte) (string, error) {
+func (v *VSPD) createTicketFeeTx(feeAmount int64, ticketHash, feeAddress string, passphrase []byte) (string, error) {
 	if ticketHash == "" || feeAmount == 0 || feeAddress == "" {
 		return "", errors.New("missing required parameters")
 	}
@@ -189,13 +189,6 @@ func (v *VSPD) CreateTicketFeeTx(feeAmount int64, ticketHash, feeAddress string,
 		unsignedTx.RandomizeChangePosition()
 	}
 
-	defer txAuthor.sourceWallet.LockWallet()
-	err = txAuthor.sourceWallet.UnlockWallet(passphrase)
-	if err != nil {
-		log.Error(err)
-		return "", errors.New(ErrInvalidPassphrase)
-	}
-
 	txBuf := new(bytes.Buffer)
 	txBuf.Grow(unsignedTx.Tx.SerializeSize())
 	err = unsignedTx.Tx.Serialize(txBuf)
@@ -217,9 +210,56 @@ func (v *VSPD) CreateTicketFeeTx(feeAmount int64, ticketHash, feeAddress string,
 	return hex.EncodeToString(txBuf.Bytes()), nil
 }
 
-// PayVSPFee is the second part of submitting ticket to a VSP. The feeTx is gotton from CreateTicketFeeTx
+// PurchaseStakeTickets purchases the number of tickets passed as an argument and pays the fees for the tickets
+func (v *VSPD) PurchaseStakeTickets(tickets, expiryBlocks int32, passphrase []byte) error {
+	defer v.w.LockWallet()
+	passphraseCopy := make([]byte, len(passphrase))
+	_ = copy(passphraseCopy, passphrase)
+
+	err := v.w.UnlockWallet(passphraseCopy)
+	if err != nil {
+		return translateError(err)
+	}
+
+	request := &PurchaseTicketsRequest{
+		Account:               uint32(v.sourceAccountNumber),
+		Passphrase:            passphrase,
+		NumTickets:            uint32(tickets),
+		Expiry:                uint32(v.w.GetBestBlock() + expiryBlocks),
+		RequiredConfirmations: DefaultRequiredConfirmations,
+	}
+
+	hashes, err := v.w.PurchaseTickets(request, "")
+	if err != nil {
+		return err
+	}
+
+	for _, hash := range hashes {
+		resp, err := v.getVSPFeeAddress(hash, passphrase)
+		if err != nil {
+			log.Error(err)
+			return err
+		}
+
+		transactionResponse, err := v.createTicketFeeTx(resp.FeeAmount, hash, resp.FeeAddress, passphrase)
+		if err != nil {
+			log.Error(err)
+			return err
+		}
+
+		_, err = v.payVSPFee(transactionResponse, hash, "", passphrase)
+		if err != nil {
+			log.Error(err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+// PayVSPFee is the second part of submitting ticket to a VSP. The feeTx is gotten from CreateTicketFeeTx
 // and feeAddress from GetVSPFeeAddress
-func (v *VSPD) PayVSPFee(feeTx, ticketHash, feeAddress string, passphrase []byte) (*PayFeeResponse, error) {
+func (v *VSPD) payVSPFee(feeTx, ticketHash, feeAddress string, passphrase []byte) (*PayFeeResponse, error) {
 	if ticketHash == "" {
 		return nil, errors.New("no ticketHash provided")
 	}
@@ -240,12 +280,6 @@ func (v *VSPD) PayVSPFee(feeTx, ticketHash, feeAddress string, passphrase []byte
 
 	if len(votingAddress) == 0 {
 		return nil, errors.New("voting address not found")
-	}
-
-	defer v.w.LockWallet()
-	err = v.w.UnlockWallet(passphrase)
-	if err != nil {
-		return nil, translateError(err)
 	}
 
 	votingKey, err := v.w.internal.DumpWIFPrivateKey(v.w.shutdownContext(), votingAddress[0])
