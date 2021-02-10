@@ -189,24 +189,11 @@ func (v *VSPD) CreateTicketFeeTx(feeAmount int64, ticketHash, feeAddress string,
 		unsignedTx.RandomizeChangePosition()
 	}
 
-	lock := make(chan time.Time, 1)
-	defer func() {
-		lock <- time.Time{}
-	}()
-
-	ctx := txAuthor.sourceWallet.shutdownContext()
-	err = txAuthor.sourceWallet.internal.Unlock(ctx, passphrase, lock)
+	defer txAuthor.sourceWallet.LockWallet()
+	err = txAuthor.sourceWallet.UnlockWallet(passphrase)
 	if err != nil {
 		log.Error(err)
 		return "", errors.New(ErrInvalidPassphrase)
-	}
-
-	invalidSigs, err := txAuthor.sourceWallet.internal.SignTransaction(ctx, unsignedTx.Tx, txscript.SigHashAll, nil, nil, nil)
-	if err != nil {
-		for _, sigErr := range invalidSigs {
-			log.Errorf("\t%v", sigErr)
-		}
-		return "", fmt.Errorf("failed to sign transaction: %v", err)
 	}
 
 	txBuf := new(bytes.Buffer)
@@ -255,14 +242,8 @@ func (v *VSPD) PayVSPFee(feeTx, ticketHash, feeAddress string, passphrase []byte
 		return nil, errors.New("voting address not found")
 	}
 
-	lock := make(chan time.Time, 1)
-	defer func() {
-		lock <- time.Time{}
-	}()
-
-	// unlock wallet
-	ctx := v.w.shutdownContext()
-	err = v.w.internal.Unlock(ctx, passphrase, lock)
+	defer v.w.LockWallet()
+	err = v.w.UnlockWallet(passphrase)
 	if err != nil {
 		return nil, translateError(err)
 	}
