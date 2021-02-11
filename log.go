@@ -98,6 +98,18 @@ func initLogRotator(logFile string) error {
 	return nil
 }
 
+func UseLogger(logger slog.Logger) {
+	log = logger
+	loader.UseLogger(logger)
+	wallet.UseLogger(logger)
+	udb.UseLogger(logger)
+	ticketbuyer.UseLogger(logger)
+	spv.UseLogger(logger)
+	p2p.UseLogger(logger)
+	connmgr.UseLogger(logger)
+	addrmgr.UseLogger(logger)
+}
+
 // RegisterLogger should be called before logRotator is initialized.
 func RegisterLogger(tag string) (slog.Logger, error) {
 	if logRotator != nil {
