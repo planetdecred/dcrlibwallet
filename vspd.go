@@ -229,7 +229,7 @@ func (v *VSPD) PurchaseStakeTickets(tickets, expiryBlocks int32, passphrase []by
 		RequiredConfirmations: DefaultRequiredConfirmations,
 	}
 
-	hashes, err := v.w.PurchaseTickets(request, "")
+	hashes, err := v.w.purchaseTickets(request, "")
 	if err != nil {
 		return err
 	}

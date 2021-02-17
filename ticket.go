@@ -178,7 +178,7 @@ func (wallet *Wallet) TicketPrice() (*TicketPriceResponse, error) {
 }
 
 // PurchaseTickets purchases tickets from the wallet. Returns a slice of hashes for tickets purchased
-func (wallet *Wallet) PurchaseTickets(request *PurchaseTicketsRequest, vspHost string) ([]string, error) {
+func (wallet *Wallet) purchaseTickets(request *PurchaseTicketsRequest, vspHost string) ([]string, error) {
 	var err error
 
 	// fetch redeem script, ticket address, pool address and pool fee if vsp host isn't empty
