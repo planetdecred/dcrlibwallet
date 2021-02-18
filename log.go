@@ -98,16 +98,23 @@ func initLogRotator(logFile string) error {
 	return nil
 }
 
+// UseLoggers sets the subsystem logs to use the provided loggers.
+func UseLoggers(main, loaderLog, walletLog, tkbyLog,
+	syncLog, cmgrLog, amgrLog slog.Logger) {
+	log = main
+	loader.UseLogger(loaderLog)
+	wallet.UseLogger(walletLog)
+	udb.UseLogger(walletLog)
+	ticketbuyer.UseLogger(tkbyLog)
+	spv.UseLogger(syncLog)
+	p2p.UseLogger(syncLog)
+	connmgr.UseLogger(cmgrLog)
+	addrmgr.UseLogger(amgrLog)
+}
+
+// UseLogger sets the subsystem logs to use the provided logger.
 func UseLogger(logger slog.Logger) {
-	log = logger
-	loader.UseLogger(logger)
-	wallet.UseLogger(logger)
-	udb.UseLogger(logger)
-	ticketbuyer.UseLogger(logger)
-	spv.UseLogger(logger)
-	p2p.UseLogger(logger)
-	connmgr.UseLogger(logger)
-	addrmgr.UseLogger(logger)
+	UseLoggers(logger, logger, logger, logger, logger, logger, logger)
 }
 
 // RegisterLogger should be called before logRotator is initialized.
