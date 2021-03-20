@@ -51,6 +51,16 @@ func (db *DB) SaveOrUpdateVspdRecord(emptyTxPointer, record interface{}) (update
 	return
 }
 
+func (db *DB) LastIndexPoint() (int32, error) {
+	var endBlockHeight int32
+	err := db.walletDataDB.Get(TxBucketName, KeyEndBlock, &endBlockHeight)
+	if err != nil && err != storm.ErrNotFound {
+		return 0, err
+	}
+
+	return endBlockHeight, nil
+}
+
 func (db *DB) SaveLastIndexPoint(endBlockHeight int32) error {
 	err := db.walletDataDB.Set(TxBucketName, KeyEndBlock, &endBlockHeight)
 	if err != nil {

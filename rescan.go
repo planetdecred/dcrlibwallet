@@ -10,6 +10,10 @@ import (
 )
 
 func (mw *MultiWallet) RescanBlocks(walletID int) error {
+	return mw.RescanBlocksFromHeight(walletID, 0)
+}
+
+func (mw *MultiWallet) RescanBlocksFromHeight(walletID int, startHeight int32) error {
 
 	wallet := mw.WalletWithID(walletID)
 	if wallet == nil {
@@ -45,7 +49,7 @@ func (mw *MultiWallet) RescanBlocks(walletID int) error {
 		}
 
 		progress := make(chan w.RescanProgress, 1)
-		go wallet.internal.RescanProgressFromHeight(ctx, netBackend, 0, progress)
+		go wallet.internal.RescanProgressFromHeight(ctx, netBackend, startHeight, progress)
 
 		rescanStartTime := time.Now().Unix()
 
@@ -98,7 +102,12 @@ func (mw *MultiWallet) RescanBlocks(walletID int) error {
 			}
 		}
 
-		err := wallet.reindexTransactions()
+		var err error
+		if startHeight == 0 {
+			err = wallet.reindexTransactions()
+		} else {
+			err = wallet.IndexTransactions()
+		}
 		if mw.blocksRescanProgressListener != nil {
 			mw.blocksRescanProgressListener.OnBlocksRescanEnded(walletID, err)
 		}

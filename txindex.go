@@ -1,10 +1,14 @@
 package dcrlibwallet
 
 import (
+	"errors"
+
 	w "decred.org/dcrwallet/wallet"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/planetdecred/dcrlibwallet/walletdata"
 )
+
+const defaultTxRecoveryBlocks int32 = 4000
 
 func (wallet *Wallet) IndexTransactions() error {
 	ctx := wallet.shutdownContext()
@@ -86,4 +90,41 @@ func (wallet *Wallet) reindexTransactions() error {
 	}
 
 	return wallet.IndexTransactions()
+}
+
+func (mw *MultiWallet) RecoverTransactions(walletId int) error {
+
+	if !mw.IsSynced() {
+		return errors.New(ErrNotConnected)
+	}
+
+	wallet := mw.WalletWithID(walletId)
+	if wallet == nil {
+		return errors.New(ErrNotExist)
+	}
+
+	log.Infof("[%d] Doing transaction recovery", walletId)
+
+	lastIndexBlock, err := wallet.walletDataDB.LastIndexPoint()
+	if err != nil {
+		return err
+	}
+
+	bestBlock := mw.GetBestBlock()
+	beginScanHeight := bestBlock.Height - defaultTxRecoveryBlocks // recover from the last txRecoveryBlocks
+	if lastIndexBlock < beginScanHeight {
+		// tx index last index block might be older than beginScanHeight
+		beginScanHeight = lastIndexBlock
+	}
+
+	if beginScanHeight < 0 {
+		beginScanHeight = 0
+	}
+
+	err = wallet.walletDataDB.SaveLastIndexPoint(beginScanHeight)
+	if err != nil {
+		return err
+	}
+
+	return mw.RescanBlocksFromHeight(walletId, beginScanHeight)
 }
