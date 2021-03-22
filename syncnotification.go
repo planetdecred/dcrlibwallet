@@ -628,11 +628,37 @@ func (mw *MultiWallet) resetSyncData() {
 }
 
 func (mw *MultiWallet) synced(walletID int, synced bool) {
+
+	indexTransactions := func() {
+		// begin indexing transactions after sync is completed,
+		// syncProgressListeners.OnSynced() will be invoked after transactions are indexed
+		var txIndexing errgroup.Group
+		for _, wallet := range mw.wallets {
+			txIndexing.Go(wallet.IndexTransactions)
+		}
+
+		go func() {
+			err := txIndexing.Wait()
+			if err != nil {
+				log.Errorf("Tx Index Error: %v", err)
+			}
+
+			for _, syncProgressListener := range mw.syncProgressListeners() {
+				if synced {
+					syncProgressListener.OnSyncCompleted()
+				} else {
+					syncProgressListener.OnSyncCanceled(false)
+				}
+			}
+		}()
+	}
+
 	mw.syncData.mu.RLock()
 	allWalletsSynced := mw.syncData.synced
 	mw.syncData.mu.RUnlock()
 
 	if allWalletsSynced && synced {
+		indexTransactions()
 		return
 	}
 
@@ -655,26 +681,6 @@ func (mw *MultiWallet) synced(walletID int, synced bool) {
 		mw.syncData.synced = true
 		mw.syncData.mu.Unlock()
 
-		// begin indexing transactions after sync is completed,
-		// syncProgressListeners.OnSynced() will be invoked after transactions are indexed
-		var txIndexing errgroup.Group
-		for _, wallet := range mw.wallets {
-			txIndexing.Go(wallet.IndexTransactions)
-		}
-
-		go func() {
-			err := txIndexing.Wait()
-			if err != nil {
-				log.Errorf("Tx Index Error: %v", err)
-			}
-
-			for _, syncProgressListener := range mw.syncProgressListeners() {
-				if synced {
-					syncProgressListener.OnSyncCompleted()
-				} else {
-					syncProgressListener.OnSyncCanceled(false)
-				}
-			}
-		}()
+		indexTransactions()
 	}
 }
