@@ -106,6 +106,14 @@ func (mw *MultiWallet) RescanBlocksFromHeight(walletID int, startHeight int32) e
 		if startHeight == 0 {
 			err = wallet.reindexTransactions()
 		} else {
+			err = wallet.walletDataDB.SaveLastIndexPoint(startHeight)
+			if err != nil {
+				if mw.blocksRescanProgressListener != nil {
+					mw.blocksRescanProgressListener.OnBlocksRescanEnded(walletID, err)
+				}
+				return
+			}
+
 			err = wallet.IndexTransactions()
 		}
 		if mw.blocksRescanProgressListener != nil {
