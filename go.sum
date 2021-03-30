@@ -5,6 +5,8 @@ decred.org/dcrwallet v1.6.0-rc3 h1:Dft0ArM2hpqbjyYdhPEBbsTPah19Kno1Aa5WI5n4zn0=
 decred.org/dcrwallet v1.6.0-rc3/go.mod h1:KfDFVvtUnyCKPp6WwWxgD5Q5nlcgvd826tVOHyPOBU0=
 decred.org/dcrwallet v1.6.0-rc4 h1:5IT6mFa+2YMqenu6aE2LetD0N8QSUVFyAFl205PvIIE=
 decred.org/dcrwallet v1.6.0-rc4/go.mod h1:lsrNbuKxkPGeHXPufxNTckwQopCEDz0r3t0a8JCKAmU=
+decred.org/dcrwallet v1.6.2 h1:bf3SXJYjLQPxZ1NiDJntj556Ouszu2q9ObTuZqEVYKM=
+decred.org/dcrwallet v1.6.2/go.mod h1:hNOGyvH53gWdgFB601/ubGRzCPfPtWnEVAi9Grs90y4=
 github.com/AndreasBriese/bbloom v0.0.0-20190306092124-e2d15f34fcf9 h1:HD8gA2tkByhMAwYaFAX9w2l7vxvBQ5NMoxDrkhqhtn4=
 github.com/AndreasBriese/bbloom v0.0.0-20190306092124-e2d15f34fcf9/go.mod h1:bOvUY6CB00SOBii9/FifXqc0awNKxLFCL/+pkDPuyl8=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
@@ -45,6 +47,7 @@ github.com/decred/dcrd/blockchain/standalone/v2 v2.0.0 h1:9gUuH0u/IZNPWBK9K3CxgA
 github.com/decred/dcrd/blockchain/standalone/v2 v2.0.0/go.mod h1:t2qaZ3hNnxHZ5kzVJDgW5sp47/8T5hYJt7SR+/JtRhI=
 github.com/decred/dcrd/blockchain/v3 v3.0.1 h1:Sk1Td+2uahykZFMUunhhL0gBNawosVNBoq034Bjw6EQ=
 github.com/decred/dcrd/blockchain/v3 v3.0.1/go.mod h1:LD5VA95qdb+DlRiPI8VLBimDqvlDCAJsidZ5oD6nc/U=
+github.com/decred/dcrd/blockchain/v3 v3.0.2 h1:jrM7dTmNsvY3dzYhVOL090A3mnUnTlZdI5zt2l5SyAM=
 github.com/decred/dcrd/blockchain/v3 v3.0.2/go.mod h1:LD5VA95qdb+DlRiPI8VLBimDqvlDCAJsidZ5oD6nc/U=
 github.com/decred/dcrd/certgen v1.1.1/go.mod h1:ivkPLChfjdAgFh7ZQOtl6kJRqVkfrCq67dlq3AbZBQE=
 github.com/decred/dcrd/chaincfg/chainhash v1.0.2 h1:rt5Vlq/jM3ZawwiacWjPa+smINyLRN07EO0cNBV6DGU=
@@ -214,6 +217,8 @@ golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9 h1:psW17arqaxU48Z5kZ0CQnk
 golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=
 golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a h1:vclmkQCjlDX5OydZ9wv8rBCcS0QyQY66Mpf/7BZbInM=
 golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=
+golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83 h1:/ZScEX8SfEmUGRHs0gxpqteO5nfNW6axyZbBdw9A12g=
+golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83/go.mod h1:jdWPYTVW3xRLrWPugEBEK3UY2ZEsg3UU495nc5E+M+I=
 golang.org/x/exp v0.0.0-20190121172915-509febef88a4/go.mod h1:CJ0aWSM057203Lf6IL+f9T1iT9GByDxfZKAQTCR3kQA=
 golang.org/x/lint v0.0.0-20181026193005-c67002cb31c3/go.mod h1:UVdnD1Gm6xHRNCYTkRU2/jEulfH38KcIWyp/GAMgvoE=
 golang.org/x/lint v0.0.0-20190227174305-5b3e6a55c961/go.mod h1:wehouNa3lNwaWXcvxsM5YxQ5yQlVC4a0KAMCusXpPoU=
@@ -248,6 +253,7 @@ golang.org/x/sys v0.0.0-20190904154756-749cb33beabd/go.mod h1:h1NjWce9XRLGQEsW7w
 golang.org/x/sys v0.0.0-20191005200804-aed5e4c7ecf9/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20191010194322-b09406accb47 h1:/XfQ9z7ib8eEJX2hdgFTZJ/ntt0swNk5oYBziWeTCvY=
 golang.org/x/sys v0.0.0-20191010194322-b09406accb47/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
+golang.org/x/sys v0.0.0-20191026070338-33540a1f6037/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20191120155948-bd437916bb0e/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20200202164722-d101bd2416d5 h1:LfCXLvNmTYH9kEmVgqbnsWfruoXZIrh4YBgqVHtDvw0=
 golang.org/x/sys v0.0.0-20200202164722-d101bd2416d5/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
@@ -255,6 +261,7 @@ golang.org/x/sys v0.0.0-20200323222414-85ca7c5b95cd/go.mod h1:h1NjWce9XRLGQEsW7w
 golang.org/x/sys v0.0.0-20200519105757-fe76b779f299/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20200814200057-3d37ad5750ed h1:J22ig1FUekjjkmZUM7pTKixYm8DvrYsvrBZdunYeIuQ=
 golang.org/x/sys v0.0.0-20200814200057-3d37ad5750ed/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
+golang.org/x/term v0.0.0-20201117132131-f5c789dd3221/go.mod h1:Nr5EML6q2oocZ2LXRh80K7BxOlk5/8JxuGnuhpl+muw=
 golang.org/x/text v0.3.0 h1:g61tztE5qeGQ89tm6NTjjM9VPIm088od1l6aSorWRWg=
 golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
 golang.org/x/text v0.3.2 h1:tW2bmiBqwgJj/UpqtC8EpXEZVYOwU0yG4iWbprSVAcs=
