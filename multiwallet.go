@@ -22,6 +22,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+const (
+	DBDriverBadger = "badgerdb"
+	DBDriverBolt   = "bdb"
+)
+
 type MultiWallet struct {
 	dbDriver string
 	rootDir  string
