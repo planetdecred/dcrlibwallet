@@ -1,6 +1,6 @@
 package dcrlibwallet
 
-import "github.com/decred/dcrwallet/wallet/v3"
+import "decred.org/dcrwallet/wallet"
 
 func ticketStatusString(ticketStatus wallet.TicketStatus) string {
 	switch ticketStatus {

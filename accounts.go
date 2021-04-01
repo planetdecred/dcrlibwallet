@@ -5,9 +5,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/decred/dcrd/chaincfg/v2"
-	"github.com/decred/dcrwallet/errors/v2"
+	"decred.org/dcrwallet/errors"
+	"github.com/decred/dcrd/chaincfg/v3"
 )
+
+const AddressGapLimit uint32 = 20
 
 func (wallet *Wallet) GetAccounts() (string, error) {
 	accountsResponse, err := wallet.GetAccountsRaw()
@@ -24,14 +26,24 @@ func (wallet *Wallet) GetAccountsRaw() (*Accounts, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	accounts := make([]*Account, len(resp.Accounts))
 	for i, a := range resp.Accounts {
-		account, err := wallet.GetAccount(int32(a.AccountNumber))
+		balance, err := wallet.GetAccountBalance(int32(a.AccountNumber))
 		if err != nil {
 			return nil, err
 		}
 
-		accounts[i] = account
+		accounts[i] = &Account{
+			WalletID:         wallet.ID,
+			Number:           int32(a.AccountNumber),
+			Name:             a.AccountName,
+			Balance:          balance,
+			TotalBalance:     int64(a.TotalBalance),
+			ExternalKeyCount: int32(a.LastUsedExternalIndex + AddressGapLimit), // Add gap limit
+			InternalKeyCount: int32(a.LastUsedInternalIndex + AddressGapLimit),
+			ImportedKeyCount: int32(a.ImportedKeyCount),
+		}
 	}
 
 	return &Accounts{
@@ -69,32 +81,22 @@ func (accountsInterator *AccountsIterator) Reset() {
 }
 
 func (wallet *Wallet) GetAccount(accountNumber int32) (*Account, error) {
-	props, err := wallet.internal.AccountProperties(wallet.shutdownContext(), uint32(accountNumber))
+	accounts, err := wallet.GetAccountsRaw()
 	if err != nil {
 		return nil, err
 	}
 
-	balance, err := wallet.GetAccountBalance(accountNumber)
-	if err != nil {
-		return nil, err
+	for _, account := range accounts.Acc {
+		if account.Number == accountNumber {
+			return account, nil
+		}
 	}
 
-	account := &Account{
-		WalletID:         wallet.ID,
-		Number:           accountNumber,
-		Name:             props.AccountName,
-		TotalBalance:     balance.Total,
-		Balance:          balance,
-		ExternalKeyCount: int32(props.LastUsedExternalIndex + 20),
-		InternalKeyCount: int32(props.LastUsedInternalIndex + 20),
-		ImportedKeyCount: int32(props.ImportedKeyCount),
-	}
-
-	return account, nil
+	return nil, errors.New(ErrNotExist)
 }
 
 func (wallet *Wallet) GetAccountBalance(accountNumber int32) (*Balance, error) {
-	balance, err := wallet.internal.CalculateAccountBalance(wallet.shutdownContext(), uint32(accountNumber), wallet.RequiredConfirmations())
+	balance, err := wallet.internal.AccountBalance(wallet.shutdownContext(), uint32(accountNumber), wallet.RequiredConfirmations())
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +113,7 @@ func (wallet *Wallet) GetAccountBalance(accountNumber int32) (*Balance, error) {
 }
 
 func (wallet *Wallet) SpendableForAccount(account int32) (int64, error) {
-	bals, err := wallet.internal.CalculateAccountBalance(wallet.shutdownContext(), uint32(account), wallet.RequiredConfirmations())
+	bals, err := wallet.internal.AccountBalance(wallet.shutdownContext(), uint32(account), wallet.RequiredConfirmations())
 	if err != nil {
 		log.Error(err)
 		return 0, translateError(err)
@@ -149,13 +151,12 @@ func (wallet *Wallet) RenameAccount(accountNumber int32, newName string) error {
 	return nil
 }
 
-func (wallet *Wallet) AccountName(accountNumber int32) string {
+func (wallet *Wallet) AccountName(accountNumber int32) (string, error) {
 	name, err := wallet.AccountNameRaw(uint32(accountNumber))
 	if err != nil {
-		log.Error(err)
-		return "Account not found"
+		return "", translateError(err)
 	}
-	return name
+	return name, nil
 }
 
 func (wallet *Wallet) AccountNameRaw(accountNumber uint32) (string, error) {

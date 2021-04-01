@@ -3,8 +3,8 @@ package utils
 import (
 	"strings"
 
-	"github.com/decred/dcrd/chaincfg/v2"
-	"github.com/decred/dcrwallet/errors"
+	"decred.org/dcrwallet/errors"
+	"github.com/decred/dcrd/chaincfg/v3"
 )
 
 var (

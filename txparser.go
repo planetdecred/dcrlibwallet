@@ -3,8 +3,8 @@ package dcrlibwallet
 import (
 	"fmt"
 
+	w "decred.org/dcrwallet/wallet"
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	w "github.com/decred/dcrwallet/wallet/v3"
 )
 
 const BlockHeightInvalid int32 = -1
@@ -26,12 +26,17 @@ func (wallet *Wallet) decodeTransactionWithTxSummary(txSummary *w.TransactionSum
 	walletInputs := make([]*WalletInput, len(txSummary.MyInputs))
 	for i, input := range txSummary.MyInputs {
 		accountNumber := int32(input.PreviousAccount)
+		accountName, err := wallet.AccountName(accountNumber)
+		if err != nil {
+			log.Error(err)
+		}
+
 		walletInputs[i] = &WalletInput{
 			Index:    int32(input.Index),
 			AmountIn: int64(input.PreviousAmount),
 			WalletAccount: &WalletAccount{
 				AccountNumber: accountNumber,
-				AccountName:   wallet.AccountName(accountNumber),
+				AccountName:   accountName,
 			},
 		}
 	}
@@ -39,6 +44,11 @@ func (wallet *Wallet) decodeTransactionWithTxSummary(txSummary *w.TransactionSum
 	walletOutputs := make([]*WalletOutput, len(txSummary.MyOutputs))
 	for i, output := range txSummary.MyOutputs {
 		accountNumber := int32(output.Account)
+		accountName, err := wallet.AccountName(accountNumber)
+		if err != nil {
+			log.Error(err)
+		}
+
 		walletOutputs[i] = &WalletOutput{
 			Index:     int32(output.Index),
 			AmountOut: int64(output.Amount),
@@ -46,7 +56,7 @@ func (wallet *Wallet) decodeTransactionWithTxSummary(txSummary *w.TransactionSum
 			Address:   output.Address.Address(),
 			WalletAccount: &WalletAccount{
 				AccountNumber: accountNumber,
-				AccountName:   wallet.AccountName(accountNumber),
+				AccountName:   accountName,
 			},
 		}
 	}

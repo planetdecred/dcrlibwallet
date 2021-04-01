@@ -1,6 +1,6 @@
 package dcrlibwallet
 
-import "github.com/decred/dcrwallet/errors/v2"
+import "decred.org/dcrwallet/errors"
 
 const (
 	// Error Codes

@@ -3,11 +3,11 @@ package dcrlibwallet
 import (
 	"fmt"
 
-	"github.com/decred/dcrd/blockchain/stake/v2"
-	"github.com/decred/dcrd/chaincfg/v2"
-	"github.com/decred/dcrd/txscript/v2"
+	"decred.org/dcrwallet/wallet"
+	"github.com/decred/dcrd/blockchain/stake/v3"
+	"github.com/decred/dcrd/chaincfg/v3"
+	"github.com/decred/dcrd/txscript/v3"
 	"github.com/decred/dcrd/wire"
-	"github.com/decred/dcrwallet/wallet/v3"
 	"github.com/planetdecred/dcrlibwallet/txhelper"
 )
 
@@ -98,7 +98,7 @@ func decodeTxInputs(mtx *wire.MsgTx, walletInputs []*WalletInput) (inputs []*TxI
 
 func decodeTxOutputs(mtx *wire.MsgTx, netParams *chaincfg.Params, walletOutputs []*WalletOutput) (outputs []*TxOutput) {
 	outputs = make([]*TxOutput, len(mtx.TxOut))
-	txType := stake.DetermineTxType(mtx)
+	txType := stake.DetermineTxType(mtx, true)
 
 	for i, txOut := range mtx.TxOut {
 		// get address and script type for output
@@ -113,7 +113,7 @@ func decodeTxOutputs(mtx *wire.MsgTx, netParams *chaincfg.Params, walletOutputs 
 			// Ignore the error here since an error means the script
 			// couldn't parse and there is no additional information
 			// about it anyways.
-			scriptClass, addrs, _, _ := txscript.ExtractPkScriptAddrs(txOut.Version, txOut.PkScript, netParams)
+			scriptClass, addrs, _, _ := txscript.ExtractPkScriptAddrs(txOut.Version, txOut.PkScript, netParams, true)
 			if len(addrs) > 0 {
 				address = addrs[0].Address()
 			}
@@ -148,7 +148,7 @@ func decodeTxOutputs(mtx *wire.MsgTx, netParams *chaincfg.Params, walletOutputs 
 }
 
 func voteInfo(msgTx *wire.MsgTx) (ssGenVersion uint32, lastBlockValid bool, voteBits string, ticketSpentHash string) {
-	if stake.IsSSGen(msgTx) {
+	if stake.IsSSGen(msgTx, true) {
 		ssGenVersion = stake.SSGenVersion(msgTx)
 		bits := stake.SSGenVoteBits(msgTx)
 		voteBits = fmt.Sprintf("%#04x", bits)

@@ -1,13 +1,11 @@
 package dcrlibwallet
 
 import (
-	"encoding/hex"
 	"fmt"
 
-	"github.com/decred/dcrd/dcrutil/v2"
-	"github.com/decred/dcrwallet/errors/v2"
-	w "github.com/decred/dcrwallet/wallet/v3"
-	"github.com/decred/dcrwallet/wallet/v3/udb"
+	"decred.org/dcrwallet/errors"
+	w "decred.org/dcrwallet/wallet"
+	"github.com/decred/dcrd/dcrutil/v3"
 )
 
 // AddressInfo holds information about an address
@@ -38,20 +36,23 @@ func (wallet *Wallet) HaveAddress(address string) bool {
 	return have
 }
 
-func (wallet *Wallet) AccountOfAddress(address string) string {
+func (wallet *Wallet) AccountOfAddress(address string) (string, error) {
 	addr, err := dcrutil.DecodeAddress(address, wallet.chainParams)
 	if err != nil {
-		return err.Error()
+		return "", translateError(err)
 	}
 
-	info, _ := wallet.internal.AddressInfo(wallet.shutdownContext(), addr)
-	return wallet.AccountName(int32(info.Account()))
+	a, err := wallet.internal.KnownAddress(wallet.shutdownContext(), addr)
+	if err != nil {
+		return "", translateError(err)
+	}
+
+	return a.AccountName(), nil
 }
 
 func (wallet *Wallet) AddressInfo(address string) (*AddressInfo, error) {
 	addr, err := dcrutil.DecodeAddress(address, wallet.chainParams)
 	if err != nil {
-		log.Error(err)
 		return nil, err
 	}
 
@@ -59,11 +60,16 @@ func (wallet *Wallet) AddressInfo(address string) (*AddressInfo, error) {
 		Address: address,
 	}
 
-	info, _ := wallet.internal.AddressInfo(wallet.shutdownContext(), addr)
-	if info != nil {
+	known, _ := wallet.internal.KnownAddress(wallet.shutdownContext(), addr)
+	if known != nil {
 		addressInfo.IsMine = true
-		addressInfo.AccountNumber = info.Account()
-		addressInfo.AccountName = wallet.AccountName(int32(info.Account()))
+		addressInfo.AccountName = known.AccountName()
+
+		accountNumber, err := wallet.AccountNumber(known.AccountName())
+		if err != nil {
+			return nil, err
+		}
+		addressInfo.AccountNumber = accountNumber
 	}
 
 	return addressInfo, nil
@@ -101,23 +107,19 @@ func (wallet *Wallet) AddressPubKey(address string) (string, error) {
 		return "", err
 	}
 
-	ainfo, err := wallet.internal.AddressInfo(wallet.shutdownContext(), addr)
+	known, err := wallet.internal.KnownAddress(wallet.shutdownContext(), addr)
 	if err != nil {
 		return "", err
 	}
-	switch ma := ainfo.(type) {
-	case udb.ManagedPubKeyAddress:
-		pubKey := ma.ExportPubKey()
-		pubKeyBytes, err := hex.DecodeString(pubKey)
-		if err != nil {
-			return "", err
-		}
-		pubKeyAddr, err := dcrutil.NewAddressSecpPubKey(pubKeyBytes, wallet.chainParams)
+
+	switch known := known.(type) {
+	case w.PubKeyHashAddress:
+
+		pubKeyAddr, err := dcrutil.NewAddressSecpPubKey(known.PubKey(), wallet.chainParams)
 		if err != nil {
 			return "", err
 		}
 		return pubKeyAddr.String(), nil
-
 	default:
 		return "", fmt.Errorf("address is not a managed pub key address")
 	}
