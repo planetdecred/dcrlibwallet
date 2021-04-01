@@ -648,7 +648,7 @@ func openDB(dbPath string, create bool) (walletdb.DB, error) {
 	opts.Dir = dbPath
 	opts.ValueDir = dbPath
 	opts.ValueLogLoadingMode = options.FileIO
-	opts.TableLoadingMode = options.MemoryMap
+	opts.TableLoadingMode = options.FileIO
 	opts.ValueLogFileSize = 209715200
 	opts.MaxTableSize = 40000000
 	opts.LevelOneSize = 209715200
