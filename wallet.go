@@ -125,10 +125,6 @@ func (wallet *Wallet) NetType() string {
 	return wallet.chainParams.Name
 }
 
-func (wallet *Wallet) DBDriver() string {
-	return wallet.DbDriver
-}
-
 func (wallet *Wallet) WalletExists() (bool, error) {
 	return wallet.loader.WalletExists()
 }
