@@ -6,6 +6,8 @@ import (
 	"github.com/planetdecred/dcrlibwallet/walletdata"
 )
 
+const defaultTxRecoveryBlocks int32 = 4000
+
 func (wallet *Wallet) IndexTransactions() error {
 	ctx := wallet.shutdownContext()
 
