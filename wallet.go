@@ -65,6 +65,10 @@ func (wallet *Wallet) prepare(rootDir string, chainParams *chaincfg.Params,
 
 	// open database for indexing transactions for faster loading
 	walletDataDBPath := filepath.Join(wallet.dataDir, walletdata.DbName)
+	oldTxDBPath := filepath.Join(wallet.dataDir, walletdata.OldDbName)
+	if exists, _ := fileExists(oldTxDBPath); exists {
+		moveFile(oldTxDBPath, walletDataDBPath)
+	}
 	wallet.walletDataDB, err = walletdata.Initialize(walletDataDBPath, &Transaction{}, &VspdTicketInfo{})
 	if err != nil {
 		log.Error(err.Error())
