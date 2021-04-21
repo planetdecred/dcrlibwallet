@@ -61,13 +61,24 @@ func (p *Politeia) saveOrOverwiteProposal(proposal *Proposal) error {
 
 // GetProposalsRaw fetches and returns a proposals from the db
 func (p *Politeia) GetProposalsRaw(category int32, offset, limit int32, newestFirst bool) ([]Proposal, error) {
+	return p.getProposalsRaw(category, offset, limit, newestFirst, false)
+}
+
+func (p *Politeia) getProposalsRaw(category int32, offset, limit int32, newestFirst bool, skipAbandoned bool) ([]Proposal, error) {
 
 	var query storm.Query
 	switch category {
 	case ProposalCategoryAll:
-		query = p.mwRef.db.Select(
-			q.True(),
-		)
+
+		if skipAbandoned {
+			query = p.mwRef.db.Select(
+				q.Not(q.Eq("Category", ProposalCategoryAbandoned)),
+			)
+		} else {
+			query = p.mwRef.db.Select(
+				q.True(),
+			)
+		}
 	default:
 		query = p.mwRef.db.Select(
 			q.Eq("Category", category),
