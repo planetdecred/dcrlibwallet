@@ -1,6 +1,7 @@
 package dcrlibwallet
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -178,7 +179,7 @@ func (wallet *Wallet) TicketPrice() (*TicketPriceResponse, error) {
 }
 
 // PurchaseTickets purchases tickets from the wallet. Returns a slice of hashes for tickets purchased
-func (wallet *Wallet) purchaseTickets(request *PurchaseTicketsRequest, vspHost string) ([]string, error) {
+func (wallet *Wallet) purchaseTickets(ctx context.Context, request *PurchaseTicketsRequest, vspHost string) ([]string, error) {
 	var err error
 
 	// fetch redeem script, ticket address, pool address and pool fee if vsp host isn't empty
@@ -235,7 +236,7 @@ func (wallet *Wallet) purchaseTickets(request *PurchaseTicketsRequest, vspHost s
 	defer func() {
 		lock <- time.Time{} // send matters, not the value
 	}()
-	err = wallet.internal.Unlock(wallet.shutdownContext(), request.Passphrase, lock)
+	err = wallet.internal.Unlock(ctx, request.Passphrase, lock)
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -246,6 +247,8 @@ func (wallet *Wallet) purchaseTickets(request *PurchaseTicketsRequest, vspHost s
 		VotingAddress: ticketAddr,
 		MinConf:       minConf,
 		Expiry:        expiry,
+		VSPFeeProcess: request.VSPFeeProcess,
+		VSPFeePaymentProcess: request.VSPFeePaymentProcess,
 	}
 
 	netBackend, err := wallet.internal.NetworkBackend()
@@ -283,7 +286,6 @@ func (wallet *Wallet) updateTicketPurchaseRequestWithVSPInfo(vspHost string, req
 	if err != nil {
 		return fmt.Errorf("vsp connection error: %s", err.Error())
 	}
-
 	// decode the redeem script gotten from vsp
 	rs, err := hex.DecodeString(ticketPurchaseInfo.Script)
 	if err != nil {
@@ -309,7 +311,7 @@ func (wallet *Wallet) updateTicketPurchaseRequestWithVSPInfo(vspHost string, req
 }
 
 func CallVSPTicketInfoAPI(vspHost, pubKeyAddr string) (ticketPurchaseInfo *VSPTicketPurchaseInfo, err error) {
-	apiUrl := fmt.Sprintf("%s/api/v2/purchaseticket", strings.TrimSuffix(vspHost, "/"))
+	apiUrl := fmt.Sprintf("%s/api/v3/vspinfo", strings.TrimSuffix(vspHost, "/"))
 	data := url.Values{}
 	data.Set("UserPubKeyAddr", pubKeyAddr)
 

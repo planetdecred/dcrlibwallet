@@ -2,21 +2,24 @@ package dcrlibwallet
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"net/http"
-	"reflect"
 	"strings"
+	"sync"
 	"time"
 
+	"decred.org/dcrwallet/errors"
+
+	"github.com/decred/dcrwallet/wallet/v3"
+
 	w "decred.org/dcrwallet/wallet"
-	"github.com/asdine/storm"
+	"decred.org/dcrwallet/wallet/txauthor"
+	"decred.org/dcrwallet/wallet/txsizes"
 	"github.com/decred/dcrd/blockchain/stake/v3"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v3"
@@ -25,189 +28,64 @@ import (
 	"github.com/decred/dcrd/wire"
 )
 
+const (
+	apiVSPInfo    = "/api/v3/vspinfo"
+	requiredConfs = 6 + 2
+)
+
 type VSPD struct {
-	baseURL             string
-	pubKey              []byte
-	w                   *Wallet
-	mwRef               *MultiWallet
-	sourceAccountNumber int32
-	httpClient          *http.Client
-	params              *chaincfg.Params
+	vspHost         string
+	pubKey          []byte
+	w               *Wallet
+	mwRef           *MultiWallet
+	purchaseAccount uint32
+	changeAccount   uint32
+	chainParams     *chaincfg.Params
+
+	*client
+	ctx context.Context
+	c   *w.ConfirmationNotificationsClient
+
+	ticketToFeeLock sync.Mutex
+	feesToTickets   map[chainhash.Hash]chainhash.Hash
+	ticketsToFees   map[chainhash.Hash]PendingFee
 }
 
-func (mw *MultiWallet) NewVSPD(baseURL string, walletID int, sourceAccountNumber int32) *VSPD {
+func (mw *MultiWallet) NewVSPD(vspHost string, walletID int, purchaseAccount uint32) (*VSPD, error) {
 	sourceWallet := mw.WalletWithID(walletID)
 	if sourceWallet == nil {
-		return nil
+		return nil, fmt.Errorf("wallet doesn't exist")
 	}
 
-	return &VSPD{
-		baseURL:             baseURL,
-		w:                   sourceWallet,
-		mwRef:               mw,
-		sourceAccountNumber: sourceAccountNumber,
-		httpClient:          new(http.Client),
-		params:              mw.chainParams,
+	v := &VSPD{
+		vspHost:         vspHost,
+		w:               sourceWallet,
+		mwRef:           mw,
+		purchaseAccount: purchaseAccount,
+		changeAccount:   purchaseAccount,
+		chainParams:     mw.chainParams,
 	}
+
+	ctx, cancel := mw.contextWithShutdownCancel()
+	mw.cancelFuncs = append(mw.cancelFuncs, cancel)
+	vspInfo, err := v.GetInfo(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	v.ctx = ctx
+	v.c = sourceWallet.internal.NtfnServer.ConfirmationNotifications(ctx)
+	v.client = newClient(vspHost, vspInfo.PubKey, sourceWallet.internal)
+	return v, nil
 }
 
-// GetInfo returns the information of the specified VSP base URL
-func (v *VSPD) GetInfo() (*GetVspInfoResponse, error) {
-	resp, err := v.httpClient.Get(v.baseURL + "/api/v3/vspinfo")
+func (v *VSPD) PoolFee(ctx context.Context) (float64, error) {
+	var vspInfo VspInfoResponse
+	err := v.client.get(ctx, apiVSPInfo, &vspInfo)
 	if err != nil {
-		return nil, err
+		return -1, err
 	}
-
-	b, err := ioutil.ReadAll(resp.Body)
-	resp.Body.Close()
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("non 200 response from server: %v", string(b))
-	}
-
-	var vspInfoResponse GetVspInfoResponse
-	err = json.Unmarshal(b, &vspInfoResponse)
-	if err != nil {
-		return nil, err
-	}
-
-	err = validateVSPServerSignature(resp, vspInfoResponse.PubKey, b)
-	if err != nil {
-		return nil, err
-	}
-	v.pubKey = vspInfoResponse.PubKey
-
-	return &vspInfoResponse, nil
-}
-
-// GetVSPFeeAddress is the first part of submiting ticket to a VSP. It returns a
-// fee address and an amount that must be paid by calling CreateTicketFeeTx.
-func (v *VSPD) getVSPFeeAddress(ticketHash string, passphrase []byte) (*GetFeeAddressResponse, error) {
-	if ticketHash == "" {
-		return nil, errors.New("no ticketHash provided")
-	}
-
-	txs, commitmentAddr, err := v.getTxAndAddress(ticketHash)
-	if err != nil {
-		return nil, err
-	}
-
-	txBuf, err := txs.Bytes()
-	if err != nil {
-		return nil, fmt.Errorf("failed to serialize ticket %v: %v", ticketHash, err)
-	}
-	ticketHex := hex.EncodeToString(txBuf)
-
-	parentHash := txs.TxIn[0].PreviousOutPoint.Hash
-	parentTxs, err := v.getTxFromHash(parentHash.String())
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve parent %v of ticket %v: %v", parentHash, ticketHash, err)
-	}
-	parentTx := parentTxs[0]
-
-	// Serialize parent
-	parentTxBuf, err := parentTx.Bytes()
-	if err != nil {
-		return nil, fmt.Errorf("failed to serialize parent %v of ticket %v: %v", parentHash, ticketHash, err)
-	}
-	parentHex := hex.EncodeToString(parentTxBuf)
-
-	req, err := json.Marshal(&GetFeeAddressRequest{
-		Timestamp:  time.Now().Unix(),
-		TicketHash: ticketHash,
-		TicketHex:  ticketHex,
-		ParentHex:  parentHex,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := v.signedVSPHTTP("/api/v3/feeaddress", commitmentAddr.String(), passphrase, json.RawMessage(req))
-	if err != nil {
-		return nil, err
-	}
-
-	var feeAddressResponse GetFeeAddressResponse
-	err = json.Unmarshal(resp, &feeAddressResponse)
-	if err != nil {
-		return nil, err
-	}
-
-	err = verifyResponse(feeAddressResponse.Request, req)
-	if err != nil {
-		return nil, err
-	}
-
-	data := &VspdTicketInfo{
-		Timestamp:  feeAddressResponse.Timestamp,
-		Hash:       ticketHash,
-		FeeAddress: feeAddressResponse.FeeAddress,
-		FeeAmount:  feeAddressResponse.FeeAmount,
-		Expiration: feeAddressResponse.Expiration,
-	}
-
-	err = v.updateVspdDBRecord(data, ticketHash)
-	if err != nil {
-		return nil, err
-	}
-
-	return &feeAddressResponse, nil
-}
-
-// CreateTicketFeeTx gets fee info from GetVSPFeeAddress makes payment and returns tx hash for PayVSPFee
-// ticket verification
-func (v *VSPD) createTicketFeeTx(feeAmount int64, ticketHash, feeAddress string, passphrase []byte) (string, error) {
-	if ticketHash == "" || feeAmount == 0 || feeAddress == "" {
-		return "", errors.New("missing required parameters")
-	}
-
-	record, err := v.getVspdDBRecord(ticketHash, &VspdTicketInfo{})
-	if err != nil {
-		return "", err
-	}
-
-	feeTx := reflect.Indirect(*record).FieldByName("FeeTx").String()
-	if feeTx != "" {
-		return "", errors.New("vspd ticket fee has been created. Use PayVSPFee() to register ticket")
-	}
-
-	txAuthor, err := v.mwRef.NewUnsignedTx(v.w.ID, v.sourceAccountNumber)
-	if err != nil {
-		return "", err
-	}
-	txAuthor.AddSendDestination(feeAddress, feeAmount, false)
-
-	unsignedTx, err := txAuthor.constructTransaction()
-	if err != nil {
-		return "", translateError(err)
-	}
-
-	if unsignedTx.ChangeIndex >= 0 {
-		unsignedTx.RandomizeChangePosition()
-	}
-
-	txBuf := new(bytes.Buffer)
-	txBuf.Grow(unsignedTx.Tx.SerializeSize())
-	err = unsignedTx.Tx.Serialize(txBuf)
-	if err != nil {
-		return "", fmt.Errorf("failed to serialize fee transaction: %v", err)
-	}
-
-	//update db with feetx data
-	data := &VspdTicketInfo{
-		Hash:  ticketHash,
-		FeeTx: hex.EncodeToString(txBuf.Bytes()),
-	}
-
-	err = v.updateVspdDBRecord(data, ticketHash)
-	if err != nil {
-		return "", err
-	}
-
-	return hex.EncodeToString(txBuf.Bytes()), nil
+	return vspInfo.FeePercentage, nil
 }
 
 // PurchaseStakeTickets purchases the number of tickets passed as an argument and pays the fees for the tickets
@@ -222,73 +100,270 @@ func (v *VSPD) PurchaseStakeTickets(tickets, expiryBlocks int32, passphrase []by
 	}
 
 	request := &PurchaseTicketsRequest{
-		Account:               uint32(v.sourceAccountNumber),
+		Account:               v.purchaseAccount,
 		Passphrase:            passphrase,
 		NumTickets:            uint32(tickets),
 		Expiry:                uint32(v.w.GetBestBlock() + expiryBlocks),
 		RequiredConfirmations: DefaultRequiredConfirmations,
 	}
 
-	hashes, err := v.w.purchaseTickets(request, "")
+	request.VSPFeeProcess = v.PoolFee
+	request.VSPFeePaymentProcess = v.ProcessFee
+
+	_, err = v.w.purchaseTickets(v.ctx, request, v.vspHost)
 	if err != nil {
 		return err
-	}
-
-	for _, hash := range hashes {
-		resp, err := v.getVSPFeeAddress(hash, passphrase)
-		if err != nil {
-			log.Error(err)
-			return err
-		}
-
-		transactionResponse, err := v.createTicketFeeTx(resp.FeeAmount, hash, resp.FeeAddress, passphrase)
-		if err != nil {
-			log.Error(err)
-			return err
-		}
-
-		_, err = v.payVSPFee(transactionResponse, hash, "", passphrase)
-		if err != nil {
-			log.Error(err)
-			return err
-		}
 	}
 
 	return nil
 }
 
-// PayVSPFee is the second part of submitting ticket to a VSP. The feeTx is gotten from CreateTicketFeeTx
-// and feeAddress from GetVSPFeeAddress
-func (v *VSPD) payVSPFee(feeTx, ticketHash, feeAddress string, passphrase []byte) (*PayFeeResponse, error) {
-	if ticketHash == "" {
-		return nil, errors.New("no ticketHash provided")
+// ProcessFee
+func (v *VSPD) ProcessFee(ctx context.Context, ticketHash chainhash.Hash, credits []w.Input) (*wire.MsgTx, error) {
+	var feeAmount dcrutil.Amount
+	var err error
+	for i := 0; i < 2; i++ {
+		feeAmount, err = v.GetFeeAddress(ctx, ticketHash)
+		if err == nil {
+			break
+		}
+		const broadcastMsg = "ticket transaction could not be broadcast"
+		if err != nil && i == 0 && strings.Contains(err.Error(), broadcastMsg) {
+			time.Sleep(2 * time.Minute)
+		}
 	}
-
-	if feeTx == "" {
-		return nil, errors.New("no feeTx provided")
-	}
-
-	txs, commitmentAddr, err := v.getTxAndAddress(ticketHash)
 	if err != nil {
 		return nil, err
 	}
 
-	_, votingAddress, _, err := txscript.ExtractPkScriptAddrs(0, txs.TxOut[0].PkScript, v.params, true)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get voting Address: %v", err)
+	var totalValue int64
+	if credits == nil {
+		const minconf = 1
+		// PurchaseAccount => sourceAccount
+		credits, err = v.w.internal.ReserveOutputsForAmount(ctx, v.purchaseAccount, feeAmount, minconf)
+		if err != nil {
+			return nil, err
+		}
+		for _, credit := range credits {
+			totalValue += credit.PrevOut.Value
+		}
+		if dcrutil.Amount(totalValue) < feeAmount {
+			return nil, fmt.Errorf("reserved credits insufficient: %v < %v",
+				dcrutil.Amount(totalValue), feeAmount)
+		}
 	}
 
-	if len(votingAddress) == 0 {
-		return nil, errors.New("voting address not found")
+	feeTx, err := v.CreateFeeTx(ctx, ticketHash, credits)
+	if err != nil {
+		return nil, err
+	}
+	// set fee tx as unpublished, because it will be published by the vsp.
+	feeHash := feeTx.TxHash()
+	err = v.w.internal.AddTransaction(ctx, feeTx, nil)
+	if err != nil {
+		return nil, err
+	}
+	err = v.w.internal.SetPublished(ctx, &feeHash, false)
+	if err != nil {
+		return nil, err
+	}
+	paidTx, err := v.PayFee(ctx, ticketHash, feeTx)
+	if err != nil {
+		return nil, err
+	}
+	err = v.w.internal.UpdateVspTicketFeeToPaid(ctx, &ticketHash, &feeHash)
+	if err != nil {
+		return nil, err
+	}
+	return paidTx, nil
+}
+
+type changeSource struct {
+	script  []byte
+	version uint16
+}
+
+func (c changeSource) Script() ([]byte, uint16, error) {
+	return c.script, c.version, nil
+}
+
+func (c changeSource) ScriptSize() int {
+	return len(c.script)
+}
+
+func (v *VSPD) CreateFeeTx(ctx context.Context, ticketHash chainhash.Hash, credits []w.Input) (*wire.MsgTx, error) {
+	if len(credits) == 0 {
+		return nil, fmt.Errorf("no credits passed")
 	}
 
-	votingKey, err := v.w.internal.DumpWIFPrivateKey(v.w.shutdownContext(), votingAddress[0])
-	if err != nil {
-		return nil, fmt.Errorf("failed to get votingKeyWIF for %v: %v", votingAddress[0], err)
+	v.ticketToFeeLock.Lock()
+	feeInfo, exists := v.ticketsToFees[ticketHash]
+	v.ticketToFeeLock.Unlock()
+	if !exists {
+		_, err := v.GetFeeAddress(ctx, ticketHash)
+		if err != nil {
+			return nil, err
+		}
+		v.ticketToFeeLock.Lock()
+		feeInfo, exists = v.ticketsToFees[ticketHash]
+		v.ticketToFeeLock.Unlock()
+		if !exists {
+			return nil, fmt.Errorf("failed to find fee info for ticket %v", ticketHash)
+		}
 	}
 
-	agendaChoices, err := v.getAgenda(ticketHash)
+	// validate credits
+	var totalValue int64
+	for _, credit := range credits {
+		totalValue += credit.PrevOut.Value
+	}
+	if dcrutil.Amount(totalValue) < feeInfo.FeeAmount {
+		return nil, fmt.Errorf("not enough fee: %v < %v", dcrutil.Amount(totalValue), feeInfo.FeeAmount)
+	}
+
+	pkScript, err := txscript.PayToAddrScript(feeInfo.FeeAddress)
 	if err != nil {
+		log.Warnf("failed to generate pay to addr script for %v: %v", feeInfo.FeeAddress, err)
+		return nil, err
+	}
+
+	a, err := v.w.internal.NewChangeAddress(ctx, v.changeAccount)
+	if err != nil {
+		log.Warnf("failed to get new change address: %v", err)
+		return nil, err
+	}
+
+	c, ok := a.(w.Address)
+	if !ok {
+		log.Warnf("failed to convert '%T' to wallet.Address", a)
+		return nil, fmt.Errorf("failed to convert '%T' to wallet.Address", a)
+	}
+
+	cver, cscript := c.PaymentScript()
+	cs := changeSource{
+		script:  cscript,
+		version: cver,
+	}
+
+	var inputSource txauthor.InputSource
+	if len(credits) > 0 {
+		inputSource = func(amount dcrutil.Amount) (*txauthor.InputDetail, error) {
+			if amount < 0 {
+				return nil, fmt.Errorf("invalid amount: %d < 0", amount)
+			}
+
+			var detail txauthor.InputDetail
+			if amount == 0 {
+				return &detail, nil
+			}
+			for _, credit := range credits {
+				if detail.Amount >= amount {
+					break
+				}
+
+				log.Infof("credit: %v %v", credit.OutPoint.String(), dcrutil.Amount(credit.PrevOut.Value))
+
+				// TODO: copied from txauthor.MakeInputSource - make a shared function?
+				// Unspent credits are currently expected to be either P2PKH or
+				// P2PK, P2PKH/P2SH nested in a revocation/stakechange/vote output.
+				var scriptSize int
+				scriptClass := txscript.GetScriptClass(0, credit.PrevOut.PkScript, true) // Yes treasury
+				switch scriptClass {
+				case txscript.PubKeyHashTy:
+					scriptSize = txsizes.RedeemP2PKHSigScriptSize
+				case txscript.PubKeyTy:
+					scriptSize = txsizes.RedeemP2PKSigScriptSize
+				case txscript.StakeRevocationTy, txscript.StakeSubChangeTy,
+					txscript.StakeGenTy:
+					scriptClass, err = txscript.GetStakeOutSubclass(credit.PrevOut.PkScript, true) // Yes treasury
+					if err != nil {
+						return nil, fmt.Errorf(
+							"failed to extract nested script in stake output: %v",
+							err)
+					}
+
+					// For stake transactions we expect P2PKH and P2SH script class
+					// types only but ignore P2SH script type since it can pay
+					// to any script which the wallet may not recognize.
+					if scriptClass != txscript.PubKeyHashTy {
+						log.Errorf("unexpected nested script class for credit: %v",
+							scriptClass)
+						continue
+					}
+
+					scriptSize = txsizes.RedeemP2PKHSigScriptSize
+				default:
+					log.Errorf("unexpected script class for credit: %v",
+						scriptClass)
+					continue
+				}
+
+				inputs := wire.NewTxIn(&credit.OutPoint, credit.PrevOut.Value, credit.PrevOut.PkScript)
+
+				detail.Amount += dcrutil.Amount(credit.PrevOut.Value)
+				detail.Inputs = append(detail.Inputs, inputs)
+				detail.Scripts = append(detail.Scripts, credit.PrevOut.PkScript)
+				detail.RedeemScriptSizes = append(detail.RedeemScriptSizes, scriptSize)
+			}
+			return &detail, nil
+		}
+	}
+
+	txOut := []*wire.TxOut{wire.NewTxOut(int64(feeInfo.FeeAmount), pkScript)}
+	feeTx, err := v.w.internal.NewUnsignedTransaction(ctx, txOut, v.w.internal.RelayFee(), v.purchaseAccount, 6,
+		wallet.OutputSelectionAlgorithmDefault, cs, inputSource)
+	if err != nil {
+		log.Warnf("failed to create fee transaction: %v", err)
+		return nil, err
+	}
+	if feeTx.ChangeIndex >= 0 {
+		feeTx.RandomizeChangePosition()
+	}
+
+	sigErrs, err := v.w.internal.SignTransaction(ctx, feeTx.Tx, txscript.SigHashAll, nil, nil, nil)
+	if err != nil {
+		log.Errorf("failed to sign transaction: %v", err)
+		for _, sigErr := range sigErrs {
+			log.Errorf("\t%v", sigErr)
+		}
+		return nil, err
+	}
+
+	return feeTx.Tx, nil
+}
+
+// PayFee receives an unsigned fee tx, signs it and make a pays fee request to
+// the vsp, so the ticket get registered.
+func (v *VSPD) PayFee(ctx context.Context, ticketHash chainhash.Hash, feeTx *wire.MsgTx) (*wire.MsgTx, error) {
+	if feeTx == nil {
+		return nil, fmt.Errorf("nil fee tx")
+	}
+
+	txBuf := new(bytes.Buffer)
+	txBuf.Grow(feeTx.SerializeSize())
+	err := feeTx.Serialize(txBuf)
+	if err != nil {
+		log.Errorf("failed to serialize fee transaction: %v", err)
+		return nil, err
+	}
+
+	v.ticketToFeeLock.Lock()
+	feeInfo, exists := v.ticketsToFees[ticketHash]
+	v.ticketToFeeLock.Unlock()
+	if !exists {
+		return nil, fmt.Errorf("call GetFeeAddress first")
+	}
+
+	votingKeyWIF, err := v.w.internal.DumpWIFPrivateKey(ctx, feeInfo.VotingAddress)
+	if err != nil {
+		log.Errorf("failed to retrieve privkey for %v: %v", feeInfo.VotingAddress, err)
+		return nil, err
+	}
+
+	// Retrieve voting preferences
+	agendaChoices, _, err := v.w.internal.AgendaChoices(ctx, &ticketHash)
+	if err != nil {
+		log.Errorf("failed to retrieve agenda choices for %v: %v", ticketHash, err)
 		return nil, err
 	}
 
@@ -297,305 +372,162 @@ func (v *VSPD) payVSPFee(feeTx, ticketHash, feeAddress string, passphrase []byte
 		voteChoices[agendaChoice.AgendaID] = agendaChoice.ChoiceID
 	}
 
-	req, err := json.Marshal(&PayFeeRequest{
-		FeeTx:       feeTx,
-		VotingKey:   votingKey,
-		TicketHash:  ticketHash,
+	var payfeeResponse PayFeeResponse
+	requestBody, err := json.Marshal(&PayFeeRequest{
 		Timestamp:   time.Now().Unix(),
+		TicketHash:  ticketHash.String(),
+		FeeTx:       hex.EncodeToString(txBuf.Bytes()),
+		VotingKey:   votingKeyWIF,
 		VoteChoices: voteChoices,
 	})
 	if err != nil {
 		return nil, err
 	}
-
-	resp, err := v.signedVSPHTTP("/api/v3/payfee", commitmentAddr.String(), passphrase, json.RawMessage(req))
+	err = v.client.post(ctx, "/api/v3/payfee", feeInfo.CommitmentAddress,
+		&payfeeResponse, json.RawMessage(requestBody))
 	if err != nil {
 		return nil, err
 	}
 
-	var payFeeResponse PayFeeResponse
-	err = json.Unmarshal(resp, &payFeeResponse)
-	if err != nil {
-		return nil, err
-	}
-
-	err = verifyResponse(payFeeResponse.Request, req)
-	if err != nil {
-		return nil, err
-	}
-
-	data := &VspdTicketInfo{
-		Timestamp:   payFeeResponse.Timestamp,
-		Hash:        ticketHash,
-		FeeTx:       feeTx,
-		VoteChoices: voteChoices,
-	}
-
-	err = v.updateVspdDBRecord(data, ticketHash)
-	if err != nil {
-		return nil, err
-	}
-
-	return &payFeeResponse, nil
-}
-
-// GetTicketStatus returns the status of the specified ticket from the VSP, after calling PayVSPFee
-func (v *VSPD) GetTicketStatus(ticketHash string, passphrase []byte) (*TicketStatusResponse, error) {
-	if ticketHash == "" {
-		return nil, errors.New("no ticketHash provided")
-	}
-
-	_, commitmentAddr, err := v.getTxAndAddress(ticketHash)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := json.Marshal(&TicketStatusRequest{
-		TicketHash: ticketHash,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := v.signedVSPHTTP("/api/v3/ticketstatus", commitmentAddr.String(), passphrase, json.RawMessage(req))
-	if err != nil {
-		return nil, err
-	}
-
-	var ticketStatusResponse TicketStatusResponse
-	err = json.Unmarshal(resp, &ticketStatusResponse)
-	if err != nil {
-		return nil, err
-	}
-
-	err = verifyResponse(ticketStatusResponse.Request, req)
-	if err != nil {
-		return nil, err
-	}
-
-	data := &VspdTicketInfo{
-		Timestamp:       ticketStatusResponse.Timestamp,
-		Hash:            ticketHash,
-		TicketConfirmed: ticketStatusResponse.TicketConfirmed,
-		VoteChoices:     ticketStatusResponse.VoteChoices,
-		FeeTxStatus:     ticketStatusResponse.FeeTxStatus,
-		FeeTxHash:       ticketStatusResponse.FeeTxHash,
-	}
-
-	err = v.updateVspdDBRecord(data, ticketHash)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ticketStatusResponse, nil
-}
-
-// SetVoteChoices updates the vote choice of the specified ticket on the VSP, after calling PayVSPFee
-func (v *VSPD) SetVoteChoices(ticketHash string, passphrase []byte, choices map[string]string) (*SetVoteChoicesResponse, error) {
-	if ticketHash == "" {
-		return nil, fmt.Errorf("no ticketHash provided")
-	}
-
-	_, commitmentAddr, err := v.getTxAndAddress(ticketHash)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := json.Marshal(&SetVoteChoicesRequest{
-		Timestamp:   time.Now().Unix(),
-		TicketHash:  ticketHash,
-		VoteChoices: choices,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := v.signedVSPHTTP("/api/v3/setvotechoices", commitmentAddr.String(), passphrase, json.RawMessage(req))
-	if err != nil {
-		return nil, err
-	}
-
-	var setVoteChoicesResponse SetVoteChoicesResponse
-	err = json.Unmarshal(resp, &setVoteChoicesResponse)
-	if err != nil {
-		return nil, err
-	}
-
-	err = verifyResponse(setVoteChoicesResponse.Request, req)
-	if err != nil {
-		return nil, err
-	}
-
-	data := &VspdTicketInfo{
-		Timestamp:   setVoteChoicesResponse.Timestamp,
-		Hash:        ticketHash,
-		VoteChoices: choices,
-	}
-
-	err = v.updateVspdDBRecord(data, ticketHash)
-	if err != nil {
-		return nil, err
-	}
-
-	return &setVoteChoicesResponse, nil
-}
-
-// signedVSPHTTP makes a request against a VSP API. The request will be JSON
-// encoded and signed using the provided commitment address. The signature of
-// the response is also validated using the VSP pubkey.
-func (v *VSPD) signedVSPHTTP(path, commitmentAddr string, passphrase []byte, request interface{}) ([]byte, error) {
-	var reqBody io.Reader
-	reqBytes, err := json.Marshal(request)
-	if err != nil {
-		return nil, err
-	}
-	reqBody = bytes.NewReader(reqBytes)
-
-	path = strings.TrimSuffix(v.baseURL, "/") + path
-	ctx := v.w.shutdownContext()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, path, reqBody)
-	if err != nil {
-		return nil, err
-	}
-
-	signature, err := v.w.SignMessage(passphrase, commitmentAddr, string(reqBytes))
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("VSP-Client-Signature", base64.StdEncoding.EncodeToString(signature))
-
-	resp, err := v.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	b, err := ioutil.ReadAll(resp.Body)
-	resp.Body.Close()
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("vsp responded with an error: %v", string(b))
-	}
-
-	err = validateVSPServerSignature(resp, v.pubKey, b)
-	if err != nil {
-		return nil, err
-	}
-
-	return b, nil
-}
-
-func (v *VSPD) getTxAndAddress(ticketHash string) (*wire.MsgTx, dcrutil.Address, error) {
-	txs, err := v.getTxFromHash(ticketHash)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if len(txs) == 0 {
-		return nil, nil, fmt.Errorf("ticket has not found: %s", ticketHash)
-	}
-
-	tx := txs[0]
-	ticketCommitmentOutput := tx.TxOut[1]
-	commitmentAddr, err := stake.AddrFromSStxPkScrCommitment(ticketCommitmentOutput.PkScript, v.params)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to extract script addr from %v: %v", ticketHash, err)
-	}
-
-	return tx, commitmentAddr, nil
-}
-
-// insert or update VSPD ticket info
-func (v *VSPD) updateVspdDBRecord(data interface{}, ticketHash string) error {
-	updated, err := v.w.walletDataDB.SaveOrUpdateVspdRecord(&VspdTicketInfo{}, data)
-	if err != nil {
-		return fmt.Errorf("[%d] new vspd save err : %v", v.w.ID, err)
-	}
-
-	if !updated {
-		log.Infof("[%d] New vspd ticket %s added", v.w.ID, ticketHash)
-	} else {
-		log.Infof("[%d] vspd ticket %s updated", v.w.ID, ticketHash)
-	}
-
-	return nil
-}
-
-// get VSPD ticket info
-func (v *VSPD) getVspdDBRecord(txHash string, dataPointer interface{}) (*reflect.Value, error) {
-	err := v.w.walletDataDB.FindOne("Hash", txHash, dataPointer)
-	if err != nil {
-		if err == storm.ErrNotFound {
-			return nil, fmt.Errorf("vspd ticket: " + txHash + " " + err.Error() + ". ensure you first call GetVSPFeeAddress()")
-		}
-
-		return nil, fmt.Errorf("failed to find vspd ticket for %v: %v", txHash, err)
-	}
-
-	val := reflect.ValueOf(dataPointer)
-	return &val, nil
-}
-
-// get VSPD ticket info
-func (v *VSPD) getAgenda(txHash string) ([]w.AgendaChoice, error) {
-	hash, err := getHashFromStr(txHash)
-	if err != nil {
-		return nil, err
-	}
-
-	agendaChoices, _, err := v.w.internal.AgendaChoices(v.w.shutdownContext(), hash)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve agenda choices for %v: %v", txHash, err)
-	}
-
-	return agendaChoices, nil
-}
-
-func (v *VSPD) getTxFromHash(txHash string) ([]*wire.MsgTx, error) {
-	hash, err := getHashFromStr(txHash)
-	if err != nil {
-		return nil, err
-	}
-
-	txs, _, err := v.w.internal.GetTransactionsByHashes(v.w.shutdownContext(), []*chainhash.Hash{hash})
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve transaction for %v: %v", hash, err)
-	}
-
-	return txs, nil
-}
-
-func getHashFromStr(txHash string) (*chainhash.Hash, error) {
-	hash, err := chainhash.NewHashFromStr(txHash)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve hash from %s: %v", txHash, err)
-	}
-
-	return hash, nil
-}
-
-// verify initial request matches vspd server
-func verifyResponse(serverResp, serverReq interface{}) error {
-	resp, err := json.Marshal(serverResp)
-	if err != nil {
-		return fmt.Errorf("failed to marshal response request: %v", err)
-	}
-
-	req, err := json.Marshal(serverReq)
-	if err != nil {
-		return fmt.Errorf("failed to marshal request: %v", err)
-	}
-
-	if !bytes.Equal(req, resp) {
+	// verify initial request matches server
+	if !bytes.Equal(requestBody, payfeeResponse.Request) {
 		log.Warnf("server response has differing request: %#v != %#v",
-			serverResp, serverReq)
-		return fmt.Errorf("server response contains differing request")
+			requestBody, payfeeResponse.Request)
+		return nil, fmt.Errorf("server response contains differing request")
+	}
+	// TODO - validate server timestamp?
+
+	v.ticketToFeeLock.Lock()
+	feeInfo.FeeTx = feeTx
+	v.ticketsToFees[ticketHash] = feeInfo
+	v.ticketToFeeLock.Unlock()
+	v.c.Watch([]*chainhash.Hash{&ticketHash}, requiredConfs)
+
+	log.Infof("successfully processed %v", ticketHash)
+
+	return feeTx, nil
+}
+
+func (v *VSPD) GetFeeAddress(ctx context.Context, ticketHash chainhash.Hash) (dcrutil.Amount, error) {
+	// Fetch ticket
+	txs, _, err := v.w.internal.GetTransactionsByHashes(ctx, []*chainhash.Hash{&ticketHash})
+	if err != nil {
+		log.Errorf("failed to retrieve ticket %v: %v", ticketHash, err)
+		return 0, err
+	}
+	ticketTx := txs[0]
+
+	// Fetch parent transaction
+	parentHash := ticketTx.TxIn[0].PreviousOutPoint.Hash
+	parentTxs, _, err := v.w.internal.GetTransactionsByHashes(ctx, []*chainhash.Hash{&parentHash})
+	if err != nil {
+		log.Errorf("failed to retrieve parent %v of ticket %v: %v", parentHash, ticketHash, err)
+		return 0, err
+	}
+	parentTx := parentTxs[0]
+
+	const scriptVersion = 0
+	_, addrs, _, err := txscript.ExtractPkScriptAddrs(scriptVersion,
+		ticketTx.TxOut[0].PkScript, v.w.internal.ChainParams(), true) // Yes treasury
+	if err != nil {
+		log.Errorf("failed to extract stake submission address from %v: %v", ticketHash, err)
+		return 0, err
+	}
+	if len(addrs) == 0 {
+		log.Errorf("failed to get address from %v", ticketHash)
+		return 0, fmt.Errorf("failed to get address from %v", ticketHash)
+	}
+	votingAddress := addrs[0]
+
+	commitmentAddr, err := stake.AddrFromSStxPkScrCommitment(ticketTx.TxOut[1].PkScript, v.chainParams)
+	if err != nil {
+		log.Errorf("failed to extract script addr from %v: %v", ticketHash, err)
+		return 0, err
 	}
 
-	return nil
+	// Serialize ticket
+	txBuf := new(bytes.Buffer)
+	txBuf.Grow(ticketTx.SerializeSize())
+	err = ticketTx.Serialize(txBuf)
+	if err != nil {
+		log.Errorf("failed to serialize ticket %v: %v", ticketHash, err)
+		return 0, err
+	}
+	ticketHex := hex.EncodeToString(txBuf.Bytes())
+
+	// Serialize parent
+	txBuf.Reset()
+	txBuf.Grow(parentTx.SerializeSize())
+	err = parentTx.Serialize(txBuf)
+	if err != nil {
+		log.Errorf("failed to serialize parent %v of ticket %v: %v", parentHash, ticketHash, err)
+		return 0, err
+	}
+	parentHex := hex.EncodeToString(txBuf.Bytes())
+
+	var feeResponse FeeAddressResponse
+	requestBody, err := json.Marshal(&FeeAddressRequest{
+		Timestamp:  time.Now().Unix(),
+		TicketHash: ticketHash.String(),
+		TicketHex:  ticketHex,
+		ParentHex:  parentHex,
+	})
+	if err != nil {
+		return 0, err
+	}
+	err = v.client.post(ctx, "/api/v3/feeaddress", commitmentAddr, &feeResponse,
+		json.RawMessage(requestBody))
+	if err != nil {
+		return 0, err
+	}
+
+	// verify initial request matches server
+	if !bytes.Equal(requestBody, feeResponse.Request) {
+		log.Warnf("server response has differing request: %#v != %#v",
+			requestBody, feeResponse.Request)
+		return 0, fmt.Errorf("server response contains differing request")
+	}
+	// TODO - validate server timestamp?
+
+	feeAddress, err := dcrutil.DecodeAddress(feeResponse.FeeAddress, v.w.internal.ChainParams())
+	if err != nil {
+		log.Warnf("server fee address invalid: %v", err)
+		return 0, fmt.Errorf("server fee address invalid: %v", err)
+	}
+	feeAmount := dcrutil.Amount(feeResponse.FeeAmount)
+
+	// TODO - convert to vsp.maxfee config option
+	maxFee, err := dcrutil.NewAmount(0.1)
+	if err != nil {
+		return 0, err
+	}
+
+	if feeAmount > maxFee {
+		log.Warnf("fee amount too high: %v > %v", feeAmount, maxFee)
+		return 0, fmt.Errorf("server fee amount too high: %v > %v", feeAmount, maxFee)
+	}
+
+	v.ticketToFeeLock.Lock()
+	v.ticketsToFees[ticketHash] = PendingFee{
+		CommitmentAddress: commitmentAddr,
+		VotingAddress:     votingAddress,
+		FeeAddress:        feeAddress,
+		FeeAmount:         feeAmount,
+	}
+	v.ticketToFeeLock.Unlock()
+
+	return feeAmount, nil
+}
+
+// GetInfo returns the information of the specified VSP base URL
+func (v *VSPD) GetInfo(ctx context.Context) (*VspInfoResponse, error) {
+	var response VspInfoResponse
+	err := v.client.get(ctx, apiVSPInfo, &response)
+	if err != nil {
+		return nil, err
+	}
+
+	return &response, nil
 }
 
 func validateVSPServerSignature(resp *http.Response, pubKey, body []byte) error {

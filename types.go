@@ -1,7 +1,11 @@
 package dcrlibwallet
 
 import (
+	"context"
 	"encoding/json"
+	"github.com/decred/dcrd/chaincfg/chainhash"
+	"github.com/decred/dcrd/dcrutil/v3"
+	"github.com/decred/dcrd/wire"
 
 	"decred.org/dcrwallet/wallet"
 )
@@ -269,6 +273,13 @@ type PurchaseTicketsRequest struct {
 	PoolAddress           string
 	PoolFees              float64
 	TicketFee             int64
+
+	// VSPFeeProcessFunc Process the fee price for the vsp to register a ticket
+	// so we can reserve the amount.
+	VSPFeeProcess func(context.Context) (float64, error)
+	// VSPFeePaymentProcess processes the payment of the vsp fee and returns
+	// the paid fee tx.
+	VSPFeePaymentProcess func(context.Context, chainhash.Hash, []wallet.Input) (*wire.MsgTx, error)
 }
 
 type GetTicketsRequest struct {
@@ -350,7 +361,7 @@ type UnspentOutput struct {
 /** end politea proposal types */
 
 /** begin vspd-related types */
-type GetVspInfoResponse struct {
+type VspInfoResponse struct {
 	APIVersions   []int64 `json:"apiversions"`
 	Timestamp     int64   `json:"timestamp"`
 	PubKey        []byte  `json:"pubkey"`
@@ -426,6 +437,29 @@ type VspdTicketInfo struct {
 	FeeTxStatus     string            `json:"feetxstatus"`
 	VoteChoices     map[string]string `json:"votechoices"`
 	TicketConfirmed bool              `json:"ticketconfirmed"`
+}
+
+type FeeAddressResponse struct {
+	Timestamp  int64           `json:"timestamp"`
+	FeeAddress string          `json:"feeaddress"`
+	FeeAmount  int64           `json:"feeamount"`
+	Expiration int64           `json:"expiration"`
+	Request    json.RawMessage `json:"request"`
+}
+
+type FeeAddressRequest struct {
+	Timestamp  int64  `json:"timestamp" `
+	TicketHash string `json:"tickethash"`
+	TicketHex  string `json:"tickethex"`
+	ParentHex  string `json:"parenthex"`
+}
+
+type PendingFee struct {
+	CommitmentAddress dcrutil.Address
+	VotingAddress     dcrutil.Address
+	FeeAddress        dcrutil.Address
+	FeeAmount         dcrutil.Amount
+	FeeTx             *wire.MsgTx
 }
 
 /** end vspd-related types */
