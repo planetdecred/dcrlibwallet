@@ -279,7 +279,7 @@ type PurchaseTicketsRequest struct {
 	VSPFeeProcess func(context.Context) (float64, error)
 	// VSPFeePaymentProcess processes the payment of the vsp fee and returns
 	// the paid fee tx.
-	VSPFeePaymentProcess func(context.Context, chainhash.Hash, []wallet.Input) (*wire.MsgTx, error)
+	VSPFeePaymentProcess func(context.Context, *chainhash.Hash, *wire.MsgTx) error
 }
 
 type GetTicketsRequest struct {
@@ -390,16 +390,16 @@ type GetFeeAddressResponse struct {
 }
 
 type PayFeeRequest struct {
-	Timestamp   int64             `json:"timestamp" binding:"required"`
-	TicketHash  string            `json:"tickethash" binding:"required"`
-	FeeTx       string            `json:"feetx" binding:"required"`
-	VotingKey   string            `json:"votingkey" binding:"required"`
-	VoteChoices map[string]string `json:"votechoices" binding:"required"`
+	Timestamp   int64             `json:"timestamp"`
+	TicketHash  string            `json:"tickethash"`
+	FeeTx       json.Marshaler    `json:"feetx"`
+	VotingKey   string            `json:"votingkey"`
+	VoteChoices map[string]string `json:"votechoices"`
 }
 
 type PayFeeResponse struct {
-	Timestamp int64           `json:"timestamp"`
-	Request   json.RawMessage `json:"request"`
+	Timestamp int64  `json:"timestamp"`
+	Request   []byte `json:"request"`
 }
 
 type TicketStatusRequest struct {
@@ -440,18 +440,17 @@ type VspdTicketInfo struct {
 }
 
 type FeeAddressResponse struct {
-	Timestamp  int64           `json:"timestamp"`
-	FeeAddress string          `json:"feeaddress"`
-	FeeAmount  int64           `json:"feeamount"`
-	Expiration int64           `json:"expiration"`
-	Request    json.RawMessage `json:"request"`
+	Timestamp  int64  `json:"timestamp"`
+	FeeAddress string `json:"feeaddress"`
+	FeeAmount  int64  `json:"feeamount"`
+	Request    []byte `json:"request"`
 }
 
 type FeeAddressRequest struct {
-	Timestamp  int64  `json:"timestamp" `
-	TicketHash string `json:"tickethash"`
-	TicketHex  string `json:"tickethex"`
-	ParentHex  string `json:"parenthex"`
+	Timestamp  int64          `json:"timestamp"`
+	TicketHash string         `json:"tickethash"`
+	TicketHex  json.Marshaler `json:"tickethex"`
+	ParentHex  json.Marshaler `json:"parenthex"`
 }
 
 type PendingFee struct {

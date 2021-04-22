@@ -242,12 +242,12 @@ func (wallet *Wallet) purchaseTickets(ctx context.Context, request *PurchaseTick
 	}
 
 	purchaseTicketsRequest := &w.PurchaseTicketsRequest{
-		Count:         numTickets,
-		SourceAccount: request.Account,
-		VotingAddress: ticketAddr,
-		MinConf:       minConf,
-		Expiry:        expiry,
-		VSPFeeProcess: request.VSPFeeProcess,
+		Count:                numTickets,
+		SourceAccount:        request.Account,
+		VotingAddress:        ticketAddr,
+		MinConf:              minConf,
+		Expiry:               expiry,
+		VSPFeeProcess:        request.VSPFeeProcess,
 		VSPFeePaymentProcess: request.VSPFeePaymentProcess,
 	}
 
@@ -311,7 +311,7 @@ func (wallet *Wallet) updateTicketPurchaseRequestWithVSPInfo(vspHost string, req
 }
 
 func CallVSPTicketInfoAPI(vspHost, pubKeyAddr string) (ticketPurchaseInfo *VSPTicketPurchaseInfo, err error) {
-	apiUrl := fmt.Sprintf("%s/api/v3/vspinfo", strings.TrimSuffix(vspHost, "/"))
+	apiUrl := fmt.Sprintf("%s/api/v2/purchaseticket", strings.TrimSuffix(vspHost, "/"))
 	data := url.Values{}
 	data.Set("UserPubKeyAddr", pubKeyAddr)
 
