@@ -304,7 +304,7 @@ type VSPTicketPurchaseInfo struct {
 /** begin politeia types */
 type Proposal struct {
 	ID               int    `storm:"id,increment"`
-	Token            string `json:"token" storm:"index"`
+	Token            string `json:"token" storm:"unique"`
 	Category         int32  `json:"category" storm:"index"`
 	Name             string `json:"name"`
 	State            int32  `json:"state"`

@@ -91,10 +91,8 @@ func (p *Politeia) checkForUpdates() error {
 	limit := int32(p.client.policy.ProposalListPageSize)
 	p.mu.RUnlock()
 
-	var allProposals []Proposal
-
 	for {
-		proposals, err := p.GetProposalsRaw(ProposalCategoryAll, int32(offset), limit, true)
+		proposals, err := p.getProposalsRaw(ProposalCategoryAll, int32(offset), limit, true, true)
 		if err != nil && err != storm.ErrNotFound {
 			return err
 		}
@@ -109,11 +107,15 @@ func (p *Politeia) checkForUpdates() error {
 		if err != nil {
 			return err
 		}
-
-		allProposals = append(allProposals, proposals...)
 	}
 
-	err := p.handleNewProposals(allProposals)
+	// include abandoned proposals
+	allProposals, err := p.getProposalsRaw(ProposalCategoryAll, 0, 0, true, false)
+	if err != nil && err != storm.ErrNotFound {
+		return err
+	}
+
+	err = p.handleNewProposals(allProposals)
 	if err != nil {
 		return err
 	}
@@ -163,11 +165,14 @@ func (p *Politeia) handleProposalsUpdate(proposals []Proposal) error {
 			batchProposals[i].PassPercentage = int32(voteSummary.PassPercentage)
 			batchProposals[i].EligibleTickets = int32(voteSummary.EligibleTickets)
 			batchProposals[i].QuorumPercentage = int32(voteSummary.QuorumPercentage)
-			batchProposals[i].YesVotes, proposals[i].NoVotes = getVotesCount(voteSummary.Results)
+			batchProposals[i].YesVotes, batchProposals[i].NoVotes = getVotesCount(voteSummary.Results)
 		}
 
 		for k := range proposals {
 			if proposals[k].Token == batchProposals[i].Token {
+
+				// proposal category
+				batchProposals[i].Category = proposals[k].Category
 				err := p.updateProposalDetails(proposals[k], batchProposals[i])
 				if err != nil {
 					return err
@@ -180,10 +185,11 @@ func (p *Politeia) handleProposalsUpdate(proposals []Proposal) error {
 }
 
 func (p *Politeia) updateProposalDetails(oldProposal, updatedProposal Proposal) error {
+	updatedProposal.ID = oldProposal.ID
+
 	if reflect.DeepEqual(oldProposal, updatedProposal) {
 		return nil
 	}
-	updatedProposal.ID = oldProposal.ID
 
 	var callback func(*Proposal)
 
