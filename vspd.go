@@ -51,6 +51,60 @@ func (mw *MultiWallet) NewVSPD(baseURL string, walletID int, sourceAccountNumber
 	}
 }
 
+func (mw *MultiWallet) SaveVSPConfigValue(url string) (error, *GetVspInfoResponse) {
+	v := &VSPD{baseURL: url, httpClient: new(http.Client)}
+	info, err := v.GetInfo()
+	if err != nil {
+		return err, nil
+	}
+
+	valueOut := make(map[string]interface{})
+	mw.ReadUserConfigValue(VSPHostConfigKey, &valueOut)
+	if _, ok := valueOut[url]; ok {
+		return fmt.Errorf("host %v already exist", url), nil
+	}
+	valueOut[url] = info
+	mw.SaveUserConfigValue(VSPHostConfigKey, valueOut)
+
+	return nil, info
+}
+
+func (mw *MultiWallet) GetAllVSPConfigValue() (valueOut map[string]*GetVspInfoResponse) {
+	mw.ReadUserConfigValue(VSPHostConfigKey, &valueOut)
+	return
+}
+
+func (mw *MultiWallet) UpdateAllVSPConfigValue() (valueOut map[string]*GetVspInfoResponse) {
+	vspsInfo := make(map[string]*GetVspInfoResponse)
+
+	mw.ReadUserConfigValue(VSPHostConfigKey, &vspsInfo)
+	for h := range vspsInfo {
+		v := &VSPD{baseURL: h, httpClient: new(http.Client)}
+		newInfo, err := v.GetInfo()
+		if err != nil {
+			delete(vspsInfo, h)
+			log.Error(err)
+			continue
+		}
+		vspsInfo[h] = newInfo
+	}
+	mw.SaveUserConfigValue(VSPHostConfigKey, vspsInfo)
+
+	valueOut = vspsInfo
+	return
+}
+
+func (mw *MultiWallet) DeleteVSPConfigValue(host string) error {
+	valueOut := make(map[string]interface{})
+	mw.ReadUserConfigValue(VSPHostConfigKey, &valueOut)
+	if _, ok := valueOut[host]; !ok {
+		return fmt.Errorf("%v is not exist", host)
+	}
+	delete(valueOut, host)
+	mw.SaveUserConfigValue(VSPHostConfigKey, valueOut)
+	return nil
+}
+
 // GetInfo returns the information of the specified VSP base URL
 func (v *VSPD) GetInfo() (*GetVspInfoResponse, error) {
 	resp, err := v.httpClient.Get(v.baseURL + "/api/v3/vspinfo")
