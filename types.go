@@ -3,6 +3,7 @@ package dcrlibwallet
 import (
 	"context"
 	"encoding/json"
+
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrutil/v3"
 	"github.com/decred/dcrd/wire"
