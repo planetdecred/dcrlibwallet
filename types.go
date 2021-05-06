@@ -316,6 +316,7 @@ type Proposal struct {
 	Version          string `json:"version"`
 	PublishedAt      int64  `json:"publishedat"`
 	IndexFile        string `json:"indexfile"`
+	IndexFileVersion string `json:"fileversion"`
 	VoteStatus       int32  `json:"votestatus"`
 	VoteApproved     bool   `json:"voteapproved"`
 	YesVotes         int32  `json:"yesvotes"`

@@ -366,6 +366,9 @@ func (p *Politeia) FetchProposalDescription(token string) (string, error) {
 
 			// save file to db
 			proposal.IndexFile = string(b)
+			// index file version will be used to determine if the
+			// saved file is out of date when compared to version.
+			proposal.IndexFileVersion = proposal.Version
 			err = p.saveOrOverwiteProposal(proposal)
 			if err != nil {
 				log.Errorf("error saving new proposal: %s", err.Error())
