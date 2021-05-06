@@ -1,17 +1,24 @@
 package dcrlibwallet
 
 import (
+	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
+	"net"
 
 	"decred.org/dcrwallet/ticketbuyer"
 	w "decred.org/dcrwallet/wallet"
+	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/dcrutil/v3"
+	"github.com/planetdecred/dcrlibwallet/internal/certs"
 )
 
 const (
 	smalletSplitPoint  = 000.00262144
 	ShuffleServer      = "cspp.decred.org"
-	ShufflePort        = "15760"
+	MainnetShufflePort = "5760"
+	TestnetShufflePort = "15760"
 	MixedAccountBranch = 0
 )
 
@@ -134,11 +141,36 @@ func (mw *MultiWallet) StartAccountMixer(walletID int, walletPassphrase string) 
 		return errors.New(ErrNoMixableOutput)
 	}
 
+	var shufflePort = TestnetShufflePort
+	var dialCSPPServer func(ctx context.Context, network, addr string) (net.Conn, error)
+	if mw.chainParams.Net == chaincfg.MainNetParams().Net {
+		shufflePort = MainnetShufflePort
+
+		pool := x509.NewCertPool()
+		pool.AppendCertsFromPEM([]byte(certs.CSPP))
+
+		csppTLSConfig := new(tls.Config)
+		csppTLSConfig.ServerName = ShuffleServer
+		csppTLSConfig.RootCAs = pool
+
+		dailer := new(net.Dialer)
+		dialCSPPServer = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			conn, err := dailer.DialContext(context.Background(), network, addr)
+			if err != nil {
+				return nil, err
+			}
+
+			conn = tls.Client(conn, csppTLSConfig)
+			return conn, nil
+		}
+	}
+
 	tb.AccessConfig(func(c *ticketbuyer.Config) {
 		c.MixedAccountBranch = MixedAccountBranch
 		c.MixedAccount = uint32(mixedAccount)
 		c.ChangeAccount = uint32(unmixedAccount)
-		c.CSPPServer = ShuffleServer + ":" + ShufflePort
+		c.CSPPServer = ShuffleServer + ":" + shufflePort
+		c.DialCSPPServer = dialCSPPServer
 		c.BuyTickets = false
 		c.MixChange = true
 	})
