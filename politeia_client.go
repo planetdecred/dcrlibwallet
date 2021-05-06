@@ -32,6 +32,7 @@ const (
 	policyPath           = "/policy"
 	votesStatusPath      = "/proposals/votestatus"
 	tokenInventoryPath   = "/proposals/tokeninventory"
+	proposalDetailsPath  = "/proposals/"
 	batchProposalsPath   = "/proposals/batch"
 	batchVoteSummaryPath = "/proposals/batchvotesummary"
 )
@@ -202,6 +203,17 @@ func (c *politeiaClient) version() (*www.VersionReply, error) {
 	return &versionReply, nil
 }
 
+func (c *politeiaClient) loadServerPolicy() error {
+	serverPolicy, err := c.serverPolicy()
+	if err != nil {
+		return err
+	}
+
+	c.policy = &serverPolicy
+
+	return nil
+}
+
 func (c *politeiaClient) serverPolicy() (www.PolicyReply, error) {
 	var policyReply www.PolicyReply
 	err := c.makeRequest(http.MethodGet, policyPath, nil, &policyReply)
@@ -247,6 +259,19 @@ func (c *politeiaClient) batchProposals(tokens []string) ([]Proposal, error) {
 	}
 
 	return proposals, nil
+}
+
+func (c *politeiaClient) proposalDetails(token string) (*www.ProposalDetailsReply, error) {
+
+	route := proposalDetailsPath + token
+
+	var proposalDetailsReply www.ProposalDetailsReply
+	err := c.makeRequest(http.MethodGet, route, nil, &proposalDetailsReply)
+	if err != nil {
+		return nil, err
+	}
+
+	return &proposalDetailsReply, nil
 }
 
 func (c *politeiaClient) tokenInventory() (*www.TokenInventoryReply, error) {

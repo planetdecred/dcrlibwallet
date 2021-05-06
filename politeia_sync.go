@@ -19,7 +19,7 @@ func (p *Politeia) Sync() error {
 
 	p.mu.Lock()
 
-	if p.client != nil {
+	if p.cancelSync != nil {
 		p.mu.Unlock()
 		return errors.New(ErrSyncAlreadyInProgress)
 	}
@@ -35,13 +35,12 @@ func (p *Politeia) Sync() error {
 	for {
 		// fetch server policy if it's not been fetched
 		if p.client.policy == nil {
-			serverPolicy, err := p.client.serverPolicy()
+			err := p.client.loadServerPolicy()
 			if err != nil {
 				log.Errorf("Error fetching for politeia server policy: %v", err)
 				time.Sleep(retryInterval * time.Second)
 				continue
 			}
-			p.client.policy = &serverPolicy
 		}
 
 		if done(p.ctx) {
@@ -71,7 +70,6 @@ func (p *Politeia) IsSyncing() bool {
 
 // this function requres p.mu unlocked.
 func (p *Politeia) resetSyncData() {
-	p.client = nil
 	p.cancelSync = nil
 }
 
@@ -334,6 +332,37 @@ func (p *Politeia) fetchBatchProposals(category int32, tokens []string, broadcas
 	}
 
 	return nil
+}
+
+func (p *Politeia) FetchProposalDescription(token string) (string, error) {
+	p.mu.Lock()
+	client := p.client
+	p.mu.Unlock()
+	if client == nil {
+		client = newPoliteiaClient()
+		err := client.loadServerPolicy()
+		if err != nil {
+			return "", nil
+		}
+	}
+
+	proposalDetailsReply, err := client.proposalDetails(token)
+	if err != nil {
+		return "", err
+	}
+
+	for _, file := range proposalDetailsReply.Proposal.Files {
+		if file.Name == "index.md" {
+			b, err := DecodeBase64(file.Payload)
+			if err != nil {
+				return "", err
+			}
+
+			return string(b), nil
+		}
+	}
+
+	return "", errors.New(ErrNotExist)
 }
 
 func (p *Politeia) AddNotificationListener(notificationListener ProposalNotificationListener, uniqueIdentifier string) error {
