@@ -335,6 +335,12 @@ func (p *Politeia) fetchBatchProposals(category int32, tokens []string, broadcas
 }
 
 func (p *Politeia) FetchProposalDescription(token string) (string, error) {
+
+	proposal, err := p.GetProposalRaw(token)
+	if err != nil {
+		return "", err
+	}
+
 	p.mu.Lock()
 	client := p.client
 	p.mu.Unlock()
@@ -342,7 +348,7 @@ func (p *Politeia) FetchProposalDescription(token string) (string, error) {
 		client = newPoliteiaClient()
 		err := client.loadServerPolicy()
 		if err != nil {
-			return "", nil
+			return "", err
 		}
 	}
 
@@ -358,7 +364,14 @@ func (p *Politeia) FetchProposalDescription(token string) (string, error) {
 				return "", err
 			}
 
-			return string(b), nil
+			// save file to db
+			proposal.IndexFile = string(b)
+			err = p.saveOrOverwiteProposal(proposal)
+			if err != nil {
+				log.Errorf("error saving new proposal: %s", err.Error())
+			}
+
+			return proposal.IndexFile, nil
 		}
 	}
 
