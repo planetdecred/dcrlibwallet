@@ -40,6 +40,11 @@ func DecodeTransaction(walletTx *TxInfoFromWallet, netParams *chaincfg.Params) (
 	// ticketSpentHash will be empty if this isn't a vote tx
 	if stake.IsSSRtx(msgTx) {
 		ticketSpentHash = msgTx.TxIn[0].PreviousOutPoint.Hash.String()
+		// set first tx input ss amount for revoked txs
+		amount = msgTx.TxIn[0].ValueIn
+	} else if stake.IsSStx(msgTx) {
+		// set first tx output as amount for ticket txs
+		amount = msgTx.TxOut[0].Value
 	}
 
 	isMixedTx, mixDenom, mixCount := txhelpers.IsMixTx(msgTx)
