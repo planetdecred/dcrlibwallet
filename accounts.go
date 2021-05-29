@@ -43,7 +43,7 @@ func (wallet *Wallet) GetAccountsRaw() (*Accounts, error) {
 			Number:           int32(a.AccountNumber),
 			Name:             a.AccountName,
 			Balance:          balance,
-			TotalBalance:     int64(a.TotalBalance),
+			TotalBalance:     balance.Total,
 			ExternalKeyCount: int32(a.LastUsedExternalIndex + AddressGapLimit), // Add gap limit
 			InternalKeyCount: int32(a.LastUsedInternalIndex + AddressGapLimit),
 			ImportedKeyCount: int32(a.ImportedKeyCount),
