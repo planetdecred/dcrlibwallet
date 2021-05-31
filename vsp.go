@@ -3,7 +3,6 @@ package dcrlibwallet
 import (
 	"bytes"
 	"context"
-	cryptorand "crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -11,12 +10,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/planetdecred/dcrlibwallet/vsp"
-
-	"decred.org/dcrwallet/wallet/txrules"
+	"decred.org/dcrwallet/errors"
 
 	w "decred.org/dcrwallet/wallet"
+	"decred.org/dcrwallet/wallet/txauthor"
+	"decred.org/dcrwallet/wallet/txrules"
 	"decred.org/dcrwallet/wallet/txsizes"
+
 	"github.com/decred/dcrd/blockchain/stake/v3"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v3"
@@ -28,23 +28,16 @@ import (
 const apiVSPInfo = "/api/v3/vspinfo"
 
 type VSP struct {
-	vspHost         string
-	pubKey          []byte
 	w               *Wallet
-	mwRef           *MultiWallet
 	purchaseAccount uint32
 	changeAccount   uint32
 	chainParams     *chaincfg.Params
 
-	*vsp.Client
+	*vspClient
 	ctx context.Context
-	c   *w.ConfirmationNotificationsClient
 
 	ticketToFeeLock sync.Mutex
-	feesToTickets   map[chainhash.Hash]chainhash.Hash
 	ticketsToFees   map[chainhash.Hash]PendingFee
-
-	prng lockedRand
 }
 
 func (mw *MultiWallet) NewVSPClient(vspHost string, walletID int, purchaseAccount uint32) (*VSP, error) {
@@ -53,44 +46,32 @@ func (mw *MultiWallet) NewVSPClient(vspHost string, walletID int, purchaseAccoun
 		return nil, fmt.Errorf("wallet doesn't exist")
 	}
 
-	source, err := vsp.CreateRandSource(cryptorand.Reader)
-	if err != nil {
-		panic(err)
-	}
-
 	v := &VSP{
-		vspHost:         vspHost,
 		w:               sourceWallet,
-		mwRef:           mw,
 		purchaseAccount: purchaseAccount,
 		changeAccount:   purchaseAccount,
 		chainParams:     mw.chainParams,
-		prng: lockedRand{
-			rand: source,
-		},
 
-		feesToTickets: make(map[chainhash.Hash]chainhash.Hash),
 		ticketsToFees: make(map[chainhash.Hash]PendingFee),
 	}
 
 	ctx, cancel := mw.contextWithShutdownCancel()
 	mw.cancelFuncs = append(mw.cancelFuncs, cancel)
 
-	v.Client = vsp.NewClient(vspHost, nil, sourceWallet.internal)
+	v.vspClient = newVSPClient(vspHost, nil, sourceWallet.internal)
 	vspInfo, err := v.GetInfo(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	v.ctx = ctx
-	v.c = sourceWallet.internal.NtfnServer.ConfirmationNotifications(ctx)
-	v.Client.Pub = vspInfo.PubKey
+	v.vspClient.pub = vspInfo.PubKey
 	return v, nil
 }
 
 func (v *VSP) PoolFee(ctx context.Context) (float64, error) {
 	var vspInfo VspInfoResponse
-	err := v.Client.Get(ctx, apiVSPInfo, &vspInfo)
+	err := v.vspClient.get(ctx, apiVSPInfo, &vspInfo)
 	if err != nil {
 		return -1, err
 	}
@@ -99,14 +80,11 @@ func (v *VSP) PoolFee(ctx context.Context) (float64, error) {
 
 // PurchaseStakeTickets purchases the number of tickets passed as an argument and pays the fees for the tickets
 func (v *VSP) PurchaseTickets(ticketCount, expiryBlocks int32, passphrase []byte) error {
-	defer v.w.LockWallet()
-	passphraseCopy := make([]byte, len(passphrase))
-	_ = copy(passphraseCopy, passphrase)
-
-	err := v.w.UnlockWallet(passphraseCopy)
+	err := v.w.UnlockWallet(passphrase)
 	if err != nil {
 		return translateError(err)
 	}
+	defer v.w.LockWallet()
 
 	request := &w.PurchaseTicketsRequest{
 		Count:                int(ticketCount),
@@ -124,7 +102,6 @@ func (v *VSP) PurchaseTickets(ticketCount, expiryBlocks int32, passphrase []byte
 
 	_, err = v.w.internal.PurchaseTickets(v.ctx, networkBackend, request)
 	if err != nil {
-		log.Errorf("PURCHASE TICKET %v", err.Error())
 		return err
 	}
 
@@ -210,17 +187,6 @@ func (v *VSP) ProcessFee(ctx context.Context, ticketHash *chainhash.Hash, feeTx 
 	return nil
 }
 
-type lockedRand struct {
-	mu   sync.Mutex
-	rand *vsp.RandSource
-}
-
-func (r *lockedRand) coinflip() bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.rand.Uint32n(2) == 0
-}
-
 func (v *VSP) CreateFeeTx(ctx context.Context, ticketHash chainhash.Hash, tx *wire.MsgTx) error {
 	if tx == nil {
 		tx = wire.NewMsgTx()
@@ -275,14 +241,12 @@ func (v *VSP) CreateFeeTx(ctx context.Context, ticketHash chainhash.Hash, tx *wi
 
 	feeScript, err := txscript.PayToAddrScript(feeInfo.FeeAddress)
 	if err != nil {
-		log.Warnf("failed to generate pay to addr script for %v: %v", feeInfo.FeeAddress, err)
-		return err
+		return errors.Errorf("failed to generate pay to addr script for %v: %v", feeInfo.FeeAddress, err)
 	}
 
 	addr, err := v.w.internal.NewChangeAddress(ctx, v.changeAccount)
 	if err != nil {
-		log.Warnf("failed to get new change address: %v", err)
-		return err
+		return errors.Errorf("failed to get new change address: %v", err)
 	}
 
 	var changeOut *wire.TxOut
@@ -308,18 +272,15 @@ func (v *VSP) CreateFeeTx(ctx context.Context, ticketHash chainhash.Hash, tx *wi
 		changeOut.Value = change
 		tx.TxOut = append(tx.TxOut, changeOut)
 		// randomize position
-		if v.prng.coinflip() {
-			tx.TxOut[0], tx.TxOut[1] = tx.TxOut[1], tx.TxOut[0]
-		}
+		txauthor.RandomizeOutputPosition(tx.TxOut, 0)
 	}
 
 	sigErrs, err := v.w.internal.SignTransaction(ctx, tx, txscript.SigHashAll, nil, nil, nil)
 	if err != nil {
-		log.Errorf("failed to sign transaction: %v", err)
 		for _, sigErr := range sigErrs {
 			log.Errorf("\t%v", sigErr)
 		}
-		return err
+		return errors.Errorf("failed to sign transaction: %v", err)
 	}
 
 	return nil
@@ -341,15 +302,13 @@ func (v *VSP) PayFee(ctx context.Context, ticketHash chainhash.Hash, feeTx *wire
 
 	votingKeyWIF, err := v.w.internal.DumpWIFPrivateKey(ctx, feeInfo.VotingAddress)
 	if err != nil {
-		log.Errorf("failed to retrieve privkey for %v: %v", feeInfo.VotingAddress, err)
-		return err
+		return errors.Errorf("failed to retrieve privkey for %v: %v", feeInfo.VotingAddress, err)
 	}
 
 	// Retrieve voting preferences
 	agendaChoices, _, err := v.w.internal.AgendaChoices(ctx, &ticketHash)
 	if err != nil {
-		log.Errorf("failed to retrieve agenda choices for %v: %v", ticketHash, err)
-		return err
+		return errors.Errorf("failed to retrieve agenda choices for %v: %v", ticketHash, err)
 	}
 
 	voteChoices := make(map[string]string)
@@ -369,7 +328,7 @@ func (v *VSP) PayFee(ctx context.Context, ticketHash chainhash.Hash, feeTx *wire
 		return err
 	}
 
-	err = v.Client.Post(ctx, "/api/v3/payfee", feeInfo.CommitmentAddress,
+	err = v.vspClient.post(ctx, "/api/v3/payfee", feeInfo.CommitmentAddress,
 		&payfeeResponse, json.RawMessage(requestBody))
 	if err != nil {
 		return err
@@ -377,8 +336,6 @@ func (v *VSP) PayFee(ctx context.Context, ticketHash chainhash.Hash, feeTx *wire
 
 	// verify initial request matches server
 	if !bytes.Equal(requestBody, payfeeResponse.Request) {
-		log.Warnf("[PAYFee] server response has differing request: %#v != %#v",
-			string(requestBody), string(payfeeResponse.Request))
 		return fmt.Errorf("server response contains differing request")
 	}
 	// TODO - validate server timestamp?
@@ -386,7 +343,6 @@ func (v *VSP) PayFee(ctx context.Context, ticketHash chainhash.Hash, feeTx *wire
 	feeInfo.FeeTx = feeTx
 	v.ticketsToFees[ticketHash] = feeInfo
 	v.ticketToFeeLock.Unlock()
-	log.Infof("successfully processed %v", ticketHash)
 
 	return nil
 }
@@ -394,7 +350,7 @@ func (v *VSP) PayFee(ctx context.Context, ticketHash chainhash.Hash, feeTx *wire
 // GetInfo returns the information of the specified VSP base URL
 func (v *VSP) GetInfo(ctx context.Context) (*VspInfoResponse, error) {
 	var response VspInfoResponse
-	err := v.Client.Get(ctx, apiVSPInfo, &response)
+	err := v.vspClient.get(ctx, apiVSPInfo, &response)
 	if err != nil {
 		return nil, err
 	}
@@ -414,8 +370,7 @@ func (v *VSP) GetFeeAddress(ctx context.Context, ticketHash chainhash.Hash) (dcr
 	// Fetch ticket
 	txs, _, err := v.w.internal.GetTransactionsByHashes(ctx, []*chainhash.Hash{&ticketHash})
 	if err != nil {
-		log.Errorf("failed to retrieve ticket %v: %v", ticketHash, err)
-		return 0, err
+		return 0, errors.Errorf("failed to retrieve ticket %v: %v", ticketHash, err)
 	}
 	ticketTx := txs[0]
 
@@ -425,19 +380,16 @@ func (v *VSP) GetFeeAddress(ctx context.Context, ticketHash chainhash.Hash) (dcr
 	_, addrs, _, err := txscript.ExtractPkScriptAddrs(scriptVersion,
 		ticketTx.TxOut[0].PkScript, v.w.internal.ChainParams(), true) // Yes treasury
 	if err != nil {
-		log.Errorf("failed to extract stake submission address from %v: %v", ticketHash, err)
-		return 0, err
+		return 0, errors.Errorf("failed to extract stake submission address from %v: %v", ticketHash, err)
 	}
 	if len(addrs) == 0 {
-		log.Errorf("failed to get address from %v", ticketHash)
-		return 0, fmt.Errorf("failed to get address from %v", ticketHash)
+		return 0, errors.Errorf("failed to get address from %v", ticketHash)
 	}
 	votingAddress := addrs[0]
 
 	commitmentAddr, err := stake.AddrFromSStxPkScrCommitment(ticketTx.TxOut[1].PkScript, v.chainParams)
 	if err != nil {
-		log.Errorf("failed to extract script addr from %v: %v", ticketHash, err)
-		return 0, err
+		return 0, errors.Errorf("failed to extract script addr from %v: %v", ticketHash, err)
 	}
 
 	// Fetch ticket and its parent transaction (typically, a split
@@ -463,7 +415,7 @@ func (v *VSP) GetFeeAddress(ctx context.Context, ticketHash chainhash.Hash) (dcr
 	if err != nil {
 		return 0, err
 	}
-	err = v.Client.Post(ctx, "/api/v3/feeaddress", commitmentAddr, &feeResponse,
+	err = v.vspClient.post(ctx, "/api/v3/feeaddress", commitmentAddr, &feeResponse,
 		json.RawMessage(requestBody))
 	if err != nil {
 		return 0, err
@@ -471,15 +423,12 @@ func (v *VSP) GetFeeAddress(ctx context.Context, ticketHash chainhash.Hash) (dcr
 
 	// verify initial request matches server
 	if !bytes.Equal(requestBody, feeResponse.Request) {
-		log.Warnf("[GetFeeAddress] server response has differing request: %#v != %#v",
-			string(requestBody), string(feeResponse.Request))
 		return 0, fmt.Errorf("server response contains differing request")
 	}
 	// TODO - validate server timestamp?
 
 	feeAddress, err := dcrutil.DecodeAddress(feeResponse.FeeAddress, v.w.internal.ChainParams())
 	if err != nil {
-		log.Warnf("server fee address invalid: %v", err)
 		return 0, fmt.Errorf("server fee address invalid: %v", err)
 	}
 	feeAmount := dcrutil.Amount(feeResponse.FeeAmount)
@@ -491,7 +440,6 @@ func (v *VSP) GetFeeAddress(ctx context.Context, ticketHash chainhash.Hash) (dcr
 	}
 
 	if feeAmount > maxFee {
-		log.Warnf("fee amount too high: %v > %v", feeAmount, maxFee)
 		return 0, fmt.Errorf("server fee amount too high: %v > %v", feeAmount, maxFee)
 	}
 

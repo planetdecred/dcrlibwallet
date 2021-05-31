@@ -1,4 +1,4 @@
-package vsp
+package dcrlibwallet
 
 import (
 	"bytes"
@@ -14,9 +14,9 @@ import (
 	"github.com/decred/dcrd/dcrutil/v3"
 )
 
-type Client struct {
+type vspClient struct {
 	http.Client
-	Pub  []byte
+	pub  []byte
 	url  string
 	sign func(context.Context, string, dcrutil.Address) ([]byte, error)
 }
@@ -25,8 +25,8 @@ type signer interface {
 	SignMessage(ctx context.Context, message string, address dcrutil.Address) ([]byte, error)
 }
 
-func NewClient(url string, pub []byte, s signer) *Client {
-	return &Client{url: url, Pub: pub, sign: s.SignMessage}
+func newVSPClient(url string, pub []byte, s signer) *vspClient {
+	return &vspClient{url: url, pub: pub, sign: s.SignMessage}
 }
 
 type BadRequestError struct {
@@ -37,15 +37,15 @@ type BadRequestError struct {
 
 func (e *BadRequestError) Error() string { return e.Message }
 
-func (c *Client) Post(ctx context.Context, path string, addr dcrutil.Address, resp, req interface{}) error {
+func (c *vspClient) post(ctx context.Context, path string, addr dcrutil.Address, resp, req interface{}) error {
 	return c.do(ctx, "POST", path, addr, resp, req)
 }
 
-func (c *Client) Get(ctx context.Context, path string, resp interface{}) error {
+func (c *vspClient) get(ctx context.Context, path string, resp interface{}) error {
 	return c.do(ctx, "GET", path, nil, resp, nil)
 }
 
-func (c *Client) do(ctx context.Context, method, path string, addr dcrutil.Address, resp, req interface{}) error {
+func (c *vspClient) do(ctx context.Context, method, path string, addr dcrutil.Address, resp, req interface{}) error {
 	var reqBody io.Reader
 	var sig []byte
 	if method == "POST" {
@@ -90,8 +90,8 @@ func (c *Client) do(ctx context.Context, method, path string, addr dcrutil.Addre
 		return fmt.Errorf("read response body: %w", err)
 	}
 
-	if len(c.Pub) > 0 {
-		if !ed25519.Verify(c.Pub, respBody, sig) {
+	if len(c.pub) > 0 {
+		if !ed25519.Verify(c.pub, respBody, sig) {
 			return fmt.Errorf("cannot authenticate server: invalid signature")
 		}
 	}
