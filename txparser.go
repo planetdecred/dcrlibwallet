@@ -70,7 +70,7 @@ func (wallet *Wallet) decodeTransactionWithTxSummary(txSummary *w.TransactionSum
 		Outputs:     walletOutputs,
 	}
 
-	decodedTx, err := DecodeTransaction(walletTx, wallet.chainParams)
+	decodedTx, err := wallet.DecodeTransaction(walletTx, wallet.chainParams)
 	if err != nil {
 		return nil, err
 	}

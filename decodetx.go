@@ -6,6 +6,7 @@ import (
 	"decred.org/dcrwallet/wallet"
 	"github.com/decred/dcrd/blockchain/stake/v3"
 	"github.com/decred/dcrd/chaincfg/v3"
+	"github.com/decred/dcrd/dcrutil/v3"
 	"github.com/decred/dcrd/txscript/v3"
 	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrdata/txhelpers/v4"
@@ -15,42 +16,37 @@ import (
 const BlockValid = 1 << 0
 
 // DecodeTransaction uses `walletTx.Hex` to retrieve detailed information for a transaction.
-func DecodeTransaction(walletTx *TxInfoFromWallet, netParams *chaincfg.Params) (*Transaction, error) {
+func (w *Wallet) DecodeTransaction(walletTx *TxInfoFromWallet, netParams *chaincfg.Params) (*Transaction, error) {
 	msgTx, txFee, txSize, txFeeRate, err := txhelper.MsgTxFeeSizeRate(walletTx.Hex)
 	if err != nil {
 		return nil, err
 	}
 
-	// only use input/output amounts relating to wallet to correctly determine tx direction
-	var totalWalletInput, totalWalletOutput int64
-	for _, input := range walletTx.Inputs {
-		totalWalletInput += input.AmountIn
-	}
-	for _, output := range walletTx.Outputs {
-		totalWalletOutput += output.AmountOut
-	}
-	amount, direction := txhelper.TransactionAmountAndDirection(totalWalletInput, totalWalletOutput, int64(txFee))
+	inputs, totalWalletInput, totalWalletUnmixedInputs := w.decodeTxInputs(msgTx, walletTx.Inputs)
+	outputs, totalWalletOutput, totalWalletMixedOutputs, mixedOutputsCount := w.decodeTxOutputs(msgTx, netParams, walletTx.Outputs)
 
-	inputs := decodeTxInputs(msgTx, walletTx.Inputs)
-	outputs := decodeTxOutputs(msgTx, netParams, walletTx.Outputs)
+	amount, direction := txhelper.TransactionAmountAndDirection(totalWalletInput, totalWalletOutput, int64(txFee))
 
 	ssGenVersion, lastBlockValid, voteBits, ticketSpentHash := voteInfo(msgTx)
 
 	// ticketSpentHash will be empty if this isn't a vote tx
 	if stake.IsSSRtx(msgTx) {
 		ticketSpentHash = msgTx.TxIn[0].PreviousOutPoint.Hash.String()
-		// set first tx input ss amount for revoked txs
+		// set first tx input as amount for revoked txs
 		amount = msgTx.TxIn[0].ValueIn
 	} else if stake.IsSStx(msgTx) {
 		// set first tx output as amount for ticket txs
 		amount = msgTx.TxOut[0].Value
 	}
 
-	isMixedTx, mixDenom, mixCount := txhelpers.IsMixTx(msgTx)
+	isMixedTx, mixDenom, _ := txhelpers.IsMixTx(msgTx)
 
 	txType := txhelper.FormatTransactionType(wallet.TxTransactionType(msgTx))
 	if isMixedTx {
 		txType = txhelper.TxTypeMixed
+
+		mixChange := totalWalletOutput - totalWalletMixedOutputs
+		txFee = dcrutil.Amount(totalWalletUnmixedInputs - (totalWalletMixedOutputs + mixChange))
 	}
 
 	return &Transaction{
@@ -62,7 +58,7 @@ func DecodeTransaction(walletTx *TxInfoFromWallet, netParams *chaincfg.Params) (
 		BlockHeight: walletTx.BlockHeight,
 
 		MixDenomination: mixDenom,
-		MixCount:        int32(mixCount),
+		MixCount:        mixedOutputsCount,
 
 		Version:  int32(msgTx.Version),
 		LockTime: int32(msgTx.LockTime),
@@ -83,8 +79,13 @@ func DecodeTransaction(walletTx *TxInfoFromWallet, netParams *chaincfg.Params) (
 	}, nil
 }
 
-func decodeTxInputs(mtx *wire.MsgTx, walletInputs []*WalletInput) (inputs []*TxInput) {
+func (wallet *Wallet) mixedTxFee(tx *TxInfoFromWallet) {
+
+}
+
+func (wallet *Wallet) decodeTxInputs(mtx *wire.MsgTx, walletInputs []*WalletInput) (inputs []*TxInput, totalWalletInputs, totalWalletUnmixedInputs int64) {
 	inputs = make([]*TxInput, len(mtx.TxIn))
+	unmixedAccountNumber := wallet.ReadInt32ConfigValueForKey(AccountMixerUnmixedAccount, -1)
 
 	for i, txIn := range mtx.TxIn {
 		input := &TxInput{
@@ -103,15 +104,24 @@ func decodeTxInputs(mtx *wire.MsgTx, walletInputs []*WalletInput) (inputs []*TxI
 			}
 		}
 
+		if input.AccountNumber != -1 {
+			totalWalletInputs += input.Amount
+			if input.AccountNumber == unmixedAccountNumber {
+				totalWalletUnmixedInputs += input.Amount
+			}
+		}
+
 		inputs[i] = input
 	}
 
 	return
 }
 
-func decodeTxOutputs(mtx *wire.MsgTx, netParams *chaincfg.Params, walletOutputs []*WalletOutput) (outputs []*TxOutput) {
+func (wallet *Wallet) decodeTxOutputs(mtx *wire.MsgTx, netParams *chaincfg.Params,
+	walletOutputs []*WalletOutput) (outputs []*TxOutput, totalWalletOutput, totalWalletMixedOutputs int64, mixedOutputsCount int32) {
 	outputs = make([]*TxOutput, len(mtx.TxOut))
 	txType := stake.DetermineTxType(mtx, true)
+	mixedAccountNumber := wallet.ReadInt32ConfigValueForKey(AccountMixerMixedAccount, -1)
 
 	for i, txOut := range mtx.TxOut {
 		// get address and script type for output
@@ -149,6 +159,14 @@ func decodeTxOutputs(mtx *wire.MsgTx, netParams *chaincfg.Params, walletOutputs 
 				output.Address = walletOutput.Address
 				output.AccountNumber = walletOutput.AccountNumber
 				break
+			}
+		}
+
+		if output.AccountNumber != -1 {
+			totalWalletOutput += output.Amount
+			if output.AccountNumber == mixedAccountNumber {
+				totalWalletMixedOutputs += output.Amount
+				mixedOutputsCount++
 			}
 		}
 
