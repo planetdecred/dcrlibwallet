@@ -15,9 +15,9 @@ const (
 	TxBucketName = "TxIndexInfo"
 	KeyDbVersion = "DbVersion"
 
-	// Necessary to force re-indexing if changes are made to the structure of data being stored.
+	// TxDbVersion is necessary to force re-indexing if changes are made to the structure of data being stored.
 	// Increment this version number if db structure changes such that client apps need to re-index.
-	TxDbVersion uint32 = 1
+	TxDbVersion uint32 = 2
 )
 
 type DB struct {
@@ -35,7 +35,7 @@ func Initialize(dbPath string, txData, vspdData interface{}) (*DB, error) {
 		return nil, err
 	}
 
-	walletDataDB, err = ensureDatabaseVersion(walletDataDB, dbPath)
+	walletDataDB, err = ensureTxDatabaseVersion(walletDataDB, dbPath, txData)
 	if err != nil {
 		return nil, err
 	}
@@ -92,9 +92,9 @@ func openOrCreateDB(dbPath string) (*storm.DB, error) {
 	return walletDataDB, nil
 }
 
-// ensureDatabaseVersion checks the version of the existing db against `TxDbVersion`.
+// ensureTxDatabaseVersion checks the version of the existing db against `TxDbVersion`.
 // If there's a difference, the current wallet data db file is deleted and a new one created.
-func ensureDatabaseVersion(walletDataDB *storm.DB, dbPath string) (*storm.DB, error) {
+func ensureTxDatabaseVersion(walletDataDB *storm.DB, dbPath string, txData interface{}) (*storm.DB, error) {
 	var currentDbVersion uint32
 	err := walletDataDB.Get(TxBucketName, KeyDbVersion, &currentDbVersion)
 	if err != nil && err != storm.ErrNotFound {
@@ -103,10 +103,15 @@ func ensureDatabaseVersion(walletDataDB *storm.DB, dbPath string) (*storm.DB, er
 	}
 
 	if currentDbVersion != TxDbVersion {
-		if err = os.RemoveAll(dbPath); err != nil {
+		if err = walletDataDB.Drop(txData); err != nil {
 			return nil, fmt.Errorf("error deleting outdated wallet data database: %s", err.Error())
 		}
-		return openOrCreateDB(dbPath)
+
+		if err = walletDataDB.Set(TxBucketName, KeyDbVersion, TxDbVersion); err != nil {
+			return nil, fmt.Errorf("error updating tx db version: %s", err.Error())
+		}
+
+		return walletDataDB, walletDataDB.Set(TxBucketName, KeyEndBlock, 0) // reset tx index
 	}
 
 	return walletDataDB, nil

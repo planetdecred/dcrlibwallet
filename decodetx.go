@@ -20,7 +20,6 @@ func DecodeTransaction(walletTx *TxInfoFromWallet, netParams *chaincfg.Params) (
 	if err != nil {
 		return nil, err
 	}
-	txType := wallet.TxTransactionType(msgTx)
 
 	// only use input/output amounts relating to wallet to correctly determine tx direction
 	var totalWalletInput, totalWalletOutput int64
@@ -49,15 +48,19 @@ func DecodeTransaction(walletTx *TxInfoFromWallet, netParams *chaincfg.Params) (
 
 	isMixedTx, mixDenom, mixCount := txhelpers.IsMixTx(msgTx)
 
+	txType := txhelper.FormatTransactionType(wallet.TxTransactionType(msgTx))
+	if isMixedTx {
+		txType = txhelper.TxTypeMixed
+	}
+
 	return &Transaction{
 		WalletID:    walletTx.WalletID,
 		Hash:        msgTx.TxHash().String(),
-		Type:        txhelper.FormatTransactionType(txType),
+		Type:        txType,
 		Hex:         walletTx.Hex,
 		Timestamp:   walletTx.Timestamp,
 		BlockHeight: walletTx.BlockHeight,
 
-		IsMixed:         isMixedTx,
 		MixDenomination: mixDenom,
 		MixCount:        int32(mixCount),
 

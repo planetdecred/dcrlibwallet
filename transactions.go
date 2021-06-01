@@ -20,6 +20,7 @@ const (
 	TxFilterStaking     = walletdata.TxFilterStaking
 	TxFilterCoinBase    = walletdata.TxFilterCoinBase
 	TxFilterRegular     = walletdata.TxFilterRegular
+	TxFilterMixed       = walletdata.TxFilterMixed
 
 	TxDirectionInvalid     = txhelper.TxDirectionInvalid
 	TxDirectionSent        = txhelper.TxDirectionSent
@@ -31,6 +32,7 @@ const (
 	TxTypeTicketPurchase = txhelper.TxTypeTicketPurchase
 	TxTypeVote           = txhelper.TxTypeVote
 	TxTypeRevocation     = txhelper.TxTypeRevocation
+	TxTypeMixed          = txhelper.TxTypeMixed
 )
 
 func (wallet *Wallet) PublishUnminedTransactions() error {
