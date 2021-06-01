@@ -15,7 +15,7 @@ const (
 )
 
 // Sync fetches all proposals from the server and
-func (p *Politeia) Sync() error {
+func (p *Politeia) Sync(host string) error {
 
 	p.mu.Lock()
 
@@ -27,7 +27,7 @@ func (p *Politeia) Sync() error {
 	log.Info("Politeia sync: started")
 
 	p.ctx, p.cancelSync = p.mwRef.contextWithShutdownCancel()
-	p.client = newPoliteiaClient()
+	p.client = newPoliteiaClient(host)
 	defer p.resetSyncData()
 
 	p.mu.Unlock()
@@ -334,7 +334,7 @@ func (p *Politeia) fetchBatchProposals(category int32, tokens []string, broadcas
 	return nil
 }
 
-func (p *Politeia) FetchProposalDescription(token string) (string, error) {
+func (p *Politeia) FetchProposalDescription(politeiaHost, token string) (string, error) {
 
 	proposal, err := p.GetProposalRaw(token)
 	if err != nil {
@@ -345,7 +345,7 @@ func (p *Politeia) FetchProposalDescription(token string) (string, error) {
 	client := p.client
 	p.mu.Unlock()
 	if client == nil {
-		client = newPoliteiaClient()
+		client = newPoliteiaClient(politeiaHost)
 		err := client.loadServerPolicy()
 		if err != nil {
 			return "", err

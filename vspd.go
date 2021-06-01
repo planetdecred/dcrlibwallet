@@ -174,7 +174,10 @@ func (v *VSPD) CreateTicketFeeTx(feeAmount int64, ticketHash, feeAddress string,
 		return "", errors.New("vspd ticket fee has been created. Use PayVSPFee() to register ticket")
 	}
 
-	txAuthor := v.mwRef.NewUnsignedTx(v.w, v.sourceAccountNumber)
+	txAuthor, err := v.mwRef.NewUnsignedTx(v.w.ID, v.sourceAccountNumber)
+	if err != nil {
+		return "", err
+	}
 	txAuthor.AddSendDestination(feeAddress, feeAmount, false)
 
 	unsignedTx, err := txAuthor.constructTransaction()
