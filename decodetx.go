@@ -79,10 +79,6 @@ func (w *Wallet) DecodeTransaction(walletTx *TxInfoFromWallet, netParams *chainc
 	}, nil
 }
 
-func (wallet *Wallet) mixedTxFee(tx *TxInfoFromWallet) {
-
-}
-
 func (wallet *Wallet) decodeTxInputs(mtx *wire.MsgTx, walletInputs []*WalletInput) (inputs []*TxInput, totalWalletInputs, totalWalletUnmixedInputs int64) {
 	inputs = make([]*TxInput, len(mtx.TxIn))
 	unmixedAccountNumber := wallet.ReadInt32ConfigValueForKey(AccountMixerUnmixedAccount, -1)
