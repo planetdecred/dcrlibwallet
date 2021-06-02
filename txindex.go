@@ -6,8 +6,6 @@ import (
 	"github.com/planetdecred/dcrlibwallet/walletdata"
 )
 
-const defaultTxRecoveryBlocks int32 = 4000
-
 func (wallet *Wallet) IndexTransactions() error {
 	ctx := wallet.shutdownContext()
 
@@ -73,7 +71,12 @@ func (wallet *Wallet) IndexTransactions() error {
 		if err != nil {
 			log.Errorf("[%d] Post-indexing tx count error :%v", wallet.ID, err)
 		} else if count > 0 {
-			log.Infof("[%d] Transaction index finished at %d, %d transaction(s) indexed in total", wallet.ID, txEndHeight, count)
+			log.Infof("[%d] Transaction index finished at %d, %d transaction(s) indexed in total", wallet.ID, endHeight, count)
+		}
+
+		err = wallet.walletDataDB.SaveLastIndexPoint(endHeight)
+		if err != nil {
+			log.Errorf("[%d] Set tx index end block height error: ", wallet.ID, err)
 		}
 	}()
 

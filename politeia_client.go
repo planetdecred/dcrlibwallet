@@ -16,6 +16,7 @@ import (
 )
 
 type politeiaClient struct {
+	host       string
 	httpClient *http.Client
 
 	policy             *www.PolicyReply
@@ -25,9 +26,10 @@ type politeiaClient struct {
 }
 
 const (
-	host    = "https://proposals.decred.org"
-	apiPath = "/api/v1"
+	PoliteiaMainnetHost = "https://proposals.decred.org"
+	PoliteiaTestnetHost = "https://test-proposals.decred.org"
 
+	apiPath              = "/api/v1"
 	versionPath          = "/version"
 	policyPath           = "/policy"
 	votesStatusPath      = "/proposals/votestatus"
@@ -37,7 +39,7 @@ const (
 	batchVoteSummaryPath = "/proposals/batchvotesummary"
 )
 
-func newPoliteiaClient() *politeiaClient {
+func newPoliteiaClient(host string) *politeiaClient {
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
@@ -50,6 +52,7 @@ func newPoliteiaClient() *politeiaClient {
 	}
 
 	return &politeiaClient{
+		host:       host,
 		httpClient: httpClient,
 	}
 }
@@ -87,7 +90,7 @@ func (c *politeiaClient) makeRequest(method, path string, body interface{}, dest
 		}
 	}
 
-	route := host + apiPath + path
+	route := c.host + apiPath + path
 	if body != nil {
 		requestBody, err = c.getRequestBody(method, body)
 		if err != nil {
@@ -165,7 +168,7 @@ func (c *politeiaClient) handleError(statusCode int, responseBody []byte) error 
 }
 
 func (c *politeiaClient) version() (*www.VersionReply, error) {
-	route := host + apiPath + versionPath
+	route := c.host + apiPath + versionPath
 	req, err := http.NewRequest(http.MethodGet, route, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating version request: %s", err.Error())

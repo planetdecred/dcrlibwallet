@@ -12,6 +12,7 @@ const (
 	ErrWalletLocked                 = "wallet_locked"
 	ErrWalletDatabaseInUse          = "wallet_db_in_use"
 	ErrWalletNotLoaded              = "wallet_not_loaded"
+	ErrWalletNotFound               = "wallet_not_found"
 	ErrWalletNameExist              = "wallet_name_exists"
 	ErrReservedWalletName           = "wallet_name_reserved"
 	ErrWalletIsRestored             = "wallet_is_restored"

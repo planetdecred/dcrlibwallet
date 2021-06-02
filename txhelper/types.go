@@ -7,6 +7,7 @@ const (
 	TxDirectionTransferred int32 = 2
 
 	TxTypeRegular        = "Regular"
+	TxTypeMixed          = "Mixed"
 	TxTypeCoinBase       = "Coinbase"
 	TxTypeTicketPurchase = "Ticket"
 	TxTypeVote           = "Vote"
