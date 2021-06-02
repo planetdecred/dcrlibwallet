@@ -68,9 +68,10 @@ func (db *DB) prepareTxQuery(txFilter int32) (query storm.Query) {
 		)
 	case TxFilterStaking:
 		query = db.walletDataDB.Select(
-			q.Not(
-				q.Eq("Type", txhelper.TxTypeRegular),
-				q.Eq("Type", txhelper.TxTypeCoinBase),
+			q.Or(
+				q.Eq("Type", txhelper.TxTypeTicketPurchase),
+				q.Eq("Type", txhelper.TxTypeVote),
+				q.Eq("Type", txhelper.TxTypeRevocation),
 			),
 		)
 	case TxFilterCoinBase:
