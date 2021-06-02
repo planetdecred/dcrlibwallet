@@ -363,6 +363,8 @@ func (mw *MultiWallet) GeneralSyncProgress() *GeneralSyncProgress {
 			return mw.syncData.addressDiscoveryProgress.GeneralSyncProgress
 		case HeadersRescanSyncStage:
 			return mw.syncData.headersRescanProgress.GeneralSyncProgress
+		case CFiltersFetchSyncStage:
+			return mw.syncData.cfiltersFetchProgress.GeneralSyncProgress
 		}
 	}
 
