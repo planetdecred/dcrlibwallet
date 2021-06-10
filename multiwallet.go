@@ -34,7 +34,7 @@ type MultiWallet struct {
 	txAndBlockNotificationListeners map[string]TxAndBlockNotificationListener
 
 	blocksRescanProgressListener     BlocksRescanProgressListener
-	accountMixerNotificationListener AccountMixerNotificationListener
+	accountMixerNotificationListener map[string]AccountMixerNotificationListener
 
 	shuttingDown chan bool
 	cancelFuncs  []context.CancelFunc
@@ -94,7 +94,8 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 		syncData: &syncData{
 			syncProgressListeners: make(map[string]SyncProgressListener),
 		},
-		txAndBlockNotificationListeners: make(map[string]TxAndBlockNotificationListener),
+		txAndBlockNotificationListeners:  make(map[string]TxAndBlockNotificationListener),
+		accountMixerNotificationListener: make(map[string]AccountMixerNotificationListener),
 	}
 
 	mw.Politeia, err = newPoliteia(mw)
