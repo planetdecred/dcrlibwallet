@@ -110,6 +110,18 @@ func (wallet *Wallet) SetAccountMixerConfig(mixedAccount, unmixedAccount int32, 
 	return nil
 }
 
+func (wallet *Wallet) AccountMixerConfigIsSet() bool {
+	return wallet.ReadBoolConfigValueForKey(AccountMixerConfigSet, false)
+}
+
+func (wallet *Wallet) MixedAccountNumber() int32 {
+	return wallet.ReadInt32ConfigValueForKey(AccountMixerMixedAccount, -1)
+}
+
+func (wallet *Wallet) UnmixedAccountNumber() int32 {
+	return wallet.ReadInt32ConfigValueForKey(AccountMixerUnmixedAccount, -1)
+}
+
 func (wallet *Wallet) ClearMixerConfig() {
 	wallet.SetInt32ConfigValueForKey(AccountMixerMixedAccount, -1)
 	wallet.SetInt32ConfigValueForKey(AccountMixerUnmixedAccount, -1)

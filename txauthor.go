@@ -342,9 +342,10 @@ func (tx *TxAuthor) changeSource(ctx context.Context) (txauthor.ChangeSource, er
 	if tx.changeAddress == "" {
 		var changeAccount uint32
 
-		mixChange := tx.sourceWallet.ReadBoolConfigValueForKey(AccountMixerMixTxChange, false)
-		if mixChange {
-			changeAccount = uint32(tx.sourceWallet.ReadInt32ConfigValueForKey(AccountMixerUnmixedAccount, -1))
+		if tx.sourceWallet.AccountMixerConfigIsSet() {
+			if tx.sourceAccountNumber == uint32(tx.sourceWallet.MixedAccountNumber()) {
+				changeAccount = uint32(tx.sourceWallet.UnmixedAccountNumber())
+			}
 		} else {
 			changeAccount = tx.sourceAccountNumber
 		}
