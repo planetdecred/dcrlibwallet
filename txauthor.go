@@ -26,6 +26,9 @@ type TxAuthor struct {
 	changeAddress       string
 	inputs              []*wire.TxIn
 	changeDestination   *TransactionDestination
+
+	unsignedTx     *txauthor.AuthoredTx
+	needsConstruct bool
 }
 
 func (mw *MultiWallet) NewUnsignedTx(walletID int, sourceAccountNumber int32) (*TxAuthor, error) {
@@ -43,6 +46,7 @@ func (mw *MultiWallet) NewUnsignedTx(walletID int, sourceAccountNumber int32) (*
 		sourceWallet:        sourceWallet,
 		sourceAccountNumber: uint32(sourceAccountNumber),
 		destinations:        make([]TransactionDestination, 0),
+		needsConstruct:      true,
 	}, nil
 }
 
@@ -61,6 +65,7 @@ func (tx *TxAuthor) AddSendDestination(address string, atomAmount int64, sendMax
 		AtomAmount: atomAmount,
 		SendMax:    sendMax,
 	})
+	tx.needsConstruct = true
 
 	return nil
 }
@@ -79,12 +84,14 @@ func (tx *TxAuthor) UpdateSendDestination(index int, address string, atomAmount 
 		AtomAmount: atomAmount,
 		SendMax:    sendMax,
 	}
+	tx.needsConstruct = true
 	return nil
 }
 
 func (tx *TxAuthor) RemoveSendDestination(index int) {
 	if len(tx.destinations) > index {
 		tx.destinations = append(tx.destinations[:index], tx.destinations[index+1:]...)
+		tx.needsConstruct = true
 	}
 }
 
@@ -96,10 +103,12 @@ func (tx *TxAuthor) SetChangeDestination(address string) {
 	tx.changeDestination = &TransactionDestination{
 		Address: address,
 	}
+	tx.needsConstruct = true
 }
 
 func (tx *TxAuthor) RemoveChangeDestination() {
 	tx.changeDestination = nil
+	tx.needsConstruct = true
 }
 
 func (tx *TxAuthor) TotalSendAmount() *Amount {
@@ -115,7 +124,7 @@ func (tx *TxAuthor) TotalSendAmount() *Amount {
 }
 
 func (tx *TxAuthor) EstimateFeeAndSize() (*TxFeeAndSize, error) {
-	unsignedTx, err := tx.constructTransaction()
+	unsignedTx, err := tx.unsignedTransaction()
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -126,9 +135,19 @@ func (tx *TxAuthor) EstimateFeeAndSize() (*TxFeeAndSize, error) {
 		DcrValue:  feeToSendTx.ToCoin(),
 	}
 
+	var change *Amount
+	if unsignedTx.ChangeIndex >= 0 {
+		txOut := unsignedTx.Tx.TxOut[unsignedTx.ChangeIndex]
+		change = &Amount{
+			AtomValue: txOut.Value,
+			DcrValue:  AmountCoin(txOut.Value),
+		}
+	}
+
 	return &TxFeeAndSize{
 		EstimatedSignedSize: unsignedTx.EstimatedSignedSerializeSize,
 		Fee:                 feeAmount,
+		Change:              change,
 	}, nil
 }
 
@@ -184,6 +203,7 @@ func (tx *TxAuthor) UseInputs(utxoKeys []string) error {
 	}
 
 	tx.inputs = inputs
+	tx.needsConstruct = true
 	return nil
 }
 
@@ -200,7 +220,7 @@ func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	unsignedTx, err := tx.constructTransaction()
+	unsignedTx, err := tx.unsignedTransaction()
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -270,6 +290,20 @@ func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
 		return nil, translateError(err)
 	}
 	return txHash[:], nil
+}
+
+func (tx *TxAuthor) unsignedTransaction() (*txauthor.AuthoredTx, error) {
+	if tx.needsConstruct || tx.unsignedTx == nil {
+		unsignedTx, err := tx.constructTransaction()
+		if err != nil {
+			return nil, err
+		}
+
+		tx.needsConstruct = false
+		tx.unsignedTx = unsignedTx
+	}
+
+	return tx.unsignedTx, nil
 }
 
 func (tx *TxAuthor) constructTransaction() (*txauthor.AuthoredTx, error) {
@@ -342,10 +376,10 @@ func (tx *TxAuthor) changeSource(ctx context.Context) (txauthor.ChangeSource, er
 	if tx.changeAddress == "" {
 		var changeAccount uint32
 
-		if tx.sourceWallet.AccountMixerConfigIsSet() {
-			if tx.sourceAccountNumber == uint32(tx.sourceWallet.MixedAccountNumber()) {
-				changeAccount = uint32(tx.sourceWallet.UnmixedAccountNumber())
-			}
+		// MixedAccountNumber would be -1 if mixer config isn't set.
+		if tx.sourceAccountNumber == uint32(tx.sourceWallet.MixedAccountNumber()) ||
+			tx.sourceWallet.AccountMixerMixChange() {
+			changeAccount = uint32(tx.sourceWallet.UnmixedAccountNumber())
 		} else {
 			changeAccount = tx.sourceAccountNumber
 		}

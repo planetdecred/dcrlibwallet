@@ -110,6 +110,10 @@ func (wallet *Wallet) SetAccountMixerConfig(mixedAccount, unmixedAccount int32, 
 	return nil
 }
 
+func (wallet *Wallet) AccountMixerMixChange() bool {
+	return wallet.ReadBoolConfigValueForKey(AccountMixerMixTxChange, false)
+}
+
 func (wallet *Wallet) AccountMixerConfigIsSet() bool {
 	return wallet.ReadBoolConfigValueForKey(AccountMixerConfigSet, false)
 }
