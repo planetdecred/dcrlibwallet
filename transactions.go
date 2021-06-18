@@ -96,11 +96,26 @@ func (wallet *Wallet) GetTransactionsRaw(offset, limit, txFilter int32, newestFi
 }
 
 func (mw *MultiWallet) GetTransactions(offset, limit, txFilter int32, newestFirst bool) (string, error) {
+
+	transactions, err := mw.GetTransactionsRaw(offset, limit, txFilter, newestFirst)
+	if err != nil {
+		return "", err
+	}
+
+	jsonEncodedTransactions, err := json.Marshal(&transactions)
+	if err != nil {
+		return "", err
+	}
+
+	return string(jsonEncodedTransactions), nil
+}
+
+func (mw *MultiWallet) GetTransactionsRaw(offset, limit, txFilter int32, newestFirst bool) ([]Transaction, error) {
 	transactions := make([]Transaction, 0)
 	for _, wallet := range mw.wallets {
 		walletTransactions, err := wallet.GetTransactionsRaw(offset, limit, txFilter, newestFirst)
 		if err != nil {
-			return "", nil
+			return nil, err
 		}
 
 		transactions = append(transactions, walletTransactions...)
@@ -118,12 +133,7 @@ func (mw *MultiWallet) GetTransactions(offset, limit, txFilter int32, newestFirs
 		transactions = transactions[:limit]
 	}
 
-	jsonEncodedTransactions, err := json.Marshal(&transactions)
-	if err != nil {
-		return "", err
-	}
-
-	return string(jsonEncodedTransactions), nil
+	return transactions, nil
 }
 
 func (wallet *Wallet) CountTransactions(txFilter int32) (int, error) {
