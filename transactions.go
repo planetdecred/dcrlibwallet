@@ -21,6 +21,8 @@ const (
 	TxFilterCoinBase    = walletdata.TxFilterCoinBase
 	TxFilterRegular     = walletdata.TxFilterRegular
 	TxFilterMixed       = walletdata.TxFilterMixed
+	TxFilterVoted       = walletdata.TxFilterVoted
+	TxFilterRevoked     = walletdata.TxFilterRevoked
 
 	TxDirectionInvalid     = txhelper.TxDirectionInvalid
 	TxDirectionSent        = txhelper.TxDirectionSent
@@ -150,6 +152,59 @@ func (wallet *Wallet) TicketHasVotedOrRevoked(ticketHash string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+func (wallet *Wallet) TicketSpender(ticketHash string) (*Transaction, error) {
+	var spender Transaction
+	err := wallet.walletDataDB.FindOne("TicketSpentHash", ticketHash, &spender)
+	if err != nil {
+		if err == storm.ErrNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &spender, nil
+}
+
+func (wallet *Wallet) TransactionOverview() (txOverview *TransactionOverview, err error) {
+
+	txOverview = &TransactionOverview{}
+
+	txOverview.Sent, err = wallet.CountTransactions(TxFilterSent)
+	if err != nil {
+		return
+	}
+
+	txOverview.Received, err = wallet.CountTransactions(TxFilterReceived)
+	if err != nil {
+		return
+	}
+
+	txOverview.Transferred, err = wallet.CountTransactions(TxFilterTransferred)
+	if err != nil {
+		return
+	}
+
+	txOverview.Mixed, err = wallet.CountTransactions(TxFilterMixed)
+	if err != nil {
+		return
+	}
+
+	txOverview.Staking, err = wallet.CountTransactions(TxFilterStaking)
+	if err != nil {
+		return
+	}
+
+	txOverview.Coinbase, err = wallet.CountTransactions(TxFilterCoinBase)
+	if err != nil {
+		return
+	}
+
+	txOverview.All = txOverview.Sent + txOverview.Received + txOverview.Transferred + txOverview.Mixed +
+		txOverview.Staking + txOverview.Coinbase
+
+	return txOverview, nil
 }
 
 func TxMatchesFilter(txType string, txDirection, txFilter int32) bool {

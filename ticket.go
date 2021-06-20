@@ -36,6 +36,36 @@ func (wallet *Wallet) StakeInfo() (*w.StakeInfoData, error) {
 	return wallet.internal.StakeInfo(ctx)
 }
 
+func (wallet *Wallet) StakingOverview() (*StakingOverview, error) {
+	stOverview := &StakingOverview{}
+
+	stakeInfo, err := wallet.StakeInfo()
+	if err != nil {
+		return nil, err
+	}
+
+	stOverview.Voted, err = wallet.CountTransactions(TxFilterVoted)
+	if err != nil {
+		return nil, err
+	}
+
+	stOverview.Revoked, err = wallet.CountTransactions(TxFilterRevoked)
+	if err != nil {
+		return nil, err
+	}
+
+	stOverview.Mempool = int(stakeInfo.OwnMempoolTix)
+	stOverview.Immature = int(stakeInfo.Immature)
+	stOverview.Live = int(stakeInfo.Live)
+	stOverview.Missed = int(stakeInfo.Missed)
+	stOverview.Expired = int(stakeInfo.Expired)
+
+	stOverview.All = stOverview.Mempool + stOverview.Immature + stOverview.Live + stOverview.Voted +
+		stOverview.Missed + stOverview.Expired + stOverview.Revoked
+
+	return stOverview, nil
+}
+
 func (wallet *Wallet) GetTickets(startingBlockHash, endingBlockHash []byte, targetCount int32) ([]*TicketInfo, error) {
 	return wallet.getTickets(&GetTicketsRequest{
 		StartingBlockHash: startingBlockHash,

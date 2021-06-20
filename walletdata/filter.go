@@ -15,6 +15,8 @@ const (
 	TxFilterCoinBase    int32 = 5
 	TxFilterRegular     int32 = 6
 	TxFilterMixed       int32 = 7
+	TxFilterVoted       int32 = 8
+	TxFilterRevoked     int32 = 9
 )
 
 func TxMatchesFilter(txType string, txDirection, txFilter int32) bool {
@@ -42,6 +44,10 @@ func TxMatchesFilter(txType string, txDirection, txFilter int32) bool {
 		return txType == txhelper.TxTypeRegular
 	case TxFilterMixed:
 		return txType == txhelper.TxTypeMixed
+	case TxFilterVoted:
+		return txType == txhelper.TxTypeVote
+	case TxFilterRevoked:
+		return txType == txhelper.TxTypeRevocation
 	case TxFilterAll:
 		return true
 	}
@@ -85,6 +91,14 @@ func (db *DB) prepareTxQuery(txFilter int32) (query storm.Query) {
 	case TxFilterMixed:
 		query = db.walletDataDB.Select(
 			q.Eq("Type", txhelper.TxTypeMixed),
+		)
+	case TxFilterVoted:
+		query = db.walletDataDB.Select(
+			q.Eq("Type", txhelper.TxTypeVote),
+		)
+	case TxFilterRevoked:
+		query = db.walletDataDB.Select(
+			q.Eq("Type", txhelper.TxTypeRevocation),
 		)
 	default:
 		query = db.walletDataDB.Select(
