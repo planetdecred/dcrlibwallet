@@ -322,7 +322,6 @@ type VSPTicketPurchaseInfo struct {
 	TicketAddress string
 }
 
-// mixer overview
 type StakingOverview struct {
 	All      int
 	Immature int

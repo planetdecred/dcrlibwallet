@@ -18,7 +18,7 @@ const (
 
 	// TxDbVersion is necessary to force re-indexing if changes are made to the structure of data being stored.
 	// Increment this version number if db structure changes such that client apps need to re-index.
-	TxDbVersion uint32 = 2
+	TxDbVersion uint32 = 3
 )
 
 type DB struct {
