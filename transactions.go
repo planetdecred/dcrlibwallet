@@ -23,6 +23,8 @@ const (
 	TxFilterMixed       = walletdata.TxFilterMixed
 	TxFilterVoted       = walletdata.TxFilterVoted
 	TxFilterRevoked     = walletdata.TxFilterRevoked
+	TxFilterLive        = walletdata.TxFilterLive
+	TxFilterExpired     = walletdata.TxFilterExpired
 
 	TxDirectionInvalid     = txhelper.TxDirectionInvalid
 	TxDirectionSent        = txhelper.TxDirectionSent
@@ -93,7 +95,7 @@ func (wallet *Wallet) GetTransactions(offset, limit, txFilter int32, newestFirst
 }
 
 func (wallet *Wallet) GetTransactionsRaw(offset, limit, txFilter int32, newestFirst bool) (transactions []Transaction, err error) {
-	err = wallet.walletDataDB.Read(offset, limit, txFilter, newestFirst, &transactions)
+	err = wallet.walletDataDB.Read(offset, limit, txFilter, newestFirst, wallet.GetBestBlock(), &transactions)
 	return
 }
 
@@ -139,7 +141,7 @@ func (mw *MultiWallet) GetTransactionsRaw(offset, limit, txFilter int32, newestF
 }
 
 func (wallet *Wallet) CountTransactions(txFilter int32) (int, error) {
-	return wallet.walletDataDB.Count(txFilter, &Transaction{})
+	return wallet.walletDataDB.Count(txFilter, wallet.GetBestBlock(), &Transaction{})
 }
 
 func (wallet *Wallet) TicketHasVotedOrRevoked(ticketHash string) (bool, error) {
@@ -207,6 +209,48 @@ func (wallet *Wallet) TransactionOverview() (txOverview *TransactionOverview, er
 	return txOverview, nil
 }
 
-func TxMatchesFilter(txType string, txDirection, txFilter int32) bool {
-	return walletdata.TxMatchesFilter(txType, txDirection, txFilter)
+func (wallet *Wallet) TxMatchesFilter(tx *Transaction, txFilter int32) bool {
+	switch txFilter {
+	case TxFilterSent:
+		return tx.Type == TxTypeRegular && tx.Direction == TxDirectionSent
+	case TxFilterReceived:
+		return tx.Type == TxTypeRegular && tx.Direction == TxDirectionReceived
+	case TxFilterTransferred:
+		return tx.Type == TxTypeRegular && tx.Direction == TxDirectionTransferred
+	case TxFilterStaking:
+		switch tx.Type {
+		case TxTypeTicketPurchase:
+			fallthrough
+		case TxTypeVote:
+			fallthrough
+		case TxTypeRevocation:
+			return true
+		}
+
+		return false
+	case TxFilterCoinBase:
+		return tx.Type == TxTypeCoinBase
+	case TxFilterRegular:
+		return tx.Type == TxTypeRegular
+	case TxFilterMixed:
+		return tx.Type == TxTypeMixed
+	case TxFilterVoted:
+		return tx.Type == TxTypeVote
+	case TxFilterRevoked:
+		return tx.Type == TxTypeRevocation
+	case TxFilterLive:
+		bestBlock := wallet.GetBestBlock()
+		// ticket is live if we don't have the spender hash and it hasn't expired.
+		// we cannot detect missed tickets over spv.
+		return tx.Type == TxTypeTicketPurchase && tx.TicketSpentHash == "" &&
+			(tx.Expiry >= bestBlock || tx.Expiry == 0)
+	case TxFilterExpired:
+		bestBlock := wallet.GetBestBlock()
+		return tx.Type == TxTypeTicketPurchase && tx.TicketSpentHash == "" &&
+			(tx.Expiry <= bestBlock && tx.Expiry != 0)
+	case TxFilterAll:
+		return true
+	}
+
+	return false
 }

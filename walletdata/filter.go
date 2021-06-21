@@ -17,45 +17,11 @@ const (
 	TxFilterMixed       int32 = 7
 	TxFilterVoted       int32 = 8
 	TxFilterRevoked     int32 = 9
+	TxFilterLive        int32 = 10
+	TxFilterExpired     int32 = 11
 )
 
-func TxMatchesFilter(txType string, txDirection, txFilter int32) bool {
-	switch txFilter {
-	case TxFilterSent:
-		return txType == txhelper.TxTypeRegular && txDirection == txhelper.TxDirectionSent
-	case TxFilterReceived:
-		return txType == txhelper.TxTypeRegular && txDirection == txhelper.TxDirectionReceived
-	case TxFilterTransferred:
-		return txType == txhelper.TxTypeRegular && txDirection == txhelper.TxDirectionTransferred
-	case TxFilterStaking:
-		switch txType {
-		case txhelper.TxTypeTicketPurchase:
-			fallthrough
-		case txhelper.TxTypeVote:
-			fallthrough
-		case txhelper.TxTypeRevocation:
-			return true
-		}
-
-		return false
-	case TxFilterCoinBase:
-		return txType == txhelper.TxTypeCoinBase
-	case TxFilterRegular:
-		return txType == txhelper.TxTypeRegular
-	case TxFilterMixed:
-		return txType == txhelper.TxTypeMixed
-	case TxFilterVoted:
-		return txType == txhelper.TxTypeVote
-	case TxFilterRevoked:
-		return txType == txhelper.TxTypeRevocation
-	case TxFilterAll:
-		return true
-	}
-
-	return false
-}
-
-func (db *DB) prepareTxQuery(txFilter int32) (query storm.Query) {
+func (db *DB) prepareTxQuery(txFilter, bestBlock int32) (query storm.Query) {
 	switch txFilter {
 	case TxFilterSent:
 		query = db.walletDataDB.Select(
@@ -99,6 +65,28 @@ func (db *DB) prepareTxQuery(txFilter int32) (query storm.Query) {
 	case TxFilterRevoked:
 		query = db.walletDataDB.Select(
 			q.Eq("Type", txhelper.TxTypeRevocation),
+		)
+	case TxFilterLive:
+		query = db.walletDataDB.Select(
+			q.And(
+				q.Eq("Type", txhelper.TxTypeTicketPurchase),
+				q.Eq("TicketSpender", ""),
+				q.Or(
+					q.Gte("Expiry", bestBlock),
+					q.Eq("Expiry", 0),
+				),
+			),
+		)
+	case TxFilterExpired:
+		query = db.walletDataDB.Select(
+			q.And(
+				q.Eq("Type", txhelper.TxTypeTicketPurchase),
+				q.Eq("TicketSpender", ""),
+				q.And(
+					q.Lte("Expiry", bestBlock),
+					q.Not(q.Eq("Expiry", 0)),
+				),
+			),
 		)
 	default:
 		query = db.walletDataDB.Select(

@@ -58,7 +58,7 @@ func (wallet *Wallet) StakingOverview() (*StakingOverview, error) {
 	stOverview.Immature = int(stakeInfo.Immature)
 	stOverview.Live = int(stakeInfo.Live)
 	stOverview.Missed = int(stakeInfo.Missed)
-	stOverview.Expired = int(stakeInfo.Expired)
+	stOverview.Expired = int(stakeInfo.UnspentExpired)
 
 	stOverview.All = stOverview.Mempool + stOverview.Immature + stOverview.Live + stOverview.Voted +
 		stOverview.Missed + stOverview.Expired + stOverview.Revoked
