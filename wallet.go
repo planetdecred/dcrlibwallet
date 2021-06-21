@@ -69,7 +69,7 @@ func (wallet *Wallet) prepare(rootDir string, chainParams *chaincfg.Params,
 	if exists, _ := fileExists(oldTxDBPath); exists {
 		moveFile(oldTxDBPath, walletDataDBPath)
 	}
-	wallet.walletDataDB, err = walletdata.Initialize(walletDataDBPath, &Transaction{}, &VspdTicketInfo{})
+	wallet.walletDataDB, err = walletdata.Initialize(walletDataDBPath, chainParams, &Transaction{}, &VspdTicketInfo{})
 	if err != nil {
 		log.Error(err.Error())
 		return err

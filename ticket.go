@@ -36,13 +36,8 @@ func (wallet *Wallet) StakeInfo() (*w.StakeInfoData, error) {
 	return wallet.internal.StakeInfo(ctx)
 }
 
-func (wallet *Wallet) StakingOverview() (*StakingOverview, error) {
-	stOverview := &StakingOverview{}
-
-	stakeInfo, err := wallet.StakeInfo()
-	if err != nil {
-		return nil, err
-	}
+func (wallet *Wallet) StakingOverview() (stOverview *StakingOverview, err error) {
+	stOverview = &StakingOverview{}
 
 	stOverview.Voted, err = wallet.CountTransactions(TxFilterVoted)
 	if err != nil {
@@ -54,14 +49,23 @@ func (wallet *Wallet) StakingOverview() (*StakingOverview, error) {
 		return nil, err
 	}
 
-	stOverview.Mempool = int(stakeInfo.OwnMempoolTix)
-	stOverview.Immature = int(stakeInfo.Immature)
-	stOverview.Live = int(stakeInfo.Live)
-	stOverview.Missed = int(stakeInfo.Missed)
-	stOverview.Expired = int(stakeInfo.UnspentExpired)
+	stOverview.Expired, err = wallet.CountTransactions(TxFilterExpired)
+	if err != nil {
+		return nil, err
+	}
 
-	stOverview.All = stOverview.Mempool + stOverview.Immature + stOverview.Live + stOverview.Voted +
-		stOverview.Missed + stOverview.Expired + stOverview.Revoked
+	stOverview.Live, err = wallet.CountTransactions(TxFilterLive)
+	if err != nil {
+		return nil, err
+	}
+
+	stOverview.Immature, err = wallet.CountTransactions(TxFilterImmature)
+	if err != nil {
+		return nil, err
+	}
+
+	stOverview.All = stOverview.Immature + stOverview.Live + stOverview.Voted +
+		stOverview.Expired + stOverview.Revoked
 
 	return stOverview, nil
 }

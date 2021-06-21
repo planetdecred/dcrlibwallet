@@ -325,11 +325,9 @@ type VSPTicketPurchaseInfo struct {
 // mixer overview
 type StakingOverview struct {
 	All      int
-	Mempool  int
 	Immature int
 	Live     int
 	Voted    int
-	Missed   int
 	Expired  int
 	Revoked  int
 }
