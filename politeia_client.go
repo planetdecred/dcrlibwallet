@@ -19,10 +19,8 @@ type politeiaClient struct {
 	host       string
 	httpClient *http.Client
 
-	policy             *www.PolicyReply
-	csrfToken          string
-	cookies            []*http.Cookie
-	csrfTokenExpiresAt time.Time
+	policy  *www.PolicyReply
+	cookies []*http.Cookie
 }
 
 const (
@@ -83,13 +81,6 @@ func (c *politeiaClient) makeRequest(method, path string, body interface{}, dest
 	var err error
 	var requestBody []byte
 
-	if c.csrfToken == "" || time.Now().Unix() >= c.csrfTokenExpiresAt.Unix() {
-		_, err := c.version()
-		if err != nil {
-			return err
-		}
-	}
-
 	route := c.host + apiPath + path
 	if body != nil {
 		requestBody, err = c.getRequestBody(method, body)
@@ -110,7 +101,6 @@ func (c *politeiaClient) makeRequest(method, path string, body interface{}, dest
 	if method == http.MethodPost && requestBody != nil {
 		req.Body = ioutil.NopCloser(bytes.NewReader(requestBody))
 	}
-	req.Header.Add(www.CsrfToken, c.csrfToken)
 
 	for _, cookie := range c.cookies {
 		req.AddCookie(cookie)
@@ -173,7 +163,6 @@ func (c *politeiaClient) version() (*www.VersionReply, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error creating version request: %s", err.Error())
 	}
-	req.Header.Add(www.CsrfToken, c.csrfToken)
 
 	// Send request
 	r, err := c.httpClient.Do(req)
@@ -196,12 +185,6 @@ func (c *politeiaClient) version() (*www.VersionReply, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshaling version response: %s", err.Error())
 	}
-
-	newCsrfToken := r.Header.Get(www.CsrfToken)
-	if newCsrfToken != "" {
-		c.csrfToken = newCsrfToken
-	}
-	c.csrfTokenExpiresAt = time.Now().Add(time.Hour * 23)
 
 	return &versionReply, nil
 }
