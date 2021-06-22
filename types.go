@@ -175,12 +175,13 @@ type BlocksRescanProgressListener interface {
 // Transaction is used with storm for tx indexing operations.
 // For faster queries, the `Hash`, `Type` and `Direction` fields are indexed.
 type Transaction struct {
-	WalletID    int    `json:"walletID"`
-	Hash        string `storm:"id,unique" json:"hash"`
-	Type        string `storm:"index" json:"type"`
-	Hex         string `json:"hex"`
-	Timestamp   int64  `json:"timestamp"`
-	BlockHeight int32  `json:"block_height"`
+	WalletID      int    `json:"walletID"`
+	Hash          string `storm:"id,unique" json:"hash"`
+	Type          string `storm:"index" json:"type"`
+	Hex           string `json:"hex"`
+	Timestamp     int64  `storm:"index" json:"timestamp"`
+	BlockHeight   int32  `storm:"index" json:"block_height"`
+	TicketSpender string `storm:"index" json:"ticket_spender"`
 
 	MixDenomination int64 `json:"mix_denom"`
 	MixCount        int32 `json:"mix_count"`
@@ -260,6 +261,16 @@ type TransactionDestination struct {
 	SendMax    bool
 }
 
+type TransactionOverview struct {
+	All         int
+	Sent        int
+	Received    int
+	Transferred int
+	Mixed       int
+	Staking     int
+	Coinbase    int
+}
+
 /** end tx-related types */
 
 /** begin ticket-related types */
@@ -309,6 +320,15 @@ type VSPTicketPurchaseInfo struct {
 	PoolFees      float64
 	Script        string
 	TicketAddress string
+}
+
+type StakingOverview struct {
+	All      int
+	Immature int
+	Live     int
+	Voted    int
+	Expired  int
+	Revoked  int
 }
 
 /** end ticket-related types */

@@ -27,8 +27,8 @@ func (db *DB) ReadIndexingStartBlock() (int32, error) {
 // Read queries the db for `limit` count transactions that match the specified `txFilter`
 // starting from the specified `offset`; and saves the transactions found to the received `transactions` object.
 // `transactions` should be a pointer to a slice of Transaction objects.
-func (db *DB) Read(offset, limit, txFilter int32, newestFirst bool, transactions interface{}) error {
-	query := db.prepareTxQuery(txFilter)
+func (db *DB) Read(offset, limit, txFilter int32, newestFirst bool, bestBlock int32, transactions interface{}) error {
+	query := db.prepareTxQuery(txFilter, bestBlock)
 	if offset > 0 {
 		query = query.Skip(int(offset))
 	}
@@ -50,8 +50,8 @@ func (db *DB) Read(offset, limit, txFilter int32, newestFirst bool, transactions
 
 // Count queries the db for transactions of the `txObj` type
 // to return the number of records matching the specified `txFilter`.
-func (db *DB) Count(txFilter int32, txObj interface{}) (int, error) {
-	query := db.prepareTxQuery(txFilter)
+func (db *DB) Count(txFilter int32, bestBlock int32, txObj interface{}) (int, error) {
+	query := db.prepareTxQuery(txFilter, bestBlock)
 
 	count, err := query.Count(txObj)
 	if err != nil {
@@ -59,6 +59,16 @@ func (db *DB) Count(txFilter int32, txObj interface{}) (int, error) {
 	}
 
 	return count, nil
+}
+
+func (db *DB) Find(matcher q.Matcher, transactions interface{}) error {
+	query := db.walletDataDB.Select(matcher)
+
+	err := query.Find(transactions)
+	if err != nil && err != storm.ErrNotFound {
+		return err
+	}
+	return nil
 }
 
 func (db *DB) FindOne(fieldName string, value interface{}, obj interface{}) error {

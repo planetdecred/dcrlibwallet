@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/asdine/storm"
+	"github.com/decred/dcrd/chaincfg/v3"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -17,11 +18,12 @@ const (
 
 	// TxDbVersion is necessary to force re-indexing if changes are made to the structure of data being stored.
 	// Increment this version number if db structure changes such that client apps need to re-index.
-	TxDbVersion uint32 = 2
+	TxDbVersion uint32 = 3
 )
 
 type DB struct {
 	walletDataDB *storm.DB
+	chainParams  *chaincfg.Params
 	Close        func() error
 }
 
@@ -29,7 +31,7 @@ type DB struct {
 // and checks the database version for compatibility.
 // If there is a version mismatch or the db does not exist at `dbPath`,
 // a new db is created and the current db version number saved to the db.
-func Initialize(dbPath string, txData, vspdData interface{}) (*DB, error) {
+func Initialize(dbPath string, chainParams *chaincfg.Params, txData, vspdData interface{}) (*DB, error) {
 	walletDataDB, err := openOrCreateDB(dbPath)
 	if err != nil {
 		return nil, err
@@ -54,6 +56,7 @@ func Initialize(dbPath string, txData, vspdData interface{}) (*DB, error) {
 
 	return &DB{
 		walletDataDB,
+		chainParams,
 		walletDataDB.Close,
 	}, nil
 }
