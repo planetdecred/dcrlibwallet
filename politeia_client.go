@@ -11,14 +11,16 @@ import (
 	"net/url"
 	"time"
 
+	tkv1 "github.com/decred/politeia/politeiawww/api/ticketvote/v1"
 	www "github.com/decred/politeia/politeiawww/api/www/v1"
-	"github.com/decred/politeia/util"
+	"github.com/decred/politeia/politeiawww/client"
 )
 
 type politeiaClient struct {
 	host       string
 	httpClient *http.Client
 
+	version *www.VersionReply
 	policy  *www.PolicyReply
 	cookies []*http.Cookie
 }
@@ -28,6 +30,7 @@ const (
 	PoliteiaTestnetHost = "https://test-proposals.decred.org"
 
 	apiPath              = "/api/v1"
+	ticketVoteApi        = "/api" + tkv1.APIRoute
 	versionPath          = "/version"
 	policyPath           = "/policy"
 	votesStatusPath      = "/proposals/votestatus"
@@ -77,11 +80,11 @@ func (c *politeiaClient) getRequestBody(method string, body interface{}) ([]byte
 	return nil, errors.New("invalid request body")
 }
 
-func (c *politeiaClient) makeRequest(method, path string, body interface{}, dest interface{}) error {
+func (c *politeiaClient) makeRequest(method, apiRoute, path string, body interface{}, dest interface{}) error {
 	var err error
 	var requestBody []byte
 
-	route := c.host + apiPath + path
+	route := c.host + apiRoute + path
 	if body != nil {
 		requestBody, err = c.getRequestBody(method, body)
 		if err != nil {
@@ -157,38 +160,6 @@ func (c *politeiaClient) handleError(statusCode int, responseBody []byte) error 
 	return errors.New("unknown error")
 }
 
-func (c *politeiaClient) version() (*www.VersionReply, error) {
-	route := c.host + apiPath + versionPath
-	req, err := http.NewRequest(http.MethodGet, route, nil)
-	if err != nil {
-		return nil, fmt.Errorf("error creating version request: %s", err.Error())
-	}
-
-	// Send request
-	r, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("error fetching politeia server version: %s", err.Error())
-	}
-	defer func() {
-		r.Body.Close()
-	}()
-
-	c.cookies = r.Cookies()
-
-	responseBody := util.ConvertBodyToByteArray(r.Body, false)
-	if r.StatusCode != http.StatusOK {
-		return nil, c.handleError(r.StatusCode, responseBody)
-	}
-
-	var versionReply www.VersionReply
-	err = json.Unmarshal(responseBody, &versionReply)
-	if err != nil {
-		return nil, fmt.Errorf("error unmarshaling version response: %s", err.Error())
-	}
-
-	return &versionReply, nil
-}
-
 func (c *politeiaClient) loadServerPolicy() error {
 	serverPolicy, err := c.serverPolicy()
 	if err != nil {
@@ -202,8 +173,14 @@ func (c *politeiaClient) loadServerPolicy() error {
 
 func (c *politeiaClient) serverPolicy() (www.PolicyReply, error) {
 	var policyReply www.PolicyReply
-	err := c.makeRequest(http.MethodGet, policyPath, nil, &policyReply)
+	err := c.makeRequest(http.MethodGet, apiPath, policyPath, nil, &policyReply)
 	return policyReply, err
+}
+
+func (c *politeiaClient) serverVersion() (www.VersionReply, error) {
+	var versionReply www.VersionReply
+	err := c.makeRequest(http.MethodGet, apiPath, www.RouteVersion, nil, &versionReply)
+	return versionReply, err
 }
 
 func (c *politeiaClient) batchProposals(tokens []string) ([]Proposal, error) {
@@ -214,7 +191,7 @@ func (c *politeiaClient) batchProposals(tokens []string) ([]Proposal, error) {
 
 	var batchProposalsReply www.BatchProposalsReply
 
-	err = c.makeRequest(http.MethodPost, batchProposalsPath, b, &batchProposalsReply)
+	err = c.makeRequest(http.MethodPost, apiPath, batchProposalsPath, b, &batchProposalsReply)
 	if err != nil {
 		return nil, err
 	}
@@ -252,7 +229,7 @@ func (c *politeiaClient) proposalDetails(token string) (*www.ProposalDetailsRepl
 	route := proposalDetailsPath + token
 
 	var proposalDetailsReply www.ProposalDetailsReply
-	err := c.makeRequest(http.MethodGet, route, nil, &proposalDetailsReply)
+	err := c.makeRequest(http.MethodGet, apiPath, route, nil, &proposalDetailsReply)
 	if err != nil {
 		return nil, err
 	}
@@ -263,12 +240,34 @@ func (c *politeiaClient) proposalDetails(token string) (*www.ProposalDetailsRepl
 func (c *politeiaClient) tokenInventory() (*www.TokenInventoryReply, error) {
 	var tokenInventoryReply www.TokenInventoryReply
 
-	err := c.makeRequest(http.MethodGet, tokenInventoryPath, nil, &tokenInventoryReply)
+	err := c.makeRequest(http.MethodGet, apiPath, tokenInventoryPath, nil, &tokenInventoryReply)
 	if err != nil {
 		return nil, err
 	}
 
 	return &tokenInventoryReply, nil
+}
+
+func (c *politeiaClient) voteDetails(token string) (*tkv1.DetailsReply, error) {
+
+	requestBody, err := json.Marshal(&tkv1.Details{Token: token})
+	if err != nil {
+		return nil, err
+	}
+
+	var dr tkv1.DetailsReply
+	err = c.makeRequest(http.MethodPost, ticketVoteApi, tkv1.RouteDetails, requestBody, &dr)
+	if err != nil {
+		return nil, err
+	}
+
+	// Verify VoteDetails.
+	err = client.VoteDetailsVerify(*dr.Vote, c.version.PubKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dr, nil
 }
 
 func (c *politeiaClient) batchVoteSummary(tokens []string) (map[string]www.VoteSummary, error) {
@@ -279,7 +278,7 @@ func (c *politeiaClient) batchVoteSummary(tokens []string) (map[string]www.VoteS
 
 	var batchVoteSummaryReply www.BatchVoteSummaryReply
 
-	err = c.makeRequest(http.MethodPost, batchVoteSummaryPath, b, &batchVoteSummaryReply)
+	err = c.makeRequest(http.MethodPost, apiPath, batchVoteSummaryPath, b, &batchVoteSummaryReply)
 	if err != nil {
 		return nil, err
 	}

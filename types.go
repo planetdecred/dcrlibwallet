@@ -322,6 +322,11 @@ type VSPTicketPurchaseInfo struct {
 	TicketAddress string
 }
 
+type EligibleTicket struct {
+	Hash    string
+	Address string
+}
+
 type StakingOverview struct {
 	All      int
 	Immature int

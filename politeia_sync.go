@@ -226,11 +226,11 @@ func (p *Politeia) fetchAllUnfetchedProposals(tokenInventory *www.TokenInventory
 
 	broadcastNotification := len(savedTokens) > 0
 
-	approvedTokens, savedTokens := p.getUniqueTokens(tokenInventory.Approved, savedTokens)
-	rejectedTokens, savedTokens := p.getUniqueTokens(tokenInventory.Rejected, savedTokens)
-	abandonedTokens, savedTokens := p.getUniqueTokens(tokenInventory.Abandoned, savedTokens)
-	preTokens, savedTokens := p.getUniqueTokens(tokenInventory.Pre, savedTokens)
-	activeTokens, _ := p.getUniqueTokens(tokenInventory.Active, savedTokens)
+	approvedTokens, savedTokens := getUniqueTokens(tokenInventory.Approved, savedTokens)
+	rejectedTokens, savedTokens := getUniqueTokens(tokenInventory.Rejected, savedTokens)
+	abandonedTokens, savedTokens := getUniqueTokens(tokenInventory.Abandoned, savedTokens)
+	preTokens, savedTokens := getUniqueTokens(tokenInventory.Pre, savedTokens)
+	activeTokens, _ := getUniqueTokens(tokenInventory.Active, savedTokens)
 
 	inventoryMap := map[int32][]string{
 		ProposalCategoryPre:       preTokens,
@@ -334,6 +334,27 @@ func (p *Politeia) fetchBatchProposals(category int32, tokens []string, broadcas
 	return nil
 }
 
+func (p *Politeia) getClient(politeiaHost string) (*politeiaClient, error) {
+	p.mu.Lock()
+	client := p.client
+	p.mu.Unlock()
+	if client == nil {
+		client = newPoliteiaClient(politeiaHost)
+		version, err := client.serverVersion()
+		if err != nil {
+			return nil, err
+		}
+		client.version = &version
+
+		err = client.loadServerPolicy()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return client, nil
+}
+
 func (p *Politeia) FetchProposalDescription(politeiaHost, token string) (string, error) {
 
 	proposal, err := p.GetProposalRaw(token)
@@ -341,15 +362,9 @@ func (p *Politeia) FetchProposalDescription(politeiaHost, token string) (string,
 		return "", err
 	}
 
-	p.mu.Lock()
-	client := p.client
-	p.mu.Unlock()
-	if client == nil {
-		client = newPoliteiaClient(politeiaHost)
-		err := client.loadServerPolicy()
-		if err != nil {
-			return "", err
-		}
+	client, err := p.getClient(politeiaHost)
+	if err != nil {
+		return "", err
 	}
 
 	proposalDetailsReply, err := client.proposalDetails(token)
@@ -379,6 +394,44 @@ func (p *Politeia) FetchProposalDescription(politeiaHost, token string) (string,
 	}
 
 	return "", errors.New(ErrNotExist)
+}
+
+func (p *Politeia) EligibleTicketsForProposal(walletID int, politeiaHost, token string) ([]*EligibleTicket, error) {
+	wal := p.mwRef.WalletWithID(walletID)
+	if wal == nil {
+		return nil, fmt.Errorf(ErrWalletNotFound)
+	}
+
+	client, err := p.getClient(politeiaHost)
+	if err != nil {
+		log.Info("Politeia client error:", err.Error())
+		return nil, err
+	}
+
+	detailsReply, err := client.voteDetails(token)
+	if err != nil {
+		return nil, err
+	}
+
+	hashes, err := StringSliceToHash(detailsReply.Vote.EligibleTickets)
+	if err != nil {
+		return nil, err
+	}
+
+	ticketHashes, addresses, err := wal.internal.CommittedTickets(wal.shutdownContext(), hashes)
+	if err != nil {
+		return nil, err
+	}
+
+	var eligibletickets = make([]*EligibleTicket, len(ticketHashes))
+	for i := 0; i < len(ticketHashes); i++ {
+		eligibletickets[i] = &EligibleTicket{
+			Hash:    ticketHashes[i].String(),
+			Address: addresses[i].Address(),
+		}
+	}
+
+	return eligibletickets, nil
 }
 
 func (p *Politeia) AddNotificationListener(notificationListener ProposalNotificationListener, uniqueIdentifier string) error {
@@ -450,7 +503,7 @@ func getVotesCount(options []www.VoteOptionResult) (int32, int32) {
 	return yes, no
 }
 
-func (p *Politeia) getUniqueTokens(tokenInventory, savedTokens []string) ([]string, []string) {
+func getUniqueTokens(tokenInventory, savedTokens []string) ([]string, []string) {
 	var diff []string
 
 	for i := range tokenInventory {

@@ -2,6 +2,7 @@ module github.com/planetdecred/dcrlibwallet
 
 require (
 	decred.org/dcrwallet v1.7.0
+	github.com/DataDog/zstd v1.4.8 // indirect
 	github.com/asdine/storm v0.0.0-20190216191021-fe89819f6282
 	github.com/decred/dcrd/addrmgr v1.2.0
 	github.com/decred/dcrd/blockchain/stake/v3 v3.0.0
