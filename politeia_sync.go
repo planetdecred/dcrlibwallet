@@ -413,6 +413,11 @@ func (p *Politeia) EligibleTicketsForProposal(walletID int, politeiaHost, token 
 		return nil, err
 	}
 
+	votesResults, err := client.voteResults(token)
+	if err != nil {
+		return nil, err
+	}
+
 	hashes, err := StringSliceToHash(detailsReply.Vote.EligibleTickets)
 	if err != nil {
 		return nil, err
@@ -423,12 +428,35 @@ func (p *Politeia) EligibleTicketsForProposal(walletID int, politeiaHost, token 
 		return nil, err
 	}
 
-	var eligibletickets = make([]*EligibleTicket, len(ticketHashes))
+	castVotes := make(map[string]struct{})
+	for _, v := range votesResults.Votes {
+		castVotes[v.Ticket] = struct{}{}
+	}
+
+	var eligibletickets = make([]*EligibleTicket, 0)
 	for i := 0; i < len(ticketHashes); i++ {
-		eligibletickets[i] = &EligibleTicket{
+
+		eligibleticket := &EligibleTicket{
 			Hash:    ticketHashes[i].String(),
 			Address: addresses[i].Address(),
 		}
+
+		ainfo, err := wal.AddressInfo(eligibleticket.Address)
+		if err != nil {
+			return nil, err
+		}
+
+		// filter out tickets controlled by imported accounts
+		if ainfo.AccountNumber == ImportedAccountNumber {
+			continue
+		}
+
+		// filter out voted tickets
+		if _, ok := castVotes[eligibleticket.Hash]; ok {
+			continue
+		}
+
+		eligibletickets = append(eligibletickets, eligibleticket)
 	}
 
 	return eligibletickets, nil

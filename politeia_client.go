@@ -270,6 +270,30 @@ func (c *politeiaClient) voteDetails(token string) (*tkv1.DetailsReply, error) {
 	return &dr, nil
 }
 
+func (c *politeiaClient) voteResults(token string) (*tkv1.ResultsReply, error) {
+
+	requestBody, err := json.Marshal(&tkv1.Results{Token: token})
+	if err != nil {
+		return nil, err
+	}
+
+	var resultReply tkv1.ResultsReply
+	err = c.makeRequest(http.MethodPost, ticketVoteApi, tkv1.RouteResults, requestBody, &resultReply)
+	if err != nil {
+		return nil, err
+	}
+
+	// Verify CastVoteDetails.
+	for _, cvd := range resultReply.Votes {
+		err = client.CastVoteDetailsVerify(cvd, c.version.PubKey)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &resultReply, nil
+}
+
 func (c *politeiaClient) batchVoteSummary(tokens []string) (map[string]www.VoteSummary, error) {
 	b, err := json.Marshal(&www.BatchVoteSummary{Tokens: tokens})
 	if err != nil {
