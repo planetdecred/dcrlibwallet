@@ -1,12 +1,15 @@
 package dcrlibwallet
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
 	"time"
 
 	"github.com/asdine/storm"
+	tkv1 "github.com/decred/politeia/politeiawww/api/ticketvote/v1"
 	www "github.com/decred/politeia/politeiawww/api/www/v1"
 )
 
@@ -404,7 +407,6 @@ func (p *Politeia) EligibleTicketsForProposal(walletID int, politeiaHost, token 
 
 	client, err := p.getClient(politeiaHost)
 	if err != nil {
-		log.Info("Politeia client error:", err.Error())
 		return nil, err
 	}
 
@@ -460,6 +462,75 @@ func (p *Politeia) EligibleTicketsForProposal(walletID int, politeiaHost, token 
 	}
 
 	return eligibletickets, nil
+}
+
+// use politeia client for client
+func (p *Politeia) CastVotes(walletID int, tickets []*EligibleTicket, politeiaHost, token, voteBit, passphrase string) error {
+	wal := p.mwRef.WalletWithID(walletID)
+	if wal == nil {
+		return fmt.Errorf(ErrWalletNotFound)
+	}
+
+	client, err := p.getClient(politeiaHost)
+	if err != nil {
+		return err
+	}
+
+	detailsReply, err := client.voteDetails(token)
+	if err != nil {
+		return err
+	}
+
+	var voteBitHex string
+	// Verify vote bit
+	for _, vv := range detailsReply.Vote.Params.Options {
+		if vv.ID == voteBit {
+			voteBitHex = strconv.FormatUint(vv.Bit, 16)
+			break
+		}
+	}
+
+	if voteBitHex == "" {
+		return fmt.Errorf(ErrChangingPassphrase)
+	}
+
+	err = wal.UnlockWallet([]byte(passphrase))
+	if err != nil {
+		return translateError(err)
+	}
+	defer wal.LockWallet()
+
+	// sign tickets
+	signatures := make([][]byte, 0)
+	for _, ticket := range tickets {
+
+		msg := token + ticket.Hash + voteBitHex
+
+		signature, err := wal.signMessage(ticket.Address, msg)
+		if err != nil {
+			return err
+		}
+
+		signatures = append(signatures, signature)
+	}
+
+	// packup votes
+	votes := make([]tkv1.CastVote, 0)
+	for i := 0; i < len(tickets); i++ {
+		ticket := tickets[i]
+
+		signature := hex.EncodeToString(signatures[i])
+		singleVote := tkv1.CastVote{
+			Token:     token,
+			Ticket:    ticket.Hash,
+			VoteBit:   voteBitHex,
+			Signature: signature,
+		}
+
+		votes = append(votes, singleVote)
+	}
+
+	return client.sendVotes(votes)
 }
 
 func (p *Politeia) AddNotificationListener(notificationListener ProposalNotificationListener, uniqueIdentifier string) error {

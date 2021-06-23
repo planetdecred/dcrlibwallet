@@ -307,5 +307,25 @@ func (c *politeiaClient) batchVoteSummary(tokens []string) (map[string]www.VoteS
 		return nil, err
 	}
 
-	return batchVoteSummaryReply.Summaries, err
+	return batchVoteSummaryReply.Summaries, nil
+}
+
+func (c *politeiaClient) sendVotes(votes []tkv1.CastVote) error {
+	b, err := json.Marshal(&tkv1.CastBallot{Votes: votes})
+	if err != nil {
+		return err
+	}
+
+	var reply tkv1.CastBallotReply
+	err = c.makeRequest(http.MethodPost, ticketVoteApi, tkv1.RouteCastBallot, b, &reply)
+	if err != nil {
+		return err
+	}
+
+	for _, receipt := range reply.Receipts {
+		if receipt.ErrorContext != "" {
+			return fmt.Errorf(receipt.ErrorContext)
+		}
+	}
+	return nil
 }
