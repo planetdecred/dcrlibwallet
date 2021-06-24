@@ -26,19 +26,14 @@ type politeiaClient struct {
 }
 
 const (
-	PoliteiaMainnetHost = "https://proposals.decred.org"
-	PoliteiaTestnetHost = "https://test-proposals.decred.org"
+	PoliteiaMainnetHost = "https://proposals.decred.org/api"
+	PoliteiaTestnetHost = "https://test-proposals.decred.org/api"
 
-	apiPath              = "/api/v1"
-	ticketVoteApi        = "/api" + tkv1.APIRoute
-	versionPath          = "/version"
-	policyPath           = "/policy"
-	votesStatusPath      = "/proposals/votestatus"
-	tokenInventoryPath   = "/proposals/tokeninventory"
-	proposalDetailsPath  = "/proposals/"
-	batchProposalsPath   = "/proposals/batch"
-	batchVoteSummaryPath = "/proposals/batchvotesummary"
+	ticketVoteApi       = tkv1.APIRoute
+	proposalDetailsPath = "/proposals/"
 )
+
+var apiPath = www.PoliteiaWWWAPIRoute
 
 func newPoliteiaClient(host string) *politeiaClient {
 	tr := &http.Transport{
@@ -196,7 +191,7 @@ func (c *politeiaClient) loadServerPolicy() error {
 
 func (c *politeiaClient) serverPolicy() (www.PolicyReply, error) {
 	var policyReply www.PolicyReply
-	err := c.makeRequest(http.MethodGet, apiPath, policyPath, nil, &policyReply)
+	err := c.makeRequest(http.MethodGet, apiPath, www.RoutePolicy, nil, &policyReply)
 	return policyReply, err
 }
 
@@ -214,7 +209,7 @@ func (c *politeiaClient) batchProposals(tokens []string) ([]Proposal, error) {
 
 	var batchProposalsReply www.BatchProposalsReply
 
-	err = c.makeRequest(http.MethodPost, apiPath, batchProposalsPath, b, &batchProposalsReply)
+	err = c.makeRequest(http.MethodPost, apiPath, www.RouteBatchProposals, b, &batchProposalsReply)
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +258,7 @@ func (c *politeiaClient) proposalDetails(token string) (*www.ProposalDetailsRepl
 func (c *politeiaClient) tokenInventory() (*www.TokenInventoryReply, error) {
 	var tokenInventoryReply www.TokenInventoryReply
 
-	err := c.makeRequest(http.MethodGet, apiPath, tokenInventoryPath, nil, &tokenInventoryReply)
+	err := c.makeRequest(http.MethodGet, apiPath, www.RouteTokenInventory, nil, &tokenInventoryReply)
 	if err != nil {
 		return nil, err
 	}
@@ -325,7 +320,7 @@ func (c *politeiaClient) batchVoteSummary(tokens []string) (map[string]www.VoteS
 
 	var batchVoteSummaryReply www.BatchVoteSummaryReply
 
-	err = c.makeRequest(http.MethodPost, apiPath, batchVoteSummaryPath, b, &batchVoteSummaryReply)
+	err = c.makeRequest(http.MethodPost, apiPath, www.RouteBatchVoteSummary, b, &batchVoteSummaryReply)
 	if err != nil {
 		return nil, err
 	}
