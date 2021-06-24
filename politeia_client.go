@@ -58,6 +58,29 @@ func newPoliteiaClient(host string) *politeiaClient {
 	}
 }
 
+func (p *Politeia) getClient() (*politeiaClient, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	client := p.client
+	if client == nil {
+		client = newPoliteiaClient(p.host)
+		version, err := client.serverVersion()
+		if err != nil {
+			return nil, err
+		}
+		client.version = &version
+
+		err = client.loadServerPolicy()
+		if err != nil {
+			return nil, err
+		}
+
+		p.client = client
+	}
+
+	return client, nil
+}
+
 func (c *politeiaClient) getRequestBody(method string, body interface{}) ([]byte, error) {
 	if body == nil {
 		return nil, nil

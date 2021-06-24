@@ -18,7 +18,7 @@ const (
 )
 
 // Sync fetches all proposals from the server and
-func (p *Politeia) Sync(host string) error {
+func (p *Politeia) Sync() error {
 
 	p.mu.Lock()
 
@@ -30,20 +30,16 @@ func (p *Politeia) Sync(host string) error {
 	log.Info("Politeia sync: started")
 
 	p.ctx, p.cancelSync = p.mwRef.contextWithShutdownCancel()
-	p.client = newPoliteiaClient(host)
 	defer p.resetSyncData()
 
 	p.mu.Unlock()
 
 	for {
-		// fetch server policy if it's not been fetched
-		if p.client.policy == nil {
-			err := p.client.loadServerPolicy()
-			if err != nil {
-				log.Errorf("Error fetching for politeia server policy: %v", err)
-				time.Sleep(retryInterval * time.Second)
-				continue
-			}
+		_, err := p.getClient()
+		if err != nil {
+			log.Errorf("Error fetching for politeia server policy: %v", err)
+			time.Sleep(retryInterval * time.Second)
+			continue
 		}
 
 		if done(p.ctx) {
@@ -52,7 +48,7 @@ func (p *Politeia) Sync(host string) error {
 
 		log.Info("Politeia sync: checking for updates")
 
-		err := p.checkForUpdates()
+		err = p.checkForUpdates()
 		if err != nil {
 			log.Errorf("Error checking for politeia updates: %v", err)
 			time.Sleep(retryInterval * time.Second)
@@ -337,35 +333,14 @@ func (p *Politeia) fetchBatchProposals(category int32, tokens []string, broadcas
 	return nil
 }
 
-func (p *Politeia) getClient(politeiaHost string) (*politeiaClient, error) {
-	p.mu.Lock()
-	client := p.client
-	p.mu.Unlock()
-	if client == nil {
-		client = newPoliteiaClient(politeiaHost)
-		version, err := client.serverVersion()
-		if err != nil {
-			return nil, err
-		}
-		client.version = &version
-
-		err = client.loadServerPolicy()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return client, nil
-}
-
-func (p *Politeia) FetchProposalDescription(politeiaHost, token string) (string, error) {
+func (p *Politeia) FetchProposalDescription(token string) (string, error) {
 
 	proposal, err := p.GetProposalRaw(token)
 	if err != nil {
 		return "", err
 	}
 
-	client, err := p.getClient(politeiaHost)
+	client, err := p.getClient()
 	if err != nil {
 		return "", err
 	}
@@ -399,13 +374,13 @@ func (p *Politeia) FetchProposalDescription(politeiaHost, token string) (string,
 	return "", errors.New(ErrNotExist)
 }
 
-func (p *Politeia) EligibleTicketsForProposal(walletID int, politeiaHost, token string) ([]*EligibleTicket, error) {
+func (p *Politeia) EligibleTicketsForProposal(walletID int, token string) ([]*EligibleTicket, error) {
 	wal := p.mwRef.WalletWithID(walletID)
 	if wal == nil {
 		return nil, fmt.Errorf(ErrWalletNotFound)
 	}
 
-	client, err := p.getClient(politeiaHost)
+	client, err := p.getClient()
 	if err != nil {
 		return nil, err
 	}
@@ -465,13 +440,13 @@ func (p *Politeia) EligibleTicketsForProposal(walletID int, politeiaHost, token 
 }
 
 // use politeia client for client
-func (p *Politeia) CastVotes(walletID int, tickets []*EligibleTicket, politeiaHost, token, voteBit, passphrase string) error {
+func (p *Politeia) CastVotes(walletID int, tickets []*EligibleTicket, token, voteBit, passphrase string) error {
 	wal := p.mwRef.WalletWithID(walletID)
 	if wal == nil {
 		return fmt.Errorf(ErrWalletNotFound)
 	}
 
-	client, err := p.getClient(politeiaHost)
+	client, err := p.getClient()
 	if err != nil {
 		return err
 	}
