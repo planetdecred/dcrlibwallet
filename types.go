@@ -322,11 +322,6 @@ type VSPTicketPurchaseInfo struct {
 	TicketAddress string
 }
 
-type EligibleTicket struct {
-	Hash    string
-	Address string
-}
-
 type StakingOverview struct {
 	All      int
 	Immature int
@@ -361,6 +356,23 @@ type Proposal struct {
 	EligibleTickets  int32  `json:"eligibletickets"`
 	QuorumPercentage int32  `json:"quorumpercentage"`
 	PassPercentage   int32  `json:"passpercentage"`
+}
+
+type ProposalVoteDetails struct {
+	EligibleTickets []*EligibleTicket
+	Votes           []*ProposalVote
+	YesVotes        int32
+	NoVotes         int32
+}
+
+type EligibleTicket struct {
+	Hash    string
+	Address string
+}
+
+type ProposalVote struct {
+	Ticket *EligibleTicket
+	Bit    string
 }
 
 type ProposalNotificationListener interface {

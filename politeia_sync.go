@@ -2,6 +2,7 @@ package dcrlibwallet
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -15,6 +16,11 @@ import (
 
 const (
 	retryInterval = 15 // 15 seconds
+
+	// VoteBitYes is the string value for identifying "yes" vote bits
+	VoteBitYes = "yes"
+	// VoteBitNo is the string value for identifying "no" vote bits
+	VoteBitNo = "no"
 )
 
 // Sync fetches all proposals from the server and
@@ -374,7 +380,7 @@ func (p *Politeia) FetchProposalDescription(token string) (string, error) {
 	return "", errors.New(ErrNotExist)
 }
 
-func (p *Politeia) EligibleTicketsForProposal(walletID int, token string) ([]*EligibleTicket, error) {
+func (p *Politeia) ProposalVoteDetailsRaw(walletID int, token string) (*ProposalVoteDetails, error) {
 	wal := p.mwRef.WalletWithID(walletID)
 	if wal == nil {
 		return nil, fmt.Errorf(ErrWalletNotFound)
@@ -405,12 +411,14 @@ func (p *Politeia) EligibleTicketsForProposal(walletID int, token string) ([]*El
 		return nil, err
 	}
 
-	castVotes := make(map[string]struct{})
+	castVotes := make(map[string]string)
 	for _, v := range votesResults.Votes {
-		castVotes[v.Ticket] = struct{}{}
+		castVotes[v.Ticket] = v.VoteBit
 	}
 
 	var eligibletickets = make([]*EligibleTicket, 0)
+	var votedTickets = make([]*ProposalVote, 0)
+	var yesVotes, noVotes int32
 	for i := 0; i < len(ticketHashes); i++ {
 
 		eligibleticket := &EligibleTicket{
@@ -429,14 +437,43 @@ func (p *Politeia) EligibleTicketsForProposal(walletID int, token string) ([]*El
 		}
 
 		// filter out voted tickets
-		if _, ok := castVotes[eligibleticket.Hash]; ok {
+		if voteBit, ok := castVotes[eligibleticket.Hash]; ok {
+
+			pv := &ProposalVote{
+				Ticket: eligibleticket,
+			}
+
+			if voteBit == "1" {
+				noVotes++
+				pv.Bit = VoteBitNo
+			} else if voteBit == "2" {
+				yesVotes++
+				pv.Bit = VoteBitYes
+			}
+
+			votedTickets = append(votedTickets, pv)
 			continue
 		}
 
 		eligibletickets = append(eligibletickets, eligibleticket)
 	}
 
-	return eligibletickets, nil
+	return &ProposalVoteDetails{
+		EligibleTickets: eligibletickets,
+		Votes:           votedTickets,
+		YesVotes:        yesVotes,
+		NoVotes:         noVotes,
+	}, nil
+}
+
+func (p *Politeia) ProposalVoteDetails(walletID int, token string) (string, error) {
+	voteDetails, err := p.ProposalVoteDetailsRaw(walletID, token)
+	if err != nil {
+		return "", err
+	}
+
+	result, _ := json.Marshal(voteDetails)
+	return string(result), nil
 }
 
 // use politeia client for client
