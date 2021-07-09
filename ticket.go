@@ -411,8 +411,8 @@ func remaining(idx int, max, t int64) string {
 	return str
 }
 
-// TicketPrice returns the remaning time of a ticket for the next block
-func (mw *MultiWallet) NextTicketRemaining(netType string) (string, error) {
+// NextTicketPriceRemaining returns the remaning time of a ticket for the next block
+func (mw *MultiWallet) NextTicketPriceRemaining(netType string) (string, error) {
 	params, err := utils.ChainParams(netType)
 	if err != nil {
 		return "", err
