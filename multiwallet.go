@@ -158,6 +158,10 @@ func (mw *MultiWallet) Shutdown() {
 	}
 }
 
+func (mw *MultiWallet) NetType() string {
+	return mw.chainParams.Name
+}
+
 func (mw *MultiWallet) SetStartupPassphrase(passphrase []byte, passphraseType int32) error {
 	return mw.ChangeStartupPassphrase([]byte(""), passphrase, passphraseType)
 }

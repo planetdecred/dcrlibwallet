@@ -8,6 +8,7 @@ import (
 	"decred.org/dcrwallet/errors"
 	w "decred.org/dcrwallet/wallet"
 	"github.com/asdine/storm"
+	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/kevinburke/nacl"
 	"github.com/kevinburke/nacl/secretbox"
 	"golang.org/x/crypto/scrypt"
@@ -19,6 +20,11 @@ const (
 
 	walletsMetadataBucketName    = "metadata"
 	walletstartupPassphraseField = "startup-passphrase"
+)
+
+var (
+	Mainnet  = chaincfg.MainNetParams().Name
+	Testnet3 = chaincfg.TestNet3Params().Name
 )
 
 func (mw *MultiWallet) batchDbTransaction(dbOp func(node storm.Node) error) (err error) {
