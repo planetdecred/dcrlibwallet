@@ -358,6 +358,15 @@ type Proposal struct {
 	PassPercentage   int32  `json:"passpercentage"`
 }
 
+type ProposalOverview struct {
+	All        int32
+	Discussion int32
+	Voting     int32
+	Approved   int32
+	Rejected   int32
+	Abandoned  int32
+}
+
 type ProposalVoteDetails struct {
 	EligibleTickets []*EligibleTicket
 	Votes           []*ProposalVote

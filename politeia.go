@@ -180,6 +180,43 @@ func (p *Politeia) Count(category int32) (int32, error) {
 	return int32(count), nil
 }
 
+func (p *Politeia) Overview() (*ProposalOverview, error) {
+
+	pre, err := p.Count(ProposalCategoryPre)
+	if err != nil {
+		return nil, err
+	}
+
+	active, err := p.Count(ProposalCategoryActive)
+	if err != nil {
+		return nil, err
+	}
+
+	approved, err := p.Count(ProposalCategoryApproved)
+	if err != nil {
+		return nil, err
+	}
+
+	rejected, err := p.Count(ProposalCategoryRejected)
+	if err != nil {
+		return nil, err
+	}
+
+	abandoned, err := p.Count(ProposalCategoryApproved)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ProposalOverview{
+		All:        pre + active + approved + rejected + abandoned,
+		Discussion: pre,
+		Voting:     active,
+		Approved:   approved,
+		Rejected:   rejected,
+		Abandoned:  abandoned,
+	}, nil
+}
+
 func (p *Politeia) ClearSavedProposals() error {
 	err := p.mwRef.db.Drop(&Proposal{})
 	if err != nil {
