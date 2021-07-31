@@ -18,9 +18,9 @@ const (
 	retryInterval = 15 // 15 seconds
 
 	// VoteBitYes is the string value for identifying "yes" vote bits
-	VoteBitYes = "yes"
+	VoteBitYes = tkv1.VoteOptionIDApprove
 	// VoteBitNo is the string value for identifying "no" vote bits
-	VoteBitNo = "no"
+	VoteBitNo = tkv1.VoteOptionIDReject
 )
 
 // Sync fetches all proposals from the server and
@@ -477,7 +477,7 @@ func (p *Politeia) ProposalVoteDetails(walletID int, token string) (string, erro
 }
 
 // use politeia client for client
-func (p *Politeia) CastVotes(walletID int, tickets []*EligibleTicket, token, voteBit, passphrase string) error {
+func (p *Politeia) CastVotes(walletID int, eligibleTickets []*ProposalVote, token, passphrase string) error {
 	wal := p.mwRef.WalletWithID(walletID)
 	if wal == nil {
 		return fmt.Errorf(ErrWalletNotFound)
@@ -493,28 +493,28 @@ func (p *Politeia) CastVotes(walletID int, tickets []*EligibleTicket, token, vot
 		return err
 	}
 
-	var voteBitHex string
-	// Verify vote bit
-	for _, vv := range detailsReply.Vote.Params.Options {
-		if vv.ID == voteBit {
-			voteBitHex = strconv.FormatUint(vv.Bit, 16)
-			break
-		}
-	}
-
-	if voteBitHex == "" {
-		return fmt.Errorf(ErrChangingPassphrase)
-	}
-
 	err = wal.UnlockWallet([]byte(passphrase))
 	if err != nil {
 		return translateError(err)
 	}
 	defer wal.LockWallet()
 
-	// sign tickets
-	signatures := make([][]byte, 0)
-	for _, ticket := range tickets {
+	votes := make([]tkv1.CastVote, 0)
+	for _, eligibleTicket := range eligibleTickets {
+		var voteBitHex string
+		// Verify vote bit
+		for _, vv := range detailsReply.Vote.Params.Options {
+			if vv.ID == eligibleTicket.Bit {
+				voteBitHex = strconv.FormatUint(vv.Bit, 16)
+				break
+			}
+		}
+
+		if voteBitHex == "" {
+			return errors.New(ErrInvalid)
+		}
+
+		ticket := eligibleTicket.Ticket
 
 		msg := token + ticket.Hash + voteBitHex
 
@@ -523,20 +523,12 @@ func (p *Politeia) CastVotes(walletID int, tickets []*EligibleTicket, token, vot
 			return err
 		}
 
-		signatures = append(signatures, signature)
-	}
-
-	// packup votes
-	votes := make([]tkv1.CastVote, 0)
-	for i := 0; i < len(tickets); i++ {
-		ticket := tickets[i]
-
-		signature := hex.EncodeToString(signatures[i])
+		sigHex := hex.EncodeToString(signature)
 		singleVote := tkv1.CastVote{
 			Token:     token,
 			Ticket:    ticket.Hash,
 			VoteBit:   voteBitHex,
-			Signature: signature,
+			Signature: sigHex,
 		}
 
 		votes = append(votes, singleVote)
