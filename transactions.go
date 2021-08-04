@@ -263,3 +263,14 @@ func (wallet *Wallet) TxMatchesFilter(tx *Transaction, txFilter int32) bool {
 
 	return false
 }
+
+func (wallet *Wallet) TxMatchesFilter2(direction, blockHeight, expiry int32, txType, ticketSpender string, txFilter int32) bool {
+	tx := Transaction{
+		Type:          txType,
+		Direction:     direction,
+		BlockHeight:   blockHeight,
+		Expiry:        expiry,
+		TicketSpender: ticketSpender,
+	}
+	return wallet.TxMatchesFilter(&tx, txFilter)
+}

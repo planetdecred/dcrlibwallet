@@ -476,7 +476,6 @@ func (p *Politeia) ProposalVoteDetails(walletID int, token string) (string, erro
 	return string(result), nil
 }
 
-// use politeia client for client
 func (p *Politeia) CastVotes(walletID int, eligibleTickets []*ProposalVote, token, passphrase string) error {
 	wal := p.mwRef.WalletWithID(walletID)
 	if wal == nil {
