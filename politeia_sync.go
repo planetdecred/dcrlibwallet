@@ -401,7 +401,7 @@ func (p *Politeia) ProposalVoteDetailsRaw(walletID int, token string) (*Proposal
 		return nil, err
 	}
 
-	hashes, err := StringSliceToHash(detailsReply.Vote.EligibleTickets)
+	hashes, err := StringsToHashes(detailsReply.Vote.EligibleTickets)
 	if err != nil {
 		return nil, err
 	}

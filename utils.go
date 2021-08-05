@@ -230,7 +230,7 @@ func CalculateDaysBehind(lastHeaderTime int64) string {
 	}
 }
 
-func StringSliceToHash(h []string) ([]*chainhash.Hash, error) {
+func StringsToHashes(h []string) ([]*chainhash.Hash, error) {
 	hashes := make([]*chainhash.Hash, 0, len(h))
 	for _, v := range h {
 		hash, err := chainhash.NewHashFromStr(v)
