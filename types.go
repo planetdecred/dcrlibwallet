@@ -327,7 +327,6 @@ type StakingOverview struct {
 	Immature int
 	Live     int
 	Voted    int
-	Expired  int
 	Revoked  int
 }
 

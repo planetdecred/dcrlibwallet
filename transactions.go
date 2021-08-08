@@ -25,7 +25,6 @@ const (
 	TxFilterRevoked     = walletdata.TxFilterRevoked
 	TxFilterImmature    = walletdata.TxFilterImmature
 	TxFilterLive        = walletdata.TxFilterLive
-	TxFilterExpired     = walletdata.TxFilterExpired
 	TxFilterUnmined     = walletdata.TxFilterUnmined
 
 	TxDirectionInvalid     = txhelper.TxDirectionInvalid
@@ -244,22 +243,16 @@ func (wallet *Wallet) TxMatchesFilter(tx *Transaction, txFilter int32) bool {
 	case walletdata.TxFilterImmature:
 		return tx.Type == TxTypeTicketPurchase &&
 			(tx.BlockHeight > (bestBlock-int32(wallet.chainParams.TicketMaturity)) &&
-				tx.BlockHeight <= bestBlock-wallet.RequiredConfirmations())
+				tx.BlockHeight <= bestBlock)
 	case TxFilterLive:
 		// ticket is live if we don't have the spender hash and it hasn't expired.
 		// we cannot detect missed tickets over spv.
 		return tx.Type == TxTypeTicketPurchase &&
 			tx.TicketSpender == "" &&
 			tx.BlockHeight > 0 &&
-			tx.BlockHeight <= (bestBlock-int32(wallet.chainParams.TicketMaturity)) &&
-			(tx.Expiry >= bestBlock || tx.Expiry == 0)
-	case TxFilterExpired:
-		return tx.Type == TxTypeTicketPurchase && tx.TicketSpender == "" &&
-			(tx.Expiry <= bestBlock && tx.Expiry != 0)
+			tx.BlockHeight <= (bestBlock-int32(wallet.chainParams.TicketMaturity))
 	case TxFilterUnmined:
-		return tx.Type == TxTypeTicketPurchase &&
-			(tx.BlockHeight > bestBlock-wallet.RequiredConfirmations() ||
-				tx.BlockHeight == -1)
+		return tx.Type == TxTypeTicketPurchase && tx.BlockHeight == -1
 	case TxFilterAll:
 		return true
 	}
