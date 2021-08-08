@@ -67,7 +67,7 @@ func (wallet *Wallet) IndexTransactions() error {
 	endBlock := w.NewBlockIdentifierFromHeight(endHeight)
 
 	defer func() {
-		count, err := wallet.walletDataDB.Count(walletdata.TxFilterAll, endHeight, &Transaction{})
+		count, err := wallet.walletDataDB.Count(walletdata.TxFilterAll, wallet.RequiredConfirmations(), endHeight, &Transaction{})
 		if err != nil {
 			log.Errorf("[%d] Post-indexing tx count error :%v", wallet.ID, err)
 		} else if count > 0 {

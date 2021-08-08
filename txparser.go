@@ -76,12 +76,7 @@ func (wallet *Wallet) decodeTransactionWithTxSummary(txSummary *w.TransactionSum
 	}
 
 	if decodedTx.TicketSpentHash != "" {
-		hash, err := chainhash.NewHashFromStr(decodedTx.TicketSpentHash)
-		if err != nil {
-			return nil, err
-		}
-
-		ticketPurchaseTx, err := wallet.GetTransactionRaw(hash[:])
+		ticketPurchaseTx, err := wallet.GetTransactionRaw(decodedTx.TicketSpentHash)
 		if err != nil {
 			return nil, err
 		}
