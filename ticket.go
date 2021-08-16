@@ -17,6 +17,7 @@ import (
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrutil/v3"
 	"github.com/decred/dcrd/wire"
+	"github.com/planetdecred/dcrlibwallet/utils"
 )
 
 // StakeInfo returns information about wallet stakes, tickets and their statuses.
@@ -369,5 +370,26 @@ func CallVSPTicketInfoAPI(vspHost, pubKeyAddr string) (ticketPurchaseInfo *VSPTi
 			TicketAddress: data["TicketAddress"].(string),
 		}
 	}
+	return
+}
+
+// NextTicketPriceRemaining returns the remaning time in seconds of a ticket for the next block,
+// if secs equal 0 is imminent
+func (mw *MultiWallet) NextTicketPriceRemaining() (secs int64, err error) {
+	params, er := utils.ChainParams(mw.chainParams.Name)
+	if er != nil {
+		secs, err = -1, er
+		return
+	}
+	bestBestBlock := mw.GetBestBlock()
+	idxBlockInWindow := int(int64(bestBestBlock.Height)%params.StakeDiffWindowSize) + 1
+	blockTime := params.TargetTimePerBlock.Nanoseconds()
+	windowSize := params.StakeDiffWindowSize
+	x := (windowSize - int64(idxBlockInWindow)) * blockTime
+	if x == 0 {
+		secs, err = 0, nil
+		return
+	}
+	secs, err = int64(time.Duration(x).Seconds()), nil
 	return
 }
