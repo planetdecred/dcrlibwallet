@@ -19,10 +19,10 @@ const (
 	TxFilterRevoked     int32 = 9
 	TxFilterImmature    int32 = 10
 	TxFilterLive        int32 = 11
-	TxFilterExpired     int32 = 12
+	TxFilterUnmined     int32 = 12
 )
 
-func (db *DB) prepareTxQuery(txFilter, bestBlock int32) (query storm.Query) {
+func (db *DB) prepareTxQuery(txFilter, requiredConfirmations, bestBlock int32) (query storm.Query) {
 	switch txFilter {
 	case TxFilterSent:
 		query = db.walletDataDB.Select(
@@ -70,8 +70,8 @@ func (db *DB) prepareTxQuery(txFilter, bestBlock int32) (query storm.Query) {
 	case TxFilterImmature:
 		query = db.walletDataDB.Select(
 			q.Eq("Type", txhelper.TxTypeTicketPurchase),
-			q.Or(
-				q.Eq("BlockHeight", -1), // include unconfirmed
+			q.And(
+				q.Lte("BlockHeight", bestBlock), // must be confirmed
 				q.Gt("BlockHeight", bestBlock-int32(db.chainParams.TicketMaturity)),
 			),
 		)
@@ -81,18 +81,12 @@ func (db *DB) prepareTxQuery(txFilter, bestBlock int32) (query storm.Query) {
 			q.Eq("TicketSpender", ""),                                            // not spent by a vote or revoke
 			q.Gt("BlockHeight", 0),                                               // mined
 			q.Lte("BlockHeight", bestBlock-int32(db.chainParams.TicketMaturity)), // must be matured
-			q.Or( // must not be expired (tx with expiry=0 are excluded)
-				q.Gte("Expiry", bestBlock),
-				q.Eq("Expiry", 0),
-			),
 		)
-	case TxFilterExpired:
+	case TxFilterUnmined:
 		query = db.walletDataDB.Select(
 			q.Eq("Type", txhelper.TxTypeTicketPurchase),
-			q.Eq("TicketSpender", ""),
-			q.And(
-				q.Lte("Expiry", bestBlock),
-				q.Not(q.Eq("Expiry", 0)),
+			q.Or(
+				q.Eq("BlockHeight", -1),
 			),
 		)
 	default:

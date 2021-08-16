@@ -25,7 +25,7 @@ const (
 	TxFilterRevoked     = walletdata.TxFilterRevoked
 	TxFilterImmature    = walletdata.TxFilterImmature
 	TxFilterLive        = walletdata.TxFilterLive
-	TxFilterExpired     = walletdata.TxFilterExpired
+	TxFilterUnmined     = walletdata.TxFilterUnmined
 
 	TxDirectionInvalid     = txhelper.TxDirectionInvalid
 	TxDirectionSent        = txhelper.TxDirectionSent
@@ -50,7 +50,7 @@ func (wallet *Wallet) PublishUnminedTransactions() error {
 	return wallet.internal.PublishUnminedTransactions(wallet.shutdownContext(), n)
 }
 
-func (wallet *Wallet) GetTransaction(txHash []byte) (string, error) {
+func (wallet *Wallet) GetTransaction(txHash string) (string, error) {
 	transaction, err := wallet.GetTransactionRaw(txHash)
 	if err != nil {
 		log.Error(err)
@@ -65,8 +65,8 @@ func (wallet *Wallet) GetTransaction(txHash []byte) (string, error) {
 	return string(result), nil
 }
 
-func (wallet *Wallet) GetTransactionRaw(txHash []byte) (*Transaction, error) {
-	hash, err := chainhash.NewHash(txHash)
+func (wallet *Wallet) GetTransactionRaw(txHash string) (*Transaction, error) {
+	hash, err := chainhash.NewHashFromStr(txHash)
 	if err != nil {
 		log.Error(err)
 		return nil, err
@@ -96,7 +96,7 @@ func (wallet *Wallet) GetTransactions(offset, limit, txFilter int32, newestFirst
 }
 
 func (wallet *Wallet) GetTransactionsRaw(offset, limit, txFilter int32, newestFirst bool) (transactions []Transaction, err error) {
-	err = wallet.walletDataDB.Read(offset, limit, txFilter, newestFirst, wallet.GetBestBlock(), &transactions)
+	err = wallet.walletDataDB.Read(offset, limit, txFilter, newestFirst, wallet.RequiredConfirmations(), wallet.GetBestBlock(), &transactions)
 	return
 }
 
@@ -142,7 +142,7 @@ func (mw *MultiWallet) GetTransactionsRaw(offset, limit, txFilter int32, newestF
 }
 
 func (wallet *Wallet) CountTransactions(txFilter int32) (int, error) {
-	return wallet.walletDataDB.Count(txFilter, wallet.GetBestBlock(), &Transaction{})
+	return wallet.walletDataDB.Count(txFilter, wallet.RequiredConfirmations(), wallet.GetBestBlock(), &Transaction{})
 }
 
 func (wallet *Wallet) TicketHasVotedOrRevoked(ticketHash string) (bool, error) {
@@ -211,6 +211,7 @@ func (wallet *Wallet) TransactionOverview() (txOverview *TransactionOverview, er
 }
 
 func (wallet *Wallet) TxMatchesFilter(tx *Transaction, txFilter int32) bool {
+	bestBlock := wallet.GetBestBlock()
 	switch txFilter {
 	case TxFilterSent:
 		return tx.Type == TxTypeRegular && tx.Direction == TxDirectionSent
@@ -240,26 +241,32 @@ func (wallet *Wallet) TxMatchesFilter(tx *Transaction, txFilter int32) bool {
 	case TxFilterRevoked:
 		return tx.Type == TxTypeRevocation
 	case walletdata.TxFilterImmature:
-		bestBlock := wallet.GetBestBlock()
 		return tx.Type == TxTypeTicketPurchase &&
-			(tx.BlockHeight > (bestBlock-int32(wallet.chainParams.TicketMaturity)) ||
-				tx.BlockHeight == -1)
+			(tx.BlockHeight > (bestBlock-int32(wallet.chainParams.TicketMaturity)) &&
+				tx.BlockHeight <= bestBlock)
 	case TxFilterLive:
-		bestBlock := wallet.GetBestBlock()
 		// ticket is live if we don't have the spender hash and it hasn't expired.
 		// we cannot detect missed tickets over spv.
 		return tx.Type == TxTypeTicketPurchase &&
 			tx.TicketSpender == "" &&
 			tx.BlockHeight > 0 &&
-			tx.BlockHeight <= (bestBlock-int32(wallet.chainParams.TicketMaturity)) &&
-			(tx.Expiry >= bestBlock || tx.Expiry == 0)
-	case TxFilterExpired:
-		bestBlock := wallet.GetBestBlock()
-		return tx.Type == TxTypeTicketPurchase && tx.TicketSpender == "" &&
-			(tx.Expiry <= bestBlock && tx.Expiry != 0)
+			tx.BlockHeight <= (bestBlock-int32(wallet.chainParams.TicketMaturity))
+	case TxFilterUnmined:
+		return tx.Type == TxTypeTicketPurchase && tx.BlockHeight == -1
 	case TxFilterAll:
 		return true
 	}
 
 	return false
+}
+
+func (wallet *Wallet) TxMatchesFilter2(direction, blockHeight, expiry int32, txType, ticketSpender string, txFilter int32) bool {
+	tx := Transaction{
+		Type:          txType,
+		Direction:     direction,
+		BlockHeight:   blockHeight,
+		Expiry:        expiry,
+		TicketSpender: ticketSpender,
+	}
+	return wallet.TxMatchesFilter(&tx, txFilter)
 }

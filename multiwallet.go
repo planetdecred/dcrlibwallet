@@ -42,7 +42,7 @@ type MultiWallet struct {
 	Politeia *Politeia
 }
 
-func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
+func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWallet, error) {
 	errors.Separator = ":: "
 
 	chainParams, err := utils.ChainParams(netType)
@@ -98,7 +98,7 @@ func NewMultiWallet(rootDir, dbDriver, netType string) (*MultiWallet, error) {
 		accountMixerNotificationListener: make(map[string]AccountMixerNotificationListener),
 	}
 
-	mw.Politeia, err = newPoliteia(mw)
+	mw.Politeia, err = newPoliteia(mw, politeiaHost)
 	if err != nil {
 		return nil, err
 	}
@@ -156,6 +156,10 @@ func (mw *MultiWallet) Shutdown() {
 		logRotator.Close()
 		log.Info("Shutdown log rotator successfully")
 	}
+}
+
+func (mw *MultiWallet) NetType() string {
+	return mw.chainParams.Name
 }
 
 func (mw *MultiWallet) SetStartupPassphrase(passphrase []byte, passphraseType int32) error {

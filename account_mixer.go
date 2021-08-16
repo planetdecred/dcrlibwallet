@@ -9,6 +9,7 @@ import (
 
 	"decred.org/dcrwallet/ticketbuyer"
 	w "decred.org/dcrwallet/wallet"
+	"decred.org/dcrwallet/wallet/udb"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/dcrutil/v3"
 	"github.com/planetdecred/dcrlibwallet/internal/certs"
@@ -19,7 +20,7 @@ const (
 	ShuffleServer      = "cspp.decred.org"
 	MainnetShufflePort = "5760"
 	TestnetShufflePort = "15760"
-	MixedAccountBranch = 0
+	MixedAccountBranch = int32(udb.ExternalBranch)
 )
 
 func (mw *MultiWallet) AddAccountMixerNotificationListener(accountMixerNotificationListener AccountMixerNotificationListener, uniqueIdentifier string) error {
@@ -197,7 +198,7 @@ func (mw *MultiWallet) StartAccountMixer(walletID int, walletPassphrase string) 
 	}
 
 	tb.AccessConfig(func(c *ticketbuyer.Config) {
-		c.MixedAccountBranch = MixedAccountBranch
+		c.MixedAccountBranch = uint32(MixedAccountBranch)
 		c.MixedAccount = uint32(mixedAccount)
 		c.ChangeAccount = uint32(unmixedAccount)
 		c.CSPPServer = ShuffleServer + ":" + shufflePort

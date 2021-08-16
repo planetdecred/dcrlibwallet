@@ -27,8 +27,8 @@ func (db *DB) ReadIndexingStartBlock() (int32, error) {
 // Read queries the db for `limit` count transactions that match the specified `txFilter`
 // starting from the specified `offset`; and saves the transactions found to the received `transactions` object.
 // `transactions` should be a pointer to a slice of Transaction objects.
-func (db *DB) Read(offset, limit, txFilter int32, newestFirst bool, bestBlock int32, transactions interface{}) error {
-	query := db.prepareTxQuery(txFilter, bestBlock)
+func (db *DB) Read(offset, limit, txFilter int32, newestFirst bool, requiredConfirmations, bestBlock int32, transactions interface{}) error {
+	query := db.prepareTxQuery(txFilter, requiredConfirmations, bestBlock)
 	if offset > 0 {
 		query = query.Skip(int(offset))
 	}
@@ -50,8 +50,8 @@ func (db *DB) Read(offset, limit, txFilter int32, newestFirst bool, bestBlock in
 
 // Count queries the db for transactions of the `txObj` type
 // to return the number of records matching the specified `txFilter`.
-func (db *DB) Count(txFilter int32, bestBlock int32, txObj interface{}) (int, error) {
-	query := db.prepareTxQuery(txFilter, bestBlock)
+func (db *DB) Count(txFilter int32, requiredConfirmations, bestBlock int32, txObj interface{}) (int, error) {
+	query := db.prepareTxQuery(txFilter, requiredConfirmations, bestBlock)
 
 	count, err := query.Count(txObj)
 	if err != nil {

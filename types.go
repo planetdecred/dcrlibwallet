@@ -327,7 +327,6 @@ type StakingOverview struct {
 	Immature int
 	Live     int
 	Voted    int
-	Expired  int
 	Revoked  int
 }
 
@@ -356,6 +355,32 @@ type Proposal struct {
 	EligibleTickets  int32  `json:"eligibletickets"`
 	QuorumPercentage int32  `json:"quorumpercentage"`
 	PassPercentage   int32  `json:"passpercentage"`
+}
+
+type ProposalOverview struct {
+	All        int32
+	Discussion int32
+	Voting     int32
+	Approved   int32
+	Rejected   int32
+	Abandoned  int32
+}
+
+type ProposalVoteDetails struct {
+	EligibleTickets []*EligibleTicket
+	Votes           []*ProposalVote
+	YesVotes        int32
+	NoVotes         int32
+}
+
+type EligibleTicket struct {
+	Hash    string
+	Address string
+}
+
+type ProposalVote struct {
+	Ticket *EligibleTicket
+	Bit    string
 }
 
 type ProposalNotificationListener interface {

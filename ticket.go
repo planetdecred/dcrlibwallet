@@ -50,11 +50,6 @@ func (wallet *Wallet) StakingOverview() (stOverview *StakingOverview, err error)
 		return nil, err
 	}
 
-	stOverview.Expired, err = wallet.CountTransactions(TxFilterExpired)
-	if err != nil {
-		return nil, err
-	}
-
 	stOverview.Live, err = wallet.CountTransactions(TxFilterLive)
 	if err != nil {
 		return nil, err
@@ -66,7 +61,7 @@ func (wallet *Wallet) StakingOverview() (stOverview *StakingOverview, err error)
 	}
 
 	stOverview.All = stOverview.Immature + stOverview.Live + stOverview.Voted +
-		stOverview.Expired + stOverview.Revoked
+		stOverview.Revoked
 
 	return stOverview, nil
 }
