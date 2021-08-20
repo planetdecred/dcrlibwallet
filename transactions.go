@@ -38,6 +38,11 @@ const (
 	TxTypeVote           = txhelper.TxTypeVote
 	TxTypeRevocation     = txhelper.TxTypeRevocation
 	TxTypeMixed          = txhelper.TxTypeMixed
+
+	TicketStatusUnmined        = "unmined"
+	TicketStatusImmature       = "immature"
+	TicketStatusLive           = "live"
+	TicketStatusVotedOrRevoked = "votedrevoked"
 )
 
 func (wallet *Wallet) PublishUnminedTransactions() error {
@@ -269,4 +274,29 @@ func (wallet *Wallet) TxMatchesFilter2(direction, blockHeight, expiry int32, txT
 		TicketSpender: ticketSpender,
 	}
 	return wallet.TxMatchesFilter(&tx, txFilter)
+}
+
+func (tx Transaction) Confirmations(bestBlock int32) int32 {
+	if tx.BlockHeight == BlockHeightInvalid {
+		return 0
+	}
+
+	return (bestBlock - tx.BlockHeight) + 1
+}
+
+func (tx Transaction) TicketStatus(ticketMaturity, bestBlock int32) string {
+	if tx.Type != TxTypeTicketPurchase {
+		return ""
+	}
+
+	confirmations := tx.Confirmations(bestBlock)
+	if confirmations == 0 {
+		return TicketStatusUnmined
+	} else if confirmations <= ticketMaturity {
+		return TicketStatusImmature
+	} else if tx.TicketSpender != "" {
+		return TicketStatusVotedOrRevoked
+	}
+
+	return TicketStatusLive
 }
