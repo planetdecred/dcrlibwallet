@@ -66,6 +66,27 @@ func (wallet *Wallet) StakingOverview() (stOverview *StakingOverview, err error)
 	return stOverview, nil
 }
 
+func (mw *MultiWallet) StakingOverview() (stOverview *StakingOverview, err error) {
+	stOverview = &StakingOverview{}
+
+	for _, wallet := range mw.wallets {
+		st, err := wallet.StakingOverview()
+		if err != nil {
+			return nil, err
+		}
+
+		stOverview.Immature += st.Immature
+		stOverview.Live += st.Live
+		stOverview.Voted += st.Voted
+		stOverview.Revoked += st.Revoked
+	}
+
+	stOverview.All = stOverview.Immature + stOverview.Live + stOverview.Voted +
+		stOverview.Revoked
+
+	return stOverview, nil
+}
+
 func (wallet *Wallet) GetTickets(startingBlockHash, endingBlockHash []byte, targetCount int32) ([]*TicketInfo, error) {
 	return wallet.getTickets(&GetTicketsRequest{
 		StartingBlockHash: startingBlockHash,
