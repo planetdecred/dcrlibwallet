@@ -20,6 +20,14 @@ import (
 	"github.com/planetdecred/dcrlibwallet/utils"
 )
 
+func (mw *MultiWallet) TicketMaturity() int32 {
+	return int32(mw.chainParams.TicketMaturity)
+}
+
+func (mw *MultiWallet) TicketExpiry() int32 {
+	return int32(mw.chainParams.TicketExpiry)
+}
+
 // StakeInfo returns information about wallet stakes, tickets and their statuses.
 func (wallet *Wallet) StakeInfo() (*w.StakeInfoData, error) {
 	ctx := wallet.shutdownContext()
