@@ -328,6 +328,7 @@ type StakingOverview struct {
 	Live     int
 	Voted    int
 	Revoked  int
+	Expired  int
 }
 
 /** end ticket-related types */

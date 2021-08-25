@@ -20,9 +20,17 @@ const (
 	TxFilterImmature    int32 = 10
 	TxFilterLive        int32 = 11
 	TxFilterUnmined     int32 = 12
+	TxFilterExpired     int32 = 13
+	TxFilterTickets     int32 = 14
 )
 
 func (db *DB) prepareTxQuery(txFilter, requiredConfirmations, bestBlock int32) (query storm.Query) {
+	// tickets with block height less than this are matured.
+	maturityBlock := bestBlock - int32(db.chainParams.TicketMaturity)
+
+	// tickets with block height less than this are expired.
+	expiryBlock := bestBlock - int32(db.chainParams.TicketMaturity+uint16(db.chainParams.TicketExpiry))
+
 	switch txFilter {
 	case TxFilterSent:
 		query = db.walletDataDB.Select(
@@ -71,16 +79,16 @@ func (db *DB) prepareTxQuery(txFilter, requiredConfirmations, bestBlock int32) (
 		query = db.walletDataDB.Select(
 			q.Eq("Type", txhelper.TxTypeTicketPurchase),
 			q.And(
-				q.Lte("BlockHeight", bestBlock), // must be confirmed
-				q.Gt("BlockHeight", bestBlock-int32(db.chainParams.TicketMaturity)),
+				q.Gt("BlockHeight", maturityBlock),
 			),
 		)
 	case TxFilterLive:
 		query = db.walletDataDB.Select(
 			q.Eq("Type", txhelper.TxTypeTicketPurchase),
-			q.Eq("TicketSpender", ""),                                            // not spent by a vote or revoke
-			q.Gt("BlockHeight", 0),                                               // mined
-			q.Lte("BlockHeight", bestBlock-int32(db.chainParams.TicketMaturity)), // must be matured
+			q.Eq("TicketSpender", ""),           // not spent by a vote or revoke
+			q.Gt("BlockHeight", 0),              // mined
+			q.Lte("BlockHeight", maturityBlock), // must be matured
+			q.Gt("BlockHeight", expiryBlock),    // not expired
 		)
 	case TxFilterUnmined:
 		query = db.walletDataDB.Select(
@@ -88,6 +96,17 @@ func (db *DB) prepareTxQuery(txFilter, requiredConfirmations, bestBlock int32) (
 			q.Or(
 				q.Eq("BlockHeight", -1),
 			),
+		)
+	case TxFilterExpired:
+		query = db.walletDataDB.Select(
+			q.Eq("Type", txhelper.TxTypeTicketPurchase),
+			q.Eq("TicketSpender", ""), // not spent by a vote or revoke
+			q.Gt("BlockHeight", 0),    // mined
+			q.Lte("BlockHeight", expiryBlock),
+		)
+	case TxFilterTickets:
+		query = db.walletDataDB.Select(
+			q.Eq("Type", txhelper.TxTypeTicketPurchase),
 		)
 	default:
 		query = db.walletDataDB.Select(
