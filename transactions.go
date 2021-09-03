@@ -45,6 +45,7 @@ const (
 	TicketStatusImmature       = "immature"
 	TicketStatusLive           = "live"
 	TicketStatusVotedOrRevoked = "votedrevoked"
+	TicketStatusExpired        = "expired"
 )
 
 func (wallet *Wallet) PublishUnminedTransactions() error {
@@ -299,7 +300,7 @@ func (tx Transaction) Confirmations(bestBlock int32) int32 {
 	return (bestBlock - tx.BlockHeight) + 1
 }
 
-func (tx Transaction) TicketStatus(ticketMaturity, bestBlock int32) string {
+func (tx Transaction) TicketStatus(ticketMaturity, ticketExpiry, bestBlock int32) string {
 	if tx.Type != TxTypeTicketPurchase {
 		return ""
 	}
@@ -309,6 +310,8 @@ func (tx Transaction) TicketStatus(ticketMaturity, bestBlock int32) string {
 		return TicketStatusUnmined
 	} else if confirmations <= ticketMaturity {
 		return TicketStatusImmature
+	} else if confirmations > (ticketMaturity + ticketExpiry) {
+		return TicketStatusExpired
 	} else if tx.TicketSpender != "" {
 		return TicketStatusVotedOrRevoked
 	}
