@@ -217,30 +217,32 @@ func (wallet *Wallet) getTickets(req *GetTicketsRequest) (ticketInfos []*TicketI
 func (wallet *Wallet) TicketPrice() (*TicketPriceResponse, error) {
 	ctx := wallet.shutdownContext()
 	sdiff, err := wallet.internal.NextStakeDifficulty(ctx)
-	if err == nil {
-		_, tipHeight := wallet.internal.MainChainTip(ctx)
-		resp := &TicketPriceResponse{
-			TicketPrice: int64(sdiff),
-			Height:      tipHeight,
-		}
-		return resp, nil
-	}
-
-	n, err := wallet.internal.NetworkBackend()
 	if err != nil {
 		return nil, err
 	}
 
-	ticketPrice, err := n.StakeDifficulty(ctx)
-	if err != nil {
-		return nil, translateError(err)
+	_, tipHeight := wallet.internal.MainChainTip(ctx)
+	resp := &TicketPriceResponse{
+		TicketPrice: int64(sdiff),
+		Height:      tipHeight,
+	}
+	return resp, nil
+}
+
+func (mw *MultiWallet) TicketPrice() (*TicketPriceResponse, error) {
+	bestBlock := mw.GetBestBlock()
+	for _, wal := range mw.wallets {
+		resp, err := wal.TicketPrice()
+		if err != nil {
+			return nil, err
+		}
+
+		if resp.Height == bestBlock.Height {
+			return resp, nil
+		}
 	}
 
-	_, tipHeight := wallet.internal.MainChainTip(ctx)
-	return &TicketPriceResponse{
-		TicketPrice: int64(ticketPrice),
-		Height:      tipHeight,
-	}, nil
+	return nil, errors.New(ErrWalletNotFound)
 }
 
 // PurchaseTickets purchases tickets from the wallet. Returns a slice of hashes for tickets purchased
