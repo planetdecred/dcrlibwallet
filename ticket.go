@@ -12,6 +12,34 @@ import (
 	"github.com/planetdecred/dcrlibwallet/utils"
 )
 
+func (wallet *Wallet) TotalStakingRewards() (int64, error) {
+	voteTransactions, err := wallet.GetTransactionsRaw(0, 0, TxFilterVoted, true)
+	if err != nil {
+		return 0, err
+	}
+
+	var totalRewards int64
+	for _, tx := range voteTransactions {
+		totalRewards += tx.VoteReward
+	}
+
+	return totalRewards, nil
+}
+
+func (mw *MultiWallet) TotalStakingRewards() (int64, error) {
+	var totalRewards int64
+	for _, wal := range mw.wallets {
+		walletTotalRewards, err := wal.TotalStakingRewards()
+		if err != nil {
+			return 0, err
+		}
+
+		totalRewards += walletTotalRewards
+	}
+
+	return totalRewards, nil
+}
+
 func (mw *MultiWallet) TicketMaturity() int32 {
 	return int32(mw.chainParams.TicketMaturity)
 }
