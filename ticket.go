@@ -76,7 +76,12 @@ func (wallet *Wallet) StakingOverview() (stOverview *StakingOverview, err error)
 		return nil, err
 	}
 
-	stOverview.All = stOverview.Immature + stOverview.Live + stOverview.Voted +
+	stOverview.Unmined, err = wallet.CountTransactions(TxFilterUnmined)
+	if err != nil {
+		return nil, err
+	}
+
+	stOverview.All = stOverview.Unmined + stOverview.Immature + stOverview.Live + stOverview.Voted +
 		stOverview.Revoked + stOverview.Expired
 
 	return stOverview, nil
@@ -91,6 +96,7 @@ func (mw *MultiWallet) StakingOverview() (stOverview *StakingOverview, err error
 			return nil, err
 		}
 
+		stOverview.Unmined += st.Unmined
 		stOverview.Immature += st.Immature
 		stOverview.Live += st.Live
 		stOverview.Voted += st.Voted
@@ -98,7 +104,7 @@ func (mw *MultiWallet) StakingOverview() (stOverview *StakingOverview, err error
 		stOverview.Expired += st.Expired
 	}
 
-	stOverview.All = stOverview.Immature + stOverview.Live + stOverview.Voted +
+	stOverview.All = stOverview.Unmined + stOverview.Immature + stOverview.Live + stOverview.Voted +
 		stOverview.Revoked + stOverview.Expired
 
 	return stOverview, nil

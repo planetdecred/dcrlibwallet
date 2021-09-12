@@ -166,6 +166,10 @@ func (mw *MultiWallet) LogDir() string {
 	return filepath.Join(mw.rootDir, logFileName)
 }
 
+func (mw *MultiWallet) TargetTimePerBlockMinutes() float64 {
+	return mw.chainParams.TargetTimePerBlock.Minutes()
+}
+
 func (mw *MultiWallet) SetStartupPassphrase(passphrase []byte, passphraseType int32) error {
 	return mw.ChangeStartupPassphrase([]byte(""), passphrase, passphraseType)
 }

@@ -324,6 +324,7 @@ type VSPTicketPurchaseInfo struct {
 
 type StakingOverview struct {
 	All      int
+	Unmined  int
 	Immature int
 	Live     int
 	Voted    int
