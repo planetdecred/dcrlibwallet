@@ -26,6 +26,8 @@ const (
 	TxFilterImmature    = walletdata.TxFilterImmature
 	TxFilterLive        = walletdata.TxFilterLive
 	TxFilterUnmined     = walletdata.TxFilterUnmined
+	TxFilterExpired     = walletdata.TxFilterExpired
+	TxFilterTickets     = walletdata.TxFilterTickets
 
 	TxDirectionInvalid     = txhelper.TxDirectionInvalid
 	TxDirectionSent        = txhelper.TxDirectionSent
@@ -38,6 +40,12 @@ const (
 	TxTypeVote           = txhelper.TxTypeVote
 	TxTypeRevocation     = txhelper.TxTypeRevocation
 	TxTypeMixed          = txhelper.TxTypeMixed
+
+	TicketStatusUnmined        = "unmined"
+	TicketStatusImmature       = "immature"
+	TicketStatusLive           = "live"
+	TicketStatusVotedOrRevoked = "votedrevoked"
+	TicketStatusExpired        = "expired"
 )
 
 func (wallet *Wallet) PublishUnminedTransactions() error {
@@ -212,6 +220,13 @@ func (wallet *Wallet) TransactionOverview() (txOverview *TransactionOverview, er
 
 func (wallet *Wallet) TxMatchesFilter(tx *Transaction, txFilter int32) bool {
 	bestBlock := wallet.GetBestBlock()
+
+	// tickets with block height less than this are matured.
+	maturityBlock := bestBlock - int32(wallet.chainParams.TicketMaturity)
+
+	// tickets with block height less than this are expired.
+	expiryBlock := bestBlock - int32(wallet.chainParams.TicketMaturity+uint16(wallet.chainParams.TicketExpiry))
+
 	switch txFilter {
 	case TxFilterSent:
 		return tx.Type == TxTypeRegular && tx.Direction == TxDirectionSent
@@ -242,17 +257,24 @@ func (wallet *Wallet) TxMatchesFilter(tx *Transaction, txFilter int32) bool {
 		return tx.Type == TxTypeRevocation
 	case walletdata.TxFilterImmature:
 		return tx.Type == TxTypeTicketPurchase &&
-			(tx.BlockHeight > (bestBlock-int32(wallet.chainParams.TicketMaturity)) &&
-				tx.BlockHeight <= bestBlock)
+			(tx.BlockHeight > maturityBlock) // not matured
 	case TxFilterLive:
 		// ticket is live if we don't have the spender hash and it hasn't expired.
 		// we cannot detect missed tickets over spv.
 		return tx.Type == TxTypeTicketPurchase &&
 			tx.TicketSpender == "" &&
 			tx.BlockHeight > 0 &&
-			tx.BlockHeight <= (bestBlock-int32(wallet.chainParams.TicketMaturity))
+			tx.BlockHeight <= maturityBlock &&
+			tx.BlockHeight > expiryBlock // not expired
 	case TxFilterUnmined:
 		return tx.Type == TxTypeTicketPurchase && tx.BlockHeight == -1
+	case TxFilterExpired:
+		return tx.Type == TxTypeTicketPurchase &&
+			tx.TicketSpender == "" &&
+			tx.BlockHeight > 0 &&
+			tx.BlockHeight <= expiryBlock
+	case TxFilterTickets:
+		return tx.Type == TxTypeTicketPurchase
 	case TxFilterAll:
 		return true
 	}
@@ -260,13 +282,39 @@ func (wallet *Wallet) TxMatchesFilter(tx *Transaction, txFilter int32) bool {
 	return false
 }
 
-func (wallet *Wallet) TxMatchesFilter2(direction, blockHeight, expiry int32, txType, ticketSpender string, txFilter int32) bool {
+func (wallet *Wallet) TxMatchesFilter2(direction, blockHeight int32, txType, ticketSpender string, txFilter int32) bool {
 	tx := Transaction{
 		Type:          txType,
 		Direction:     direction,
 		BlockHeight:   blockHeight,
-		Expiry:        expiry,
 		TicketSpender: ticketSpender,
 	}
 	return wallet.TxMatchesFilter(&tx, txFilter)
+}
+
+func (tx Transaction) Confirmations(bestBlock int32) int32 {
+	if tx.BlockHeight == BlockHeightInvalid {
+		return 0
+	}
+
+	return (bestBlock - tx.BlockHeight) + 1
+}
+
+func (tx Transaction) TicketStatus(ticketMaturity, ticketExpiry, bestBlock int32) string {
+	if tx.Type != TxTypeTicketPurchase {
+		return ""
+	}
+
+	confirmations := tx.Confirmations(bestBlock)
+	if confirmations == 0 {
+		return TicketStatusUnmined
+	} else if confirmations <= ticketMaturity {
+		return TicketStatusImmature
+	} else if confirmations > (ticketMaturity + ticketExpiry) {
+		return TicketStatusExpired
+	} else if tx.TicketSpender != "" {
+		return TicketStatusVotedOrRevoked
+	}
+
+	return TicketStatusLive
 }

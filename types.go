@@ -324,10 +324,12 @@ type VSPTicketPurchaseInfo struct {
 
 type StakingOverview struct {
 	All      int
+	Unmined  int
 	Immature int
 	Live     int
 	Voted    int
 	Revoked  int
+	Expired  int
 }
 
 /** end ticket-related types */

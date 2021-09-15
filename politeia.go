@@ -23,10 +23,6 @@ type Politeia struct {
 }
 
 const (
-	proposalsDbName = "proposals.db"
-)
-
-const (
 	ProposalCategoryAll int32 = iota + 1
 	ProposalCategoryPre
 	ProposalCategoryActive
