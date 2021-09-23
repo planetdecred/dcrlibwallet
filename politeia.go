@@ -19,7 +19,7 @@ type Politeia struct {
 	ctx                     context.Context
 	cancelSync              context.CancelFunc
 	client                  *politeiaClient
-	lastSyncedTimestamp		time.Time
+	lastSyncedTimestamp     time.Time
 	notificationListenersMu sync.RWMutex
 	notificationListeners   map[string]ProposalNotificationListener
 }

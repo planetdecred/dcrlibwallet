@@ -68,10 +68,9 @@ func (p *Politeia) Sync() error {
 	}
 }
 
-func (p *Politeia) GetLastSyncedTimeStamp() float64 {
+func (p *Politeia) GetLastSyncedTimeStamp() string {
 	currentTime := time.Now()
-	lastSyncedTime := currentTime.Sub(p.lastSyncedTimestamp).Minutes()
-	return lastSyncedTime
+	return TimeElapsed(currentTime, p.lastSyncedTimestamp, false)
 }
 
 func (p *Politeia) IsSyncing() bool {
