@@ -340,12 +340,12 @@ func TimeElapsed(now time.Time, then time.Time, full bool) string {
 	year1, month1, day1 := then.Date()
 	hour1, minute1, second1 := then.Clock()
 
-	year := math.Abs(float64(int(year2 - year1)))
-	month := math.Abs(float64(int(month2 - month1)))
-	day := math.Abs(float64(int(day2 - day1)))
-	hour := math.Abs(float64(int(hour2 - hour1)))
-	minute := math.Abs(float64(int(minute2 - minute1)))
-	second := math.Abs(float64(int(second2 - second1)))
+	year := math.Abs(float64(year2 - year1))
+	month := math.Abs(float64(month2 - month1))
+	day := math.Abs(float64(day2 - day1))
+	hour := math.Abs(float64(hour2 - hour1))
+	minute := math.Abs(float64(minute2 - minute1))
+	second := math.Abs(float64(second2 - second1))
 
 	week := math.Floor(day / 7)
 
