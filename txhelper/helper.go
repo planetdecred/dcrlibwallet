@@ -16,8 +16,7 @@ func MsgTxFeeSizeRate(transactionHex string) (msgTx *wire.MsgTx, fee dcrutil.Amo
 	}
 
 	size = msgTx.SerializeSize()
-	f, r := txhelpers.TxFeeRate(msgTx)
-	fee, feeRate = dcrutil.Amount(f), dcrutil.Amount(r)
+	fee, feeRate = txhelpers.TxFeeRate(msgTx)
 	return
 }
 
