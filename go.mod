@@ -9,12 +9,13 @@ require (
 	github.com/decred/dcrd/chaincfg/chainhash v1.0.4-0.20210914212651-723d86274b0d
 	github.com/decred/dcrd/chaincfg/v3 v3.0.1-0.20210914212651-723d86274b0d
 	github.com/decred/dcrd/connmgr/v3 v3.0.1-0.20210914212651-723d86274b0d
+	github.com/decred/dcrd/dcrec/edwards/v2 v2.0.2-0.20210525214639-70483c835b7f // indirect
 	github.com/decred/dcrd/dcrutil/v4 v4.0.0-20210914212651-723d86274b0d
 	github.com/decred/dcrd/gcs/v3 v3.0.0-20210914212651-723d86274b0d
 	github.com/decred/dcrd/hdkeychain/v3 v3.0.1-0.20210914212651-723d86274b0d
 	github.com/decred/dcrd/txscript/v4 v4.0.0-20210914212651-723d86274b0d
 	github.com/decred/dcrd/wire v1.4.1-0.20210914212651-723d86274b0d
-	github.com/decred/dcrdata/v7 v7.0.0-20211001163928-9fde58881978
+	github.com/decred/dcrdata/v7 v7.0.0-20211002170506-a6280ab3bef3
 	github.com/decred/politeia v1.0.1
 	github.com/decred/slog v1.2.0
 	github.com/dgraph-io/badger v1.6.2
@@ -26,7 +27,5 @@ require (
 	golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
 )
-
-replace github.com/decred/dcrdata/v7 => github.com/itswisdomagain/dcrdata/v7 v7.0.0-20211002100236-612d26588379
 
 go 1.16

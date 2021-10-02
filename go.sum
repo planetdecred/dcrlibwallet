@@ -223,8 +223,9 @@ github.com/decred/dcrd/dcrec/edwards v0.0.0-20180816212643-20eda7ec9229/go.mod h
 github.com/decred/dcrd/dcrec/edwards v1.0.0 h1:UDcPNzclKiJlWqV3x1Fl8xMCJrolo4PB4X9t8LwKDWU=
 github.com/decred/dcrd/dcrec/edwards v1.0.0/go.mod h1:HblVh1OfMt7xSxUL1ufjToaEvpbjpWvvTAUx4yem8BI=
 github.com/decred/dcrd/dcrec/edwards/v2 v2.0.0/go.mod h1:d0H8xGMWbiIQP7gN3v2rByWUcuZPm9YsgmnfoxgbINc=
-github.com/decred/dcrd/dcrec/edwards/v2 v2.0.1 h1:V6eqU1crZzuoFT4KG2LhaU5xDSdkHuvLQsj25wd7Wb4=
 github.com/decred/dcrd/dcrec/edwards/v2 v2.0.1/go.mod h1:d0H8xGMWbiIQP7gN3v2rByWUcuZPm9YsgmnfoxgbINc=
+github.com/decred/dcrd/dcrec/edwards/v2 v2.0.2-0.20210525214639-70483c835b7f h1:cr41CrKByXgirEcLP33Ty+ymfqlw8RtkD5Guy8G42Y4=
+github.com/decred/dcrd/dcrec/edwards/v2 v2.0.2-0.20210525214639-70483c835b7f/go.mod h1:d0H8xGMWbiIQP7gN3v2rByWUcuZPm9YsgmnfoxgbINc=
 github.com/decred/dcrd/dcrec/secp256k1 v1.0.0/go.mod h1:JPMFscGlgXTV684jxQNDijae2qrh0fLG7pJBimaYotE=
 github.com/decred/dcrd/dcrec/secp256k1 v1.0.1/go.mod h1:lhu4eZFSfTJWUnR3CFRcpD+Vta0KUAqnhTsTksHXgy0=
 github.com/decred/dcrd/dcrec/secp256k1 v1.0.2 h1:awk7sYJ4pGWmtkiGHFfctztJjHMKGLV8jctGQhAbKe0=
@@ -311,6 +312,8 @@ github.com/decred/dcrdata/semver v1.0.0/go.mod h1:z+nQqiAd9fYkHhBLbejysZ2FPHtgkr
 github.com/decred/dcrdata/txhelpers/v3 v3.0.4/go.mod h1:tKEDhoO+TbYrFrx+5qKZDxcla8ELQFYs4f5+8gL4cuY=
 github.com/decred/dcrdata/txhelpers/v4 v4.0.1/go.mod h1:cUJbgsIzzI42llHDS0nkPlG49vPJ0cW6IZGbfu5sFrA=
 github.com/decred/dcrdata/v6 v6.0.0-20210510222533-6a2ca18d4382/go.mod h1:CWT5trkQ+8KUSBeyuI5/V1TQMleYyCh1vo/Ry6PiFWU=
+github.com/decred/dcrdata/v7 v7.0.0-20211002170506-a6280ab3bef3 h1:gij3aCEBC2f+L0G8sllE4krnvsg3hcHNiN7oPpn79pQ=
+github.com/decred/dcrdata/v7 v7.0.0-20211002170506-a6280ab3bef3/go.mod h1:RO1M86y69DFasSAJqk3BynVdQYR3qpJxLqvq3hle2zA=
 github.com/decred/dcrtime v0.0.0-20191018193024-8d8b4ef0458e h1:sNDR7vx6gaA3WD+WoEofTvtdjfwHAiogtjB3kt8iFco=
 github.com/decred/dcrtime v0.0.0-20191018193024-8d8b4ef0458e/go.mod h1:IyZnyBE3E6RBFsEjwEs21FrO/UsrLrL15hUnpZZQxpU=
 github.com/decred/dcrtime/api/v2 v2.0.0-20200912200806-b1e4dbc46be9/go.mod h1:JdIX208vnNj4TdU6hDRaN+ccxmxp1I1R6sWGZNK1BAQ=
@@ -513,8 +516,6 @@ github.com/imdario/mergo v0.3.4/go.mod h1:2EnlNZ0deacrJVfApfmtdGgDfMuh/nq6Ok1EcJ
 github.com/imdario/mergo v0.3.8/go.mod h1:2EnlNZ0deacrJVfApfmtdGgDfMuh/nq6Ok1EcJh5FfA=
 github.com/inconshreveable/mousetrap v1.0.0/go.mod h1:PxqpIevigyE2G7u3NXJIT2ANytuPF1OarO4DADm73n8=
 github.com/influxdata/influxdb1-client v0.0.0-20191209144304-8bf82d3c094d/go.mod h1:qj24IKcXYK6Iy9ceXlo3Tc+vtHo9lIhSX5JddghvEPo=
-github.com/itswisdomagain/dcrdata/v7 v7.0.0-20211002100236-612d26588379 h1:TjI73pKqTcRtdl9/bwv7eTsjCmNzIUytDG/927bnwd8=
-github.com/itswisdomagain/dcrdata/v7 v7.0.0-20211002100236-612d26588379/go.mod h1:RO1M86y69DFasSAJqk3BynVdQYR3qpJxLqvq3hle2zA=
 github.com/jessevdk/go-flags v1.4.0/go.mod h1:4FA24M0QyGHXBuZZK/XkWh8h0e1EYbRYJSGM75WSRxI=
 github.com/jessevdk/go-flags v1.4.1-0.20200711081900-c17162fe8fd7/go.mod h1:4FA24M0QyGHXBuZZK/XkWh8h0e1EYbRYJSGM75WSRxI=
 github.com/jhump/protoreflect v1.6.1/go.mod h1:RZQ/lnuN+zqeRVpQigTwO6o0AJUkxbnSnpuG7toUTG4=
