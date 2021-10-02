@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"time"
 
-	"decred.org/dcrwallet/errors"
-	w "decred.org/dcrwallet/wallet"
-	"decred.org/dcrwallet/walletseed"
+	"decred.org/dcrwallet/v2/errors"
+	w "decred.org/dcrwallet/v2/wallet"
+	"decred.org/dcrwallet/v2/walletseed"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/planetdecred/dcrlibwallet/internal/loader"
 	"github.com/planetdecred/dcrlibwallet/walletdata"

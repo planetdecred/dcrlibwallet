@@ -6,22 +6,20 @@ package spv
 
 import (
 	"context"
-	"net"
 	"runtime"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"decred.org/dcrwallet/errors"
-	"decred.org/dcrwallet/lru"
-	"decred.org/dcrwallet/p2p"
-	"decred.org/dcrwallet/validate"
-	"decred.org/dcrwallet/wallet"
-	"github.com/decred/dcrd/addrmgr"
-	"github.com/decred/dcrd/blockchain/stake/v3"
+	"decred.org/dcrwallet/v2/errors"
+	"decred.org/dcrwallet/v2/lru"
+	"decred.org/dcrwallet/v2/p2p"
+	"decred.org/dcrwallet/v2/validate"
+	"decred.org/dcrwallet/v2/wallet"
+	"github.com/decred/dcrd/addrmgr/v2"
+	"github.com/decred/dcrd/blockchain/stake/v4"
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrd/gcs/v2/blockcf2"
+	"github.com/decred/dcrd/gcs/v3/blockcf2"
 	"github.com/decred/dcrd/wire"
 	"golang.org/x/sync/errgroup"
 )
@@ -431,7 +429,7 @@ func (s *Syncer) Run(ctx context.Context) error {
 // peerCandidate returns a peer address that we shall attempt to connect to.
 // Only peers not already remotes or in the process of connecting are returned.
 // Any address returned is marked in s.connectingRemotes before returning.
-func (s *Syncer) peerCandidate(svcs wire.ServiceFlag) (*wire.NetAddress, error) {
+func (s *Syncer) peerCandidate(svcs wire.ServiceFlag) (*addrmgr.NetAddress, error) {
 	// Try to obtain peer candidates at random, decreasing the requirements
 	// as more tries are performed.
 	for tries := 0; tries < 100; tries++ {
@@ -441,7 +439,7 @@ func (s *Syncer) peerCandidate(svcs wire.ServiceFlag) (*wire.NetAddress, error) 
 		}
 		na := kaddr.NetAddress()
 
-		k := addrmgr.NetAddressKey(na)
+		k := na.Key()
 		s.remotesMu.Lock()
 		_, isConnecting := s.connectingRemotes[k]
 		_, isRemote := s.remotes[k]
@@ -483,7 +481,7 @@ func (s *Syncer) connectToPersistent(ctx context.Context, raddr string) error {
 			}
 			log.Infof("New peer %v %v %v", raddr, rp.UA(), rp.Services())
 
-			k := addrmgr.NetAddressKey(rp.NA())
+			k := rp.NA().Key()
 			s.remotesMu.Lock()
 			s.remotes[k] = rp
 			n := len(s.remotes)
@@ -555,14 +553,11 @@ func (s *Syncer) connectToCandidates(ctx context.Context) error {
 			}()
 
 			// Make outbound connections to remote peers.
-			port := strconv.FormatUint(uint64(na.Port), 10)
-			raddr := net.JoinHostPort(na.IP.String(), port)
-			k := addrmgr.NetAddressKey(na)
-
+			raddr := na.String()
 			rp, err := s.lp.ConnectOutbound(ctx, raddr, reqSvcs)
 			if err != nil {
 				s.remotesMu.Lock()
-				delete(s.connectingRemotes, k)
+				delete(s.connectingRemotes, raddr)
 				s.remotesMu.Unlock()
 				if ctx.Err() == nil {
 					log.Warnf("Peering attempt failed: %v", err)
@@ -572,11 +567,11 @@ func (s *Syncer) connectToCandidates(ctx context.Context) error {
 			log.Infof("New peer %v %v %v", raddr, rp.UA(), rp.Services())
 
 			s.remotesMu.Lock()
-			delete(s.connectingRemotes, k)
-			s.remotes[k] = rp
+			delete(s.connectingRemotes, raddr)
+			s.remotes[raddr] = rp
 			n := len(s.remotes)
 			s.remotesMu.Unlock()
-			s.peerConnected(n, k)
+			s.peerConnected(n, raddr)
 
 			wait := make(chan struct{})
 			go func() {
@@ -594,10 +589,10 @@ func (s *Syncer) connectToCandidates(ctx context.Context) error {
 
 			<-wait
 			s.remotesMu.Lock()
-			delete(s.remotes, k)
+			delete(s.remotes, raddr)
 			n = len(s.remotes)
 			s.remotesMu.Unlock()
-			s.peerDisconnected(n, k)
+			s.peerDisconnected(n, raddr)
 		}()
 	}
 }

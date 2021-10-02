@@ -10,18 +10,19 @@ import (
 	"sync"
 	"time"
 
-	"decred.org/dcrwallet/errors"
+	"decred.org/dcrwallet/v2/errors"
 
-	w "decred.org/dcrwallet/wallet"
-	"decred.org/dcrwallet/wallet/txauthor"
-	"decred.org/dcrwallet/wallet/txrules"
-	"decred.org/dcrwallet/wallet/txsizes"
+	w "decred.org/dcrwallet/v2/wallet"
+	"decred.org/dcrwallet/v2/wallet/txauthor"
+	"decred.org/dcrwallet/v2/wallet/txrules"
+	"decred.org/dcrwallet/v2/wallet/txsizes"
 
-	"github.com/decred/dcrd/blockchain/stake/v3"
+	"github.com/decred/dcrd/blockchain/stake/v4"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v3"
-	"github.com/decred/dcrd/dcrutil/v3"
-	"github.com/decred/dcrd/txscript/v3"
+	"github.com/decred/dcrd/dcrutil/v4"
+	"github.com/decred/dcrd/txscript/v4"
+	"github.com/decred/dcrd/txscript/v4/stdaddr"
 	"github.com/decred/dcrd/wire"
 )
 
@@ -180,7 +181,7 @@ func (v *VSP) ProcessFee(ctx context.Context, ticketHash *chainhash.Hash, feeTx 
 		return err
 	}
 
-	err = v.w.internal.UpdateVspTicketFeeToPaid(ctx, ticketHash, &feeHash)
+	err = v.w.internal.UpdateVspTicketFeeToPaid(ctx, ticketHash, &feeHash, v.url, v.pub)
 	if err != nil {
 		return err
 	}
@@ -239,11 +240,7 @@ func (v *VSP) CreateFeeTx(ctx context.Context, ticketHash chainhash.Hash, tx *wi
 		return err
 	}
 
-	feeScript, err := txscript.PayToAddrScript(feeInfo.FeeAddress)
-	if err != nil {
-		return errors.Errorf("failed to generate pay to addr script for %v: %v", feeInfo.FeeAddress, err)
-	}
-
+	_, feeScript := feeInfo.FeeAddress.PaymentScript()
 	addr, err := v.w.internal.NewChangeAddress(ctx, v.changeAccount)
 	if err != nil {
 		return errors.Errorf("failed to get new change address: %v", err)
@@ -427,7 +424,7 @@ func (v *VSP) GetFeeAddress(ctx context.Context, ticketHash chainhash.Hash) (dcr
 	}
 	// TODO - validate server timestamp?
 
-	feeAddress, err := dcrutil.DecodeAddress(feeResponse.FeeAddress, v.w.internal.ChainParams())
+	feeAddress, err := stdaddr.DecodeAddress(feeResponse.FeeAddress, v.w.internal.ChainParams())
 	if err != nil {
 		return 0, fmt.Errorf("server fee address invalid: %v", err)
 	}

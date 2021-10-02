@@ -6,11 +6,11 @@ import (
 	"strconv"
 	"strings"
 
-	"decred.org/dcrwallet/errors"
-	w "decred.org/dcrwallet/wallet"
-	"decred.org/dcrwallet/wallet/udb"
+	"decred.org/dcrwallet/v2/errors"
+	w "decred.org/dcrwallet/v2/wallet"
+	"decred.org/dcrwallet/v2/wallet/udb"
 	"github.com/decred/dcrd/chaincfg/v3"
-	"github.com/decred/dcrd/dcrutil/v3"
+	"github.com/decred/dcrd/dcrutil/v4"
 	"github.com/planetdecred/dcrlibwallet/addresshelper"
 )
 

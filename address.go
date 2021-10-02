@@ -3,9 +3,9 @@ package dcrlibwallet
 import (
 	"fmt"
 
-	"decred.org/dcrwallet/errors"
-	w "decred.org/dcrwallet/wallet"
-	"github.com/decred/dcrd/dcrutil/v3"
+	"decred.org/dcrwallet/v2/errors"
+	w "decred.org/dcrwallet/v2/wallet"
+	"github.com/decred/dcrd/txscript/v4/stdaddr"
 )
 
 // AddressInfo holds information about an address
@@ -18,12 +18,12 @@ type AddressInfo struct {
 }
 
 func (mw *MultiWallet) IsAddressValid(address string) bool {
-	_, err := dcrutil.DecodeAddress(address, mw.chainParams)
+	_, err := stdaddr.DecodeAddress(address, mw.chainParams)
 	return err == nil
 }
 
 func (wallet *Wallet) HaveAddress(address string) bool {
-	addr, err := dcrutil.DecodeAddress(address, wallet.chainParams)
+	addr, err := stdaddr.DecodeAddress(address, wallet.chainParams)
 	if err != nil {
 		return false
 	}
@@ -37,7 +37,7 @@ func (wallet *Wallet) HaveAddress(address string) bool {
 }
 
 func (wallet *Wallet) AccountOfAddress(address string) (string, error) {
-	addr, err := dcrutil.DecodeAddress(address, wallet.chainParams)
+	addr, err := stdaddr.DecodeAddress(address, wallet.chainParams)
 	if err != nil {
 		return "", translateError(err)
 	}
@@ -51,7 +51,7 @@ func (wallet *Wallet) AccountOfAddress(address string) (string, error) {
 }
 
 func (wallet *Wallet) AddressInfo(address string) (*AddressInfo, error) {
-	addr, err := dcrutil.DecodeAddress(address, wallet.chainParams)
+	addr, err := stdaddr.DecodeAddress(address, wallet.chainParams)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (wallet *Wallet) CurrentAddress(account int32) (string, error) {
 		log.Error(err)
 		return "", err
 	}
-	return addr.Address(), nil
+	return addr.String(), nil
 }
 
 func (wallet *Wallet) NextAddress(account int32) (string, error) {
@@ -98,11 +98,11 @@ func (wallet *Wallet) NextAddress(account int32) (string, error) {
 		log.Error(err)
 		return "", err
 	}
-	return addr.Address(), nil
+	return addr.String(), nil
 }
 
 func (wallet *Wallet) AddressPubKey(address string) (string, error) {
-	addr, err := dcrutil.DecodeAddress(address, wallet.chainParams)
+	addr, err := stdaddr.DecodeAddress(address, wallet.chainParams)
 	if err != nil {
 		return "", err
 	}
@@ -114,12 +114,12 @@ func (wallet *Wallet) AddressPubKey(address string) (string, error) {
 
 	switch known := known.(type) {
 	case w.PubKeyHashAddress:
-
-		pubKeyAddr, err := dcrutil.NewAddressSecpPubKey(known.PubKey(), wallet.chainParams)
+		pubKeyAddr, err := stdaddr.NewAddressPubKeyEcdsaSecp256k1V0Raw(known.PubKey(), wallet.chainParams)
 		if err != nil {
 			return "", err
 		}
 		return pubKeyAddr.String(), nil
+
 	default:
 		return "", fmt.Errorf("address is not a managed pub key address")
 	}

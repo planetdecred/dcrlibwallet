@@ -11,18 +11,18 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/decred/dcrd/dcrutil/v3"
+	"github.com/decred/dcrd/txscript/v4/stdaddr"
 )
 
 type vspClient struct {
 	http.Client
 	pub  []byte
 	url  string
-	sign func(context.Context, string, dcrutil.Address) ([]byte, error)
+	sign func(context.Context, string, stdaddr.Address) ([]byte, error)
 }
 
 type signer interface {
-	SignMessage(ctx context.Context, message string, address dcrutil.Address) ([]byte, error)
+	SignMessage(ctx context.Context, message string, address stdaddr.Address) ([]byte, error)
 }
 
 func newVSPClient(url string, pub []byte, s signer) *vspClient {
@@ -37,7 +37,7 @@ type BadRequestError struct {
 
 func (e *BadRequestError) Error() string { return e.Message }
 
-func (c *vspClient) post(ctx context.Context, path string, addr dcrutil.Address, resp, req interface{}) error {
+func (c *vspClient) post(ctx context.Context, path string, addr stdaddr.Address, resp, req interface{}) error {
 	return c.do(ctx, "POST", path, addr, resp, req)
 }
 
@@ -45,7 +45,7 @@ func (c *vspClient) get(ctx context.Context, path string, resp interface{}) erro
 	return c.do(ctx, "GET", path, nil, resp, nil)
 }
 
-func (c *vspClient) do(ctx context.Context, method, path string, addr dcrutil.Address, resp, req interface{}) error {
+func (c *vspClient) do(ctx context.Context, method, path string, addr stdaddr.Address, resp, req interface{}) error {
 	var reqBody io.Reader
 	var sig []byte
 	if method == "POST" {

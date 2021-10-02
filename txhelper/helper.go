@@ -3,10 +3,10 @@ package txhelper
 import (
 	"math"
 
-	"decred.org/dcrwallet/wallet"
-	"github.com/decred/dcrd/dcrutil/v3"
+	"decred.org/dcrwallet/v2/wallet"
+	"github.com/decred/dcrd/dcrutil/v4"
 	"github.com/decred/dcrd/wire"
-	"github.com/decred/dcrdata/txhelpers/v4"
+	"github.com/decred/dcrdata/v7/txhelpers"
 )
 
 func MsgTxFeeSizeRate(transactionHex string) (msgTx *wire.MsgTx, fee dcrutil.Amount, size int, feeRate dcrutil.Amount, err error) {

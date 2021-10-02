@@ -3,7 +3,7 @@ package dcrlibwallet
 import (
 	"fmt"
 
-	w "decred.org/dcrwallet/wallet"
+	w "decred.org/dcrwallet/v2/wallet"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 )
 
@@ -53,7 +53,7 @@ func (wallet *Wallet) decodeTransactionWithTxSummary(txSummary *w.TransactionSum
 			Index:     int32(output.Index),
 			AmountOut: int64(output.Amount),
 			Internal:  output.Internal,
-			Address:   output.Address.Address(),
+			Address:   output.Address.String(),
 			WalletAccount: &WalletAccount{
 				AccountNumber: accountNumber,
 				AccountName:   accountName,

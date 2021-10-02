@@ -3,13 +3,13 @@ package dcrlibwallet
 import (
 	"fmt"
 
-	"decred.org/dcrwallet/wallet"
-	"github.com/decred/dcrd/blockchain/stake/v3"
+	"decred.org/dcrwallet/v2/wallet"
+	"github.com/decred/dcrd/blockchain/stake/v4"
 	"github.com/decred/dcrd/chaincfg/v3"
-	"github.com/decred/dcrd/dcrutil/v3"
-	"github.com/decred/dcrd/txscript/v3"
+	"github.com/decred/dcrd/dcrutil/v4"
+	"github.com/decred/dcrd/txscript/v4"
 	"github.com/decred/dcrd/wire"
-	"github.com/decred/dcrdata/txhelpers/v4"
+	"github.com/decred/dcrdata/v7/txhelpers"
 	"github.com/planetdecred/dcrlibwallet/txhelper"
 )
 
@@ -30,7 +30,7 @@ func (w *Wallet) DecodeTransaction(walletTx *TxInfoFromWallet, netParams *chainc
 	ssGenVersion, lastBlockValid, voteBits, ticketSpentHash := voteInfo(msgTx)
 
 	// ticketSpentHash will be empty if this isn't a vote tx
-	if stake.IsSSRtx(msgTx) {
+	if txhelpers.IsSSRtx(msgTx) {
 		ticketSpentHash = msgTx.TxIn[0].PreviousOutPoint.Hash.String()
 		// set first tx input as amount for revoked txs
 		amount = msgTx.TxIn[0].ValueIn
@@ -116,7 +116,7 @@ func (wallet *Wallet) decodeTxInputs(mtx *wire.MsgTx, walletInputs []*WalletInpu
 func (wallet *Wallet) decodeTxOutputs(mtx *wire.MsgTx, netParams *chaincfg.Params,
 	walletOutputs []*WalletOutput) (outputs []*TxOutput, totalWalletOutput, totalWalletMixedOutputs int64, mixedOutputsCount int32) {
 	outputs = make([]*TxOutput, len(mtx.TxOut))
-	txType := stake.DetermineTxType(mtx, true)
+	txType := txhelpers.DetermineTxType(mtx, true)
 	mixedAccountNumber := wallet.ReadInt32ConfigValueForKey(AccountMixerMixedAccount, -1)
 
 	for i, txOut := range mtx.TxOut {
@@ -125,7 +125,7 @@ func (wallet *Wallet) decodeTxOutputs(mtx *wire.MsgTx, netParams *chaincfg.Param
 		if (txType == stake.TxTypeSStx) && (stake.IsStakeSubmissionTxOut(i)) {
 			addr, err := stake.AddrFromSStxPkScrCommitment(txOut.PkScript, netParams)
 			if err == nil {
-				address = addr.Address()
+				address = addr.String()
 			}
 			scriptType = txscript.StakeSubmissionTy.String()
 		} else {
@@ -134,7 +134,7 @@ func (wallet *Wallet) decodeTxOutputs(mtx *wire.MsgTx, netParams *chaincfg.Param
 			// about it anyways.
 			scriptClass, addrs, _, _ := txscript.ExtractPkScriptAddrs(txOut.Version, txOut.PkScript, netParams, true)
 			if len(addrs) > 0 {
-				address = addrs[0].Address()
+				address = addrs[0].String()
 			}
 			scriptType = scriptClass.String()
 		}

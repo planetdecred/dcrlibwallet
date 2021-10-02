@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"decred.org/dcrwallet/errors"
-	w "decred.org/dcrwallet/wallet"
+	"decred.org/dcrwallet/v2/errors"
+	w "decred.org/dcrwallet/v2/wallet"
 	"github.com/asdine/storm"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/kevinburke/nacl"

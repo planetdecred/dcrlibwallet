@@ -11,11 +11,12 @@ import (
 	"path/filepath"
 	"sync"
 
-	"decred.org/dcrwallet/errors"
-	"decred.org/dcrwallet/wallet"
-	_ "decred.org/dcrwallet/wallet/drivers/bdb" // driver loaded during init
+	"decred.org/dcrwallet/v2/errors"
+	"decred.org/dcrwallet/v2/wallet"
+	_ "decred.org/dcrwallet/v2/wallet/drivers/bdb" // driver loaded during init
 	"github.com/decred/dcrd/chaincfg/v3"
-	"github.com/decred/dcrd/dcrutil/v3"
+	"github.com/decred/dcrd/dcrutil/v4"
+	"github.com/decred/dcrd/txscript/v4/stdaddr"
 	_ "github.com/planetdecred/dcrlibwallet/badgerdb" // initialize badger driver
 )
 
@@ -53,8 +54,8 @@ type Loader struct {
 type StakeOptions struct {
 	VotingEnabled       bool
 	AddressReuse        bool
-	VotingAddress       dcrutil.Address
-	PoolAddress         dcrutil.Address
+	VotingAddress       stdaddr.StakeAddress
+	PoolAddress         stdaddr.StakeAddress
 	PoolFees            float64
 	StakePoolColdExtKey string
 }

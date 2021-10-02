@@ -8,12 +8,12 @@ package dcrlibwallet
 import (
 	"os"
 
-	"decred.org/dcrwallet/errors"
-	"decred.org/dcrwallet/p2p"
-	"decred.org/dcrwallet/ticketbuyer"
-	"decred.org/dcrwallet/wallet"
-	"decred.org/dcrwallet/wallet/udb"
-	"github.com/decred/dcrd/addrmgr"
+	"decred.org/dcrwallet/v2/errors"
+	"decred.org/dcrwallet/v2/p2p"
+	"decred.org/dcrwallet/v2/ticketbuyer"
+	"decred.org/dcrwallet/v2/wallet"
+	"decred.org/dcrwallet/v2/wallet/udb"
+	"github.com/decred/dcrd/addrmgr/v2"
 	"github.com/decred/dcrd/connmgr/v3"
 	"github.com/decred/slog"
 	"github.com/jrick/logrotate/rotator"

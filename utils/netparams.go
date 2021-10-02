@@ -3,7 +3,7 @@ package utils
 import (
 	"strings"
 
-	"decred.org/dcrwallet/errors"
+	"decred.org/dcrwallet/v2/errors"
 	"github.com/decred/dcrd/chaincfg/v3"
 )
 

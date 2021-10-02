@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"decred.org/dcrwallet/errors"
+	"decred.org/dcrwallet/v2/errors"
 	"github.com/asdine/storm"
 )
 
