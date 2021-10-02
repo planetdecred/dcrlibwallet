@@ -29,4 +29,4 @@ require (
 
 replace github.com/decred/dcrdata/v7 => github.com/itswisdomagain/dcrdata/v7 v7.0.0-20211002100236-612d26588379
 
-go 1.13
+go 1.16
