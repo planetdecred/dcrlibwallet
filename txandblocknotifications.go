@@ -10,7 +10,7 @@ func (mw *MultiWallet) listenForTransactions(walletID int) {
 	go func() {
 
 		wallet := mw.wallets[walletID]
-		n := wallet.internal.NtfnServer.TransactionNotifications()
+		n := wallet.Internal().NtfnServer.TransactionNotifications()
 
 		for {
 			select {

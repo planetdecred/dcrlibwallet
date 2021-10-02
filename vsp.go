@@ -59,7 +59,7 @@ func (mw *MultiWallet) NewVSPClient(vspHost string, walletID int, purchaseAccoun
 	ctx, cancel := mw.contextWithShutdownCancel()
 	mw.cancelFuncs = append(mw.cancelFuncs, cancel)
 
-	v.vspClient = newVSPClient(vspHost, nil, sourceWallet.internal)
+	v.vspClient = newVSPClient(vspHost, nil, sourceWallet.Internal())
 	vspInfo, err := v.GetInfo(ctx)
 	if err != nil {
 		return nil, err
@@ -96,12 +96,12 @@ func (v *VSP) PurchaseTickets(ticketCount, expiryBlocks int32, passphrase []byte
 		VSPFeePaymentProcess: v.ProcessFee,
 	}
 
-	networkBackend, err := v.w.internal.NetworkBackend()
+	networkBackend, err := v.w.Internal().NetworkBackend()
 	if err != nil {
 		return err
 	}
 
-	_, err = v.w.internal.PurchaseTickets(v.ctx, networkBackend, request)
+	_, err = v.w.Internal().PurchaseTickets(v.ctx, networkBackend, request)
 	if err != nil {
 		return err
 	}
@@ -133,7 +133,7 @@ func (v *VSP) ProcessFee(ctx context.Context, ticketHash *chainhash.Hash, feeTx 
 	// outputs would already be reserved.
 	if len(feeTx.TxIn) == 0 {
 		const minconf = 1
-		inputs, err := v.w.internal.ReserveOutputsForAmount(ctx, v.purchaseAccount, feeAmount, minconf)
+		inputs, err := v.w.Internal().ReserveOutputsForAmount(ctx, v.purchaseAccount, feeAmount, minconf)
 		if err != nil {
 			return fmt.Errorf("unable to reserve enough output value to "+
 				"pay VSP fee for ticket %v: %w", ticketHash, err)
@@ -145,7 +145,7 @@ func (v *VSP) ProcessFee(ctx context.Context, ticketHash *chainhash.Hash, feeTx 
 		// state, so there is no need to leave the outputs locked.
 		defer func() {
 			for _, in := range inputs {
-				v.w.internal.UnlockOutpoint(&in.OutPoint.Hash, in.OutPoint.Index)
+				v.w.Internal().UnlockOutpoint(&in.OutPoint.Hash, in.OutPoint.Index)
 			}
 		}()
 	}
@@ -166,12 +166,12 @@ func (v *VSP) ProcessFee(ctx context.Context, ticketHash *chainhash.Hash, feeTx 
 	}
 	// set fee tx as unpublished, because it will be published by the vsp.
 	feeHash := feeTx.TxHash()
-	err = v.w.internal.AddTransaction(ctx, feeTx, nil)
+	err = v.w.Internal().AddTransaction(ctx, feeTx, nil)
 	if err != nil {
 		return err
 	}
 
-	err = v.w.internal.SetPublished(ctx, &feeHash, false)
+	err = v.w.Internal().SetPublished(ctx, &feeHash, false)
 	if err != nil {
 		return err
 	}
@@ -181,7 +181,7 @@ func (v *VSP) ProcessFee(ctx context.Context, ticketHash *chainhash.Hash, feeTx 
 		return err
 	}
 
-	err = v.w.internal.UpdateVspTicketFeeToPaid(ctx, ticketHash, &feeHash, v.url, v.pub)
+	err = v.w.Internal().UpdateVspTicketFeeToPaid(ctx, ticketHash, &feeHash, v.url, v.pub)
 	if err != nil {
 		return err
 	}
@@ -212,7 +212,7 @@ func (v *VSP) CreateFeeTx(ctx context.Context, ticketHash chainhash.Hash, tx *wi
 	// Reserve outputs to pay for fee if it hasn't already been reserved
 	if len(tx.TxIn) == 0 {
 		const minConf = 1
-		inputs, err := v.w.internal.ReserveOutputsForAmount(ctx, v.purchaseAccount, feeInfo.FeeAmount, minConf)
+		inputs, err := v.w.Internal().ReserveOutputsForAmount(ctx, v.purchaseAccount, feeInfo.FeeAmount, minConf)
 		if err != nil {
 			return fmt.Errorf("unable to reserve enough output value to "+
 				"pay VSP fee for ticket %v: %w", ticketHash, err)
@@ -224,7 +224,7 @@ func (v *VSP) CreateFeeTx(ctx context.Context, ticketHash chainhash.Hash, tx *wi
 
 		defer func() {
 			for _, in := range inputs {
-				v.w.internal.UnlockOutpoint(&in.OutPoint.Hash, in.OutPoint.Index)
+				v.w.Internal().UnlockOutpoint(&in.OutPoint.Hash, in.OutPoint.Index)
 			}
 		}()
 	}
@@ -241,7 +241,7 @@ func (v *VSP) CreateFeeTx(ctx context.Context, ticketHash chainhash.Hash, tx *wi
 	}
 
 	_, feeScript := feeInfo.FeeAddress.PaymentScript()
-	addr, err := v.w.internal.NewChangeAddress(ctx, v.changeAccount)
+	addr, err := v.w.Internal().NewChangeAddress(ctx, v.changeAccount)
 	if err != nil {
 		return errors.Errorf("failed to get new change address: %v", err)
 	}
@@ -256,7 +256,7 @@ func (v *VSP) CreateFeeTx(ctx context.Context, ticketHash chainhash.Hash, tx *wi
 	}
 
 	tx.TxOut = append(tx.TxOut[:0], wire.NewTxOut(int64(feeInfo.FeeAmount), feeScript))
-	feeRate := v.w.internal.RelayFee()
+	feeRate := v.w.Internal().RelayFee()
 	scriptSizes := make([]int, len(tx.TxIn))
 	for i := range scriptSizes {
 		scriptSizes[i] = txsizes.RedeemP2PKHSigScriptSize
@@ -272,7 +272,7 @@ func (v *VSP) CreateFeeTx(ctx context.Context, ticketHash chainhash.Hash, tx *wi
 		txauthor.RandomizeOutputPosition(tx.TxOut, 0)
 	}
 
-	sigErrs, err := v.w.internal.SignTransaction(ctx, tx, txscript.SigHashAll, nil, nil, nil)
+	sigErrs, err := v.w.Internal().SignTransaction(ctx, tx, txscript.SigHashAll, nil, nil, nil)
 	if err != nil {
 		for _, sigErr := range sigErrs {
 			log.Errorf("\t%v", sigErr)
@@ -297,13 +297,13 @@ func (v *VSP) PayFee(ctx context.Context, ticketHash chainhash.Hash, feeTx *wire
 		return fmt.Errorf("call GetFeeAddress first")
 	}
 
-	votingKeyWIF, err := v.w.internal.DumpWIFPrivateKey(ctx, feeInfo.VotingAddress)
+	votingKeyWIF, err := v.w.Internal().DumpWIFPrivateKey(ctx, feeInfo.VotingAddress)
 	if err != nil {
 		return errors.Errorf("failed to retrieve privkey for %v: %v", feeInfo.VotingAddress, err)
 	}
 
 	// Retrieve voting preferences
-	agendaChoices, _, err := v.w.internal.AgendaChoices(ctx, &ticketHash)
+	agendaChoices, _, err := v.w.Internal().AgendaChoices(ctx, &ticketHash)
 	if err != nil {
 		return errors.Errorf("failed to retrieve agenda choices for %v: %v", ticketHash, err)
 	}
@@ -356,7 +356,7 @@ func (v *VSP) GetInfo(ctx context.Context) (*VspInfoResponse, error) {
 }
 
 func (v *VSP) tx(hash *chainhash.Hash) (*wire.MsgTx, error) {
-	txs, _, err := v.w.internal.GetTransactionsByHashes(v.ctx, []*chainhash.Hash{hash})
+	txs, _, err := v.w.Internal().GetTransactionsByHashes(v.ctx, []*chainhash.Hash{hash})
 	if err != nil {
 		return nil, err
 	}
@@ -365,7 +365,7 @@ func (v *VSP) tx(hash *chainhash.Hash) (*wire.MsgTx, error) {
 
 func (v *VSP) GetFeeAddress(ctx context.Context, ticketHash chainhash.Hash) (dcrutil.Amount, error) {
 	// Fetch ticket
-	txs, _, err := v.w.internal.GetTransactionsByHashes(ctx, []*chainhash.Hash{&ticketHash})
+	txs, _, err := v.w.Internal().GetTransactionsByHashes(ctx, []*chainhash.Hash{&ticketHash})
 	if err != nil {
 		return 0, errors.Errorf("failed to retrieve ticket %v: %v", ticketHash, err)
 	}
@@ -375,7 +375,7 @@ func (v *VSP) GetFeeAddress(ctx context.Context, ticketHash chainhash.Hash) (dcr
 	parentHash := ticketTx.TxIn[0].PreviousOutPoint.Hash
 	const scriptVersion = 0
 	_, addrs, _, err := txscript.ExtractPkScriptAddrs(scriptVersion,
-		ticketTx.TxOut[0].PkScript, v.w.internal.ChainParams(), true) // Yes treasury
+		ticketTx.TxOut[0].PkScript, v.w.Internal().ChainParams(), true) // Yes treasury
 	if err != nil {
 		return 0, errors.Errorf("failed to extract stake submission address from %v: %v", ticketHash, err)
 	}
@@ -424,7 +424,7 @@ func (v *VSP) GetFeeAddress(ctx context.Context, ticketHash chainhash.Hash) (dcr
 	}
 	// TODO - validate server timestamp?
 
-	feeAddress, err := stdaddr.DecodeAddress(feeResponse.FeeAddress, v.w.internal.ChainParams())
+	feeAddress, err := stdaddr.DecodeAddress(feeResponse.FeeAddress, v.w.Internal().ChainParams())
 	if err != nil {
 		return 0, fmt.Errorf("server fee address invalid: %v", err)
 	}
