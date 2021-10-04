@@ -374,7 +374,7 @@ func (w *SpvWallet) SignRawTransaction(ctx context.Context, tx *wire.MsgTx) (*wa
 func (w *SpvWallet) SendRawTransaction(ctx context.Context, tx *wire.MsgTx, allowHighFees bool) (*chainhash.Hash, error) {
 	n, err := w.Wallet.NetworkBackend()
 	if err != nil {
-		return nil, fmt.Errorf("wallet network backend error: %w", err)
+		return nil, err
 	}
 
 	if !allowHighFees {
@@ -472,7 +472,7 @@ func (w *SpvWallet) GetBlockHeaderVerbose(ctx context.Context, blockHash *chainh
 func (w *SpvWallet) GetBlockVerbose(ctx context.Context, blockHash *chainhash.Hash, verboseTx bool) (*chainjson.GetBlockVerboseResult, error) {
 	n, err := w.Wallet.NetworkBackend()
 	if err != nil {
-		return nil, fmt.Errorf("wallet network backend error: %w", err)
+		return nil, err
 	}
 
 	blocks, err := n.Blocks(ctx, []*chainhash.Hash{blockHash})
