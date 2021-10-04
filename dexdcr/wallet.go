@@ -68,8 +68,6 @@ func NewWallet(w *wallet.Wallet, desc string) *SpvWallet {
 // interface.
 var _ dcr.Wallet = (*SpvWallet)(nil)
 
-var notImplemented = fmt.Errorf("not yet implemented")
-
 // Initialize prepares the wallet for use.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
 func (w *SpvWallet) Initialize(cfg *asset.WalletConfig, dcrCfg *dcr.Config, chainParams *chaincfg.Params, logger dex.Logger) error {
@@ -595,19 +593,19 @@ func createTxRawResult(chainParams *chaincfg.Params, mtx *wire.MsgTx, blkIdx uin
 	}
 
 	txReply := &chainjson.TxRawResult{
-		Hex:         b.String(),
-		Txid:        mtx.CachedTxHash().String(),
-		Vin:         createVinList(mtx, isTreasuryEnabled),
-		Vout:        createVoutList(mtx, chainParams, nil, isTreasuryEnabled, log),
-		Version:     int32(mtx.Version),
-		LockTime:    mtx.LockTime,
-		Expiry:      mtx.Expiry,
-		BlockHeight: int64(blkHeader.Height),
-		BlockIndex:  blkIdx,
+		Hex:        b.String(),
+		Txid:       mtx.CachedTxHash().String(),
+		Vin:        createVinList(mtx, isTreasuryEnabled),
+		Vout:       createVoutList(mtx, chainParams, nil, isTreasuryEnabled, log),
+		Version:    int32(mtx.Version),
+		LockTime:   mtx.LockTime,
+		Expiry:     mtx.Expiry,
+		BlockIndex: blkIdx,
 	}
 
 	if blkHeader != nil {
 		// This is not a typo, they are identical in bitcoind as well.
+		txReply.BlockHeight = int64(blkHeader.Height)
 		txReply.Time = blkHeader.Timestamp.Unix()
 		txReply.Blocktime = blkHeader.Timestamp.Unix()
 		txReply.BlockHash = blkHeader.BlockHash().String()
@@ -813,7 +811,79 @@ func difficultyRatio(bits uint32, params *chaincfg.Params, log slog.Logger) floa
 // found in the wallet.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
 func (w *SpvWallet) GetTransaction(ctx context.Context, txHash *chainhash.Hash) (*walletjson.GetTransactionResult, error) {
-	return nil, notImplemented
+	txd, err := wallet.UnstableAPI(w.Wallet).TxDetails(ctx, txHash)
+	if errors.Is(err, errors.NotExist) {
+		return nil, asset.CoinNotFoundError
+	} else if err != nil {
+		return nil, err
+	}
+
+	_, tipHeight := w.Wallet.MainChainTip(ctx)
+
+	var b strings.Builder
+	b.Grow(2 * txd.MsgTx.SerializeSize())
+	err = txd.MsgTx.Serialize(hex.NewEncoder(&b))
+	if err != nil {
+		return nil, err
+	}
+
+	getTxResult := &walletjson.GetTransactionResult{
+		TxID:            txHash.String(),
+		Hex:             b.String(),
+		Time:            txd.Received.Unix(),
+		TimeReceived:    txd.Received.Unix(),
+		WalletConflicts: []string{}, // Not saved
+	}
+
+	if txd.Block.Height != -1 {
+		getTxResult.BlockHash = txd.Block.Hash.String()
+		getTxResult.BlockTime = txd.Block.Time.Unix()
+		getTxResult.Confirmations = int64(confirms(txd.Block.Height,
+			tipHeight))
+	}
+
+	var (
+		debitTotal  dcrutil.Amount
+		creditTotal dcrutil.Amount
+		fee         dcrutil.Amount
+		negFeeF64   float64
+	)
+	for _, deb := range txd.Debits {
+		debitTotal += deb.Amount
+	}
+	for _, cred := range txd.Credits {
+		creditTotal += cred.Amount
+	}
+	// Fee can only be determined if every input is a debit.
+	if len(txd.Debits) == len(txd.MsgTx.TxIn) {
+		var outputTotal dcrutil.Amount
+		for _, output := range txd.MsgTx.TxOut {
+			outputTotal += dcrutil.Amount(output.Value)
+		}
+		fee = debitTotal - outputTotal
+		negFeeF64 = (-fee).ToCoin()
+	}
+	getTxResult.Amount = (creditTotal - debitTotal).ToCoin()
+	getTxResult.Fee = negFeeF64
+
+	details, err := w.Wallet.ListTransactionDetails(ctx, txHash)
+	if err != nil {
+		return nil, err
+	}
+	getTxResult.Details = make([]walletjson.GetTransactionDetailsResult, len(details))
+	for i, d := range details {
+		getTxResult.Details[i] = walletjson.GetTransactionDetailsResult{
+			Account:           d.Account,
+			Address:           d.Address,
+			Amount:            d.Amount,
+			Category:          d.Category,
+			InvolvesWatchOnly: d.InvolvesWatchOnly,
+			Fee:               d.Fee,
+			Vout:              d.Vout,
+		}
+	}
+
+	return getTxResult, nil
 }
 
 // GetRawTransactionVerbose returns details of the tx with the provided hash.
@@ -821,14 +891,16 @@ func (w *SpvWallet) GetTransaction(ctx context.Context, txHash *chainhash.Hash) 
 // always return a not-supported error.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
 func (w *SpvWallet) GetRawTransactionVerbose(ctx context.Context, txHash *chainhash.Hash) (*chainjson.TxRawResult, error) {
-	return nil, notImplemented
+	return nil, fmt.Errorf("getrawtransaction not supported by spv wallets")
 }
 
 // GetRawMempool returns hashes for all txs of the specified type in the node's
 // mempool.
+// NOTE: SPV wallets do not have a mempool so this will always return a
+// not-supported error.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
 func (w *SpvWallet) GetRawMempool(ctx context.Context, txType chainjson.GetRawMempoolTxTypeCmd) ([]*chainhash.Hash, error) {
-	return nil, notImplemented
+	return nil, fmt.Errorf("getrawmempool not supported by spv wallets")
 }
 
 // GetBestBlock returns the hash and height of the wallet's best block.
@@ -841,13 +913,23 @@ func (w *SpvWallet) GetBestBlock(ctx context.Context) (*chainhash.Hash, int64, e
 // GetBlockHash returns the hash of the mainchain block at the specified height.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
 func (w *SpvWallet) GetBlockHash(ctx context.Context, blockHeight int64) (*chainhash.Hash, error) {
-	return nil, notImplemented
+	id := wallet.NewBlockIdentifierFromHeight(int32(blockHeight))
+	info, err := w.Wallet.BlockInfo(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	blockHash := info.Hash
+	return &blockHash, nil
 }
 
 // BlockCFilter fetches the block filter info for the specified block.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) BlockCFilter(ctx context.Context, blockHash string) (filter, key string, err error) {
-	return "", "", notImplemented
+func (w *SpvWallet) BlockCFilter(ctx context.Context, blockHash *chainhash.Hash) (filter, key string, err error) {
+	keyB, cFilter, err := w.Wallet.CFilterV2(ctx, blockHash)
+	if err != nil {
+		return "", "", err
+	}
+	return hex.EncodeToString(cFilter.Bytes()), hex.EncodeToString(keyB[:]), nil
 }
 
 // LockWallet locks the wallet.
@@ -912,13 +994,24 @@ func (w *SpvWallet) LockAccount(ctx context.Context, account string) error {
 // UnlockAccount unlocks the specified account.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
 func (w *SpvWallet) UnlockAccount(ctx context.Context, account, passphrase string) error {
-	return notImplemented
+	accountNumber, err := w.accountNumber(ctx, account)
+	if err != nil {
+		return err
+	}
+	return w.Wallet.UnlockAccount(ctx, accountNumber, []byte(passphrase))
 }
 
 // AddressPrivKey fetches the privkey for the specified address.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
 func (w *SpvWallet) AddressPrivKey(ctx context.Context, address stdaddr.Address) (*dcrutil.WIF, error) {
-	return nil, notImplemented
+	key, err := w.Wallet.DumpWIFPrivateKey(ctx, address)
+	if err != nil {
+		if errors.Is(err, errors.Locked) {
+			return nil, fmt.Errorf("wallet or account locked, unlock first")
+		}
+		return nil, err
+	}
+	return dcrutil.DecodeWIF(key, w.chainParams.PrivateKeyID)
 }
 
 func (w *SpvWallet) accountNumber(ctx context.Context, account string) (uint32, error) {
