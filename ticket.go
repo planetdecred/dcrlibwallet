@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"decred.org/dcrwallet/errors"
+	"decred.org/dcrwallet/v2/errors"
 	"github.com/planetdecred/dcrlibwallet/utils"
 )
 

@@ -1,7 +1,7 @@
 package dcrlibwallet
 
 import (
-	w "decred.org/dcrwallet/wallet"
+	w "decred.org/dcrwallet/v2/wallet"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/planetdecred/dcrlibwallet/walletdata"
 )

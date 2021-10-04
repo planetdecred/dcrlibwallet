@@ -423,7 +423,7 @@ func (p *Politeia) ProposalVoteDetailsRaw(walletID int, token string) (*Proposal
 
 		eligibleticket := &EligibleTicket{
 			Hash:    ticketHashes[i].String(),
-			Address: addresses[i].Address(),
+			Address: addresses[i].String(),
 		}
 
 		ainfo, err := wal.AddressInfo(eligibleticket.Address)

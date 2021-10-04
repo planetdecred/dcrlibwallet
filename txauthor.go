@@ -8,13 +8,14 @@ import (
 	"strings"
 	"time"
 
-	"decred.org/dcrwallet/errors"
-	w "decred.org/dcrwallet/wallet"
-	"decred.org/dcrwallet/wallet/txauthor"
-	"decred.org/dcrwallet/wallet/txrules"
+	"decred.org/dcrwallet/v2/errors"
+	w "decred.org/dcrwallet/v2/wallet"
+	"decred.org/dcrwallet/v2/wallet/txauthor"
+	"decred.org/dcrwallet/v2/wallet/txrules"
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrd/dcrutil/v3"
-	"github.com/decred/dcrd/txscript/v3"
+	"github.com/decred/dcrd/dcrutil/v4"
+	"github.com/decred/dcrd/txscript/v4"
+	"github.com/decred/dcrd/txscript/v4/stdaddr"
 	"github.com/decred/dcrd/wire"
 	"github.com/planetdecred/dcrlibwallet/txhelper"
 )
@@ -51,7 +52,7 @@ func (mw *MultiWallet) NewUnsignedTx(walletID int, sourceAccountNumber int32) (*
 }
 
 func (tx *TxAuthor) AddSendDestination(address string, atomAmount int64, sendMax bool) error {
-	_, err := dcrutil.DecodeAddress(address, tx.sourceWallet.chainParams)
+	_, err := stdaddr.DecodeAddress(address, tx.sourceWallet.chainParams)
 	if err != nil {
 		return translateError(err)
 	}

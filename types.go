@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrd/dcrutil/v3"
+	"github.com/decred/dcrd/dcrutil/v4"
+	"github.com/decred/dcrd/txscript/v4/stdaddr"
 	"github.com/decred/dcrd/wire"
 
-	"decred.org/dcrwallet/wallet"
+	"decred.org/dcrwallet/v2/wallet"
 )
 
 type WalletsIterator struct {
@@ -464,9 +465,9 @@ type FeeAddressRequest struct {
 }
 
 type PendingFee struct {
-	CommitmentAddress dcrutil.Address
-	VotingAddress     dcrutil.Address
-	FeeAddress        dcrutil.Address
+	CommitmentAddress stdaddr.Address
+	VotingAddress     stdaddr.Address
+	FeeAddress        stdaddr.Address
 	FeeAmount         dcrutil.Amount
 	FeeTx             *wire.MsgTx
 }

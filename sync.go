@@ -9,10 +9,10 @@ import (
 	"strings"
 	"sync"
 
-	"decred.org/dcrwallet/errors"
-	"decred.org/dcrwallet/p2p"
-	w "decred.org/dcrwallet/wallet"
-	"github.com/decred/dcrd/addrmgr"
+	"decred.org/dcrwallet/v2/errors"
+	"decred.org/dcrwallet/v2/p2p"
+	w "decred.org/dcrwallet/v2/wallet"
+	"github.com/decred/dcrd/addrmgr/v2"
 	"github.com/planetdecred/dcrlibwallet/spv"
 )
 

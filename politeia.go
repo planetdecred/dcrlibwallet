@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	"decred.org/dcrwallet/errors"
+	"decred.org/dcrwallet/v2/errors"
 	"github.com/asdine/storm"
 	"github.com/asdine/storm/q"
 )
