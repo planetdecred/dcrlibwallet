@@ -943,8 +943,11 @@ func (w *SpvWallet) LockWallet(_ context.Context) error {
 // UnlockWallet unlocks the wallet.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
 func (w *SpvWallet) UnlockWallet(ctx context.Context, passphrase string, timeoutSecs int64) error {
-	timeout := time.Second * time.Duration(timeoutSecs)
-	lockAfter := time.After(timeout)
+	var lockAfter <-chan time.Time
+	if timeoutSecs != 0 {
+		timeout := time.Second * time.Duration(timeoutSecs)
+		lockAfter = time.After(timeout)
+	}
 	return w.Wallet.Unlock(ctx, []byte(passphrase), lockAfter)
 }
 
