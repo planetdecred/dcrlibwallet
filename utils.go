@@ -331,7 +331,7 @@ func s(x float64) string {
 }
 
 // TimeElapsed returns the formatted time diffrence between two times as a string.
-// If the argument `fullTime` is set to true, then the full time availabe is returned e.g 3 hours, 2 minutes, 20 seconds ago,
+// If the argument `fullTime` is set to true, then the full time available is returned e.g 3 hours, 2 minutes, 20 seconds ago,
 // as opposed to 3 hours ago.
 // If the argument `abbreviationFormat` is set to `long` the time format is e.g 2 minutes
 // If the argument `abbreviationFormat` is set to `short` the time format is e.g 2 mins
