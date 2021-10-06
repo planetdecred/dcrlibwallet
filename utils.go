@@ -330,7 +330,13 @@ func s(x float64) string {
 	return "s"
 }
 
-func TimeElapsed(now time.Time, then time.Time, full bool) string {
+// TimeElapsed returns the formatted time diffrence between two times as a string.
+// If the argument `fullTime` is set to true, then the full time availabe is returned e.g 3 hours, 2 minutes, 20 seconds ago, 
+// as opposed to 3 hours ago.
+// If the argument `abbreviationFormat` is set to `long` the time format is e.g 2 minutes
+// If the argument `abbreviationFormat` is set to `short` the time format is e.g 2 mins
+// If the argument `abbreviationFormat` is set to `shortest` the time format is e.g 2 m
+func TimeElapsed(now, then time.Time, abbreviationFormat string, fullTime bool) string {
 	var parts []string
 	var text string
 
@@ -350,31 +356,73 @@ func TimeElapsed(now time.Time, then time.Time, full bool) string {
 	week := math.Floor(day / 7)
 
 	if year > 0 {
-		parts = append(parts, strconv.Itoa(int(year))+" year"+s(year))
+		if abbreviationFormat == "long" {
+			parts = append(parts, strconv.Itoa(int(year)) + " year" + s(year))
+		} else if abbreviationFormat == "short" {
+			parts = append(parts, strconv.Itoa(int(year)) + " yr" + s(year))
+		} else if abbreviationFormat == "shortest" {
+			parts = append(parts, strconv.Itoa(int(year)) + " y")
+		}
 	}
 
 	if month > 0 {
-		parts = append(parts, strconv.Itoa(int(month))+" month"+s(month))
+		if abbreviationFormat == "long" {
+			parts = append(parts, strconv.Itoa(int(month)) + " month" + s(month))
+		} else if abbreviationFormat == "short" {
+			parts = append(parts, strconv.Itoa(int(month)) + " mon" + s(month))
+		} else if abbreviationFormat == "shortest" {
+			parts = append(parts, strconv.Itoa(int(month)) + " m")
+		}
 	}
 
 	if week > 0 {
-		parts = append(parts, strconv.Itoa(int(week))+" week"+s(week))
+		if abbreviationFormat == "long" {
+			parts = append(parts, strconv.Itoa(int(week)) + " week" + s(week))
+		} else if abbreviationFormat == "short" {
+			parts = append(parts, strconv.Itoa(int(week)) + " wk" + s(week))
+		} else if abbreviationFormat == "shortest" {
+			parts = append(parts, strconv.Itoa(int(week)) + " w")
+		}
 	}
 
 	if day > 0 {
-		parts = append(parts, strconv.Itoa(int(day))+" day"+s(day))
+		if abbreviationFormat == "long" {
+			parts = append(parts, strconv.Itoa(int(day)) + " day" + s(day))
+		} else if abbreviationFormat == "short" {
+			parts = append(parts, strconv.Itoa(int(day)) + " dy" + s(day))
+		} else if abbreviationFormat == "shortest" {
+			parts = append(parts, strconv.Itoa(int(day)) + " d")
+		}
 	}
 
 	if hour > 0 {
-		parts = append(parts, strconv.Itoa(int(hour))+" hour"+s(hour))
+		if abbreviationFormat == "long" {
+			parts = append(parts, strconv.Itoa(int(hour)) + " hour" + s(hour))
+		} else if abbreviationFormat == "short" {
+			parts = append(parts, strconv.Itoa(int(hour)) + " hr" + s(hour))
+		} else if abbreviationFormat == "shortest" {
+			parts = append(parts, strconv.Itoa(int(hour)) + " h")
+		}
 	}
 
 	if minute > 0 {
-		parts = append(parts, strconv.Itoa(int(minute))+" minute"+s(minute))
+		if abbreviationFormat == "long" {
+			parts = append(parts, strconv.Itoa(int(minute)) + " minute" + s(minute))
+		} else if abbreviationFormat == "short" {
+			parts = append(parts, strconv.Itoa(int(minute)) + " min" + s(minute))
+		} else if abbreviationFormat == "shortest" {
+			parts = append(parts, strconv.Itoa(int(minute)) + " mi")
+		}
 	}
 
 	if second > 0 {
-		parts = append(parts, strconv.Itoa(int(second))+" second"+s(second))
+		if abbreviationFormat == "long" {
+			parts = append(parts, strconv.Itoa(int(second)) + " second" + s(second))
+		} else if abbreviationFormat == "short" {
+			parts = append(parts, strconv.Itoa(int(second)) + " sec" + s(second))
+		} else if abbreviationFormat == "shortest" {
+			parts = append(parts, strconv.Itoa(int(second)) + " s")
+		}
 	}
 
 	if now.After(then) {
@@ -387,7 +435,7 @@ func TimeElapsed(now time.Time, then time.Time, full bool) string {
 		return "just now"
 	}
 
-	if full {
+	if fullTime {
 		return strings.Join(parts, ", ") + text
 	}
 	return parts[0] + text
