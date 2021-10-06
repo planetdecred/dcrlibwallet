@@ -62,15 +62,15 @@ func (p *Politeia) Sync() error {
 		}
 
 		log.Info("Politeia sync: update complete")
-		p.lastSyncedTimestamp = time.Now()
+		now := time.Now()
+		p.lastSyncedTimestamp = now.Unix()
 		p.publishSynced()
 		return nil
 	}
 }
 
-func (p *Politeia) GetLastSyncedTimeStamp() string {
-	currentTime := time.Now()
-	return TimeElapsed(currentTime, p.lastSyncedTimestamp, false)
+func (p *Politeia) GetLastSyncedTimeStamp() int64 {
+	return p.lastSyncedTimestamp
 }
 
 func (p *Politeia) IsSyncing() bool {

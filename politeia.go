@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
-	"time"
 
 	"decred.org/dcrwallet/v2/errors"
 	"github.com/asdine/storm"
@@ -19,7 +18,7 @@ type Politeia struct {
 	ctx                     context.Context
 	cancelSync              context.CancelFunc
 	client                  *politeiaClient
-	lastSyncedTimestamp     time.Time
+	lastSyncedTimestamp     int64
 	notificationListenersMu sync.RWMutex
 	notificationListeners   map[string]ProposalNotificationListener
 }
