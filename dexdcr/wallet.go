@@ -337,21 +337,22 @@ func (w *SpvWallet) SignRawTransaction(ctx context.Context, tx *wire.MsgTx) (*wa
 		return nil, fmt.Errorf("transaction with no inputs cannot be signed")
 	}
 
-	signErrs, err := w.Wallet.SignTransaction(ctx, tx, txscript.SigHashAll, nil, nil, nil)
+	mtx := tx.Copy() // deep copy to prevent modifications
+	signErrs, err := w.Wallet.SignTransaction(ctx, mtx, txscript.SigHashAll, nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	var b strings.Builder
-	b.Grow(2 * tx.SerializeSize())
-	err = tx.Serialize(hex.NewEncoder(&b))
+	b.Grow(2 * mtx.SerializeSize())
+	err = mtx.Serialize(hex.NewEncoder(&b))
 	if err != nil {
 		return nil, err
 	}
 
 	signErrors := make([]walletjson.SignRawTransactionError, 0, len(signErrs))
 	for _, e := range signErrs {
-		input := tx.TxIn[e.InputIndex]
+		input := mtx.TxIn[e.InputIndex]
 		signErrors = append(signErrors, walletjson.SignRawTransactionError{
 			TxID:      input.PreviousOutPoint.Hash.String(),
 			Vout:      input.PreviousOutPoint.Index,
