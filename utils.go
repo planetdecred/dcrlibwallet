@@ -45,6 +45,10 @@ const (
 	LegacyMainnetHDPath = "m / 44’ / 20’ / "
 
 	DefaultRequiredConfirmations = 2
+
+	LongAbbreviationFormat     = "long"
+	ShortAbbreviationFormat    = "short"
+	ShortestAbbreviationFormat = "shortest"
 )
 
 func (mw *MultiWallet) RequiredConfirmations() int32 {
@@ -358,71 +362,71 @@ func TimeElapsed(now, then time.Time, abbreviationFormat string, fullTime bool) 
 	week := math.Floor(day / 7)
 
 	if year > 0 {
-		if abbreviationFormat == "long" {
+		if abbreviationFormat == LongAbbreviationFormat {
 			parts = append(parts, strconv.Itoa(int(year))+" year"+makePlural(year))
-		} else if abbreviationFormat == "short" {
+		} else if abbreviationFormat == ShortAbbreviationFormat {
 			parts = append(parts, strconv.Itoa(int(year))+" yr"+makePlural(year))
-		} else if abbreviationFormat == "shortest" {
+		} else if abbreviationFormat == ShortestAbbreviationFormat {
 			parts = append(parts, strconv.Itoa(int(year))+" y")
 		}
 	}
 
 	if month > 0 {
-		if abbreviationFormat == "long" {
+		if abbreviationFormat == LongAbbreviationFormat {
 			parts = append(parts, strconv.Itoa(int(month))+" month"+makePlural(month))
-		} else if abbreviationFormat == "short" {
+		} else if abbreviationFormat == ShortAbbreviationFormat {
 			parts = append(parts, strconv.Itoa(int(month))+" mon"+makePlural(month))
-		} else if abbreviationFormat == "shortest" {
+		} else if abbreviationFormat == ShortestAbbreviationFormat {
 			parts = append(parts, strconv.Itoa(int(month))+" m")
 		}
 	}
 
 	if week > 0 {
-		if abbreviationFormat == "long" {
+		if abbreviationFormat == LongAbbreviationFormat {
 			parts = append(parts, strconv.Itoa(int(week))+" week"+makePlural(week))
-		} else if abbreviationFormat == "short" {
+		} else if abbreviationFormat == ShortAbbreviationFormat {
 			parts = append(parts, strconv.Itoa(int(week))+" wk"+makePlural(week))
-		} else if abbreviationFormat == "shortest" {
+		} else if abbreviationFormat == ShortestAbbreviationFormat {
 			parts = append(parts, strconv.Itoa(int(week))+" w")
 		}
 	}
 
 	if day > 0 {
-		if abbreviationFormat == "long" {
+		if abbreviationFormat == LongAbbreviationFormat {
 			parts = append(parts, strconv.Itoa(int(day))+" day"+makePlural(day))
-		} else if abbreviationFormat == "short" {
+		} else if abbreviationFormat == ShortAbbreviationFormat {
 			parts = append(parts, strconv.Itoa(int(day))+" dy"+makePlural(day))
-		} else if abbreviationFormat == "shortest" {
+		} else if abbreviationFormat == ShortestAbbreviationFormat {
 			parts = append(parts, strconv.Itoa(int(day))+" d")
 		}
 	}
 
 	if hour > 0 {
-		if abbreviationFormat == "long" {
+		if abbreviationFormat == LongAbbreviationFormat {
 			parts = append(parts, strconv.Itoa(int(hour))+" hour"+makePlural(hour))
-		} else if abbreviationFormat == "short" {
+		} else if abbreviationFormat == ShortAbbreviationFormat {
 			parts = append(parts, strconv.Itoa(int(hour))+" hr"+makePlural(hour))
-		} else if abbreviationFormat == "shortest" {
+		} else if abbreviationFormat == ShortestAbbreviationFormat {
 			parts = append(parts, strconv.Itoa(int(hour))+" h")
 		}
 	}
 
 	if minute > 0 {
-		if abbreviationFormat == "long" {
+		if abbreviationFormat == LongAbbreviationFormat {
 			parts = append(parts, strconv.Itoa(int(minute))+" minute"+makePlural(minute))
-		} else if abbreviationFormat == "short" {
+		} else if abbreviationFormat == ShortAbbreviationFormat {
 			parts = append(parts, strconv.Itoa(int(minute))+" min"+makePlural(minute))
-		} else if abbreviationFormat == "shortest" {
+		} else if abbreviationFormat == ShortestAbbreviationFormat {
 			parts = append(parts, strconv.Itoa(int(minute))+" mi")
 		}
 	}
 
 	if second > 0 {
-		if abbreviationFormat == "long" {
+		if abbreviationFormat == LongAbbreviationFormat {
 			parts = append(parts, strconv.Itoa(int(second))+" second"+makePlural(second))
-		} else if abbreviationFormat == "short" {
+		} else if abbreviationFormat == ShortAbbreviationFormat {
 			parts = append(parts, strconv.Itoa(int(second))+" sec"+makePlural(second))
-		} else if abbreviationFormat == "shortest" {
+		} else if abbreviationFormat == ShortestAbbreviationFormat {
 			parts = append(parts, strconv.Itoa(int(second))+" s")
 		}
 	}
