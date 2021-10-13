@@ -323,7 +323,9 @@ func initWalletLoader(chainParams *chaincfg.Params, walletDataDir, walletDbDrive
 	return walletLoader
 }
 
-func s(x float64) string {
+// makePlural is used with the TimeElapsed function. makePlural checks if the arguments passed is > 1, 
+// if true, it adds "s" after the given time to make it plural
+func makePlural(x float64) string {
 	if int(x) == 1 {
 		return ""
 	}
@@ -357,9 +359,9 @@ func TimeElapsed(now, then time.Time, abbreviationFormat string, fullTime bool) 
 
 	if year > 0 {
 		if abbreviationFormat == "long" {
-			parts = append(parts, strconv.Itoa(int(year))+" year"+s(year))
+			parts = append(parts, strconv.Itoa(int(year))+" year"+makePlural(year))
 		} else if abbreviationFormat == "short" {
-			parts = append(parts, strconv.Itoa(int(year))+" yr"+s(year))
+			parts = append(parts, strconv.Itoa(int(year))+" yr"+makePlural(year))
 		} else if abbreviationFormat == "shortest" {
 			parts = append(parts, strconv.Itoa(int(year))+" y")
 		}
@@ -367,9 +369,9 @@ func TimeElapsed(now, then time.Time, abbreviationFormat string, fullTime bool) 
 
 	if month > 0 {
 		if abbreviationFormat == "long" {
-			parts = append(parts, strconv.Itoa(int(month))+" month"+s(month))
+			parts = append(parts, strconv.Itoa(int(month))+" month"+makePlural(month))
 		} else if abbreviationFormat == "short" {
-			parts = append(parts, strconv.Itoa(int(month))+" mon"+s(month))
+			parts = append(parts, strconv.Itoa(int(month))+" mon"+makePlural(month))
 		} else if abbreviationFormat == "shortest" {
 			parts = append(parts, strconv.Itoa(int(month))+" m")
 		}
@@ -377,9 +379,9 @@ func TimeElapsed(now, then time.Time, abbreviationFormat string, fullTime bool) 
 
 	if week > 0 {
 		if abbreviationFormat == "long" {
-			parts = append(parts, strconv.Itoa(int(week))+" week"+s(week))
+			parts = append(parts, strconv.Itoa(int(week))+" week"+makePlural(week))
 		} else if abbreviationFormat == "short" {
-			parts = append(parts, strconv.Itoa(int(week))+" wk"+s(week))
+			parts = append(parts, strconv.Itoa(int(week))+" wk"+makePlural(week))
 		} else if abbreviationFormat == "shortest" {
 			parts = append(parts, strconv.Itoa(int(week))+" w")
 		}
@@ -387,9 +389,9 @@ func TimeElapsed(now, then time.Time, abbreviationFormat string, fullTime bool) 
 
 	if day > 0 {
 		if abbreviationFormat == "long" {
-			parts = append(parts, strconv.Itoa(int(day))+" day"+s(day))
+			parts = append(parts, strconv.Itoa(int(day))+" day"+makePlural(day))
 		} else if abbreviationFormat == "short" {
-			parts = append(parts, strconv.Itoa(int(day))+" dy"+s(day))
+			parts = append(parts, strconv.Itoa(int(day))+" dy"+makePlural(day))
 		} else if abbreviationFormat == "shortest" {
 			parts = append(parts, strconv.Itoa(int(day))+" d")
 		}
@@ -397,9 +399,9 @@ func TimeElapsed(now, then time.Time, abbreviationFormat string, fullTime bool) 
 
 	if hour > 0 {
 		if abbreviationFormat == "long" {
-			parts = append(parts, strconv.Itoa(int(hour))+" hour"+s(hour))
+			parts = append(parts, strconv.Itoa(int(hour))+" hour"+makePlural(hour))
 		} else if abbreviationFormat == "short" {
-			parts = append(parts, strconv.Itoa(int(hour))+" hr"+s(hour))
+			parts = append(parts, strconv.Itoa(int(hour))+" hr"+makePlural(hour))
 		} else if abbreviationFormat == "shortest" {
 			parts = append(parts, strconv.Itoa(int(hour))+" h")
 		}
@@ -407,9 +409,9 @@ func TimeElapsed(now, then time.Time, abbreviationFormat string, fullTime bool) 
 
 	if minute > 0 {
 		if abbreviationFormat == "long" {
-			parts = append(parts, strconv.Itoa(int(minute))+" minute"+s(minute))
+			parts = append(parts, strconv.Itoa(int(minute))+" minute"+makePlural(minute))
 		} else if abbreviationFormat == "short" {
-			parts = append(parts, strconv.Itoa(int(minute))+" min"+s(minute))
+			parts = append(parts, strconv.Itoa(int(minute))+" min"+makePlural(minute))
 		} else if abbreviationFormat == "shortest" {
 			parts = append(parts, strconv.Itoa(int(minute))+" mi")
 		}
@@ -417,9 +419,9 @@ func TimeElapsed(now, then time.Time, abbreviationFormat string, fullTime bool) 
 
 	if second > 0 {
 		if abbreviationFormat == "long" {
-			parts = append(parts, strconv.Itoa(int(second))+" second"+s(second))
+			parts = append(parts, strconv.Itoa(int(second))+" second"+makePlural(second))
 		} else if abbreviationFormat == "short" {
-			parts = append(parts, strconv.Itoa(int(second))+" sec"+s(second))
+			parts = append(parts, strconv.Itoa(int(second))+" sec"+makePlural(second))
 		} else if abbreviationFormat == "shortest" {
 			parts = append(parts, strconv.Itoa(int(second))+" s")
 		}

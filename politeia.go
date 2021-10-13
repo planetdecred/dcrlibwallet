@@ -43,6 +43,14 @@ func newPoliteia(mwRef *MultiWallet, host string) (*Politeia, error) {
 	return p, nil
 }
 
+func (p *Politeia) saveLastSyncedTimestamp(lastSyncedTimestamp int64) {
+	p.mwRef.SetLongConfigValueForKey("lastsyncedtimestamp", lastSyncedTimestamp)
+}
+
+func (p *Politeia) getLastSyncedTimestamp() int64 {
+	return p.mwRef.ReadLongConfigValueForKey("lastsyncedtimestamp", 0)
+}
+
 func (p *Politeia) saveOrOverwiteProposal(proposal *Proposal) error {
 	var oldProposal Proposal
 	err := p.mwRef.db.One("Token", proposal.Token, &oldProposal)
