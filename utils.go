@@ -323,7 +323,7 @@ func initWalletLoader(chainParams *chaincfg.Params, walletDataDir, walletDbDrive
 	return walletLoader
 }
 
-// makePlural is used with the TimeElapsed function. makePlural checks if the arguments passed is > 1, 
+// makePlural is used with the TimeElapsed function. makePlural checks if the arguments passed is > 1,
 // if true, it adds "s" after the given time to make it plural
 func makePlural(x float64) string {
 	if int(x) == 1 {
