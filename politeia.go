@@ -43,11 +43,11 @@ func newPoliteia(mwRef *MultiWallet, host string) (*Politeia, error) {
 }
 
 func (p *Politeia) saveLastSyncedTimestamp(lastSyncedTimestamp int64) {
-	p.mwRef.SetLongConfigValueForKey("lastsyncedtimestamp", lastSyncedTimestamp)
+	p.mwRef.SetLongConfigValueForKey(PoliteiaLastSyncedTimestampConfigKey, lastSyncedTimestamp)
 }
 
 func (p *Politeia) getLastSyncedTimestamp() int64 {
-	return p.mwRef.ReadLongConfigValueForKey("lastsyncedtimestamp", 0)
+	return p.mwRef.ReadLongConfigValueForKey(PoliteiaLastSyncedTimestampConfigKey, 0)
 }
 
 func (p *Politeia) saveOrOverwiteProposal(proposal *Proposal) error {
