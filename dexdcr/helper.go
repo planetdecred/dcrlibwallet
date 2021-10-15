@@ -5,14 +5,13 @@
 package dexdcr
 
 import (
-	"encoding/binary"
 	"fmt"
 
 	"decred.org/dcrdex/client/asset"
 	"decred.org/dcrdex/client/asset/dcr"
 	"decred.org/dcrdex/dex"
 	"decred.org/dcrwallet/v2/wallet"
-	"github.com/decred/dcrd/chaincfg/chainhash"
+	"github.com/decred/dcrd/chaincfg/v3"
 )
 
 const (
@@ -70,49 +69,42 @@ var configOpts = []*asset.ConfigOption{
 	},
 }
 
-// Driver implements decred.org/dcrdex/client/asset.Driver.
-type Driver struct {
-	wallet     *wallet.Wallet
-	walletDesc string
+// SpvWalletInfo returns general information about the SpvWallet defined by
+// this package.
+func SpvWalletInfo() *asset.WalletInfo {
+	info := dcr.DefaultWalletInfo
+	info.DefaultConfigPath = ""
+	info.ConfigOpts = configOpts
+	return info
 }
 
-// RegisterDriver registers the driver for the dcr asset backend. Requires a
-// wallet instance to provide wallet functionality to the DEX.
-func RegisterDriver(wallet *wallet.Wallet, walletDesc string) {
-	asset.Register(dcr.BipID, &Driver{
-		wallet:     wallet,
-		walletDesc: walletDesc,
-	})
-}
-
-// Setup creates the DCR exchange wallet.
-func (d *Driver) Setup(cfg *asset.WalletConfig, logger dex.Logger, network dex.Network) (asset.Wallet, error) {
-	return dcr.NewWallet(cfg, logger, network, NewWallet(d.wallet, d.walletDesc))
-}
-
-// DecodeCoinID creates a human-readable representation of a coin ID for Decred.
-func (d *Driver) DecodeCoinID(coinID []byte) (string, error) {
-	txid, vout, err := decodeCoinID(coinID)
-	if err != nil {
-		return "", err
+// SpvWalletConstructor returns a function that uses the provided wallet to set
+// up an SpvWallet. The provided wallet will be used internally to satisfy the
+// decred.org/dcrdex/client/asset/dcr.Wallet inteface. The returned function can
+// be used along with SpvWalletInfo() to register a custom decred wallet for a
+// DEX client.
+func SpvWalletConstructor(wallet *wallet.Wallet, walletDesc string) dcr.WalletConstructor {
+	if wallet == nil {
+		panic("SpvWalletConstructor called with a nil wallet parameter")
 	}
-	return fmt.Sprintf("%v:%d", txid, vout), err
-}
 
-// Info returns basic information about the decred wallet and asset.
-func (d *Driver) Info() *asset.WalletInfo {
-	wInfo := dcr.WalletInfo
-	wInfo.DefaultConfigPath = ""
-	wInfo.ConfigOpts = configOpts
-	return wInfo
-}
-
-// decodeCoinID decodes the coin ID into a tx hash and a vout.
-func decodeCoinID(coinID dex.Bytes) (*chainhash.Hash, uint32, error) {
-	if len(coinID) != 36 {
-		return nil, 0, fmt.Errorf("coin ID wrong length. expected 36, got %d", len(coinID))
+	return func(cfg *dcr.Config, chainParams *chaincfg.Params, logger dex.Logger) (dcr.Wallet, error) {
+		if wallet.ChainParams().Net != chainParams.Net {
+			return nil, fmt.Errorf("incompatible dcrwallet network %s, expected %s", wallet.ChainParams().Name, chainParams.Name)
+		}
+		return &SpvWallet{
+			wallet:      wallet,
+			desc:        walletDesc,
+			chainParams: chainParams,
+			log:         logger.SubLogger("spvw"),
+		}, nil
 	}
-	var txHash chainhash.Hash
-	copy(txHash[:], coinID[:32])
-	return &txHash, binary.BigEndian.Uint32(coinID[32:]), nil
+}
+
+// UseSpvWalletForDexClient sets up the DEX client to use the provided wallet
+// for wallet-specific functionalities instead of using the default approach of
+// making rpc requests to an external dcrwallet daemon.
+func UseSpvWalletForDexClient(wallet *wallet.Wallet, walletDesc string) {
+	spvWalletConstructor := SpvWalletConstructor(wallet, walletDesc)
+	dcr.RegisterCustomWallet(spvWalletConstructor, SpvWalletInfo())
 }

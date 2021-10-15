@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"decred.org/dcrdex/client/asset"
@@ -45,93 +46,71 @@ const (
 
 // SpvWallet is a decred wallet backend for the DEX. The backend is how the DEX
 // client app communicates with the Decred blockchain and wallet.
-// Satisfies the decred.org/dcrdex/client/asset/dcr.SpvWallet interface.
+// Satisfies the decred.org/dcrdex/client/asset/dcr.Wallet interface.
 type SpvWallet struct {
-	Wallet *wallet.Wallet
+	wallet *wallet.Wallet
 	desc   string // a human-readable description of this wallet, for logging purposes.
-
-	initialized bool
-	connected   bool
 
 	chainParams *chaincfg.Params
 	log         dex.Logger
+
+	connected uint32 // atomic
 }
 
-func NewWallet(w *wallet.Wallet, desc string) *SpvWallet {
-	return &SpvWallet{
-		Wallet: w,
-		desc:   desc,
-	}
-}
-
-// Ensure that Wallet satisfies the decred.org/dcrdex/client/asset/dcr.Wallet
+// Ensure that SpvWallet satisfies the decred.org/dcrdex/client/asset/dcr.Wallet
 // interface.
 var _ dcr.Wallet = (*SpvWallet)(nil)
 
-// Initialize prepares the wallet for use.
+// Connect establishes a connection to the wallet.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) Initialize(cfg *asset.WalletConfig, dcrCfg *dcr.Config, chainParams *chaincfg.Params, logger dex.Logger) error {
-	if w.initialized {
-		return fmt.Errorf("wallet already initialized")
-	}
-	if w.Wallet == nil {
-		return fmt.Errorf("wallet is not properly set up")
-	}
-	if w.Wallet.ChainParams().Net != chainParams.Net {
-		return fmt.Errorf("cannot initialize %s wallet with %s params", w.Wallet.ChainParams().Name, chainParams.Name)
+func (spvw *SpvWallet) Connect(ctx context.Context) error {
+	if !atomic.CompareAndSwapUint32(&spvw.connected, 0, 1) {
+		return fmt.Errorf("already connected")
 	}
 
-	// Ensure the wallet is connected to an spv backend.
-	if _, err := w.spvSyncer(); err != nil {
+	var connectSuccess bool
+	defer func() {
+		if !connectSuccess {
+			atomic.StoreUint32(&spvw.connected, 0)
+		}
+	}()
+
+	if spvw.wallet == nil {
+		return fmt.Errorf("this SpvWallet is not properly set up, did you use SpvWalletConstructor()?")
+	}
+	if _, err := spvw.spvSyncer(); err != nil { // ensure the wallet is connected to the Decred network via an SPV syncer.
 		return err
 	}
 
-	w.chainParams = chainParams
-	w.log = logger.SubLogger("SPVW")
-	w.initialized = true
-	return nil
-}
-
-// Connect establishes a connection to the wallet.
-// Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) Connect(ctx context.Context) error {
-	if !w.initialized {
-		return fmt.Errorf("wallet is not initialized")
-	}
-	if w.connected {
-		return fmt.Errorf("wallet already connected")
-	}
-
-	w.connected = true
-	w.log.Infof("Connected to wallet %s", w.desc)
+	connectSuccess = true
+	spvw.log.Infof("Connected to wallet %s", spvw.desc)
 	return nil
 }
 
 // Disconnect shuts down access to the wallet.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) Disconnect() {
-	if w.connected {
-		w.connected = false
-		w.log.Infof("Disconnected wallet %s", w.desc)
+func (spvw *SpvWallet) Disconnect() {
+	if atomic.CompareAndSwapUint32(&spvw.connected, 1, 0) {
+		spvw.log.Infof("Disconnected wallet %s", spvw.desc)
 	}
 }
 
 // Disconnected returns true if the wallet is not connected.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) Disconnected() bool {
-	return !w.connected
+func (spvw *SpvWallet) Disconnected() bool {
+	return atomic.LoadUint32(&spvw.connected) == 0
 }
 
 // SyncStatus returns the wallet's sync status.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) SyncStatus(ctx context.Context) (bool, float32, error) {
-	syncer, err := w.spvSyncer()
+func (spvw *SpvWallet) SyncStatus(ctx context.Context) (bool, float32, error) {
+	syncer, err := spvw.spvSyncer()
 	if err != nil {
 		return false, 0, err
 	}
 
-	walletBestHash, walletBestHeight := w.Wallet.MainChainTip(ctx)
-	bestBlock, err := w.Wallet.BlockInfo(ctx, wallet.NewBlockIdentifierFromHash(&walletBestHash))
+	walletBestHash, walletBestHeight := spvw.wallet.MainChainTip(ctx)
+	bestBlock, err := spvw.wallet.BlockInfo(ctx, wallet.NewBlockIdentifierFromHash(&walletBestHash))
 	if err != nil {
 		return false, 0, err
 	}
@@ -144,7 +123,7 @@ func (w *SpvWallet) SyncStatus(ctx context.Context) (bool, float32, error) {
 	if blocksToFetch <= 0 {
 		headersFetchProgress = 1
 	} else {
-		totalHeadersToFetch := targetHeight - w.Wallet.InitialHeight()
+		totalHeadersToFetch := targetHeight - spvw.wallet.InitialHeight()
 		headersFetchProgress = 1 - (float32(blocksToFetch) / float32(totalHeadersToFetch))
 	}
 
@@ -155,12 +134,12 @@ func (w *SpvWallet) SyncStatus(ctx context.Context) (bool, float32, error) {
 // AccountOwnsAddress checks if the provided address belongs to the
 // specified account.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) AccountOwnsAddress(ctx context.Context, account, address string) (bool, error) {
-	addr, err := stdaddr.DecodeAddress(address, w.chainParams)
+func (spvw *SpvWallet) AccountOwnsAddress(ctx context.Context, account, address string) (bool, error) {
+	addr, err := stdaddr.DecodeAddress(address, spvw.chainParams)
 	if err != nil {
 		return false, err
 	}
-	a, err := w.Wallet.KnownAddress(ctx, addr)
+	a, err := spvw.wallet.KnownAddress(ctx, addr)
 	if err != nil {
 		return false, err
 	}
@@ -169,13 +148,13 @@ func (w *SpvWallet) AccountOwnsAddress(ctx context.Context, account, address str
 
 // AccountBalance returns the balance breakdown for the specified account.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) AccountBalance(ctx context.Context, account string, confirms int32) (*walletjson.GetAccountBalanceResult, error) {
-	acctNumber, err := w.accountNumber(ctx, account)
+func (spvw *SpvWallet) AccountBalance(ctx context.Context, account string, confirms int32) (*walletjson.GetAccountBalanceResult, error) {
+	acctNumber, err := spvw.accountNumber(ctx, account)
 	if err != nil {
 		return nil, err
 	}
 
-	balance, err := w.Wallet.AccountBalance(ctx, acctNumber, confirms)
+	balance, err := spvw.wallet.AccountBalance(ctx, acctNumber, confirms)
 	if err != nil {
 		return nil, err
 	}
@@ -194,23 +173,23 @@ func (w *SpvWallet) AccountBalance(ctx context.Context, account string, confirms
 
 // LockedOutputs fetches locked outputs for the specified account.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) LockedOutputs(ctx context.Context, account string) ([]chainjson.TransactionInput, error) {
-	return w.Wallet.LockedOutpoints(ctx, account)
+func (spvw *SpvWallet) LockedOutputs(ctx context.Context, account string) ([]chainjson.TransactionInput, error) {
+	return spvw.wallet.LockedOutpoints(ctx, account)
 }
 
 // EstimateSmartFeeRate returns a smart feerate estimate.
 // NOTE: SPV wallets are unable to estimate feerates, so this will always
 // return 0.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) EstimateSmartFeeRate(ctx context.Context, confTarget int64, mode chainjson.EstimateSmartFeeMode) (float64, error) {
+func (spvw *SpvWallet) EstimateSmartFeeRate(ctx context.Context, confTarget int64, mode chainjson.EstimateSmartFeeMode) (float64, error) {
 	return 0, nil
 }
 
 // Unspents fetches unspent outputs for the specified account.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) Unspents(ctx context.Context, account string) ([]walletjson.ListUnspentResult, error) {
+func (spvw *SpvWallet) Unspents(ctx context.Context, account string) ([]walletjson.ListUnspentResult, error) {
 	// the listunspent rpc handler uses 9999999 as default for maxconf
-	unspents, err := w.Wallet.ListUnspent(ctx, 0, math.MaxInt32, nil, account)
+	unspents, err := spvw.wallet.ListUnspent(ctx, 0, math.MaxInt32, nil, account)
 	if err != nil {
 		return nil, err
 	}
@@ -223,27 +202,27 @@ func (w *SpvWallet) Unspents(ctx context.Context, account string) ([]walletjson.
 
 // GetChangeAddress returns a change address from the specified account.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) GetChangeAddress(ctx context.Context, account string) (stdaddr.Address, error) {
-	acctNumber, err := w.accountNumber(ctx, account)
+func (spvw *SpvWallet) GetChangeAddress(ctx context.Context, account string) (stdaddr.Address, error) {
+	acctNumber, err := spvw.accountNumber(ctx, account)
 	if err != nil {
 		return nil, err
 	}
-	return w.Wallet.NewChangeAddress(ctx, acctNumber)
+	return spvw.wallet.NewChangeAddress(ctx, acctNumber)
 }
 
 // LockUnspent locks or unlocks the specified outpoint.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) LockUnspent(ctx context.Context, unlock bool, ops []*wire.OutPoint) error {
+func (spvw *SpvWallet) LockUnspent(ctx context.Context, unlock bool, ops []*wire.OutPoint) error {
 	if unlock && len(ops) == 0 {
-		w.Wallet.ResetLockedOutpoints()
+		spvw.wallet.ResetLockedOutpoints()
 		return nil
 	}
 
 	for _, op := range ops {
 		if unlock {
-			w.Wallet.UnlockOutpoint(&op.Hash, op.Index)
+			spvw.wallet.UnlockOutpoint(&op.Hash, op.Index)
 		} else {
-			w.Wallet.LockOutpoint(&op.Hash, op.Index)
+			spvw.wallet.LockOutpoint(&op.Hash, op.Index)
 		}
 	}
 	return nil
@@ -255,14 +234,14 @@ func (w *SpvWallet) LockUnspent(ctx context.Context, unlock bool, ops []*wire.Ou
 // outputs. This is similar to how dcrwallet handles the gettxout json-rpc
 // command in spv mode.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) GetTxOut(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
+func (spvw *SpvWallet) GetTxOut(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
 	if tree != wire.TxTreeRegular && tree != wire.TxTreeStake {
 		return nil, fmt.Errorf("tx tree must be regular or stake")
 	}
 
 	// Attempt to read the unspent txout info from wallet.
 	outpoint := wire.OutPoint{Hash: *txHash, Index: index, Tree: tree}
-	utxo, err := w.Wallet.UnspentOutput(ctx, outpoint, mempool)
+	utxo, err := spvw.wallet.UnspentOutput(ctx, outpoint, mempool)
 	if err != nil && !errors.Is(err, errors.NotExist) {
 		return nil, err
 	}
@@ -279,13 +258,13 @@ func (w *SpvWallet) GetTxOut(ctx context.Context, txHash *chainhash.Hash, index 
 	// error means the script couldn't parse and there is no additional
 	// information about it anyways.
 	scriptClass, addrs, reqSigs, _ := txscript.ExtractPkScriptAddrs(
-		0, utxo.PkScript, w.chainParams, true) // Yes treasury
+		0, utxo.PkScript, spvw.chainParams, true) // Yes treasury
 	addresses := make([]string, len(addrs))
 	for i, addr := range addrs {
 		addresses[i] = addr.String()
 	}
 
-	bestHash, bestHeight := w.Wallet.MainChainTip(ctx)
+	bestHash, bestHeight := spvw.wallet.MainChainTip(ctx)
 	var confirmations int64
 	if utxo.Block.Height != -1 {
 		confirmations = int64(confirms(utxo.Block.Height, bestHeight))
@@ -309,8 +288,8 @@ func (w *SpvWallet) GetTxOut(ctx context.Context, txHash *chainhash.Hash, index 
 // GetNewAddressGapPolicy returns an address from the specified account using
 // the specified gap policy.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) GetNewAddressGapPolicy(ctx context.Context, account string, gap dcrwallet.GapPolicy) (stdaddr.Address, error) {
-	acctNumber, err := w.accountNumber(ctx, account)
+func (spvw *SpvWallet) GetNewAddressGapPolicy(ctx context.Context, account string, gap dcrwallet.GapPolicy) (stdaddr.Address, error) {
+	acctNumber, err := spvw.accountNumber(ctx, account)
 	if err != nil {
 		return nil, err
 	}
@@ -327,18 +306,18 @@ func (w *SpvWallet) GetNewAddressGapPolicy(ctx context.Context, account string, 
 		return nil, fmt.Errorf("unknown gap policy %q", gap)
 	}
 
-	return w.Wallet.NewExternalAddress(ctx, acctNumber, policy)
+	return spvw.wallet.NewExternalAddress(ctx, acctNumber, policy)
 }
 
 // SignRawTransaction signs the provided transaction.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) SignRawTransaction(ctx context.Context, tx *wire.MsgTx) (*walletjson.SignRawTransactionResult, error) {
+func (spvw *SpvWallet) SignRawTransaction(ctx context.Context, tx *wire.MsgTx) (*walletjson.SignRawTransactionResult, error) {
 	if len(tx.TxIn) == 0 {
 		return nil, fmt.Errorf("transaction with no inputs cannot be signed")
 	}
 
 	mtx := tx.Copy() // deep copy to prevent modifications
-	signErrs, err := w.Wallet.SignTransaction(ctx, mtx, txscript.SigHashAll, nil, nil, nil)
+	signErrs, err := spvw.wallet.SignTransaction(ctx, mtx, txscript.SigHashAll, nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -372,8 +351,8 @@ func (w *SpvWallet) SignRawTransaction(ctx context.Context, tx *wire.MsgTx) (*wa
 // SendRawTransaction broadcasts the provided transaction to the Decred
 // network.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) SendRawTransaction(ctx context.Context, tx *wire.MsgTx, allowHighFees bool) (*chainhash.Hash, error) {
-	n, err := w.Wallet.NetworkBackend()
+func (spvw *SpvWallet) SendRawTransaction(ctx context.Context, tx *wire.MsgTx, allowHighFees bool) (*chainhash.Hash, error) {
+	n, err := spvw.wallet.NetworkBackend()
 	if err != nil {
 		return nil, err
 	}
@@ -388,13 +367,13 @@ func (w *SpvWallet) SendRawTransaction(ctx context.Context, tx *wire.MsgTx, allo
 		}
 	}
 
-	return w.Wallet.PublishTransaction(ctx, tx, n)
+	return spvw.wallet.PublishTransaction(ctx, tx, n)
 }
 
 // GetBlockHeaderVerbose returns block header info for the specified block hash.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) GetBlockHeaderVerbose(ctx context.Context, blockHash *chainhash.Hash) (*chainjson.GetBlockHeaderVerboseResult, error) {
-	blockHeader, err := w.Wallet.BlockHeader(ctx, blockHash)
+func (spvw *SpvWallet) GetBlockHeaderVerbose(ctx context.Context, blockHash *chainhash.Hash) (*chainjson.GetBlockHeaderVerboseResult, error) {
+	blockHeader, err := spvw.wallet.BlockHeader(ctx, blockHash)
 	if err != nil {
 		return nil, err
 	}
@@ -402,16 +381,16 @@ func (w *SpvWallet) GetBlockHeaderVerbose(ctx context.Context, blockHash *chainh
 	// Get next block hash unless there are none.
 	var nextHashString string
 	confirmations := int64(-1)
-	mainChainHasBlock, _, err := w.Wallet.BlockInMainChain(ctx, blockHash)
+	mainChainHasBlock, _, err := spvw.wallet.BlockInMainChain(ctx, blockHash)
 	if err != nil {
 		return nil, fmt.Errorf("error checking if block is in mainchain: %v", err)
 	}
 	if mainChainHasBlock {
 		blockHeight := int32(blockHeader.Height)
-		_, bestHeight := w.Wallet.MainChainTip(ctx)
+		_, bestHeight := spvw.wallet.MainChainTip(ctx)
 		if blockHeight < bestHeight {
 			nextBlockID := wallet.NewBlockIdentifierFromHeight(blockHeight + 1)
-			nextBlockInfo, err := w.Wallet.BlockInfo(ctx, nextBlockID)
+			nextBlockInfo, err := spvw.wallet.BlockInfo(ctx, nextBlockID)
 			if err != nil {
 				return nil, fmt.Errorf("info not found for next block: %v", err)
 			}
@@ -428,7 +407,7 @@ func (w *SpvWallet) GetBlockHeaderVerbose(ctx context.Context, blockHash *chainh
 		if blockHeader.Height == 0 {
 			break
 		}
-		blockHeader, err = w.Wallet.BlockHeader(ctx, &blockHeader.PrevBlock)
+		blockHeader, err = spvw.wallet.BlockHeader(ctx, &blockHeader.PrevBlock)
 		if err != nil {
 			return nil, fmt.Errorf("unable to calculate median block time: %w", err)
 		}
@@ -460,7 +439,7 @@ func (w *SpvWallet) GetBlockHeaderVerbose(ctx context.Context, blockHash *chainh
 		Nonce:         blockHeader.Nonce,
 		ExtraData:     hex.EncodeToString(blockHeader.ExtraData[:]),
 		StakeVersion:  blockHeader.StakeVersion,
-		Difficulty:    difficultyRatio(blockHeader.Bits, w.chainParams, w.log),
+		Difficulty:    difficultyRatio(blockHeader.Bits, spvw.chainParams, spvw.log),
 		ChainWork:     fmt.Sprintf("%064x", blockchain.CalcWork(blockHeader.Bits)),
 		PreviousHash:  blockHeader.PrevBlock.String(),
 		NextHash:      nextHashString,
@@ -470,8 +449,8 @@ func (w *SpvWallet) GetBlockHeaderVerbose(ctx context.Context, blockHash *chainh
 // GetBlockVerbose returns information about a block, optionally including verbose
 // tx info.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) GetBlockVerbose(ctx context.Context, blockHash *chainhash.Hash, verboseTx bool) (*chainjson.GetBlockVerboseResult, error) {
-	n, err := w.Wallet.NetworkBackend()
+func (spvw *SpvWallet) GetBlockVerbose(ctx context.Context, blockHash *chainhash.Hash, verboseTx bool) (*chainjson.GetBlockVerboseResult, error) {
+	n, err := spvw.wallet.NetworkBackend()
 	if err != nil {
 		return nil, err
 	}
@@ -492,16 +471,16 @@ func (w *SpvWallet) GetBlockVerbose(ctx context.Context, blockHash *chainhash.Ha
 	var nextHashString string
 	blockHeader := &blk.Header
 	confirmations := int64(-1)
-	mainChainHasBlock, _, err := w.Wallet.BlockInMainChain(ctx, blockHash)
+	mainChainHasBlock, _, err := spvw.wallet.BlockInMainChain(ctx, blockHash)
 	if err != nil {
 		return nil, fmt.Errorf("error checking if block is in mainchain: %v", err)
 	}
 	if mainChainHasBlock {
 		blockHeight := int32(blockHeader.Height)
-		_, bestHeight := w.Wallet.MainChainTip(ctx)
+		_, bestHeight := spvw.wallet.MainChainTip(ctx)
 		if blockHeight < bestHeight {
 			nextBlockID := wallet.NewBlockIdentifierFromHeight(blockHeight + 1)
-			nextBlockInfo, err := w.Wallet.BlockInfo(ctx, nextBlockID)
+			nextBlockInfo, err := spvw.wallet.BlockInfo(ctx, nextBlockID)
 			if err != nil {
 				return nil, fmt.Errorf("info not found for next block: %v", err)
 			}
@@ -531,7 +510,7 @@ func (w *SpvWallet) GetBlockVerbose(ctx context.Context, blockHash *chainhash.Ha
 		Size:          int32(blk.Header.Size),
 		Bits:          strconv.FormatInt(int64(blockHeader.Bits), 16),
 		SBits:         sbitsFloat,
-		Difficulty:    difficultyRatio(blockHeader.Bits, w.chainParams, w.log),
+		Difficulty:    difficultyRatio(blockHeader.Bits, spvw.chainParams, spvw.log),
 		ChainWork:     fmt.Sprintf("%064x", blockchain.CalcWork(blockHeader.Bits)),
 		ExtraData:     hex.EncodeToString(blockHeader.ExtraData[:]),
 		NextHash:      nextHashString,
@@ -560,7 +539,7 @@ func (w *SpvWallet) GetBlockVerbose(ctx context.Context, blockHash *chainhash.Ha
 		txns := blk.Transactions
 		rawTxns := make([]chainjson.TxRawResult, len(txns))
 		for i, tx := range txns {
-			rawTxn, err := createTxRawResult(w.chainParams, tx, uint32(i), blockHeader, confirmations, isTreasuryEnabled, w.log)
+			rawTxn, err := createTxRawResult(spvw.chainParams, tx, uint32(i), blockHeader, confirmations, isTreasuryEnabled, spvw.log)
 			if err != nil {
 				return nil, fmt.Errorf("could not create transaction: %v", err)
 			}
@@ -571,7 +550,7 @@ func (w *SpvWallet) GetBlockVerbose(ctx context.Context, blockHash *chainhash.Ha
 		stxns := blk.STransactions
 		rawSTxns := make([]chainjson.TxRawResult, len(stxns))
 		for i, tx := range stxns {
-			rawSTxn, err := createTxRawResult(w.chainParams, tx, uint32(i), blockHeader, confirmations, isTreasuryEnabled, w.log)
+			rawSTxn, err := createTxRawResult(spvw.chainParams, tx, uint32(i), blockHeader, confirmations, isTreasuryEnabled, spvw.log)
 			if err != nil {
 				return nil, fmt.Errorf("could not create stake transaction: %v", err)
 			}
@@ -811,15 +790,15 @@ func difficultyRatio(bits uint32, params *chaincfg.Params, log slog.Logger) floa
 // tx with the provided hash. Returns asset.CoinNotFoundError if the tx is not
 // found in the wallet.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) GetTransaction(ctx context.Context, txHash *chainhash.Hash) (*walletjson.GetTransactionResult, error) {
-	txd, err := wallet.UnstableAPI(w.Wallet).TxDetails(ctx, txHash)
+func (spvw *SpvWallet) GetTransaction(ctx context.Context, txHash *chainhash.Hash) (*walletjson.GetTransactionResult, error) {
+	txd, err := wallet.UnstableAPI(spvw.wallet).TxDetails(ctx, txHash)
 	if errors.Is(err, errors.NotExist) {
 		return nil, asset.CoinNotFoundError
 	} else if err != nil {
 		return nil, err
 	}
 
-	_, tipHeight := w.Wallet.MainChainTip(ctx)
+	_, tipHeight := spvw.wallet.MainChainTip(ctx)
 
 	var b strings.Builder
 	b.Grow(2 * txd.MsgTx.SerializeSize())
@@ -867,7 +846,7 @@ func (w *SpvWallet) GetTransaction(ctx context.Context, txHash *chainhash.Hash) 
 	getTxResult.Amount = (creditTotal - debitTotal).ToCoin()
 	getTxResult.Fee = negFeeF64
 
-	details, err := w.Wallet.ListTransactionDetails(ctx, txHash)
+	details, err := spvw.wallet.ListTransactionDetails(ctx, txHash)
 	if err != nil {
 		return nil, err
 	}
@@ -891,7 +870,7 @@ func (w *SpvWallet) GetTransaction(ctx context.Context, txHash *chainhash.Hash) 
 // NOTE: SPV wallets are unable to look up non-wallet transactions so this will
 // always return a not-supported error.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) GetRawTransactionVerbose(ctx context.Context, txHash *chainhash.Hash) (*chainjson.TxRawResult, error) {
+func (spvw *SpvWallet) GetRawTransactionVerbose(ctx context.Context, txHash *chainhash.Hash) (*chainjson.TxRawResult, error) {
 	return nil, fmt.Errorf("getrawtransaction not supported by spv wallets")
 }
 
@@ -900,22 +879,22 @@ func (w *SpvWallet) GetRawTransactionVerbose(ctx context.Context, txHash *chainh
 // NOTE: SPV wallets do not have a mempool so this will always return a
 // not-supported error.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) GetRawMempool(ctx context.Context, txType chainjson.GetRawMempoolTxTypeCmd) ([]*chainhash.Hash, error) {
+func (spvw *SpvWallet) GetRawMempool(ctx context.Context, txType chainjson.GetRawMempoolTxTypeCmd) ([]*chainhash.Hash, error) {
 	return nil, fmt.Errorf("getrawmempool not supported by spv wallets")
 }
 
 // GetBestBlock returns the hash and height of the wallet's best block.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) GetBestBlock(ctx context.Context) (*chainhash.Hash, int64, error) {
-	walletBestHash, walletBestHeight := w.Wallet.MainChainTip(ctx)
+func (spvw *SpvWallet) GetBestBlock(ctx context.Context) (*chainhash.Hash, int64, error) {
+	walletBestHash, walletBestHeight := spvw.wallet.MainChainTip(ctx)
 	return &walletBestHash, int64(walletBestHeight), nil
 }
 
 // GetBlockHash returns the hash of the mainchain block at the specified height.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) GetBlockHash(ctx context.Context, blockHeight int64) (*chainhash.Hash, error) {
+func (spvw *SpvWallet) GetBlockHash(ctx context.Context, blockHeight int64) (*chainhash.Hash, error) {
 	id := wallet.NewBlockIdentifierFromHeight(int32(blockHeight))
-	info, err := w.Wallet.BlockInfo(ctx, id)
+	info, err := spvw.wallet.BlockInfo(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -925,8 +904,8 @@ func (w *SpvWallet) GetBlockHash(ctx context.Context, blockHeight int64) (*chain
 
 // BlockCFilter fetches the block filter info for the specified block.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) BlockCFilter(ctx context.Context, blockHash *chainhash.Hash) (filter, key string, err error) {
-	keyB, cFilter, err := w.Wallet.CFilterV2(ctx, blockHash)
+func (spvw *SpvWallet) BlockCFilter(ctx context.Context, blockHash *chainhash.Hash) (filter, key string, err error) {
+	keyB, cFilter, err := spvw.wallet.CFilterV2(ctx, blockHash)
 	if err != nil {
 		return "", "", err
 	}
@@ -935,38 +914,38 @@ func (w *SpvWallet) BlockCFilter(ctx context.Context, blockHash *chainhash.Hash)
 
 // LockWallet locks the wallet.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) LockWallet(_ context.Context) error {
+func (spvw *SpvWallet) LockWallet(_ context.Context) error {
 	// TODO: dcrlibwallet considers accountmixer status before locking the wallet
-	w.Wallet.Lock()
+	spvw.wallet.Lock()
 	return nil
 }
 
 // UnlockWallet unlocks the wallet.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) UnlockWallet(ctx context.Context, passphrase string, timeoutSecs int64) error {
+func (spvw *SpvWallet) UnlockWallet(ctx context.Context, passphrase string, timeoutSecs int64) error {
 	var lockAfter <-chan time.Time
 	if timeoutSecs != 0 {
 		timeout := time.Second * time.Duration(timeoutSecs)
 		lockAfter = time.After(timeout)
 	}
-	return w.Wallet.Unlock(ctx, []byte(passphrase), lockAfter)
+	return spvw.wallet.Unlock(ctx, []byte(passphrase), lockAfter)
 }
 
 // WalletUnlocked returns true if the wallet is unlocked.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) WalletUnlocked(_ context.Context) bool {
-	return !w.Wallet.Locked()
+func (spvw *SpvWallet) WalletUnlocked(_ context.Context) bool {
+	return !spvw.wallet.Locked()
 }
 
 // AccountUnlocked returns true if the specified account is unlocked.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) AccountUnlocked(ctx context.Context, account string) (*walletjson.AccountUnlockedResult, error) {
-	acctNumber, err := w.accountNumber(ctx, account)
+func (spvw *SpvWallet) AccountUnlocked(ctx context.Context, account string) (*walletjson.AccountUnlockedResult, error) {
+	acctNumber, err := spvw.accountNumber(ctx, account)
 	if err != nil {
 		return nil, err
 	}
 
-	encrypted, err := w.Wallet.AccountHasPassphrase(ctx, acctNumber)
+	encrypted, err := spvw.wallet.AccountHasPassphrase(ctx, acctNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -974,7 +953,7 @@ func (w *SpvWallet) AccountUnlocked(ctx context.Context, account string) (*walle
 		return &walletjson.AccountUnlockedResult{}, nil
 	}
 
-	unlocked, err := w.Wallet.AccountUnlocked(ctx, acctNumber)
+	unlocked, err := spvw.wallet.AccountUnlocked(ctx, acctNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -987,39 +966,39 @@ func (w *SpvWallet) AccountUnlocked(ctx context.Context, account string) (*walle
 
 // LockAccount locks the specified account.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) LockAccount(ctx context.Context, account string) error {
-	acctNumber, err := w.accountNumber(ctx, account)
+func (spvw *SpvWallet) LockAccount(ctx context.Context, account string) error {
+	acctNumber, err := spvw.accountNumber(ctx, account)
 	if err != nil {
 		return err
 	}
-	return w.Wallet.LockAccount(ctx, acctNumber)
+	return spvw.wallet.LockAccount(ctx, acctNumber)
 }
 
 // UnlockAccount unlocks the specified account.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) UnlockAccount(ctx context.Context, account, passphrase string) error {
-	accountNumber, err := w.accountNumber(ctx, account)
+func (spvw *SpvWallet) UnlockAccount(ctx context.Context, account, passphrase string) error {
+	accountNumber, err := spvw.accountNumber(ctx, account)
 	if err != nil {
 		return err
 	}
-	return w.Wallet.UnlockAccount(ctx, accountNumber, []byte(passphrase))
+	return spvw.wallet.UnlockAccount(ctx, accountNumber, []byte(passphrase))
 }
 
 // AddressPrivKey fetches the privkey for the specified address.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (w *SpvWallet) AddressPrivKey(ctx context.Context, address stdaddr.Address) (*dcrutil.WIF, error) {
-	key, err := w.Wallet.DumpWIFPrivateKey(ctx, address)
+func (spvw *SpvWallet) AddressPrivKey(ctx context.Context, address stdaddr.Address) (*dcrutil.WIF, error) {
+	key, err := spvw.wallet.DumpWIFPrivateKey(ctx, address)
 	if err != nil {
 		if errors.Is(err, errors.Locked) {
 			return nil, fmt.Errorf("wallet or account locked, unlock first")
 		}
 		return nil, err
 	}
-	return dcrutil.DecodeWIF(key, w.chainParams.PrivateKeyID)
+	return dcrutil.DecodeWIF(key, spvw.chainParams.PrivateKeyID)
 }
 
-func (w *SpvWallet) accountNumber(ctx context.Context, account string) (uint32, error) {
-	acctNumber, err := w.Wallet.AccountNumber(ctx, account)
+func (spvw *SpvWallet) accountNumber(ctx context.Context, account string) (uint32, error) {
+	acctNumber, err := spvw.wallet.AccountNumber(ctx, account)
 	if err != nil {
 		if errors.Is(err, errors.NotExist) {
 			return 0, fmt.Errorf("%q account does not exist", account)

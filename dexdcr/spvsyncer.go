@@ -20,8 +20,8 @@ type SpvSyncer interface {
 // syncer returns the spv syncer connected to the wallet or returns an error
 // if the wallet isn't connected to an spv syncer backend. Currently, only the
 // spv backends provided by dcrwallet and dcrlibwallet are supported.
-func (w *SpvWallet) spvSyncer() (SpvSyncer, error) {
-	n, err := w.Wallet.NetworkBackend()
+func (spvw *SpvWallet) spvSyncer() (SpvSyncer, error) {
+	n, err := spvw.wallet.NetworkBackend()
 	if err != nil {
 		return nil, fmt.Errorf("wallet network backend error: %w", err)
 	}

@@ -40,7 +40,7 @@ require (
 )
 
 replace (
-	decred.org/dcrdex => github.com/itswisdomagain/dcrdex v0.0.0-20211004141752-92a02cc7352a
+	decred.org/dcrdex => github.com/itswisdomagain/dcrdex v0.0.0-20211018140804-883d93468bb7
 	github.com/planetdecred/dcrlibwallet => ../
 )
 
