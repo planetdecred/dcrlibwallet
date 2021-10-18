@@ -25,6 +25,7 @@ import (
 	walletjson "decred.org/dcrwallet/v2/rpc/jsonrpc/types"
 	"decred.org/dcrwallet/v2/wallet"
 	"decred.org/dcrwallet/v2/wallet/txrules"
+	"decred.org/dcrwallet/v2/wallet/udb"
 	"github.com/decred/dcrd/blockchain/stake/v4"
 	blockchain "github.com/decred/dcrd/blockchain/standalone/v2"
 	"github.com/decred/dcrd/chaincfg/chainhash"
@@ -99,6 +100,28 @@ func (spvw *SpvWallet) Disconnect() {
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
 func (spvw *SpvWallet) Disconnected() bool {
 	return atomic.LoadUint32(&spvw.connected) == 0
+}
+
+// Network returns the network of the connected wallet.
+// Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
+func (spvw *SpvWallet) Network(ctx context.Context) (wire.CurrencyNet, error) {
+	return spvw.wallet.ChainParams().Net, nil
+}
+
+// SpvMode returns through if the wallet is connected to the Decred
+// network via SPV peers.
+// Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
+func (spvw *SpvWallet) SpvMode() bool {
+	return true
+}
+
+// NotifyOnTipChange registers a callback function that the should be
+// invoked when the wallet sees new mainchain blocks. The return value
+// indicates if this notification can be provided.
+// Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
+func (spvw *SpvWallet) NotifyOnTipChange(ctx context.Context, cb dcr.TipChangeCallback) bool {
+	// TODO: Implement a tip change notification handler to prevent bestblock polling.
+	return false
 }
 
 // SyncStatus returns the wallet's sync status.
@@ -228,25 +251,53 @@ func (spvw *SpvWallet) LockUnspent(ctx context.Context, unlock bool, ops []*wire
 	return nil
 }
 
-// GetTxOut returns information about an unspent tx output.
-// NOTE: SPV wallets are unable to locate tx outputs that are not relevant to
-// the wallet, so this method only returns information for wallet unspent
-// outputs. This is similar to how dcrwallet handles the gettxout json-rpc
-// command in spv mode.
+// TxConfs returns the number of confirmations for the provided tx, if it
+// is known to the wallet. Returns asset.CoinNotFoundError for txs that are
+// not tracked by the wallet.
+// Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
+func (spvw *SpvWallet) TxConfs(ctx context.Context, txHash *chainhash.Hash) (uint32, error) {
+	tx, err := spvw.GetTransaction(ctx, txHash)
+	if err != nil {
+		return 0, err
+	}
+	return uint32(tx.Confirmations), nil
+}
+
+// GetTxOut returns information about an unspent tx output, if found and
+// is unspent. Use wire.TxTreeUnknown if the output tree is unknown, the
+// correct tree will be returned if the unspent output is found.
+// An asset.CoinNotFoundError is returned if the unspent output cannot be
+// located. UnspentOutput is only guaranteed to return results for outputs
+// that pay to the wallet.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
 func (spvw *SpvWallet) GetTxOut(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
-	if tree != wire.TxTreeRegular && tree != wire.TxTreeStake {
+	// gettxout in spv mode returns details for outputs as long
+	// they exist, pay to the wallet and are unspent.
+	var checkTrees []int8
+	switch {
+	case tree == wire.TxTreeUnknown:
+		checkTrees = []int8{wire.TxTreeRegular, wire.TxTreeStake}
+	case tree == wire.TxTreeRegular || tree == wire.TxTreeStake:
+		checkTrees = []int8{tree}
+	default:
 		return nil, fmt.Errorf("tx tree must be regular or stake")
 	}
 
 	// Attempt to read the unspent txout info from wallet.
-	outpoint := wire.OutPoint{Hash: *txHash, Index: index, Tree: tree}
-	utxo, err := spvw.wallet.UnspentOutput(ctx, outpoint, mempool)
-	if err != nil && !errors.Is(err, errors.NotExist) {
-		return nil, err
+	var utxo *udb.Credit
+	var err error
+	for _, tree := range checkTrees {
+		outpoint := wire.OutPoint{Hash: *txHash, Index: index, Tree: tree}
+		utxo, err = spvw.wallet.UnspentOutput(ctx, outpoint, mempool)
+		if err != nil {
+			if errors.Is(err, errors.NotExist) {
+				continue
+			}
+			return nil, err
+		}
 	}
 	if utxo == nil {
-		return nil, nil // output is spent or does not exist.
+		return nil, asset.CoinNotFoundError
 	}
 
 	// Disassemble script into single line printable format.  The
@@ -311,27 +362,31 @@ func (spvw *SpvWallet) GetNewAddressGapPolicy(ctx context.Context, account strin
 
 // SignRawTransaction signs the provided transaction.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (spvw *SpvWallet) SignRawTransaction(ctx context.Context, tx *wire.MsgTx) (*walletjson.SignRawTransactionResult, error) {
+func (spvw *SpvWallet) SignRawTransaction(ctx context.Context, txHex string) (*walletjson.SignRawTransactionResult, error) {
+	tx := wire.NewMsgTx()
+	if err := tx.Deserialize(hex.NewDecoder(strings.NewReader(txHex))); err != nil {
+		return nil, err
+	}
+
 	if len(tx.TxIn) == 0 {
 		return nil, fmt.Errorf("transaction with no inputs cannot be signed")
 	}
 
-	mtx := tx.Copy() // deep copy to prevent modifications
-	signErrs, err := spvw.wallet.SignTransaction(ctx, mtx, txscript.SigHashAll, nil, nil, nil)
+	signErrs, err := spvw.wallet.SignTransaction(ctx, tx, txscript.SigHashAll, nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	var b strings.Builder
-	b.Grow(2 * mtx.SerializeSize())
-	err = mtx.Serialize(hex.NewEncoder(&b))
+	b.Grow(2 * tx.SerializeSize())
+	err = tx.Serialize(hex.NewEncoder(&b))
 	if err != nil {
 		return nil, err
 	}
 
 	signErrors := make([]walletjson.SignRawTransactionError, 0, len(signErrs))
 	for _, e := range signErrs {
-		input := mtx.TxIn[e.InputIndex]
+		input := tx.TxIn[e.InputIndex]
 		signErrors = append(signErrors, walletjson.SignRawTransactionError{
 			TxID:      input.PreviousOutPoint.Hash.String(),
 			Vout:      input.PreviousOutPoint.Index,

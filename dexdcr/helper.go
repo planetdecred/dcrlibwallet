@@ -23,6 +23,8 @@ const (
 	// target in blocks used by estimatesmartfee to get the optimal fee for a
 	// redeem transaction.
 	defaultRedeemConfTarget = 1
+
+	WalletTypeDcrwObject = "wallet_object"
 )
 
 var configOpts = []*asset.ConfigOption{
@@ -69,26 +71,28 @@ var configOpts = []*asset.ConfigOption{
 	},
 }
 
-// SpvWalletInfo returns general information about the SpvWallet defined by
+// SpvWalletDef returns general information about the SpvWallet defined by
 // this package.
-func SpvWalletInfo() *asset.WalletInfo {
-	info := dcr.DefaultWalletInfo
-	info.DefaultConfigPath = ""
-	info.ConfigOpts = configOpts
-	return info
+func SpvWalletDef() *asset.WalletDefinition {
+	return &asset.WalletDefinition{
+		Type:        WalletTypeDcrwObject,
+		Tab:         "dcrlibwallet",
+		Description: "Requires a managed dcrlibwallet instance",
+		ConfigOpts:  configOpts,
+	}
 }
 
 // SpvWalletConstructor returns a function that uses the provided wallet to set
 // up an SpvWallet. The provided wallet will be used internally to satisfy the
 // decred.org/dcrdex/client/asset/dcr.Wallet inteface. The returned function can
-// be used along with SpvWalletInfo() to register a custom decred wallet for a
+// be used along with SpvWalletDef() to register a custom decred wallet for a
 // DEX client.
 func SpvWalletConstructor(wallet *wallet.Wallet, walletDesc string) dcr.WalletConstructor {
 	if wallet == nil {
 		panic("SpvWalletConstructor called with a nil wallet parameter")
 	}
 
-	return func(cfg *dcr.Config, chainParams *chaincfg.Params, logger dex.Logger) (dcr.Wallet, error) {
+	return func(cfg *asset.WalletConfig, chainParams *chaincfg.Params, logger dex.Logger) (dcr.Wallet, error) {
 		if wallet.ChainParams().Net != chainParams.Net {
 			return nil, fmt.Errorf("incompatible dcrwallet network %s, expected %s", wallet.ChainParams().Name, chainParams.Name)
 		}
@@ -106,5 +110,5 @@ func SpvWalletConstructor(wallet *wallet.Wallet, walletDesc string) dcr.WalletCo
 // making rpc requests to an external dcrwallet daemon.
 func UseSpvWalletForDexClient(wallet *wallet.Wallet, walletDesc string) {
 	spvWalletConstructor := SpvWalletConstructor(wallet, walletDesc)
-	dcr.RegisterCustomWallet(spvWalletConstructor, SpvWalletInfo())
+	dcr.RegisterCustomWallet(spvWalletConstructor, SpvWalletDef())
 }

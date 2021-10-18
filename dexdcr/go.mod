@@ -17,7 +17,7 @@ require (
 	github.com/decred/dcrd/crypto/ripemd160 v1.0.2-0.20210914212651-723d86274b0d // indirect
 	github.com/decred/dcrd/database/v3 v3.0.0-20210914212651-723d86274b0d // indirect
 	github.com/decred/dcrd/dcrec v1.0.1-0.20210914212651-723d86274b0d // indirect
-	github.com/decred/dcrd/dcrec/edwards/v2 v2.0.2-0.20210715032435-c9521b468f95 // indirect
+	github.com/decred/dcrd/dcrec/edwards/v2 v2.0.2-0.20210914193033-2efb9bda71fe // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1-0.20210914212651-723d86274b0d // indirect
 	github.com/decred/dcrd/dcrjson/v4 v4.0.0
 	github.com/decred/dcrd/dcrutil/v4 v4.0.0-20210914212651-723d86274b0d
@@ -40,7 +40,7 @@ require (
 )
 
 replace (
-	decred.org/dcrdex => github.com/itswisdomagain/dcrdex v0.0.0-20211018140804-883d93468bb7
+	decred.org/dcrdex => github.com/itswisdomagain/dcrdex v0.0.0-20211025162011-8ad124e8d140
 	github.com/planetdecred/dcrlibwallet => ../
 )
 
