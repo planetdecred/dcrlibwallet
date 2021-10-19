@@ -31,6 +31,8 @@ const (
 
 	ticketVoteApi       = tkv1.APIRoute
 	proposalDetailsPath = "/proposals/"
+
+	PoliteiaLastSyncedTimestampConfigKey = "politeia_last_synced_timestamp"
 )
 
 var apiPath = www.PoliteiaWWWAPIRoute

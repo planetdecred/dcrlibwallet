@@ -45,6 +45,10 @@ const (
 	LegacyMainnetHDPath = "m / 44’ / 20’ / "
 
 	DefaultRequiredConfirmations = 2
+
+	LongAbbreviationFormat     = "long"
+	ShortAbbreviationFormat    = "short"
+	ShortestAbbreviationFormat = "shortest"
 )
 
 func (mw *MultiWallet) RequiredConfirmations() int32 {
@@ -321,4 +325,124 @@ func initWalletLoader(chainParams *chaincfg.Params, walletDataDir, walletDbDrive
 	}
 
 	return walletLoader
+}
+
+// makePlural is used with the TimeElapsed function. makePlural checks if the arguments passed is > 1,
+// if true, it adds "s" after the given time to make it plural
+func makePlural(x float64) string {
+	if int(x) == 1 {
+		return ""
+	}
+	return "s"
+}
+
+// TimeElapsed returns the formatted time diffrence between two times as a string.
+// If the argument `fullTime` is set to true, then the full time available is returned e.g 3 hours, 2 minutes, 20 seconds ago,
+// as opposed to 3 hours ago.
+// If the argument `abbreviationFormat` is set to `long` the time format is e.g 2 minutes
+// If the argument `abbreviationFormat` is set to `short` the time format is e.g 2 mins
+// If the argument `abbreviationFormat` is set to `shortest` the time format is e.g 2 m
+func TimeElapsed(now, then time.Time, abbreviationFormat string, fullTime bool) string {
+	var parts []string
+	var text string
+
+	year2, month2, day2 := now.Date()
+	hour2, minute2, second2 := now.Clock()
+
+	year1, month1, day1 := then.Date()
+	hour1, minute1, second1 := then.Clock()
+
+	year := math.Abs(float64(year2 - year1))
+	month := math.Abs(float64(month2 - month1))
+	day := math.Abs(float64(day2 - day1))
+	hour := math.Abs(float64(hour2 - hour1))
+	minute := math.Abs(float64(minute2 - minute1))
+	second := math.Abs(float64(second2 - second1))
+
+	week := math.Floor(day / 7)
+
+	if year > 0 {
+		if abbreviationFormat == LongAbbreviationFormat {
+			parts = append(parts, strconv.Itoa(int(year))+" year"+makePlural(year))
+		} else if abbreviationFormat == ShortAbbreviationFormat {
+			parts = append(parts, strconv.Itoa(int(year))+" yr"+makePlural(year))
+		} else if abbreviationFormat == ShortestAbbreviationFormat {
+			parts = append(parts, strconv.Itoa(int(year))+" y")
+		}
+	}
+
+	if month > 0 {
+		if abbreviationFormat == LongAbbreviationFormat {
+			parts = append(parts, strconv.Itoa(int(month))+" month"+makePlural(month))
+		} else if abbreviationFormat == ShortAbbreviationFormat {
+			parts = append(parts, strconv.Itoa(int(month))+" mon"+makePlural(month))
+		} else if abbreviationFormat == ShortestAbbreviationFormat {
+			parts = append(parts, strconv.Itoa(int(month))+" m")
+		}
+	}
+
+	if week > 0 {
+		if abbreviationFormat == LongAbbreviationFormat {
+			parts = append(parts, strconv.Itoa(int(week))+" week"+makePlural(week))
+		} else if abbreviationFormat == ShortAbbreviationFormat {
+			parts = append(parts, strconv.Itoa(int(week))+" wk"+makePlural(week))
+		} else if abbreviationFormat == ShortestAbbreviationFormat {
+			parts = append(parts, strconv.Itoa(int(week))+" w")
+		}
+	}
+
+	if day > 0 {
+		if abbreviationFormat == LongAbbreviationFormat {
+			parts = append(parts, strconv.Itoa(int(day))+" day"+makePlural(day))
+		} else if abbreviationFormat == ShortAbbreviationFormat {
+			parts = append(parts, strconv.Itoa(int(day))+" dy"+makePlural(day))
+		} else if abbreviationFormat == ShortestAbbreviationFormat {
+			parts = append(parts, strconv.Itoa(int(day))+" d")
+		}
+	}
+
+	if hour > 0 {
+		if abbreviationFormat == LongAbbreviationFormat {
+			parts = append(parts, strconv.Itoa(int(hour))+" hour"+makePlural(hour))
+		} else if abbreviationFormat == ShortAbbreviationFormat {
+			parts = append(parts, strconv.Itoa(int(hour))+" hr"+makePlural(hour))
+		} else if abbreviationFormat == ShortestAbbreviationFormat {
+			parts = append(parts, strconv.Itoa(int(hour))+" h")
+		}
+	}
+
+	if minute > 0 {
+		if abbreviationFormat == LongAbbreviationFormat {
+			parts = append(parts, strconv.Itoa(int(minute))+" minute"+makePlural(minute))
+		} else if abbreviationFormat == ShortAbbreviationFormat {
+			parts = append(parts, strconv.Itoa(int(minute))+" min"+makePlural(minute))
+		} else if abbreviationFormat == ShortestAbbreviationFormat {
+			parts = append(parts, strconv.Itoa(int(minute))+" mi")
+		}
+	}
+
+	if second > 0 {
+		if abbreviationFormat == LongAbbreviationFormat {
+			parts = append(parts, strconv.Itoa(int(second))+" second"+makePlural(second))
+		} else if abbreviationFormat == ShortAbbreviationFormat {
+			parts = append(parts, strconv.Itoa(int(second))+" sec"+makePlural(second))
+		} else if abbreviationFormat == ShortestAbbreviationFormat {
+			parts = append(parts, strconv.Itoa(int(second))+" s")
+		}
+	}
+
+	if now.After(then) {
+		text = " ago"
+	} else {
+		text = " after"
+	}
+
+	if len(parts) == 0 {
+		return "just now"
+	}
+
+	if fullTime {
+		return strings.Join(parts, ", ") + text
+	}
+	return parts[0] + text
 }
