@@ -96,12 +96,7 @@ func SpvWalletConstructor(wallet *wallet.Wallet, walletDesc string) dcr.WalletCo
 		if wallet.ChainParams().Net != chainParams.Net {
 			return nil, fmt.Errorf("incompatible dcrwallet network %s, expected %s", wallet.ChainParams().Name, chainParams.Name)
 		}
-		return &SpvWallet{
-			wallet:      wallet,
-			desc:        walletDesc,
-			chainParams: chainParams,
-			log:         logger.SubLogger("spvw"),
-		}, nil
+		return NewSpvWallet(wallet, walletDesc, chainParams, logger.SubLogger("spvw")), nil
 	}
 }
 

@@ -25,7 +25,6 @@ import (
 	walletjson "decred.org/dcrwallet/v2/rpc/jsonrpc/types"
 	"decred.org/dcrwallet/v2/wallet"
 	"decred.org/dcrwallet/v2/wallet/txrules"
-	"decred.org/dcrwallet/v2/wallet/udb"
 	"github.com/decred/dcrd/blockchain/stake/v4"
 	blockchain "github.com/decred/dcrd/blockchain/standalone/v2"
 	"github.com/decred/dcrd/chaincfg/chainhash"
@@ -61,6 +60,15 @@ type SpvWallet struct {
 // Ensure that SpvWallet satisfies the decred.org/dcrdex/client/asset/dcr.Wallet
 // interface.
 var _ dcr.Wallet = (*SpvWallet)(nil)
+
+func NewSpvWallet(wallet *wallet.Wallet, walletDesc string, chainParams *chaincfg.Params, log dex.Logger) *SpvWallet {
+	return &SpvWallet{
+		wallet:      wallet,
+		desc:        walletDesc,
+		chainParams: chainParams,
+		log:         log,
+	}
+}
 
 // Connect establishes a connection to the wallet.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
@@ -263,41 +271,19 @@ func (spvw *SpvWallet) TxConfs(ctx context.Context, txHash *chainhash.Hash) (uin
 	return uint32(tx.Confirmations), nil
 }
 
-// GetTxOut returns information about an unspent tx output, if found and
-// is unspent. Use wire.TxTreeUnknown if the output tree is unknown, the
-// correct tree will be returned if the unspent output is found.
-// An asset.CoinNotFoundError is returned if the unspent output cannot be
-// located. UnspentOutput is only guaranteed to return results for outputs
-// that pay to the wallet.
+// GetTxOut returns information about an unspent tx output.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
 func (spvw *SpvWallet) GetTxOut(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
+	// Attempt to read the unspent txout info from wallet.
 	// gettxout in spv mode returns details for outputs as long
 	// they exist, pay to the wallet and are unspent.
-	var checkTrees []int8
-	switch {
-	case tree == wire.TxTreeUnknown:
-		checkTrees = []int8{wire.TxTreeRegular, wire.TxTreeStake}
-	case tree == wire.TxTreeRegular || tree == wire.TxTreeStake:
-		checkTrees = []int8{tree}
-	default:
-		return nil, fmt.Errorf("tx tree must be regular or stake")
-	}
-
-	// Attempt to read the unspent txout info from wallet.
-	var utxo *udb.Credit
-	var err error
-	for _, tree := range checkTrees {
-		outpoint := wire.OutPoint{Hash: *txHash, Index: index, Tree: tree}
-		utxo, err = spvw.wallet.UnspentOutput(ctx, outpoint, mempool)
-		if err != nil {
-			if errors.Is(err, errors.NotExist) {
-				continue
-			}
-			return nil, err
+	outpoint := wire.OutPoint{Hash: *txHash, Index: index, Tree: tree}
+	utxo, err := spvw.wallet.UnspentOutput(ctx, outpoint, mempool)
+	if err != nil {
+		if errors.Is(err, errors.NotExist) {
+			return nil, asset.CoinNotFoundError
 		}
-	}
-	if utxo == nil {
-		return nil, asset.CoinNotFoundError
+		return nil, err
 	}
 
 	// Disassemble script into single line printable format.  The

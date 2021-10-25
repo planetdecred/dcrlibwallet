@@ -2,7 +2,7 @@ module github.com/planetdecred/dcrlibwallet/dexdcr
 
 require (
 	decred.org/cspp v0.3.0 // indirect
-	decred.org/dcrdex v0.0.0-20210929171239-72212a8bfa41
+	decred.org/dcrdex v0.0.0-20211025162648-1c508cb04d1c
 	decred.org/dcrwallet/v2 v2.0.0-20210923184553-4f3b2d70ea25
 	github.com/agl/ed25519 v0.0.0-20170116200512-5312a6153412 // indirect
 	github.com/dchest/siphash v1.2.2 // indirect
@@ -39,9 +39,6 @@ require (
 	gopkg.in/ini.v1 v1.55.0 // indirect
 )
 
-replace (
-	decred.org/dcrdex => github.com/itswisdomagain/dcrdex v0.0.0-20211025162011-8ad124e8d140
-	github.com/planetdecred/dcrlibwallet => ../
-)
+replace github.com/planetdecred/dcrlibwallet => ../
 
 go 1.17
