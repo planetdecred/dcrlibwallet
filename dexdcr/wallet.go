@@ -442,13 +442,15 @@ func (spvw *SpvWallet) GetBlockHeaderVerbose(ctx context.Context, blockHash *cha
 
 	// Calculate past median time. Look at the last 11 blocks, starting
 	// with the requested block, which is consistent with dcrd.
+	// Calculate past median time. Look at the last 11 blocks, starting
+	// with the requested block, which is consistent with dcrd.
 	timestamps := make([]int64, 0, 11)
-	for i := 0; i < cap(timestamps); i++ {
-		timestamps = append(timestamps, blockHeader.Timestamp.Unix())
-		if blockHeader.Height == 0 {
+	for iBlkHeader := blockHeader; ; {
+		timestamps = append(timestamps, iBlkHeader.Timestamp.Unix())
+		if iBlkHeader.Height == 0 || len(timestamps) == cap(timestamps) {
 			break
 		}
-		blockHeader, err = spvw.wallet.BlockHeader(ctx, &blockHeader.PrevBlock)
+		iBlkHeader, err = spvw.wallet.BlockHeader(ctx, &iBlkHeader.PrevBlock)
 		if err != nil {
 			return nil, fmt.Errorf("unable to calculate median block time: %w", err)
 		}
@@ -456,8 +458,7 @@ func (spvw *SpvWallet) GetBlockHeaderVerbose(ctx context.Context, blockHash *cha
 	sort.Slice(timestamps, func(i, j int) bool {
 		return timestamps[i] < timestamps[j]
 	})
-	medianTimestamp := timestamps[len(timestamps)/2]
-	medianTime := time.Unix(medianTimestamp, 0)
+	medianTime := timestamps[len(timestamps)/2]
 
 	return &chainjson.GetBlockHeaderVerboseResult{
 		Hash:          blockHash.String(),
@@ -476,12 +477,12 @@ func (spvw *SpvWallet) GetBlockHeaderVerbose(ctx context.Context, blockHash *cha
 		Height:        blockHeader.Height,
 		Size:          blockHeader.Size,
 		Time:          blockHeader.Timestamp.Unix(),
-		MedianTime:    medianTime.Unix(),
+		MedianTime:    medianTime,
 		Nonce:         blockHeader.Nonce,
 		ExtraData:     hex.EncodeToString(blockHeader.ExtraData[:]),
 		StakeVersion:  blockHeader.StakeVersion,
 		Difficulty:    difficultyRatio(blockHeader.Bits, spvw.chainParams, spvw.log),
-		ChainWork:     fmt.Sprintf("%064x", blockchain.CalcWork(blockHeader.Bits)),
+		ChainWork:     "", // not set by the dcrwallet json-rpc handler in spv mode
 		PreviousHash:  blockHeader.PrevBlock.String(),
 		NextHash:      nextHashString,
 	}, nil
@@ -530,6 +531,24 @@ func (spvw *SpvWallet) GetBlockVerbose(ctx context.Context, blockHash *chainhash
 		confirmations = int64(confirms(blockHeight, bestHeight))
 	}
 
+	// Calculate past median time. Look at the last 11 blocks, starting
+	// with the requested block, which is consistent with dcrd.
+	timestamps := make([]int64, 0, 11)
+	for iBlkHeader := blockHeader; ; {
+		timestamps = append(timestamps, iBlkHeader.Timestamp.Unix())
+		if iBlkHeader.Height == 0 || len(timestamps) == cap(timestamps) {
+			break
+		}
+		iBlkHeader, err = spvw.wallet.BlockHeader(ctx, &iBlkHeader.PrevBlock)
+		if err != nil {
+			return nil, fmt.Errorf("unable to calculate median block time: %w", err)
+		}
+	}
+	sort.Slice(timestamps, func(i, j int) bool {
+		return timestamps[i] < timestamps[j]
+	})
+	medianTime := timestamps[len(timestamps)/2]
+
 	sbitsFloat := float64(blockHeader.SBits) / dcrutil.AtomsPerCoin
 	blockReply := &chainjson.GetBlockVerboseResult{
 		Hash:          blockHash.String(),
@@ -545,6 +564,7 @@ func (spvw *SpvWallet) GetBlockVerbose(ctx context.Context, blockHash *chainhash
 		Revocations:   blockHeader.Revocations,
 		PoolSize:      blockHeader.PoolSize,
 		Time:          blockHeader.Timestamp.Unix(),
+		MedianTime:    medianTime,
 		StakeVersion:  blockHeader.StakeVersion,
 		Confirmations: confirmations,
 		Height:        int64(blockHeader.Height),
@@ -552,15 +572,13 @@ func (spvw *SpvWallet) GetBlockVerbose(ctx context.Context, blockHash *chainhash
 		Bits:          strconv.FormatInt(int64(blockHeader.Bits), 16),
 		SBits:         sbitsFloat,
 		Difficulty:    difficultyRatio(blockHeader.Bits, spvw.chainParams, spvw.log),
-		ChainWork:     fmt.Sprintf("%064x", blockchain.CalcWork(blockHeader.Bits)),
+		ChainWork:     "", // not set by the dcrwallet json-rpc handler in spv mode
 		ExtraData:     hex.EncodeToString(blockHeader.ExtraData[:]),
 		NextHash:      nextHashString,
 	}
 
-	// Determine if the treasury rules are active for the block.
-	// All txs in the stake tree must be version 3 once the treasury agenda
-	// is active.
-	isTreasuryEnabled := blk.STransactions[0].Version == wire.TxVersionTreasury
+	// The coinbase must be version 3 once the treasury agenda is active.
+	isTreasuryEnabled := blk.Transactions[0].Version >= wire.TxVersionTreasury
 
 	if !verboseTx {
 		transactions := blk.Transactions
@@ -614,23 +632,19 @@ func createTxRawResult(chainParams *chaincfg.Params, mtx *wire.MsgTx, blkIdx uin
 	}
 
 	txReply := &chainjson.TxRawResult{
-		Hex:        b.String(),
-		Txid:       mtx.CachedTxHash().String(),
-		Vin:        createVinList(mtx, isTreasuryEnabled),
-		Vout:       createVoutList(mtx, chainParams, nil, isTreasuryEnabled, log),
-		Version:    int32(mtx.Version),
-		LockTime:   mtx.LockTime,
-		Expiry:     mtx.Expiry,
-		BlockIndex: blkIdx,
-	}
-
-	if blkHeader != nil {
-		// This is not a typo, they are identical in bitcoind as well.
-		txReply.BlockHeight = int64(blkHeader.Height)
-		txReply.Time = blkHeader.Timestamp.Unix()
-		txReply.Blocktime = blkHeader.Timestamp.Unix()
-		txReply.BlockHash = blkHeader.BlockHash().String()
-		txReply.Confirmations = confirmations
+		Hex:           b.String(),
+		Txid:          mtx.CachedTxHash().String(),
+		Vin:           createVinList(mtx, isTreasuryEnabled),
+		Vout:          createVoutList(mtx, chainParams, nil, isTreasuryEnabled, log),
+		Version:       int32(mtx.Version),
+		LockTime:      mtx.LockTime,
+		Expiry:        mtx.Expiry,
+		BlockIndex:    blkIdx,
+		BlockHeight:   int64(blkHeader.Height),
+		Time:          blkHeader.Timestamp.Unix(),
+		Blocktime:     blkHeader.Timestamp.Unix(),
+		BlockHash:     blkHeader.BlockHash().String(),
+		Confirmations: confirmations,
 	}
 
 	return txReply, nil
