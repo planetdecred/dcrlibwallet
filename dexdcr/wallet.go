@@ -259,18 +259,6 @@ func (spvw *SpvWallet) LockUnspent(ctx context.Context, unlock bool, ops []*wire
 	return nil
 }
 
-// TxConfs returns the number of confirmations for the provided tx, if it
-// is known to the wallet. Returns asset.CoinNotFoundError for txs that are
-// not tracked by the wallet.
-// Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (spvw *SpvWallet) TxConfs(ctx context.Context, txHash *chainhash.Hash) (uint32, error) {
-	tx, err := spvw.GetTransaction(ctx, txHash)
-	if err != nil {
-		return 0, err
-	}
-	return uint32(tx.Confirmations), nil
-}
-
 // GetTxOut returns information about an unspent tx output.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
 func (spvw *SpvWallet) GetTxOut(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
