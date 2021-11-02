@@ -32,13 +32,11 @@ require (
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/jrick/bitset v1.0.0 // indirect
 	github.com/jrick/wsrpc/v2 v2.3.4 // indirect
-	github.com/planetdecred/dcrlibwallet v0.0.0-00010101000000-000000000000
+	github.com/planetdecred/dcrlibwallet v1.6.2-0.20211102093800-0ba0a60df378
 	golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	golang.org/x/sys v0.0.0-20210903071746-97244b99971b // indirect
 	gopkg.in/ini.v1 v1.55.0 // indirect
 )
-
-replace github.com/planetdecred/dcrlibwallet => ../
 
 go 1.17
