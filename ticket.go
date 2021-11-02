@@ -114,12 +114,12 @@ func (mw *MultiWallet) StakingOverview() (stOverview *StakingOverview, err error
 // May be incorrect if blockchain sync is ongoing or if blockchain is not up-to-date.
 func (wallet *Wallet) TicketPrice() (*TicketPriceResponse, error) {
 	ctx := wallet.shutdownContext()
-	sdiff, err := wallet.internal.NextStakeDifficulty(ctx)
+	sdiff, err := wallet.Internal().NextStakeDifficulty(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	_, tipHeight := wallet.internal.MainChainTip(ctx)
+	_, tipHeight := wallet.Internal().MainChainTip(ctx)
 	resp := &TicketPriceResponse{
 		TicketPrice: int64(sdiff),
 		Height:      tipHeight,

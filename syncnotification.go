@@ -667,7 +667,7 @@ func (mw *MultiWallet) synced(walletID int, synced bool) {
 	wallet.syncing = false
 	mw.listenForTransactions(wallet.ID)
 
-	if !wallet.internal.Locked() {
+	if !wallet.Internal().Locked() {
 		wallet.LockWallet() // lock wallet if previously unlocked to perform account discovery.
 		err := mw.markWalletAsDiscoveredAccounts(walletID)
 		if err != nil {

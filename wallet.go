@@ -26,7 +26,6 @@ type Wallet struct {
 	HasDiscoveredAccounts bool
 	PrivatePassphraseType int32
 
-	internal     *w.Wallet
 	chainParams  *chaincfg.Params
 	dataDir      string
 	loader       *loader.Loader
@@ -130,6 +129,11 @@ func (wallet *Wallet) NetType() string {
 	return wallet.chainParams.Name
 }
 
+func (wallet *Wallet) Internal() *w.Wallet {
+	lw, _ := wallet.loader.LoadedWallet()
+	return lw
+}
+
 func (wallet *Wallet) WalletExists() (bool, error) {
 	return wallet.loader.WalletExists()
 }
@@ -148,13 +152,11 @@ func (wallet *Wallet) createWallet(privatePassphrase, seedMnemonic string) error
 		return err
 	}
 
-	createdWallet, err := wallet.loader.CreateNewWallet(wallet.shutdownContext(), pubPass, privPass, seed)
+	_, err = wallet.loader.CreateNewWallet(wallet.shutdownContext(), pubPass, privPass, seed)
 	if err != nil {
 		log.Error(err)
 		return err
 	}
-
-	wallet.internal = createdWallet
 
 	log.Info("Created Wallet")
 	return nil
@@ -163,13 +165,11 @@ func (wallet *Wallet) createWallet(privatePassphrase, seedMnemonic string) error
 func (wallet *Wallet) createWatchingOnlyWallet(extendedPublicKey string) error {
 	pubPass := []byte(w.InsecurePubPassphrase)
 
-	createdWallet, err := wallet.loader.CreateWatchingOnlyWallet(wallet.shutdownContext(), extendedPublicKey, pubPass)
+	_, err := wallet.loader.CreateWatchingOnlyWallet(wallet.shutdownContext(), extendedPublicKey, pubPass)
 	if err != nil {
 		log.Error(err)
 		return err
 	}
-
-	wallet.internal = createdWallet
 
 	log.Info("Created Watching Only Wallet")
 	return nil
@@ -186,19 +186,17 @@ func (wallet *Wallet) IsWatchingOnlyWallet() bool {
 func (wallet *Wallet) openWallet() error {
 	pubPass := []byte(w.InsecurePubPassphrase)
 
-	openedWallet, err := wallet.loader.OpenExistingWallet(wallet.shutdownContext(), pubPass)
+	_, err := wallet.loader.OpenExistingWallet(wallet.shutdownContext(), pubPass)
 	if err != nil {
 		log.Error(err)
 		return translateError(err)
 	}
 
-	wallet.internal = openedWallet
-
 	return nil
 }
 
 func (wallet *Wallet) WalletOpened() bool {
-	return wallet.internal != nil
+	return wallet.Internal() != nil
 }
 
 func (wallet *Wallet) UnlockWallet(privPass []byte) error {
@@ -225,15 +223,16 @@ func (wallet *Wallet) UnlockWallet(privPass []byte) error {
 func (wallet *Wallet) LockWallet() {
 	if wallet.IsAccountMixerActive() {
 		log.Error("LockWallet ignored due to active account mixer")
+		return
 	}
 
-	if !wallet.internal.Locked() {
-		wallet.internal.Lock()
+	if !wallet.Internal().Locked() {
+		wallet.Internal().Lock()
 	}
 }
 
 func (wallet *Wallet) IsLocked() bool {
-	return wallet.internal.Locked()
+	return wallet.Internal().Locked()
 }
 
 func (wallet *Wallet) changePrivatePassphrase(oldPass []byte, newPass []byte) error {
@@ -247,7 +246,7 @@ func (wallet *Wallet) changePrivatePassphrase(oldPass []byte, newPass []byte) er
 		}
 	}()
 
-	err := wallet.internal.ChangePrivatePassphrase(wallet.shutdownContext(), oldPass, newPass)
+	err := wallet.Internal().ChangePrivatePassphrase(wallet.shutdownContext(), oldPass, newPass)
 	if err != nil {
 		return translateError(err)
 	}
@@ -266,11 +265,11 @@ func (wallet *Wallet) deleteWallet(privatePassphrase []byte) error {
 	}
 
 	if !wallet.IsWatchingOnlyWallet() {
-		err := wallet.internal.Unlock(wallet.shutdownContext(), privatePassphrase, nil)
+		err := wallet.Internal().Unlock(wallet.shutdownContext(), privatePassphrase, nil)
 		if err != nil {
 			return translateError(err)
 		}
-		wallet.internal.Lock()
+		wallet.Internal().Lock()
 	}
 
 	wallet.Shutdown()

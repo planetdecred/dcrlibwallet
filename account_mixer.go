@@ -161,7 +161,7 @@ func (mw *MultiWallet) StartAccountMixer(walletID int, walletPassphrase string) 
 		return errors.New(ErrNotExist)
 	}
 
-	tb := ticketbuyer.New(wallet.internal)
+	tb := ticketbuyer.New(wallet.Internal())
 
 	mixedAccount := wallet.ReadInt32ConfigValueForKey(AccountMixerMixedAccount, -1)
 	unmixedAccount := wallet.ReadInt32ConfigValueForKey(AccountMixerUnmixedAccount, -1)
@@ -260,7 +260,7 @@ func (wallet *Wallet) accountHasMixableOutput(accountNumber int32) (bool, error)
 
 	// fetch all utxos in account to extract details for the utxos selected by user
 	// use targetAmount = 0 to fetch ALL utxos in account
-	inputDetail, err := wallet.internal.SelectInputs(wallet.shutdownContext(), dcrutil.Amount(0), policy)
+	inputDetail, err := wallet.Internal().SelectInputs(wallet.shutdownContext(), dcrutil.Amount(0), policy)
 	if err != nil {
 		return false, nil
 	}
@@ -279,7 +279,7 @@ func (wallet *Wallet) accountHasMixableOutput(accountNumber int32) (bool, error)
 			return hasMixableOutput, nil
 		}
 
-		lockedOutpoints, err := wallet.internal.LockedOutpoints(wallet.shutdownContext(), accountName)
+		lockedOutpoints, err := wallet.Internal().LockedOutpoints(wallet.shutdownContext(), accountName)
 		if err != nil {
 			return hasMixableOutput, nil
 		}

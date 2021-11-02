@@ -81,7 +81,7 @@ func (wallet *Wallet) IndexTransactions() error {
 	}()
 
 	log.Infof("[%d] Indexing transactions start height: %d, end height: %d", wallet.ID, beginHeight, endHeight)
-	return wallet.internal.GetTransactions(ctx, rangeFn, startBlock, endBlock)
+	return wallet.Internal().GetTransactions(ctx, rangeFn, startBlock, endBlock)
 }
 
 func (wallet *Wallet) reindexTransactions() error {

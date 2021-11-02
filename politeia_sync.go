@@ -411,7 +411,7 @@ func (p *Politeia) ProposalVoteDetailsRaw(walletID int, token string) (*Proposal
 		return nil, err
 	}
 
-	ticketHashes, addresses, err := wal.internal.CommittedTickets(wal.shutdownContext(), hashes)
+	ticketHashes, addresses, err := wal.Internal().CommittedTickets(wal.shutdownContext(), hashes)
 	if err != nil {
 		return nil, err
 	}

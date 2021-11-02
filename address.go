@@ -28,7 +28,7 @@ func (wallet *Wallet) HaveAddress(address string) bool {
 		return false
 	}
 
-	have, err := wallet.internal.HaveAddress(wallet.shutdownContext(), addr)
+	have, err := wallet.Internal().HaveAddress(wallet.shutdownContext(), addr)
 	if err != nil {
 		return false
 	}
@@ -42,7 +42,7 @@ func (wallet *Wallet) AccountOfAddress(address string) (string, error) {
 		return "", translateError(err)
 	}
 
-	a, err := wallet.internal.KnownAddress(wallet.shutdownContext(), addr)
+	a, err := wallet.Internal().KnownAddress(wallet.shutdownContext(), addr)
 	if err != nil {
 		return "", translateError(err)
 	}
@@ -60,7 +60,7 @@ func (wallet *Wallet) AddressInfo(address string) (*AddressInfo, error) {
 		Address: address,
 	}
 
-	known, _ := wallet.internal.KnownAddress(wallet.shutdownContext(), addr)
+	known, _ := wallet.Internal().KnownAddress(wallet.shutdownContext(), addr)
 	if known != nil {
 		addressInfo.IsMine = true
 		addressInfo.AccountName = known.AccountName()
@@ -80,7 +80,7 @@ func (wallet *Wallet) CurrentAddress(account int32) (string, error) {
 		return "", errors.E(ErrAddressDiscoveryNotDone)
 	}
 
-	addr, err := wallet.internal.CurrentAddress(uint32(account))
+	addr, err := wallet.Internal().CurrentAddress(uint32(account))
 	if err != nil {
 		log.Error(err)
 		return "", err
@@ -93,7 +93,7 @@ func (wallet *Wallet) NextAddress(account int32) (string, error) {
 		return "", errors.E(ErrAddressDiscoveryNotDone)
 	}
 
-	addr, err := wallet.internal.NewExternalAddress(wallet.shutdownContext(), uint32(account), w.WithGapPolicyWrap())
+	addr, err := wallet.Internal().NewExternalAddress(wallet.shutdownContext(), uint32(account), w.WithGapPolicyWrap())
 	if err != nil {
 		log.Error(err)
 		return "", err
@@ -107,7 +107,7 @@ func (wallet *Wallet) AddressPubKey(address string) (string, error) {
 		return "", err
 	}
 
-	known, err := wallet.internal.KnownAddress(wallet.shutdownContext(), addr)
+	known, err := wallet.Internal().KnownAddress(wallet.shutdownContext(), addr)
 	if err != nil {
 		return "", err
 	}

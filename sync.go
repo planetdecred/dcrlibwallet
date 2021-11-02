@@ -219,7 +219,7 @@ func (mw *MultiWallet) SpvSync() error {
 
 	wallets := make(map[int]*w.Wallet)
 	for id, wallet := range mw.wallets {
-		wallets[id] = wallet.internal
+		wallets[id] = wallet.Internal()
 		wallet.waitingForHeaders = true
 		wallet.syncing = true
 	}
@@ -453,27 +453,27 @@ func (mw *MultiWallet) GetLowestBlock() *BlockInfo {
 }
 
 func (wallet *Wallet) GetBestBlock() int32 {
-	if wallet.internal == nil {
+	if wallet.Internal() == nil {
 		// This method is sometimes called after a wallet is deleted and causes crash.
 		log.Error("Attempting to read best block height without a loaded wallet.")
 		return 0
 	}
 
-	_, height := wallet.internal.MainChainTip(wallet.shutdownContext())
+	_, height := wallet.Internal().MainChainTip(wallet.shutdownContext())
 	return height
 }
 
 func (wallet *Wallet) GetBestBlockTimeStamp() int64 {
-	if wallet.internal == nil {
+	if wallet.Internal() == nil {
 		// This method is sometimes called after a wallet is deleted and causes crash.
 		log.Error("Attempting to read best block timestamp without a loaded wallet.")
 		return 0
 	}
 
 	ctx := wallet.shutdownContext()
-	_, height := wallet.internal.MainChainTip(ctx)
+	_, height := wallet.Internal().MainChainTip(ctx)
 	identifier := w.NewBlockIdentifierFromHeight(height)
-	info, err := wallet.internal.BlockInfo(ctx, identifier)
+	info, err := wallet.Internal().BlockInfo(ctx, identifier)
 	if err != nil {
 		log.Error(err)
 		return 0

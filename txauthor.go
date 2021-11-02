@@ -194,7 +194,7 @@ func (tx *TxAuthor) UseInputs(utxoKeys []string) error {
 			Hash:  *txHash,
 			Index: uint32(index),
 		}
-		outputInfo, err := tx.sourceWallet.internal.OutputInfo(tx.sourceWallet.shutdownContext(), op)
+		outputInfo, err := tx.sourceWallet.Internal().OutputInfo(tx.sourceWallet.shutdownContext(), op)
 		if err != nil {
 			return fmt.Errorf("no valid utxo found for '%s' in the source account", utxoKey)
 		}
@@ -215,7 +215,7 @@ func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
 		}
 	}()
 
-	n, err := tx.sourceWallet.internal.NetworkBackend()
+	n, err := tx.sourceWallet.Internal().NetworkBackend()
 	if err != nil {
 		log.Error(err)
 		return nil, err
@@ -252,7 +252,7 @@ func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
 	}()
 
 	ctx := tx.sourceWallet.shutdownContext()
-	err = tx.sourceWallet.internal.Unlock(ctx, privatePassphrase, lock)
+	err = tx.sourceWallet.Internal().Unlock(ctx, privatePassphrase, lock)
 	if err != nil {
 		log.Error(err)
 		return nil, errors.New(ErrInvalidPassphrase)
@@ -260,7 +260,7 @@ func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
 
 	var additionalPkScripts map[wire.OutPoint][]byte
 
-	invalidSigs, err := tx.sourceWallet.internal.SignTransaction(ctx, &msgTx, txscript.SigHashAll, additionalPkScripts, nil, nil)
+	invalidSigs, err := tx.sourceWallet.Internal().SignTransaction(ctx, &msgTx, txscript.SigHashAll, additionalPkScripts, nil, nil)
 	if err != nil {
 		log.Error(err)
 		return nil, err
@@ -286,7 +286,7 @@ func (tx *TxAuthor) Broadcast(privatePassphrase []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	txHash, err := tx.sourceWallet.internal.PublishTransaction(ctx, &msgTx, n)
+	txHash, err := tx.sourceWallet.Internal().PublishTransaction(ctx, &msgTx, n)
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -365,7 +365,7 @@ func (tx *TxAuthor) constructTransaction() (*txauthor.AuthoredTx, error) {
 	}
 
 	requiredConfirmations := tx.sourceWallet.RequiredConfirmations()
-	return tx.sourceWallet.internal.NewUnsignedTransaction(ctx, outputs, txrules.DefaultRelayFeePerKb, tx.sourceAccountNumber,
+	return tx.sourceWallet.Internal().NewUnsignedTransaction(ctx, outputs, txrules.DefaultRelayFeePerKb, tx.sourceAccountNumber,
 		requiredConfirmations, outputSelectionAlgorithm, changeSource, nil)
 }
 
@@ -385,7 +385,7 @@ func (tx *TxAuthor) changeSource(ctx context.Context) (txauthor.ChangeSource, er
 			changeAccount = tx.sourceAccountNumber
 		}
 
-		address, err := tx.sourceWallet.internal.NewChangeAddress(ctx, changeAccount)
+		address, err := tx.sourceWallet.Internal().NewChangeAddress(ctx, changeAccount)
 		if err != nil {
 			return nil, fmt.Errorf("change address error: %v", err)
 		}
