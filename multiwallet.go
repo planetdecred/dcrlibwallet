@@ -40,6 +40,8 @@ type MultiWallet struct {
 	cancelFuncs  []context.CancelFunc
 
 	Politeia *Politeia
+
+	dexClient *DexClient
 }
 
 func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWallet, error) {
