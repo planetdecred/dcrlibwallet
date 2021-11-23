@@ -281,6 +281,49 @@ func (d *DexClient) DEXServers() map[string]*core.Exchange {
 	return d.core.Exchanges()
 }
 
+// FreshOrder defines fields for a fresh order to be submitted to a DEX
+// server.
+type FreshOrder struct {
+	Sell         bool   `json:"sell"`
+	BaseAssetID  uint32 `json:"base"`
+	QuoteAssetID uint32 `json:"quote"`
+	Qty          uint64 `json:"qty"`
+	Rate         uint64 `json:"rate"`
+	IsLimit      bool   `json:"isLimit"`
+	TifNow       bool   `json:"tifnow"`
+}
+
+// PlaceOrderWithServer places a buy or sell order with the specified server.
+func (d *DexClient) PlaceOrderWithServer(serverAddr string, order *FreshOrder, dexcPass []byte) (*core.Order, error) {
+	return d.core.Trade(dexcPass, &core.TradeForm{
+		Host:    serverAddr,
+		Sell:    order.Sell,
+		Base:    order.BaseAssetID,
+		Quote:   order.QuoteAssetID,
+		Qty:     order.Qty,
+		Rate:    order.Rate,
+		IsLimit: order.IsLimit,
+		TifNow:  order.TifNow,
+	})
+}
+
+// OrderHistory returns all orders submitted with the specified server.
+func (d *DexClient) OrderHistory(serverAddr string) ([]*core.Order, error) {
+	return d.core.Orders(&core.OrderFilter{
+		Hosts: []string{serverAddr},
+	})
+}
+
+// SelectOrders returns all orders matching the provided filter.
+func (d *DexClient) SelectOrders(filter *core.OrderFilter) ([]*core.Order, error) {
+	return d.core.Orders(filter)
+}
+
+// CancelOrder cancels a limit order.
+func (d *DexClient) CancelOrder(orderID []byte, dexcPass []byte) error {
+	return d.core.Cancel(dexcPass, orderID)
+}
+
 // Reset attempts to shutdown Core if it is running and if successful, deletes
 // the DEX client database.
 func (d *DexClient) Reset() bool {
