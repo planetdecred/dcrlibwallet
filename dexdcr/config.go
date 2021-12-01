@@ -5,13 +5,7 @@
 package dexdcr
 
 import (
-	"fmt"
-
 	"decred.org/dcrdex/client/asset"
-	"decred.org/dcrdex/client/asset/dcr"
-	"decred.org/dcrdex/dex"
-	"decred.org/dcrwallet/v2/wallet"
-	"github.com/decred/dcrd/chaincfg/v3"
 )
 
 const (
@@ -23,11 +17,11 @@ const (
 	// target in blocks used by estimatesmartfee to get the optimal fee for a
 	// redeem transaction.
 	defaultRedeemConfTarget = 1
-
-	WalletTypeDcrwObject = "wallet_object"
 )
 
-var configOpts = []*asset.ConfigOption{
+// DefaultConfigOpts are the general, non-rpc-specific configuration options
+// defined in the decred.org/dcrdex/client/asset/dcr package.
+var DefaultConfigOpts = []*asset.ConfigOption{
 	{
 		Key:         "account",
 		DisplayName: "Account Name",
@@ -69,41 +63,4 @@ var configOpts = []*asset.ConfigOption{
 			"limit orders without immediate time-in-force.",
 		IsBoolean: true,
 	},
-}
-
-// SpvWalletDef returns general information about the SpvWallet defined by
-// this package.
-func SpvWalletDef() *asset.WalletDefinition {
-	return &asset.WalletDefinition{
-		Type:        WalletTypeDcrwObject,
-		Tab:         "dcrlibwallet",
-		Description: "Requires a managed dcrlibwallet instance",
-		ConfigOpts:  configOpts,
-	}
-}
-
-// SpvWalletConstructor returns a function that uses the provided wallet to set
-// up an SpvWallet. The provided wallet will be used internally to satisfy the
-// decred.org/dcrdex/client/asset/dcr.Wallet inteface. The returned function can
-// be used along with SpvWalletDef() to register a custom decred wallet for a
-// DEX client.
-func SpvWalletConstructor(wallet *wallet.Wallet, walletDesc string) dcr.WalletConstructor {
-	if wallet == nil {
-		panic("SpvWalletConstructor called with a nil wallet parameter")
-	}
-
-	return func(cfg *asset.WalletConfig, chainParams *chaincfg.Params, logger dex.Logger) (dcr.Wallet, error) {
-		if wallet.ChainParams().Net != chainParams.Net {
-			return nil, fmt.Errorf("incompatible dcrwallet network %s, expected %s", wallet.ChainParams().Name, chainParams.Name)
-		}
-		return NewSpvWallet(wallet, walletDesc, chainParams, logger.SubLogger("spvw")), nil
-	}
-}
-
-// UseSpvWalletForDexClient sets up the DEX client to use the provided wallet
-// for wallet-specific functionalities instead of using the default approach of
-// making rpc requests to an external dcrwallet daemon.
-func UseSpvWalletForDexClient(wallet *wallet.Wallet, walletDesc string) {
-	spvWalletConstructor := SpvWalletConstructor(wallet, walletDesc)
-	dcr.RegisterCustomWallet(spvWalletConstructor, SpvWalletDef())
 }

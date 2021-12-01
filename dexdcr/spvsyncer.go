@@ -6,9 +6,6 @@ package dexdcr
 
 import (
 	"fmt"
-
-	dcrwalletspv "decred.org/dcrwallet/v2/spv"
-	dcrlibwalletspv "github.com/planetdecred/dcrlibwallet/spv"
 )
 
 // SpvSyncer defines methods we expect to find in an spv wallet backend.
@@ -17,21 +14,15 @@ type SpvSyncer interface {
 	EstimateMainChainTip() int32
 }
 
-// syncer returns the spv syncer connected to the wallet or returns an error
-// if the wallet isn't connected to an spv syncer backend. Currently, only the
-// spv backends provided by dcrwallet and dcrlibwallet are supported.
+// spvSyncer returns the spv syncer connected to the wallet or returns an error
+// if the wallet isn't connected to an spv syncer backend.
 func (spvw *SpvWallet) spvSyncer() (SpvSyncer, error) {
 	n, err := spvw.wallet.NetworkBackend()
 	if err != nil {
 		return nil, fmt.Errorf("wallet network backend error: %w", err)
 	}
-
-	switch be := n.(type) {
-	case *dcrlibwalletspv.WalletBackend:
-		return be.Syncer, nil
-	case *dcrwalletspv.Syncer:
-		return be, nil
-	default:
-		return nil, fmt.Errorf("wallet is not connected to a supported spv backend")
+	if spvSyncer, ok := n.(SpvSyncer); ok {
+		return spvSyncer, nil
 	}
+	return nil, fmt.Errorf("wallet is not connected to a supported spv backend")
 }

@@ -259,55 +259,64 @@ func (spvw *SpvWallet) LockUnspent(ctx context.Context, unlock bool, ops []*wire
 	return nil
 }
 
-// GetTxOut returns information about an unspent tx output.
+// UnspentOutput returns information about an unspent tx output, if found
+// and unspent. Use wire.TxTreeUnknown if the output tree is unknown, the
+// correct tree will be returned if the unspent output is found. Returns
+// asset.CoinNotFoundError if the unspent output cannot be located.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
-func (spvw *SpvWallet) GetTxOut(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
-	// Attempt to read the unspent txout info from wallet.
-	// gettxout in spv mode returns details for outputs as long
-	// they exist, pay to the wallet and are unspent.
-	outpoint := wire.OutPoint{Hash: *txHash, Index: index, Tree: tree}
-	utxo, err := spvw.wallet.UnspentOutput(ctx, outpoint, mempool)
-	if err != nil {
-		if errors.Is(err, errors.NotExist) {
-			return nil, asset.CoinNotFoundError
+func (spvw *SpvWallet) UnspentOutput(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8) (*dcr.TxOutput, error) {
+	// Attempt to read the unspent txout info from wallet. The output
+	// must exist, pay to the wallet and be unspent.
+	var checkTrees []int8
+	switch {
+	case tree == wire.TxTreeUnknown:
+		checkTrees = []int8{wire.TxTreeRegular, wire.TxTreeStake}
+	case tree == wire.TxTreeRegular || tree == wire.TxTreeStake:
+		checkTrees = []int8{tree}
+	default:
+		return nil, fmt.Errorf("invalid tx tree %d", tree)
+	}
+
+	for _, tree = range checkTrees {
+		outpoint := wire.OutPoint{Hash: *txHash, Index: index, Tree: tree}
+		utxo, err := spvw.wallet.UnspentOutput(ctx, outpoint, true)
+		if err != nil {
+			if errors.Is(err, errors.NotExist) {
+				continue // check next tree
+			}
+			return nil, err
 		}
-		return nil, err
+
+		// Get further info about the script.  Ignore the error here since an
+		// error means the script couldn't parse and there is no additional
+		// information about it anyways.
+		_, addrs, _, _ := txscript.ExtractPkScriptAddrs(
+			0, utxo.PkScript, spvw.chainParams, true) // Yes treasury
+		addresses := make([]string, len(addrs))
+		for i, addr := range addrs {
+			addresses[i] = addr.String()
+		}
+
+		_, bestHeight := spvw.wallet.MainChainTip(ctx)
+		var confirmations uint32
+		if utxo.Block.Height != -1 {
+			confirmations = uint32(confirms(utxo.Block.Height, bestHeight))
+		}
+
+		return &dcr.TxOutput{
+			TxOut: &wire.TxOut{
+				Value:    int64(utxo.Amount),
+				PkScript: utxo.PkScript,
+				// Version: 0, // TODO: dcrwallet json-rpc doesn't set this also, but should be
+			},
+			Tree:          utxo.Tree,
+			Addresses:     addresses,
+			Confirmations: confirmations,
+		}, nil
 	}
 
-	// Disassemble script into single line printable format.  The
-	// disassembled string will contain [error] inline if the script
-	// doesn't fully parse, so ignore the error here.
-	disbuf, _ := txscript.DisasmString(utxo.PkScript)
-
-	// Get further info about the script.  Ignore the error here since an
-	// error means the script couldn't parse and there is no additional
-	// information about it anyways.
-	scriptClass, addrs, reqSigs, _ := txscript.ExtractPkScriptAddrs(
-		0, utxo.PkScript, spvw.chainParams, true) // Yes treasury
-	addresses := make([]string, len(addrs))
-	for i, addr := range addrs {
-		addresses[i] = addr.String()
-	}
-
-	bestHash, bestHeight := spvw.wallet.MainChainTip(ctx)
-	var confirmations int64
-	if utxo.Block.Height != -1 {
-		confirmations = int64(confirms(utxo.Block.Height, bestHeight))
-	}
-
-	return &chainjson.GetTxOutResult{
-		BestBlock:     bestHash.String(),
-		Confirmations: confirmations,
-		Value:         utxo.Amount.ToCoin(),
-		ScriptPubKey: chainjson.ScriptPubKeyResult{
-			Asm:       disbuf,
-			Hex:       hex.EncodeToString(utxo.PkScript),
-			ReqSigs:   int32(reqSigs),
-			Type:      scriptClass.String(),
-			Addresses: addresses,
-		},
-		Coinbase: utxo.FromCoinBase,
-	}, nil
+	// Not found in any of the trees checked.
+	return nil, asset.CoinNotFoundError
 }
 
 // GetNewAddressGapPolicy returns an address from the specified account using
