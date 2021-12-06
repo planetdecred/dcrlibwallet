@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"runtime/trace"
 	"strings"
 	"sync"
 	"time"
@@ -108,6 +109,185 @@ func (v *VSP) PurchaseTickets(ticketCount, expiryBlocks int32, passphrase []byte
 	}
 
 	return nil
+}
+
+// AutoTicketsPurchase purchases the number of tickets passed as an argument and pays the fees for the tickets
+func (v *VSP) AutoTicketsPurchase(balanceToMaintain int32, passphrase []byte) error {
+	err := v.w.UnlockWallet(passphrase)
+	if err != nil {
+		return translateError(err)
+	}
+	defer v.w.LockWallet()
+
+	ctx, outerCancel := context.WithCancel(v.ctx)
+	defer outerCancel()
+	var fatal error
+	var fatalMu sync.Mutex
+
+	c := v.w.Internal().NtfnServer.MainTipChangedNotifications()
+	defer c.Done()
+
+	var nextIntervalStart, expiry int32
+	var cancels []func()
+
+	for {
+		select {
+		case <-ctx.Done():
+			defer outerCancel()
+			fatalMu.Lock()
+			err := fatal
+			fatalMu.Unlock()
+			if err != nil {
+				return err
+			}
+			return ctx.Err()
+		case n := <-c.C:
+			if len(n.AttachedBlocks) == 0 {
+				continue
+			}
+
+			tip := n.AttachedBlocks[len(n.AttachedBlocks)-1]
+			w := v.w.Internal()
+
+			// Don't perform any actions while transactions are not synced through
+			// the tip block.
+			rp, err := w.RescanPoint(v.ctx)
+			if err != nil {
+				return err
+			}
+			if rp != nil {
+				log.Debugf("Skipping autobuyer actions: transactions are not synced")
+				continue
+			}
+
+			tipHeader, err := w.BlockHeader(ctx, tip)
+			if err != nil {
+				log.Error(err)
+				continue
+			}
+			height := int32(tipHeader.Height)
+
+			// Cancel any ongoing ticket purchases which are buying
+			// at an old ticket price or are no longer able to
+			// create mined tickets the window.
+			if height+2 >= nextIntervalStart {
+				for i, cancel := range cancels {
+					cancel()
+					cancels[i] = nil
+				}
+				cancels = cancels[:0]
+
+				intervalSize := int32(w.ChainParams().StakeDiffWindowSize)
+				currentInterval := height / intervalSize
+				nextIntervalStart = (currentInterval + 1) * intervalSize
+
+				// Skip this purchase when no more tickets may be purchased in the interval and
+				// the next sdiff is unknown.  The earliest any ticket may be mined is two
+				// blocks from now, with the next block containing the split transaction
+				// that the ticket purchase spends.
+				if height+2 == nextIntervalStart {
+					log.Debugf("Skipping purchase: next sdiff interval starts soon")
+					continue
+				}
+				// Set expiry to prevent tickets from being mined in the next
+				// sdiff interval.  When the next block begins the new interval,
+				// the ticket is being purchased for the next interval; therefore
+				// increment expiry by a full sdiff window size to prevent it
+				// being mined in the interval after the next.
+				expiry = nextIntervalStart
+				if height+1 == nextIntervalStart {
+					expiry += intervalSize
+				}
+			}
+
+			cancelCtx, cancel := context.WithCancel(ctx)
+			cancels = append(cancels, cancel)
+
+			go func() {
+				err := v.buyTicket(cancelCtx, passphrase, tipHeader, expiry)
+				if err != nil {
+					switch {
+					// silence these errors
+					case errors.Is(err, errors.InsufficientBalance):
+					case errors.Is(err, context.Canceled):
+					case errors.Is(err, context.DeadlineExceeded):
+					default:
+						log.Errorf("Ticket purchasing failed: %v", err)
+					}
+					if errors.Is(err, errors.Passphrase) {
+						fatalMu.Lock()
+						fatal = err
+						fatalMu.Unlock()
+						outerCancel()
+					}
+				}
+			}()
+		}
+	}
+}
+
+// buyTicket calculate the number of tickets before purchase
+func (v *VSP) buyTicket(ctx context.Context, passphrase []byte, tip *wire.BlockHeader, expiry int32) error {
+	ctx, task := trace.NewTask(ctx, "ticketbuyer.buy")
+	defer task.End()
+
+	w := v.w
+
+	if len(passphrase) > 0 {
+		// Ensure wallet is unlocked with the current passphrase.  If the passphase
+		// is changed, the Run exits and TB must be restarted with the new
+		// passphrase.
+		err := v.w.UnlockWallet(passphrase)
+		if err != nil {
+			return translateError(err)
+		}
+		defer v.w.LockWallet()
+	}
+
+	// Determine how many tickets to buy
+	bal, err := w.GetAccountBalance(v.purchaseAccount)
+	if err != nil {
+		return err
+	}
+	spendable := bal.Spendable
+
+	if spendable < maintain {
+		log.Debugf("Skipping purchase: low available balance")
+		return nil
+	}
+	spendable -= maintain
+	sdiff, err := w.Internal().NextStakeDifficultyAfterHeader(ctx, tip)
+	if err != nil {
+		return err
+	}
+	buy := int(spendable / sdiff)
+	if buy == 0 {
+		log.Debugf("Skipping purchase: low available balance")
+		return nil
+	}
+	max := int(w.Internal().ChainParams().MaxFreshStakePerBlock)
+	if buy > max {
+		buy = max
+	}
+
+	request := &w.PurchaseTicketsRequest{
+		Count:                buy,
+		SourceAccount:        v.purchaseAccount,
+		Expiry:               expiry,
+		MinConf:              DefaultRequiredConfirmations,
+		VSPFeeProcess:        v.PoolFee,
+		VSPFeePaymentProcess: v.ProcessFee,
+	}
+
+	networkBackend, err := v.w.Internal().NetworkBackend()
+	if err != nil {
+		return err
+	}
+
+	_, err = v.w.Internal().PurchaseTickets(ctx, networkBackend, request)
+	if err != nil {
+		return err
+	}
 }
 
 // ProcessFee
