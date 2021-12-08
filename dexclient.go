@@ -169,7 +169,7 @@ func (d *DexClient) Reset() bool {
 
 	err := os.RemoveAll(d.dexDataDir)
 	if err != nil {
-		d.log.Warnf("DEX client reset failed: erroring deleting DEX db: %v", err)
+		d.log.Warnf("DEX client reset failed: error deleting DEX db: %v", err)
 		return false
 	}
 	return true
