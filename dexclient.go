@@ -35,83 +35,30 @@ type DexClient struct {
 	isLoggedIn    bool
 }
 
-// StartDexClient readies the inbuilt DexClient for use. The client will be
-// stopped when this MultiWallet instance is shutdown.
-func (mw *MultiWallet) StartDexClient() (*DexClient, error) {
-	if mw.dexClient == nil || mw.dexClient.core == nil {
-		if err := mw.initDexClient(); err != nil {
-			return nil, err
-		}
-	}
-
-	if mw.dexClient.cancelCoreCtx != nil { // already started
-		return mw.dexClient, nil
-	}
-
-	// Run the client core with a context that is canceled when
-	// MultiWallet shuts down.
-	ctx, cancel := mw.contextWithShutdownCancel()
-	mw.dexClient.cancelCoreCtx = cancel
-	go func() {
-		mw.dexClient.core.Run(ctx)
-		mw.dexClient.cancelCoreCtx()
-		mw.dexClient.cancelCoreCtx = nil
-	}()
-	<-mw.dexClient.core.Ready()
-
-	return mw.dexClient, nil
-}
-
+// initDexClient sets up a DEX client on this MultiWallet instance. This equips
+// the MultiWallet instance with DEX client features.
 func (mw *MultiWallet) initDexClient() error {
-	net := mw.NetType()
-	if net == "testnet3" {
-		net = "testnet"
-	}
-	n, err := dex.NetFromString(net)
-	if err != nil {
-		return err
-	}
-
-	dbPath := filepath.Join(mw.rootDir, "dex")
-	log := dex.NewLogger("DEXC", log.Level(), logWriter{}, true)
-	clientCore, err := core.New(&core.Config{
-		DBPath: dbPath,
-		Net:    n,
-		Logger: log,
-	})
-	if err != nil {
-		return fmt.Errorf("error creating dex client core: %v", err)
-	}
-
-	if mw.dexClient == nil {
-		err = mw.prepareSupportForExistingDcrWallets() // first time only, errors for duplicate calls
-		if err != nil {
-			return fmt.Errorf("custom dcr wallet support error: %v", err)
-		}
+	if mw.dexClient != nil {
+		return nil
 	}
 
 	mw.dexClient = &DexClient{
-		core:   clientCore,
-		log:    log,
-		dbPath: dbPath,
+		log:    dex.NewLogger("DEXC", log.Level(), logWriter{}, true),
+		dbPath: filepath.Join(mw.rootDir, "dex"),
+	}
+
+	err := mw.prepareDexSupportForDcrWalletLibrary()
+	if err != nil {
+		return fmt.Errorf("custom dcr wallet support error: %v", err)
 	}
 
 	return nil
 }
 
-// DexClient returns the managed instance of a DEX client. The client must
-// have been started with mw.StartDexClient().
-func (mw *MultiWallet) DexClient() *DexClient {
-	if mw.dexClient == nil {
-		panic("DEX client is not started")
-	}
-	return mw.dexClient
-}
-
-// prepareSupportForExistingDcrWallets sets up the DEX client to allow using a
+// prepareDexSupportForDcrWalletLibrary sets up the DEX client to allow using a
 // custom dcr wallet as an alternative to using an rpc connection to a running
 // dcrwallet instance.
-func (mw *MultiWallet) prepareSupportForExistingDcrWallets() error {
+func (mw *MultiWallet) prepareDexSupportForDcrWalletLibrary() error {
 	// Build a custom wallet definition with custom config options
 	// for use by the dex dcr ExchangeWallet.
 	customWalletConfigOpts := []*asset.ConfigOption{
@@ -158,6 +105,92 @@ func (mw *MultiWallet) prepareSupportForExistingDcrWallets() error {
 	}
 
 	return dcr.RegisterCustomWallet(walletMaker, def)
+}
+
+// StartDexClient readies the inbuilt DexClient for use. The client will be
+// stopped when this MultiWallet instance is shutdown.
+func (mw *MultiWallet) StartDexClient() (*DexClient, error) {
+	if mw.dexClient.core == nil {
+		net := mw.NetType()
+		if net == "testnet3" {
+			net = "testnet"
+		}
+		n, err := dex.NetFromString(net)
+		if err != nil {
+			return nil, err
+		}
+
+		mw.dexClient.core, err = core.New(&core.Config{
+			DBPath: mw.dexClient.dbPath,
+			Net:    n,
+			Logger: mw.dexClient.log,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("error creating dex client core: %v", err)
+		}
+	}
+
+	if mw.dexClient.cancelCoreCtx != nil { // already started
+		return mw.dexClient, nil
+	}
+
+	// Run the client core with a context that is canceled when
+	// MultiWallet shuts down.
+	ctx, cancel := mw.contextWithShutdownCancel()
+	mw.dexClient.cancelCoreCtx = cancel
+	go func() {
+		mw.dexClient.core.Run(ctx)
+		mw.dexClient.cancelCoreCtx()
+		mw.dexClient.cancelCoreCtx = nil
+	}()
+	<-mw.dexClient.core.Ready()
+
+	return mw.dexClient, nil
+}
+
+// DexClient returns the managed instance of a DEX client. The client must
+// have been started with mw.StartDexClient().
+func (mw *MultiWallet) DexClient() *DexClient {
+	return mw.dexClient
+}
+
+// Reset attempts to shutdown Core if it is running and if successful, deletes
+// the DEX client database.
+func (d *DexClient) Reset() bool {
+	shutdownOk := d.shutdown(false)
+	if !shutdownOk {
+		return false
+	}
+
+	err := os.RemoveAll(d.dbPath)
+	if err != nil {
+		d.log.Warnf("DEX client reset failed: erroring deleting DEX db: %v", err)
+		return false
+	}
+	return true
+}
+
+// shutdown causes the dex client to shutdown. If there are active orders,
+// this shutdown attempt will fail unless `forceShutdown` is true. If shutdown
+// succeeds, dexc will need to be restarted before it can be used.
+func (d *DexClient) shutdown(forceShutdown bool) bool {
+	if d.core != nil {
+		err := d.core.Logout()
+		if err != nil {
+			d.log.Errorf("Unable to stop the dex client: %v", err)
+			if !forceShutdown { // abort shutdown because of the error since forceShutdown != true
+				return false
+			}
+		}
+	}
+
+	// Cancel the ctx used to run Core.
+	if d.cancelCoreCtx != nil { // in case dexc was never actually started
+		d.cancelCoreCtx()
+	}
+	d.isLoggedIn = false
+	d.core = nil // Core should be recreated before being used again.
+	return true
 }
 
 // Core returns the client core that powers this DEX client.
@@ -322,41 +355,4 @@ func (d *DexClient) SelectOrders(filter *core.OrderFilter) ([]*core.Order, error
 // CancelOrder cancels a limit order.
 func (d *DexClient) CancelOrder(orderID []byte, dexcPass []byte) error {
 	return d.core.Cancel(dexcPass, orderID)
-}
-
-// Reset attempts to shutdown Core if it is running and if successful, deletes
-// the DEX client database.
-func (d *DexClient) Reset() bool {
-	shutdownOk := d.shutdown(false)
-	if !shutdownOk {
-		return false
-	}
-
-	err := os.RemoveAll(d.dbPath)
-	if err != nil {
-		d.log.Warnf("DEX client reset failed: erroring deleting DEX db: %v", err)
-		return false
-	}
-	return true
-}
-
-// shutdown causes the dex client to shutdown. If there are active orders,
-// this shutdown attempt will fail unless `forceShutdown` is true. If shutdown
-// succeeds, dexc will need to be restarted before it can be used.
-func (d *DexClient) shutdown(forceShutdown bool) bool {
-	err := d.core.Logout()
-	if err != nil {
-		d.log.Errorf("Unable to stop the dex client: %v", err)
-		if !forceShutdown { // abort shutdown because of the error since forceShutdown != true
-			return false
-		}
-	}
-
-	// Cancel the ctx used to run Core.
-	if d.cancelCoreCtx != nil { // in case dexc was never actually started
-		d.cancelCoreCtx()
-	}
-	d.isLoggedIn = false
-	d.core = nil // Core should be recreated before being used again.
-	return true
 }

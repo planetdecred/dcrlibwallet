@@ -129,6 +129,10 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 
 	log.Infof("Loaded %d wallets", mw.LoadedWalletsCount())
 
+	if err = mw.initDexClient(); err != nil {
+		log.Errorf("DEX client set up error: %v", err)
+	}
+
 	return mw, nil
 }
 
