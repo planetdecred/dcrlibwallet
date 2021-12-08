@@ -40,6 +40,8 @@ type MultiWallet struct {
 	cancelFuncs  []context.CancelFunc
 
 	Politeia *Politeia
+
+	dexClient *DexClient
 }
 
 func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWallet, error) {
@@ -126,6 +128,10 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 	SetLogLevels(logLevel)
 
 	log.Infof("Loaded %d wallets", mw.LoadedWalletsCount())
+
+	if err = mw.initDexClient(); err != nil {
+		log.Errorf("DEX client set up error: %v", err)
+	}
 
 	return mw, nil
 }
