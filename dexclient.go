@@ -30,7 +30,7 @@ const (
 type DexClient struct {
 	core          *core.Core
 	log           dex.Logger
-	dbPath        string
+	dexDataDir    string
 	cancelCoreCtx context.CancelFunc
 	isLoggedIn    bool
 }
@@ -43,11 +43,16 @@ func (mw *MultiWallet) initDexClient() error {
 	}
 
 	mw.dexClient = &DexClient{
-		log:    dex.NewLogger("DEXC", log.Level(), logWriter{}, true),
-		dbPath: filepath.Join(mw.rootDir, "dex"),
+		log:        dex.NewLogger("DEXC", log.Level(), logWriter{}, true),
+		dexDataDir: filepath.Join(mw.rootDir, "dex"),
 	}
 
-	err := mw.prepareDexSupportForDcrWalletLibrary()
+	err := os.MkdirAll(mw.dexClient.dexDataDir, os.ModePerm)
+	if err != nil {
+		return err
+	}
+
+	err = mw.prepareDexSupportForDcrWalletLibrary()
 	if err != nil {
 		return fmt.Errorf("custom dcr wallet support error: %v", err)
 	}
@@ -121,7 +126,7 @@ func (mw *MultiWallet) StartDexClient() (*DexClient, error) {
 		}
 
 		mw.dexClient.core, err = core.New(&core.Config{
-			DBPath: mw.dexClient.dbPath,
+			DBPath: filepath.Join(mw.dexClient.dexDataDir, "dexc.db"),
 			Net:    n,
 			Logger: mw.dexClient.log,
 		})
@@ -162,7 +167,7 @@ func (d *DexClient) Reset() bool {
 		return false
 	}
 
-	err := os.RemoveAll(d.dbPath)
+	err := os.RemoveAll(d.dexDataDir)
 	if err != nil {
 		d.log.Warnf("DEX client reset failed: erroring deleting DEX db: %v", err)
 		return false
