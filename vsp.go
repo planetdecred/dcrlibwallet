@@ -214,3 +214,177 @@ func defaultVSPs(network string) ([]string, error) {
 	}
 	return vsps, nil
 }
+
+// ForUnspentUnexpiredTickets performs a function on every unexpired and unspent
+// ticket from the wallet.
+func (v *VSP) ForUnspentUnexpiredTickets(ctx context.Context, f func(hash *chainhash.Hash) error) error {
+
+	wal := v.w
+	params := wal.Internal().ChainParams()
+
+	iter := func(ticketSummaries []*w.TicketSummary, _ *wire.BlockHeader) (bool, error) {
+		for _, ticketSummary := range ticketSummaries {
+			switch ticketSummary.Status {
+			case w.TicketStatusLive:
+			case w.TicketStatusImmature:
+			case w.TicketStatusUnspent:
+			default:
+				continue
+			}
+
+			ticketHash := *ticketSummary.Ticket.Hash
+			err := f(&ticketHash)
+			if err != nil {
+				return false, err
+			}
+		}
+
+		return false, nil
+	}
+
+	_, blockHeight := wal.Internal().MainChainTip(ctx)
+	startBlockNum := blockHeight -
+		int32(params.TicketExpiry+uint32(params.TicketMaturity)-requiredConfs)
+	startBlock := w.NewBlockIdentifierFromHeight(startBlockNum)
+	endBlock := w.NewBlockIdentifierFromHeight(blockHeight)
+	return wal.Internal().GetTickets(ctx, iter, startBlock, endBlock)
+}
+
+// SetVoteChoice takes the provided AgendaChoices and ticket hash, checks the
+// status of the ticket from the connected vsp.  The status provides the
+// current vote choice so we can just update from there if need be.
+func (v *VSP) SetVoteChoice(ctx context.Context, hash *chainhash.Hash, choices ...w.AgendaChoice) error {
+	status, err := v.status(ctx, hash)
+	if err != nil {
+		if errors.Is(err, errors.Locked) {
+			return err
+		}
+		return nil
+	}
+	setVoteChoices := status.VoteChoices
+	update := false
+	for agenda, choice := range setVoteChoices {
+		for _, newChoice := range choices {
+			if agenda == newChoice.AgendaID && choice != newChoice.ChoiceID {
+				update = true
+			}
+		}
+	}
+	if !update {
+		return nil
+	}
+	err = v.setVoteChoices(ctx, hash, choices)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (v *VSP) setVoteChoices(ctx context.Context, ticketHash *chainhash.Hash, choices []w.AgendaChoice) error {
+	wal := v.w
+	params := wal.Internal().ChainParams()
+
+	ticketTx, err := v.tx(ticketHash)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve ticket %v: %w", ticketHash, err)
+	}
+
+	if !stake.IsSStx(ticketTx) {
+		return fmt.Errorf("%v is not a ticket", ticketHash)
+	}
+	if len(ticketTx.TxOut) != 3 {
+		return fmt.Errorf("ticket %v has multiple commitments: %w", ticketHash,  "not a solo ticket")
+	}
+
+	commitmentAddr, err := stake.AddrFromSStxPkScrCommitment(ticketTx.TxOut[1].PkScript, params)
+	if err != nil {
+		return fmt.Errorf("failed to extract commitment address from %v: %w",
+			ticketHash, err)
+	}
+
+	agendaChoices := make(map[string]string, len(choices))
+
+	// Prepare agenda choice
+	for _, c := range choices {
+		agendaChoices[c.AgendaID] = c.ChoiceID
+	}
+
+	var resp ticketStatus
+	requestBody, err := json.Marshal(&struct {
+		Timestamp   int64             `json:"timestamp"`
+		TicketHash  string            `json:"tickethash"`
+		VoteChoices map[string]string `json:"votechoices"`
+	}{
+		Timestamp:   time.Now().Unix(),
+		TicketHash:  ticketHash.String(),
+		VoteChoices: agendaChoices,
+	})
+	if err != nil {
+		return err
+	}
+
+	err = v.post(ctx, "/api/v3/setvotechoices", commitmentAddr, &resp,
+		json.RawMessage(requestBody))
+	if err != nil {
+		return err
+	}
+
+	// verify initial request matches server
+	if !bytes.Equal(requestBody, resp.Request) {
+		log.Warnf("server response has differing request: %#v != %#v",
+			requestBody, resp.Request)
+		return fmt.Errorf("server response contains differing request")
+	}
+
+	// XXX validate server timestamp?
+
+	return nil
+}
+
+func (v *VSP) status(ctx context.Context, ticketHash *chainhash.Hash) (*ticketStatus, error) {
+	w := v.w
+	params := w.Internal().ChainParams()
+
+	ticketTx, err := v.tx(ticketHash)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve ticket %v: %w", ticketHash, err)
+	}
+	if len(ticketTx.TxOut) != 3 {
+		return nil, fmt.Errorf("ticket %v has multiple commitments: %w", ticketHash, "not a solo ticket")
+	}
+
+	if !stake.IsSStx(ticketTx) {
+		return nil, fmt.Errorf("%v is not a ticket", ticketHash)
+	}
+	commitmentAddr, err := stake.AddrFromSStxPkScrCommitment(ticketTx.TxOut[1].PkScript, params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract commitment address from %v: %w",
+			ticketHash, err)
+	}
+
+	var resp ticketStatus
+	requestBody, err := json.Marshal(&struct {
+		TicketHash string `json:"tickethash"`
+	}{
+		TicketHash: ticketHash.String(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	err = v.post(ctx, "/api/v3/ticketstatus", commitmentAddr, &resp,
+		json.RawMessage(requestBody))
+	if err != nil {
+		return nil, err
+	}
+
+	// verify initial request matches server
+	if !bytes.Equal(requestBody, resp.Request) {
+		log.Warnf("server response has differing request: %#v != %#v",
+			requestBody, resp.Request)
+		return nil, fmt.Errorf("server response contains differing request")
+	}
+
+	// XXX validate server timestamp?
+
+	return &resp, nil
+}

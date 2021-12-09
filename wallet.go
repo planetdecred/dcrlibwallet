@@ -11,7 +11,12 @@ import (
 
 	"decred.org/dcrwallet/v2/errors"
 	w "decred.org/dcrwallet/v2/wallet"
+	"decred.org/dcrwallet/v2/rpc/jsonrpc/types"
+	// walletjson "decred.org/dcrwallet/v2/rpc/jsonrpc/types"
+	// "decred.org/dcrwallet/v2/rpc/client/dcrwallet"
+	// "decred.org/dcrwallet/v2/wallet"
 	"decred.org/dcrwallet/v2/walletseed"
+	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/planetdecred/dcrlibwallet/internal/loader"
 	"github.com/planetdecred/dcrlibwallet/internal/vsp"
@@ -288,4 +293,110 @@ func (wallet *Wallet) DecryptSeed(privatePassphrase []byte) (string, error) {
 	}
 
 	return decryptWalletSeed(privatePassphrase, wallet.EncryptedSeed)
+}
+
+// GetVoteChoices handles a getvotechoices request by returning configured vote
+// preferences for each agenda of the latest supported stake version.
+func (wallet *Wallet) GetVoteChoices(ctx context.Context, hash string) (*types.GetVoteChoicesResult, error) {
+	wal := wallet.Internal()
+	if wal == nil {
+		return nil, fmt.Errorf("request requires a wallet but wallet has not loaded yet")
+	}
+
+	var ticketHash *chainhash.Hash
+	if hash != "" {
+		hash, err := chainhash.NewHashFromStr(hash)
+		if err != nil {
+			return nil, fmt.Errorf("inavlid hash: ", err)
+		}
+		ticketHash = hash
+	}
+
+	version, agendas := w.CurrentAgendas(wal.ChainParams())
+	resp := &types.GetVoteChoicesResult{
+		Version: version,
+		Choices: make([]types.VoteChoice, len(agendas)),
+	}
+
+	choices, _, err := wal.AgendaChoices(ctx, ticketHash)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range choices {
+		resp.Choices[i] = types.VoteChoice{
+			AgendaID:          choices[i].AgendaID,
+			AgendaDescription: agendas[i].Vote.Description,
+			ChoiceID:          choices[i].ChoiceID,
+			ChoiceDescription: "", // Set below
+		}
+		for j := range agendas[i].Vote.Choices {
+			if choices[i].ChoiceID == agendas[i].Vote.Choices[j].Id {
+				resp.Choices[i].ChoiceDescription = agendas[i].Vote.Choices[j].Description
+				break
+			}
+		}
+	}
+
+	return resp, nil
+}
+
+// SetVoteChoice handles a setvotechoice request by modifying the preferred
+// choice for a voting agenda.
+//
+// If a VSP host is configured in the application settings, the voting
+// preferences will also be set with the VSP.
+func (wallet *Wallet) SetVoteChoice(ctx context.Context, vspHost, agendaID, choiceID, hash string) (error) {
+	wal := wallet.Internal()
+	if wal == nil {
+		return fmt.Errorf("request requires a wallet but wallet has not loaded yet")
+	}
+
+	var ticketHash *chainhash.Hash
+	if hash != "" {
+		hash, err := chainhash.NewHashFromStr(hash)
+		if err != nil {
+			return fmt.Errorf("inavlid hash: ", err)
+		}
+		ticketHash = hash
+	}
+
+	choice := w.AgendaChoice{
+		AgendaID: agendaID,
+		ChoiceID: choiceID,
+	}
+
+	_, err := wal.SetAgendaChoices(ctx, ticketHash, choice)
+	if err != nil {
+		return err
+	}
+
+	if vspHost == "" {
+		return nil
+	}
+	// vspClient, err := loader.LookupVSP(vspHost)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	var mw MultiWallet
+	vsp, err := mw.NewVSPClient(vspHost, 1, 0)
+	// vspClient, err := LookupVSP(vspHost)
+	if err != nil {
+		return err
+	}
+	if ticketHash != nil {
+		err = vsp.SetVoteChoice(ctx, ticketHash, choice)
+		return err
+	}
+	var firstErr error
+	err = vsp.ForUnspentUnexpiredTickets(ctx, func(hash *chainhash.Hash) error {
+		// Never return errors here, so all tickets are tried.
+		// The first error will be returned to the user.
+		err := vsp.SetVoteChoice(ctx, hash, choice)
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+		return nil
+	})
+	return firstErr
 }
