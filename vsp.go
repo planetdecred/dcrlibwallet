@@ -112,7 +112,7 @@ func (v *VSP) PurchaseTickets(ticketCount, expiryBlocks int32, passphrase []byte
 }
 
 // AutoTicketsPurchase purchases the number of tickets passed as an argument and pays the fees for the tickets
-func (v *VSP) AutoTicketsPurchase(balanceToMaintain int32, passphrase []byte) error {
+func (v *VSP) AutoTicketsPurchase(balanceToMaintain int64, passphrase []byte) error {
 	err := v.w.UnlockWallet(passphrase)
 	if err != nil {
 		return translateError(err)
@@ -204,7 +204,7 @@ func (v *VSP) AutoTicketsPurchase(balanceToMaintain int32, passphrase []byte) er
 			cancels = append(cancels, cancel)
 
 			go func() {
-				err := v.buyTicket(cancelCtx, passphrase, tipHeader, expiry)
+				err := v.buyTicket(cancelCtx, passphrase, tipHeader, expiry, balanceToMaintain)
 				if err != nil {
 					switch {
 					// silence these errors
@@ -227,25 +227,25 @@ func (v *VSP) AutoTicketsPurchase(balanceToMaintain int32, passphrase []byte) er
 }
 
 // buyTicket calculate the number of tickets before purchase
-func (v *VSP) buyTicket(ctx context.Context, passphrase []byte, tip *wire.BlockHeader, expiry int32) error {
+func (v *VSP) buyTicket(ctx context.Context, passphrase []byte, tip *wire.BlockHeader, expiry int32, maintain int64) error {
 	ctx, task := trace.NewTask(ctx, "ticketbuyer.buy")
 	defer task.End()
 
-	w := v.w
+	wal := v.w
 
 	if len(passphrase) > 0 {
 		// Ensure wallet is unlocked with the current passphrase.  If the passphase
 		// is changed, the Run exits and TB must be restarted with the new
 		// passphrase.
-		err := v.w.UnlockWallet(passphrase)
+		err := wal.UnlockWallet(passphrase)
 		if err != nil {
 			return translateError(err)
 		}
-		defer v.w.LockWallet()
+		defer wal.LockWallet()
 	}
 
 	// Determine how many tickets to buy
-	bal, err := w.GetAccountBalance(v.purchaseAccount)
+	bal, err := wal.GetAccountBalance(int32(v.purchaseAccount))
 	if err != nil {
 		return err
 	}
@@ -256,16 +256,16 @@ func (v *VSP) buyTicket(ctx context.Context, passphrase []byte, tip *wire.BlockH
 		return nil
 	}
 	spendable -= maintain
-	sdiff, err := w.Internal().NextStakeDifficultyAfterHeader(ctx, tip)
+	sdiff, err := wal.Internal().NextStakeDifficultyAfterHeader(ctx, tip)
 	if err != nil {
 		return err
 	}
-	buy := int(spendable / sdiff)
+	buy := int(dcrutil.Amount(spendable) / sdiff)
 	if buy == 0 {
 		log.Debugf("Skipping purchase: low available balance")
 		return nil
 	}
-	max := int(w.Internal().ChainParams().MaxFreshStakePerBlock)
+	max := int(wal.Internal().ChainParams().MaxFreshStakePerBlock)
 	if buy > max {
 		buy = max
 	}
@@ -288,6 +288,8 @@ func (v *VSP) buyTicket(ctx context.Context, passphrase []byte, tip *wire.BlockH
 	if err != nil {
 		return err
 	}
+
+	return nil
 }
 
 // ProcessFee
