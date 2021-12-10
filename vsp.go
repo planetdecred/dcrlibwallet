@@ -218,7 +218,6 @@ func defaultVSPs(network string) ([]string, error) {
 // ForUnspentUnexpiredTickets performs a function on every unexpired and unspent
 // ticket from the wallet.
 func (v *VSP) ForUnspentUnexpiredTickets(ctx context.Context, f func(hash *chainhash.Hash) error) error {
-
 	wal := v.w
 	params := wal.Internal().ChainParams()
 
@@ -293,7 +292,7 @@ func (v *VSP) setVoteChoices(ctx context.Context, ticketHash *chainhash.Hash, ch
 		return fmt.Errorf("%v is not a ticket", ticketHash)
 	}
 	if len(ticketTx.TxOut) != 3 {
-		return fmt.Errorf("ticket %v has multiple commitments: %w", ticketHash,  "not a solo ticket")
+		return fmt.Errorf("ticket %v has multiple commitments: %s", ticketHash, "not a solo ticket")
 	}
 
 	commitmentAddr, err := stake.AddrFromSStxPkScrCommitment(ticketTx.TxOut[1].PkScript, params)
@@ -323,7 +322,7 @@ func (v *VSP) setVoteChoices(ctx context.Context, ticketHash *chainhash.Hash, ch
 		return err
 	}
 
-	err = v.post(ctx, "/api/v3/setvotechoices", commitmentAddr, &resp,
+	err = v.post(ctx, apiSetVoteChoices, commitmentAddr, &resp,
 		json.RawMessage(requestBody))
 	if err != nil {
 		return err
@@ -335,8 +334,6 @@ func (v *VSP) setVoteChoices(ctx context.Context, ticketHash *chainhash.Hash, ch
 			requestBody, resp.Request)
 		return fmt.Errorf("server response contains differing request")
 	}
-
-	// XXX validate server timestamp?
 
 	return nil
 }
@@ -350,7 +347,7 @@ func (v *VSP) status(ctx context.Context, ticketHash *chainhash.Hash) (*ticketSt
 		return nil, fmt.Errorf("failed to retrieve ticket %v: %w", ticketHash, err)
 	}
 	if len(ticketTx.TxOut) != 3 {
-		return nil, fmt.Errorf("ticket %v has multiple commitments: %w", ticketHash, "not a solo ticket")
+		return nil, fmt.Errorf("ticket %v has multiple commitments: %s", ticketHash, "not a solo ticket")
 	}
 
 	if !stake.IsSStx(ticketTx) {
@@ -371,7 +368,7 @@ func (v *VSP) status(ctx context.Context, ticketHash *chainhash.Hash) (*ticketSt
 	if err != nil {
 		return nil, err
 	}
-	err = v.post(ctx, "/api/v3/ticketstatus", commitmentAddr, &resp,
+	err = v.post(ctx, apiTicketStatus, commitmentAddr, &resp,
 		json.RawMessage(requestBody))
 	if err != nil {
 		return nil, err
@@ -383,8 +380,6 @@ func (v *VSP) status(ctx context.Context, ticketHash *chainhash.Hash) (*ticketSt
 			requestBody, resp.Request)
 		return nil, fmt.Errorf("server response contains differing request")
 	}
-
-	// XXX validate server timestamp?
 
 	return &resp, nil
 }

@@ -10,11 +10,8 @@ import (
 	"time"
 
 	"decred.org/dcrwallet/v2/errors"
-	w "decred.org/dcrwallet/v2/wallet"
 	"decred.org/dcrwallet/v2/rpc/jsonrpc/types"
-	// walletjson "decred.org/dcrwallet/v2/rpc/jsonrpc/types"
-	// "decred.org/dcrwallet/v2/rpc/client/dcrwallet"
-	// "decred.org/dcrwallet/v2/wallet"
+	w "decred.org/dcrwallet/v2/wallet"
 	"decred.org/dcrwallet/v2/walletseed"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v3"
@@ -307,7 +304,7 @@ func (wallet *Wallet) GetVoteChoices(ctx context.Context, hash string) (*types.G
 	if hash != "" {
 		hash, err := chainhash.NewHashFromStr(hash)
 		if err != nil {
-			return nil, fmt.Errorf("inavlid hash: ", err)
+			return nil, fmt.Errorf("inavlid hash: %w", err)
 		}
 		ticketHash = hash
 	}
@@ -346,7 +343,7 @@ func (wallet *Wallet) GetVoteChoices(ctx context.Context, hash string) (*types.G
 //
 // If a VSP host is configured in the application settings, the voting
 // preferences will also be set with the VSP.
-func (wallet *Wallet) SetVoteChoice(ctx context.Context, vspHost, agendaID, choiceID, hash string) (error) {
+func (wallet *Wallet) SetVoteChoice(ctx context.Context, vspHost, agendaID, choiceID, hash string) error {
 	wal := wallet.Internal()
 	if wal == nil {
 		return fmt.Errorf("request requires a wallet but wallet has not loaded yet")
@@ -356,7 +353,7 @@ func (wallet *Wallet) SetVoteChoice(ctx context.Context, vspHost, agendaID, choi
 	if hash != "" {
 		hash, err := chainhash.NewHashFromStr(hash)
 		if err != nil {
-			return fmt.Errorf("inavlid hash: ", err)
+			return fmt.Errorf("inavlid hash: %w", err)
 		}
 		ticketHash = hash
 	}
@@ -389,7 +386,7 @@ func (wallet *Wallet) SetVoteChoice(ctx context.Context, vspHost, agendaID, choi
 		return err
 	}
 	var firstErr error
-	err = vsp.ForUnspentUnexpiredTickets(ctx, func(hash *chainhash.Hash) error {
+	vsp.ForUnspentUnexpiredTickets(ctx, func(hash *chainhash.Hash) error {
 		// Never return errors here, so all tickets are tried.
 		// The first error will be returned to the user.
 		err := vsp.SetVoteChoice(ctx, hash, choice)
