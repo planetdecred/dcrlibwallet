@@ -11,6 +11,7 @@ import (
 
 	"decred.org/dcrwallet/v2/errors"
 	"decred.org/dcrwallet/v2/rpc/jsonrpc/types"
+	pb "decred.org/dcrwallet/v2/rpc/walletrpc"
 	w "decred.org/dcrwallet/v2/wallet"
 	"decred.org/dcrwallet/v2/walletseed"
 	"github.com/decred/dcrd/chaincfg/chainhash"
@@ -396,4 +397,54 @@ func (wallet *Wallet) SetVoteChoice(ctx context.Context, vspHost, agendaID, choi
 		return nil
 	})
 	return firstErr
+}
+
+// GetAllAgendas returns all agendas through out the various stake versions for the active network and
+// this version of the software, and all agendas defined by it.
+func (wallet *Wallet) GetAllAgendas(ctx context.Context) (*pb.AgendasResponse, error) {
+	version, deployments := getAllAgendas(wallet.chainParams)
+	resp := &pb.AgendasResponse{
+		Version: version,
+		Agendas: make([]*pb.AgendasResponse_Agenda, len(deployments)),
+	}
+	for i := range deployments {
+		d := &deployments[i]
+		resp.Agendas[i] = &pb.AgendasResponse_Agenda{
+			Id:          d.Vote.Id,
+			Description: d.Vote.Description,
+			Mask:        uint32(d.Vote.Mask),
+			Choices:     make([]*pb.AgendasResponse_Choice, len(d.Vote.Choices)),
+			StartTime:   int64(d.StartTime),
+			ExpireTime:  int64(d.ExpireTime),
+		}
+		for j := range d.Vote.Choices {
+			choice := &d.Vote.Choices[j]
+			resp.Agendas[i].Choices[j] = &pb.AgendasResponse_Choice{
+				Id:          choice.Id,
+				Description: choice.Description,
+				Bits:        uint32(choice.Bits),
+				IsAbstain:   choice.IsAbstain,
+				IsNo:        choice.IsNo,
+			}
+		}
+	}
+	return resp, nil
+}
+
+func getAllAgendas(params *chaincfg.Params) (version uint32, agendas []chaincfg.ConsensusDeployment) {
+	version = voteVersion(params)
+	if params.Deployments == nil {
+		return version, nil
+	}
+
+	var i uint32
+	allAgendas := make([]chaincfg.ConsensusDeployment, 0)
+	for i = 1; i <= version; i++ {
+		currentAgendas := params.Deployments[i]
+		for j := 0; j < len(currentAgendas); j++ {
+			agenda := currentAgendas[j]
+			allAgendas = append(allAgendas, agenda)
+		}
+	}
+	return version, allAgendas
 }

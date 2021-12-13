@@ -21,6 +21,7 @@ import (
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/dcrutil/v4"
 	"github.com/decred/dcrd/hdkeychain/v3"
+	"github.com/decred/dcrd/wire"
 	"github.com/planetdecred/dcrlibwallet/internal/loader"
 )
 
@@ -455,4 +456,19 @@ func TimeElapsed(now, then time.Time, abbreviationFormat string, fullTime bool) 
 		return strings.Join(parts, ", ") + text
 	}
 	return parts[0] + text
+}
+
+func voteVersion(params *chaincfg.Params) uint32 {
+	switch params.Net {
+	case wire.MainNet:
+		return 9
+	case 0x48e7a065: // TestNet2
+		return 6
+	case wire.TestNet3:
+		return 10
+	case wire.SimNet:
+		return 10
+	default:
+		return 1
+	}
 }
