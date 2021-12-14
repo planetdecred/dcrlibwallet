@@ -128,7 +128,7 @@ func (v *VSP) AutoTicketsPurchase(balanceToMaintain int64, passphrase []byte) er
 	defer c.Done()
 
 	var nextIntervalStart, expiry int32
-	var cancels []func()
+	// var cancels []func()
 
 	for {
 		select {
@@ -151,7 +151,7 @@ func (v *VSP) AutoTicketsPurchase(balanceToMaintain int64, passphrase []byte) er
 
 			// Don't perform any actions while transactions are not synced through
 			// the tip block.
-			rp, err := w.RescanPoint(v.ctx)
+			rp, err := w.RescanPoint(ctx)
 			if err != nil {
 				return err
 			}
@@ -171,11 +171,11 @@ func (v *VSP) AutoTicketsPurchase(balanceToMaintain int64, passphrase []byte) er
 			// at an old ticket price or are no longer able to
 			// create mined tickets the window.
 			if height+2 >= nextIntervalStart {
-				for i, cancel := range cancels {
+				for i, cancel := range v.w.cancelFuncs {
 					cancel()
-					cancels[i] = nil
+					v.w.cancelFuncs[i] = nil
 				}
-				cancels = cancels[:0]
+				v.w.cancelFuncs = v.w.cancelFuncs[:0]
 
 				intervalSize := int32(w.ChainParams().StakeDiffWindowSize)
 				currentInterval := height / intervalSize
@@ -201,7 +201,7 @@ func (v *VSP) AutoTicketsPurchase(balanceToMaintain int64, passphrase []byte) er
 			}
 
 			cancelCtx, cancel := context.WithCancel(ctx)
-			cancels = append(cancels, cancel)
+			v.w.cancelFuncs = append(v.w.cancelFuncs, cancel)
 
 			go func() {
 				err := v.buyTicket(cancelCtx, passphrase, tipHeader, expiry, balanceToMaintain)
@@ -290,6 +290,11 @@ func (v *VSP) buyTicket(ctx context.Context, passphrase []byte, tip *wire.BlockH
 	}
 
 	return nil
+}
+
+// IsAutoTicketsPurchaseActive returns true if account mixer is active
+func (v *VSP) IsAutoTicketsPurchaseActive() bool {
+	return v.w.cancelFuncs != nil
 }
 
 // ProcessFee
