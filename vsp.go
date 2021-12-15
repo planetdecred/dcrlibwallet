@@ -297,6 +297,10 @@ func (v *VSP) IsAutoTicketsPurchaseActive() bool {
 	return v.w.cancelFuncs != nil
 }
 
+func (mw *MultiWallet) SetAutoTicketsBuyerConfig(vspHost string, walletID int, purchaseAccount uint32) (*VSP, error) {
+
+}
+
 // ProcessFee
 func (v *VSP) ProcessFee(ctx context.Context, ticketHash *chainhash.Hash, feeTx *wire.MsgTx) error {
 	var feeAmount dcrutil.Amount
@@ -637,6 +641,66 @@ func (v *VSP) GetFeeAddress(ctx context.Context, ticketHash chainhash.Hash) (dcr
 	v.ticketToFeeLock.Unlock()
 
 	return feeAmount, nil
+}
+
+func (mw *MultiWallet) GetVSPList() {
+	var valueOut struct {
+		Remember string
+		List     []string
+	}
+
+	mw.ReadUserConfigValue(VSPHostConfigKey, &valueOut)
+	var loadedVSP []*VSPInfo
+
+	for _, host := range valueOut.List {
+		vspClient = newVSPClient(host, nil, "")
+		vspInfo, err := vspClient.GetInfo(ctx)
+		if err == nil {
+			loadedVSP = append(loadedVSP, &VSPInfo{
+				Host: host,
+				Info: vspInfo,
+			})
+		}
+	}
+
+	l, _ := getInitVSPInfo("https://api.decred.org/?c=vsp")
+	for h, v := range l {
+		if strings.Contains(wl.Wallet.Net, v.Network) {
+			loadedVSP = append(loadedVSP, &VSPInfo{
+				Host: fmt.Sprintf("https://%s", h),
+				Info: v,
+			})
+		}
+	}
+
+	mw.VspInfo.List = loadedVSP
+}
+
+// getInitVSPInfo returns the list information of the VSP
+func getInitVSPInfo(url string) (map[string]*VspInfoResponse, error) {
+	rq := new(http.Client)
+	resp, err := rq.Get((url))
+	if err != nil {
+		return nil, err
+	}
+
+	b, err := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("non 200 response from server: %v", string(b))
+	}
+
+	var vspInfoResponse map[string]*VspInfoResponse
+	err = json.Unmarshal(b, &vspInfoResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	return vspInfoResponse, nil
 }
 
 type marshaler struct {

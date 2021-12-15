@@ -514,4 +514,13 @@ type PendingFee struct {
 	FeeTx             *wire.MsgTx
 }
 
+type VSPInfo struct {
+	Host string
+	Info *VspInfoResponse
+}
+
+type VSP struct {
+	List []*VSPInfo
+}
+
 /** end vspd-related types */
