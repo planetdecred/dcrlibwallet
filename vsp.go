@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"runtime/trace"
 	"strings"
 	"sync"
@@ -29,6 +31,11 @@ import (
 )
 
 const apiVSPInfo = "/api/v3/vspinfo"
+
+type valueOut struct {
+	Remember string
+	List     []string
+}
 
 type VSP struct {
 	w               *Wallet
@@ -297,9 +304,9 @@ func (v *VSP) IsAutoTicketsPurchaseActive() bool {
 	return v.w.cancelFuncs != nil
 }
 
-func (mw *MultiWallet) SetAutoTicketsBuyerConfig(vspHost string, walletID int, purchaseAccount uint32) (*VSP, error) {
+// func (mw *MultiWallet) SetAutoTicketsBuyerConfig(vspHost string, walletID int, purchaseAccount uint32) (*VSP, error) {
 
-}
+// }
 
 // ProcessFee
 func (v *VSP) ProcessFee(ctx context.Context, ticketHash *chainhash.Hash, feeTx *wire.MsgTx) error {
@@ -643,29 +650,27 @@ func (v *VSP) GetFeeAddress(ctx context.Context, ticketHash chainhash.Hash) (dcr
 	return feeAmount, nil
 }
 
-func (mw *MultiWallet) GetVSPList() {
-	var valueOut struct {
-		Remember string
-		List     []string
-	}
+func (mw *MultiWallet) GetVSPList(net string) (*VSPList, error) {
+	var valueOut valueOut
 
 	mw.ReadUserConfigValue(VSPHostConfigKey, &valueOut)
 	var loadedVSP []*VSPInfo
 
 	for _, host := range valueOut.List {
-		vspClient = newVSPClient(host, nil, "")
-		vspInfo, err := vspClient.GetInfo(ctx)
-		if err == nil {
-			loadedVSP = append(loadedVSP, &VSPInfo{
-				Host: host,
-				Info: vspInfo,
-			})
+		info, err := mw.getInfo(host)
+		if err != nil {
+			return nil, err
 		}
+
+		loadedVSP = append(loadedVSP, &VSPInfo{
+			Host: host,
+			Info: info,
+		})
 	}
 
 	l, _ := getInitVSPInfo("https://api.decred.org/?c=vsp")
 	for h, v := range l {
-		if strings.Contains(wl.Wallet.Net, v.Network) {
+		if strings.Contains(net, v.Network) {
 			loadedVSP = append(loadedVSP, &VSPInfo{
 				Host: fmt.Sprintf("https://%s", h),
 				Info: v,
@@ -673,7 +678,77 @@ func (mw *MultiWallet) GetVSPList() {
 		}
 	}
 
-	mw.VspInfo.List = loadedVSP
+	return &VSPList{
+		List: loadedVSP,
+	}, nil
+}
+
+func (mw *MultiWallet) AddVSP(host, net string) error {
+	var valueOut valueOut
+
+	// check if host already exists
+	_ = mw.ReadUserConfigValue(VSPHostConfigKey, &valueOut)
+	for _, v := range valueOut.List {
+		if v == host {
+			return fmt.Errorf("existing host %s", host)
+		}
+	}
+
+	// validate host network
+	info, err := mw.getInfo(host)
+	if err != nil {
+		return err
+	}
+
+	if info.Network != net {
+		return fmt.Errorf("invalid net %s", info.Network)
+	}
+
+	valueOut.List = append(valueOut.List, host)
+	mw.SaveUserConfigValue(VSPHostConfigKey, valueOut)
+	// (*wl.VspInfo).List = append((*wl.VspInfo).List, &wallet.VSPInfo{
+	// 	Host: host,
+	// 	Info: info,
+	// })
+	return nil
+}
+
+func (mw *MultiWallet) GetRememberVSP() string {
+	var valueOut valueOut
+
+	mw.ReadUserConfigValue(VSPHostConfigKey, &valueOut)
+	return valueOut.Remember
+}
+
+func (mw *MultiWallet) RememberVSP(host string) {
+	var valueOut valueOut
+
+	err := mw.ReadUserConfigValue(VSPHostConfigKey, &valueOut)
+	if err != nil {
+		log.Error(err.Error())
+	}
+
+	valueOut.Remember = host
+	mw.SaveUserConfigValue(VSPHostConfigKey, valueOut)
+}
+
+func (mw *MultiWallet) getInfo(host string) (*VspInfoResponse, error) {
+	sourceWallet := mw.WalletWithID(mw.OpenedWalletIDsRaw()[0])
+	if sourceWallet == nil {
+		return nil, fmt.Errorf("wallet doesn't exist")
+	}
+
+	ctx, cancel := mw.contextWithShutdownCancel()
+	mw.cancelFuncs = append(mw.cancelFuncs, cancel)
+
+	vsp := &VSP{}
+	vsp.vspClient = newVSPClient(host, nil, sourceWallet.Internal())
+	vspInfo, err := vsp.GetInfo(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return vspInfo, nil
 }
 
 // getInitVSPInfo returns the list information of the VSP
