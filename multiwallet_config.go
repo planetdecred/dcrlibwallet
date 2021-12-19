@@ -33,7 +33,7 @@ const (
 	TicketBuyerVSPHostConfigKey = "tb_vsp_host"
 	TicketBuyerWalletConfigKey  = "tb_wallet_id"
 	TicketBuyerAccountConfigKey = "tb_account_number"
-	TicketBuyerATMConfigKey     = "tb_ammount_to_maintain"
+	TicketBuyerATMConfigKey     = "tb_amount_to_maintain"
 	TicketBuyerConfigSet        = "tb_config_set"
 
 	PassphraseTypePin  int32 = 0
