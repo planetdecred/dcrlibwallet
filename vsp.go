@@ -32,11 +32,6 @@ import (
 
 const apiVSPInfo = "/api/v3/vspinfo"
 
-type valueOut struct {
-	Remember string
-	List     []string
-}
-
 type VSP struct {
 	w               *Wallet
 	purchaseAccount uint32
@@ -127,6 +122,8 @@ func (v *VSP) AutoTicketsPurchase(balanceToMaintain int64, passphrase []byte) er
 	defer v.w.LockWallet()
 
 	ctx, outerCancel := context.WithCancel(v.ctx)
+	v.w.cancelAutoTicketBuyer = make([]context.CancelFunc, 0)
+
 	defer outerCancel()
 	var fatal error
 	var fatalMu sync.Mutex
@@ -135,7 +132,6 @@ func (v *VSP) AutoTicketsPurchase(balanceToMaintain int64, passphrase []byte) er
 	defer c.Done()
 
 	var nextIntervalStart, expiry int32
-	// var cancels []func()
 
 	for {
 		select {
@@ -178,11 +174,11 @@ func (v *VSP) AutoTicketsPurchase(balanceToMaintain int64, passphrase []byte) er
 			// at an old ticket price or are no longer able to
 			// create mined tickets the window.
 			if height+2 >= nextIntervalStart {
-				for i, cancel := range v.w.cancelFuncs {
+				for i, cancel := range v.w.cancelAutoTicketBuyer {
 					cancel()
-					v.w.cancelFuncs[i] = nil
+					v.w.cancelAutoTicketBuyer[i] = nil
 				}
-				v.w.cancelFuncs = v.w.cancelFuncs[:0]
+				v.w.cancelAutoTicketBuyer = v.w.cancelAutoTicketBuyer[:0]
 
 				intervalSize := int32(w.ChainParams().StakeDiffWindowSize)
 				currentInterval := height / intervalSize
@@ -208,7 +204,7 @@ func (v *VSP) AutoTicketsPurchase(balanceToMaintain int64, passphrase []byte) er
 			}
 
 			cancelCtx, cancel := context.WithCancel(ctx)
-			v.w.cancelFuncs = append(v.w.cancelFuncs, cancel)
+			v.w.cancelAutoTicketBuyer = append(v.w.cancelAutoTicketBuyer, cancel)
 
 			go func() {
 				err := v.buyTicket(cancelCtx, passphrase, tipHeader, expiry, balanceToMaintain)
@@ -301,12 +297,30 @@ func (v *VSP) buyTicket(ctx context.Context, passphrase []byte, tip *wire.BlockH
 
 // IsAutoTicketsPurchaseActive returns true if account mixer is active
 func (v *VSP) IsAutoTicketsPurchaseActive() bool {
-	return v.w.cancelFuncs != nil
+	var ticketBuyerRunning bool
+	for i := range v.w.cancelAutoTicketBuyer {
+		ticketBuyerRunning = v.w.cancelAutoTicketBuyer[i] != nil
+	}
+
+	return ticketBuyerRunning
 }
 
-// func (mw *MultiWallet) SetAutoTicketsBuyerConfig(vspHost string, walletID int, purchaseAccount uint32) (*VSP, error) {
+// StopAutoTicketsPurchase stops the active account mixer
+func (v *VSP) StopAutoTicketsPurchase() error {
+	for i, cancel := range v.w.cancelAutoTicketBuyer {
+		if v.w.cancelAutoTicketBuyer == nil {
+			fmt.Println("not running")
+			return errors.New(ErrInvalid)
+		}
 
-// }
+		cancel()
+		v.w.cancelAutoTicketBuyer[i] = nil
+	}
+
+	v.w.cancelAutoTicketBuyer = v.w.cancelAutoTicketBuyer[:0]
+
+	return nil
+}
 
 // ProcessFee
 func (v *VSP) ProcessFee(ctx context.Context, ticketHash *chainhash.Hash, feeTx *wire.MsgTx) error {
@@ -650,6 +664,11 @@ func (v *VSP) GetFeeAddress(ctx context.Context, ticketHash chainhash.Hash) (dcr
 	return feeAmount, nil
 }
 
+type valueOut struct {
+	Remember string
+	List     []string
+}
+
 func (mw *MultiWallet) GetVSPList(net string) (*VSPList, error) {
 	var valueOut valueOut
 
@@ -749,6 +768,34 @@ func (mw *MultiWallet) getInfo(host string) (*VspInfoResponse, error) {
 	}
 
 	return vspInfo, nil
+}
+
+func (mw *MultiWallet) SetAutoTicketsBuyerConfig(vspHost string, walletID int, purchaseAccount int32, amountToMaintain int64) {
+	mw.SetLongConfigValueForKey(TicketBuyerATMConfigKey, amountToMaintain)
+	mw.SetIntConfigValueForKey(TicketBuyerWalletConfigKey, walletID)
+	mw.SetInt32ConfigValueForKey(TicketBuyerAccountConfigKey, purchaseAccount)
+	mw.SetStringConfigValueForKey(TicketBuyerVSPHostConfigKey, vspHost)
+	mw.SetBoolConfigValueForKey(TicketBuyerConfigSet, true)
+}
+
+func (mw *MultiWallet) GetAutoTicketsBuyerConfig() (vspHost string, walletID int, purchaseAccount int32, amountToMaintain int64) {
+	atm := mw.ReadLongConfigValueForKey(TicketBuyerATMConfigKey, -1)
+	walId := mw.ReadIntConfigValueForKey(TicketBuyerWalletConfigKey, -1)
+	accNum := mw.ReadInt32ConfigValueForKey(TicketBuyerAccountConfigKey, -1)
+	vspHost = mw.ReadStringConfigValueForKey(TicketBuyerVSPHostConfigKey)
+	return vspHost, walId, accNum, atm
+}
+
+func (mw *MultiWallet) TicketBuyerConfigIsSet() bool {
+	return mw.ReadBoolConfigValueForKey(TicketBuyerConfigSet, false)
+}
+
+func (mw *MultiWallet) ClearTicketBuyerConfig() {
+	mw.SetLongConfigValueForKey(TicketBuyerATMConfigKey, -1)
+	mw.SetIntConfigValueForKey(TicketBuyerWalletConfigKey, -1)
+	mw.SetInt32ConfigValueForKey(TicketBuyerAccountConfigKey, -1)
+	mw.SetStringConfigValueForKey(TicketBuyerVSPHostConfigKey, "")
+	mw.SetBoolConfigValueForKey(TicketBuyerConfigSet, false)
 }
 
 // getInitVSPInfo returns the list information of the VSP

@@ -35,9 +35,10 @@ type Wallet struct {
 	syncing           bool
 	waitingForHeaders bool
 
-	shuttingDown       chan bool
-	cancelFuncs        []context.CancelFunc
-	cancelAccountMixer context.CancelFunc
+	shuttingDown          chan bool
+	cancelFuncs           []context.CancelFunc
+	cancelAutoTicketBuyer []context.CancelFunc
+	cancelAccountMixer    context.CancelFunc
 
 	// setUserConfigValue saves the provided key-value pair to a config database.
 	// This function is ideally assigned when the `wallet.prepare` method is
