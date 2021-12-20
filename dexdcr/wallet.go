@@ -34,6 +34,7 @@ import (
 	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v3"
 	"github.com/decred/dcrd/txscript/v4"
 	"github.com/decred/dcrd/txscript/v4/stdaddr"
+	"github.com/decred/dcrd/txscript/v4/stdscript"
 	"github.com/decred/dcrd/wire"
 	"github.com/decred/slog"
 )
@@ -287,11 +288,10 @@ func (spvw *SpvWallet) UnspentOutput(ctx context.Context, txHash *chainhash.Hash
 			return nil, err
 		}
 
-		// Get further info about the script.  Ignore the error here since an
-		// error means the script couldn't parse and there is no additional
-		// information about it anyways.
-		_, addrs, _, _ := txscript.ExtractPkScriptAddrs(
-			0, utxo.PkScript, spvw.chainParams, true) // Yes treasury
+		// Get further info about the script.
+		// Assume scriptVersion 0. dcrwallet json-rpc doesn't set this yet either.
+		var scriptVersion uint16
+		_, addrs := stdscript.ExtractAddrs(scriptVersion, utxo.PkScript, spvw.chainParams)
 		addresses := make([]string, len(addrs))
 		for i, addr := range addrs {
 			addresses[i] = addr.String()
@@ -307,7 +307,7 @@ func (spvw *SpvWallet) UnspentOutput(ctx context.Context, txHash *chainhash.Hash
 			TxOut: &wire.TxOut{
 				Value:    int64(utxo.Amount),
 				PkScript: utxo.PkScript,
-				// Version: 0, // TODO: dcrwallet json-rpc doesn't set this also, but should be
+				Version:  scriptVersion,
 			},
 			Tree:          utxo.Tree,
 			Addresses:     addresses,
@@ -769,10 +769,7 @@ func createVoutList(mtx *wire.MsgTx, chainParams *chaincfg.Params, filterAddrMap
 			// Ignore the error here since an error means the script
 			// couldn't parse and there is no additional information
 			// about it anyways.
-			var sc txscript.ScriptClass
-			sc, addrs, reqSigs, _ = txscript.ExtractPkScriptAddrs(
-				v.Version, v.PkScript, chainParams,
-				isTreasuryEnabled)
+			sc, _ := stdscript.ExtractAddrs(v.Version, v.PkScript, chainParams)
 			scriptClass = sc.String()
 		}
 
