@@ -3,10 +3,10 @@ package addresshelper
 import (
 	"fmt"
 
-	chaincfg "github.com/decred/dcrd/chaincfg/v3"
-	dcrutil "github.com/decred/dcrd/dcrutil/v4"
-	txscript "github.com/decred/dcrd/txscript/v4"
+	"github.com/decred/dcrd/chaincfg/v3"
+	"github.com/decred/dcrd/dcrutil/v4"
 	"github.com/decred/dcrd/txscript/v4/stdaddr"
+	"github.com/decred/dcrd/txscript/v4/stdscript"
 )
 
 const scriptVersion = 0
@@ -21,16 +21,11 @@ func PkScript(address string, net dcrutil.AddressParams) ([]byte, error) {
 	return pkScript, nil
 }
 
-func PkScriptAddresses(params *chaincfg.Params, pkScript []byte) ([]string, error) {
-	_, addresses, _, err := txscript.ExtractPkScriptAddrs(scriptVersion, pkScript, params, true)
-	if err != nil {
-		return nil, err
-	}
-
+func PkScriptAddresses(params *chaincfg.Params, pkScript []byte) []string {
+	_, addresses := stdscript.ExtractAddrs(scriptVersion, pkScript, params)
 	encodedAddresses := make([]string, len(addresses))
 	for i, address := range addresses {
 		encodedAddresses[i] = address.String()
 	}
-
-	return encodedAddresses, nil
+	return encodedAddresses
 }
