@@ -236,17 +236,6 @@ func (v *VSP) buyTicket(ctx context.Context, passphrase []byte, tip *wire.BlockH
 
 	wal := v.w
 
-	if len(passphrase) > 0 {
-		// Ensure wallet is unlocked with the current passphrase.  If the passphase
-		// is changed, the Run exits and TB must be restarted with the new
-		// passphrase.
-		err := wal.UnlockWallet(passphrase)
-		if err != nil {
-			return translateError(err)
-		}
-		defer wal.LockWallet()
-	}
-
 	// Determine how many tickets to buy
 	bal, err := wal.GetAccountBalance(int32(v.purchaseAccount))
 	if err != nil {
