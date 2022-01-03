@@ -493,3 +493,52 @@ type VSP struct {
 }
 
 /** end vspd-related types */
+
+/** begin agenda types */
+type Agenda struct {
+	ID               int       `storm:"id,increment"`
+	AgendaID         string    `json:"agenda_id" storm:"index"`
+	WalletID         int       `json:"wallet_id" storm:"index"`
+	Description      string    `json:"description"`
+	Mask             uint32    `json:"mask"`
+	Choices          []*Choice `json:"choices"`
+	VotingPreference string    `json:"voting_preference"`
+	StartTime        int64     `json:"start_time"`
+	ExpireTime       int64     `json:"expire_time"`
+}
+
+type Choice struct {
+	Id          string `json:"id"`
+	Description string `json:"description"`
+	Bits        uint32 `json:"bits"`
+	IsAbstain   bool   `json:"is_abstain"`
+	IsNo        bool   `json:"is_no"`
+}
+
+type GetVoteChoicesResult struct {
+	Version uint32       `json:"version"`
+	Choices []VoteChoice `json:"choices"`
+}
+
+type VoteChoice struct {
+	ID                int    `storm:"id,increment"`
+	AgendaID          string `json:"agenda_id"`
+	WalletID          int    `json:"wallet_id" storm:"index"`
+	AgendaDescription string `json:"agenda_description"`
+	ChoiceID          string `json:"choice_id"`
+	ChoiceDescription string `json:"choice_description"`
+}
+
+type AgendasResponse struct {
+	Version uint32    `json:"version,omitempty"`
+	Agendas []*Agenda `json:"agendas"`
+}
+
+type ConsensusNotificationListener interface {
+	OnAgendasSynced()
+	OnNewAgenda(agenda *Agenda)
+	OnAgendaVoteStarted(agenda *Agenda)
+	OnAgendaVoteFinished(agenda *Agenda)
+}
+
+/** end agenda types */

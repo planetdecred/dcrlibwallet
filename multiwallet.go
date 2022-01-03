@@ -46,6 +46,7 @@ type MultiWallet struct {
 
 	vspMu sync.RWMutex
 	vsps  []*VSP
+	Consensus *Consensus
 }
 
 func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWallet, error) {
@@ -91,6 +92,13 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 		return nil, err
 	}
 
+	// init database for saving/reading agenda objects
+	err = mwDB.Init(&Agenda{})
+	if err != nil {
+		log.Errorf("Error initializing agendas database: %s", err.Error())
+		return nil, err
+	}
+
 	mw := &MultiWallet{
 		dbDriver:    dbDriver,
 		rootDir:     rootDir,
@@ -106,6 +114,11 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 	}
 
 	mw.Politeia, err = newPoliteia(mw, politeiaHost)
+	if err != nil {
+		return nil, err
+	}
+
+	mw.Consensus, err = newConsensus(mw)
 	if err != nil {
 		return nil, err
 	}
