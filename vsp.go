@@ -115,14 +115,22 @@ func (v *VSP) PurchaseTickets(ticketCount, expiryBlocks int32, passphrase []byte
 
 // AutoTicketsPurchase purchases the number of tickets passed as an argument and pays the fees for the tickets
 func (v *VSP) AutoTicketsPurchase(balanceToMaintain int64, passphrase []byte) error {
+	if balanceToMaintain < 0 {
+		return errors.New("Negative balance to maintain given")
+	}
+
 	err := v.w.UnlockWallet(passphrase)
 	if err != nil {
 		return translateError(err)
 	}
 	defer v.w.LockWallet()
 
+	v.w.listenForTicketBuyerShutdown()
+
+	log.Info("Automatic ticket buyer instance started")
+
 	ctx, outerCancel := context.WithCancel(v.ctx)
-	v.w.cancelAutoTicketBuyer = make([]context.CancelFunc, 0)
+	v.w.cancelAutoTicketBuyer = append(v.w.cancelAutoTicketBuyer, outerCancel)
 
 	defer outerCancel()
 	var fatal error
@@ -132,7 +140,6 @@ func (v *VSP) AutoTicketsPurchase(balanceToMaintain int64, passphrase []byte) er
 	defer c.Done()
 
 	var nextIntervalStart, expiry int32
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -154,6 +161,8 @@ func (v *VSP) AutoTicketsPurchase(balanceToMaintain int64, passphrase []byte) er
 
 			// Don't perform any actions while transactions are not synced through
 			// the tip block.
+
+			log.Info("checking rescan point if transactions are synced")
 			rp, err := w.RescanPoint(ctx)
 			if err != nil {
 				return err
@@ -163,6 +172,7 @@ func (v *VSP) AutoTicketsPurchase(balanceToMaintain int64, passphrase []byte) er
 				continue
 			}
 
+			log.Info("getting BlockHeader")
 			tipHeader, err := w.BlockHeader(ctx, tip)
 			if err != nil {
 				log.Error(err)
@@ -174,6 +184,7 @@ func (v *VSP) AutoTicketsPurchase(balanceToMaintain int64, passphrase []byte) er
 			// at an old ticket price or are no longer able to
 			// create mined tickets the window.
 			if height+2 >= nextIntervalStart {
+				log.Info("Canceling any ongoing ticket purchases buying at an old ticket price or are no longer able to create mined tickets the window.")
 				for i, cancel := range v.w.cancelAutoTicketBuyer {
 					cancel()
 					v.w.cancelAutoTicketBuyer[i] = nil
@@ -257,10 +268,13 @@ func (v *VSP) buyTicket(ctx context.Context, passphrase []byte, tip *wire.BlockH
 		log.Debugf("Skipping purchase: low available balance")
 		return nil
 	}
+
 	max := int(wal.Internal().ChainParams().MaxFreshStakePerBlock)
 	if buy > max {
 		buy = max
 	}
+
+	log.Debugf("total tickets to purchase :", buy)
 
 	request := &w.PurchaseTicketsRequest{
 		Count:                buy,
@@ -295,18 +309,20 @@ func (v *VSP) IsAutoTicketsPurchaseActive() bool {
 }
 
 // StopAutoTicketsPurchase stops the active account mixer
-func (v *VSP) StopAutoTicketsPurchase() error {
-	for i, cancel := range v.w.cancelAutoTicketBuyer {
-		if v.w.cancelAutoTicketBuyer == nil {
-			fmt.Println("not running")
+func (mw *MultiWallet) StopAutoTicketsPurchase(walletID int) error {
+	wallet := mw.WalletWithID(walletID)
+	if wallet == nil {
+		return errors.New(ErrNotExist)
+	}
+
+	for i, cancel := range wallet.cancelAutoTicketBuyer {
+		if wallet.cancelAutoTicketBuyer == nil {
 			return errors.New(ErrInvalid)
 		}
 
 		cancel()
-		v.w.cancelAutoTicketBuyer[i] = nil
+		wallet.cancelAutoTicketBuyer[i] = nil
 	}
-
-	v.w.cancelAutoTicketBuyer = v.w.cancelAutoTicketBuyer[:0]
 
 	return nil
 }
@@ -676,7 +692,11 @@ func (mw *MultiWallet) GetVSPList(net string) (*VSPList, error) {
 		})
 	}
 
-	l, _ := getInitVSPInfo("https://api.decred.org/?c=vsp")
+	l, err := getInitVSPInfo("https://api.decred.org/?c=vsp")
+	if err != nil {
+		return nil, err
+	}
+
 	for h, v := range l {
 		if strings.Contains(net, v.Network) {
 			loadedVSP = append(loadedVSP, &VSPInfo{
@@ -785,6 +805,15 @@ func (mw *MultiWallet) ClearTicketBuyerConfig() {
 	mw.SetInt32ConfigValueForKey(TicketBuyerAccountConfigKey, -1)
 	mw.SetStringConfigValueForKey(TicketBuyerVSPHostConfigKey, "")
 	mw.SetBoolConfigValueForKey(TicketBuyerConfigSet, false)
+}
+
+func (wallet *Wallet) listenForTicketBuyerShutdown() {
+	wallet.cancelFuncs = make([]context.CancelFunc, 0)
+	go func() {
+		for _, cancel := range wallet.cancelFuncs {
+			cancel()
+		}
+	}()
 }
 
 // getInitVSPInfo returns the list information of the VSP
