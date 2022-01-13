@@ -7,7 +7,7 @@ import (
 	"github.com/decred/dcrd/blockchain/stake/v4"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/dcrutil/v4"
-	"github.com/decred/dcrd/txscript/v4"
+	"github.com/decred/dcrd/txscript/v4/stdscript"
 	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrdata/v7/txhelpers"
 	"github.com/planetdecred/dcrlibwallet/txhelper"
@@ -122,17 +122,17 @@ func (wallet *Wallet) decodeTxOutputs(mtx *wire.MsgTx, netParams *chaincfg.Param
 	for i, txOut := range mtx.TxOut {
 		// get address and script type for output
 		var address, scriptType string
-		if (txType == stake.TxTypeSStx) && (stake.IsStakeSubmissionTxOut(i)) {
+		if (txType == stake.TxTypeSStx) && (stake.IsStakeCommitmentTxOut(i)) {
 			addr, err := stake.AddrFromSStxPkScrCommitment(txOut.PkScript, netParams)
 			if err == nil {
 				address = addr.String()
 			}
-			scriptType = txscript.StakeSubmissionTy.String()
+			scriptType = stdscript.STStakeSubmissionPubKeyHash.String()
 		} else {
 			// Ignore the error here since an error means the script
 			// couldn't parse and there is no additional information
 			// about it anyways.
-			scriptClass, addrs, _, _ := txscript.ExtractPkScriptAddrs(txOut.Version, txOut.PkScript, netParams, true)
+			scriptClass, addrs := stdscript.ExtractAddrs(txOut.Version, txOut.PkScript, netParams)
 			if len(addrs) > 0 {
 				address = addrs[0].String()
 			}

@@ -23,6 +23,7 @@ import (
 	"github.com/decred/dcrd/dcrutil/v4"
 	"github.com/decred/dcrd/txscript/v4"
 	"github.com/decred/dcrd/txscript/v4/stdaddr"
+	"github.com/decred/dcrd/txscript/v4/stdscript"
 	"github.com/decred/dcrd/wire"
 )
 
@@ -374,8 +375,7 @@ func (v *VSP) GetFeeAddress(ctx context.Context, ticketHash chainhash.Hash) (dcr
 	// Fetch parent transaction
 	parentHash := ticketTx.TxIn[0].PreviousOutPoint.Hash
 	const scriptVersion = 0
-	_, addrs, _, err := txscript.ExtractPkScriptAddrs(scriptVersion,
-		ticketTx.TxOut[0].PkScript, v.w.Internal().ChainParams(), true) // Yes treasury
+	_, addrs := stdscript.ExtractAddrs(scriptVersion, ticketTx.TxOut[0].PkScript, v.w.Internal().ChainParams())
 	if err != nil {
 		return 0, errors.Errorf("failed to extract stake submission address from %v: %v", ticketHash, err)
 	}

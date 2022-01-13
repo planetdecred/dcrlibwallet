@@ -155,10 +155,7 @@ func (wallet *Wallet) UnspentOutputs(account int32) ([]*UnspentOutput, error) {
 		// unique key to identify utxo
 		outputKey := fmt.Sprintf("%s:%d", input.PreviousOutPoint.Hash, input.PreviousOutPoint.Index)
 
-		addresses, err := addresshelper.PkScriptAddresses(wallet.chainParams, inputDetail.Scripts[i])
-		if err != nil {
-			return nil, fmt.Errorf("error reading address details for unspent output: %v", err)
-		}
+		addresses := addresshelper.PkScriptAddresses(wallet.chainParams, inputDetail.Scripts[i])
 
 		var confirmations int32
 		inputBlockHeight := int32(input.BlockHeight)
