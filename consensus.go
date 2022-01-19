@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"sync"
-	"time"
 
 	"decred.org/dcrwallet/v2/errors"
 	w "decred.org/dcrwallet/v2/wallet"
@@ -14,125 +12,16 @@ import (
 )
 
 type Consensus struct {
-	mwRef                   *MultiWallet
-	mu                      sync.RWMutex
-	ctx                     context.Context
-	cancelSync              context.CancelFunc
-	notificationListenersMu sync.RWMutex
-	notificationListeners   map[string]ConsensusNotificationListener
+	mwRef *MultiWallet
+	ctx   context.Context
 }
-
-const (
-	ConsensusLastSyncedTimestampConfigKey = "consensus_last_synced_timestamp"
-)
 
 func newConsensus(mwRef *MultiWallet) (*Consensus, error) {
 	c := &Consensus{
-		mwRef:                 mwRef,
-		notificationListeners: make(map[string]ConsensusNotificationListener),
+		mwRef: mwRef,
 	}
 
 	return c, nil
-}
-
-func (c *Consensus) saveLastSyncedTimestamp(lastSyncedTimestamp int64) {
-	c.mwRef.SetLongConfigValueForKey(ConsensusLastSyncedTimestampConfigKey, lastSyncedTimestamp)
-}
-
-func (c *Consensus) getLastSyncedTimestamp() int64 {
-	return c.mwRef.ReadLongConfigValueForKey(ConsensusLastSyncedTimestampConfigKey, 0)
-}
-
-func (c *Consensus) GetLastSyncedTimeStamp() int64 {
-	return c.getLastSyncedTimestamp()
-}
-
-func (c *Consensus) Sync(wallets []*Wallet) error {
-
-	c.mu.Lock()
-
-	if c.cancelSync != nil {
-		c.mu.Unlock()
-		return errors.New(ErrSyncAlreadyInProgress)
-	}
-
-	log.Info("Consensus sync: started")
-
-	c.ctx, c.cancelSync = c.mwRef.contextWithShutdownCancel()
-	defer c.resetSyncData()
-
-	c.mu.Unlock()
-
-	for i, w := range wallets {
-
-		log.Info("fires i: ", i, w.ID)
-		log.Info("Consensus sync: refreshing agendas")
-		_, err := c.GetAllAgendasForWallet(w.ID, false)
-		if err != nil {
-			log.Errorf("Error fetching agendas: %v", err)
-			time.Sleep(retryInterval * time.Second)
-			continue
-		}
-
-		if done(c.ctx) {
-			return errors.New(ErrContextCanceled)
-		}
-
-		log.Info("Consensus sync: update complete")
-		c.saveLastSyncedTimestamp(time.Now().Unix())
-		c.publishSynced()
-
-	}
-	return nil
-}
-
-func (c *Consensus) IsSyncing() bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.cancelSync != nil
-}
-
-// this function requres c.mu unlocked.
-func (c *Consensus) resetSyncData() {
-	c.cancelSync = nil
-}
-
-func (c *Consensus) StopSync() {
-	c.mu.Lock()
-	if c.cancelSync != nil {
-		c.cancelSync()
-		c.resetSyncData()
-	}
-	c.mu.Unlock()
-	log.Info("Consensus sync: stopped")
-}
-
-func (c *Consensus) AddNotificationListener(notificationListener ConsensusNotificationListener, uniqueIdentifier string) error {
-	c.notificationListenersMu.Lock()
-	defer c.notificationListenersMu.Unlock()
-
-	if _, ok := c.notificationListeners[uniqueIdentifier]; ok {
-		return errors.New(ErrListenerAlreadyExist)
-	}
-
-	c.notificationListeners[uniqueIdentifier] = notificationListener
-	return nil
-}
-
-func (c *Consensus) RemoveNotificationListener(uniqueIdentifier string) {
-	c.notificationListenersMu.Lock()
-	defer c.notificationListenersMu.Unlock()
-
-	delete(c.notificationListeners, uniqueIdentifier)
-}
-
-func (c *Consensus) publishSynced() {
-	c.notificationListenersMu.Lock()
-	defer c.notificationListenersMu.Unlock()
-
-	for _, notificationListener := range c.notificationListeners {
-		notificationListener.OnAgendasSynced()
-	}
 }
 
 // GetVoteChoices handles a getvotechoices request by returning configured vote
