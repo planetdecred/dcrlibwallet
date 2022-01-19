@@ -1,5 +1,5 @@
 // Copyright (c) 2015-2018 The btcsuite developers
-// Copyright (c) 2017-2020 The Decred developers
+// Copyright (c) 2017-2022 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -45,7 +45,9 @@ type Loader struct {
 	accountGapLimit         int
 	disableCoinTypeUpgrades bool
 	allowHighFees           bool
+	manualTickets           bool
 	relayFee                dcrutil.Amount
+	mixSplitLimit           int
 
 	mu sync.Mutex
 }
@@ -62,7 +64,7 @@ type StakeOptions struct {
 
 // NewLoader constructs a Loader.
 func NewLoader(chainParams *chaincfg.Params, dbDirPath string, stakeOptions *StakeOptions, gapLimit uint32,
-	allowHighFees bool, relayFee dcrutil.Amount, accountGapLimit int, disableCoinTypeUpgrades bool) *Loader {
+	allowHighFees bool, relayFee dcrutil.Amount, accountGapLimit int, disableCoinTypeUpgrades bool, manualTickets bool, mixSplitLimit int) *Loader {
 
 	return &Loader{
 		chainParams:             chainParams,
@@ -73,7 +75,9 @@ func NewLoader(chainParams *chaincfg.Params, dbDirPath string, stakeOptions *Sta
 		accountGapLimit:         accountGapLimit,
 		disableCoinTypeUpgrades: disableCoinTypeUpgrades,
 		allowHighFees:           allowHighFees,
+		manualTickets:           manualTickets,
 		relayFee:                relayFee,
+		mixSplitLimit:           mixSplitLimit,
 	}
 }
 
@@ -185,8 +189,10 @@ func (l *Loader) CreateWatchingOnlyWallet(ctx context.Context, extendedPubKey st
 		AccountGapLimit:         l.accountGapLimit,
 		DisableCoinTypeUpgrades: l.disableCoinTypeUpgrades,
 		StakePoolColdExtKey:     so.StakePoolColdExtKey,
+		ManualTickets:           l.manualTickets,
 		AllowHighFees:           l.allowHighFees,
 		RelayFee:                l.relayFee,
+		MixSplitLimit:           l.mixSplitLimit,
 		Params:                  l.chainParams,
 	}
 	w, err = wallet.Open(ctx, cfg)
@@ -275,6 +281,7 @@ func (l *Loader) CreateNewWallet(ctx context.Context, pubPassphrase, privPassphr
 		AccountGapLimit:         l.accountGapLimit,
 		DisableCoinTypeUpgrades: l.disableCoinTypeUpgrades,
 		StakePoolColdExtKey:     so.StakePoolColdExtKey,
+		ManualTickets:           l.manualTickets,
 		AllowHighFees:           l.allowHighFees,
 		RelayFee:                l.relayFee,
 		Params:                  l.chainParams,
@@ -335,8 +342,10 @@ func (l *Loader) OpenExistingWallet(ctx context.Context, pubPassphrase []byte) (
 		AccountGapLimit:         l.accountGapLimit,
 		DisableCoinTypeUpgrades: l.disableCoinTypeUpgrades,
 		StakePoolColdExtKey:     so.StakePoolColdExtKey,
+		ManualTickets:           l.manualTickets,
 		AllowHighFees:           l.allowHighFees,
 		RelayFee:                l.relayFee,
+		MixSplitLimit:           l.mixSplitLimit,
 		Params:                  l.chainParams,
 	}
 	w, err = wallet.Open(ctx, cfg)
