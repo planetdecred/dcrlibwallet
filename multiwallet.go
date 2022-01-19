@@ -41,9 +41,9 @@ type MultiWallet struct {
 	shuttingDown chan bool
 	cancelFuncs  []context.CancelFunc
 
-	Politeia *Politeia
+	Politeia  *Politeia
 	dexClient *DexClient
-	VspInfo  *VSP
+	VspInfo   *VSP
 }
 
 func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWallet, error) {

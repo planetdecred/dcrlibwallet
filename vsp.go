@@ -46,6 +46,7 @@ type VSP struct {
 }
 
 func (mw *MultiWallet) NewVSPClient(vspHost string, walletID int, purchaseAccount uint32) (*VSP, error) {
+
 	sourceWallet := mw.WalletWithID(walletID)
 	if sourceWallet == nil {
 		return nil, fmt.Errorf("wallet doesn't exist")
@@ -113,33 +114,45 @@ func (v *VSP) PurchaseTickets(ticketCount, expiryBlocks int32, passphrase []byte
 	return nil
 }
 
-// AutoTicketsPurchase purchases the number of tickets passed as an argument and pays the fees for the tickets
-func (v *VSP) AutoTicketsPurchase(balanceToMaintain int64, passphrase []byte) error {
+func (v *VSP) StartTicketBuyer(balanceToMaintain int64, passphrase []byte) error {
 	if balanceToMaintain < 0 {
 		return errors.New("Negative balance to maintain given")
 	}
 
-	err := v.w.UnlockWallet(passphrase)
-	if err != nil {
-		return translateError(err)
+	go func() {
+		log.Info("Running ticket buyer")
+		ctx, cancel := context.WithCancel(v.ctx)
+		v.w.cancelAutoTicketBuyer = cancel
+
+		err := v.ticketBuyerInstance(ctx, balanceToMaintain, passphrase)
+		if err != nil {
+			log.Errorf("Ticket buyer instance errored: %v", err)
+		}
+
+		v.w.cancelAccountMixer = nil
+	}()
+
+	return nil
+}
+
+func (v *VSP) ticketBuyerInstance(ctx context.Context, balanceToMaintain int64, passphrase []byte) error {
+	if len(passphrase) > 0 {
+		err := v.w.UnlockWallet(passphrase)
+		if err != nil {
+			return translateError(err)
+		}
 	}
-	defer v.w.LockWallet()
-
-	v.w.listenForTicketBuyerShutdown()
-
-	log.Info("Automatic ticket buyer instance started")
-
-	ctx, outerCancel := context.WithCancel(v.ctx)
-	v.w.cancelAutoTicketBuyer = append(v.w.cancelAutoTicketBuyer, outerCancel)
-
-	defer outerCancel()
-	var fatal error
-	var fatalMu sync.Mutex
 
 	c := v.w.Internal().NtfnServer.MainTipChangedNotifications()
 	defer c.Done()
 
+	ctx, outerCancel := context.WithCancel(ctx)
+	defer outerCancel()
+	var fatal error
+	var fatalMu sync.Mutex
+
 	var nextIntervalStart, expiry int32
+	var cancels []func()
 	for {
 		select {
 		case <-ctx.Done():
@@ -161,18 +174,15 @@ func (v *VSP) AutoTicketsPurchase(balanceToMaintain int64, passphrase []byte) er
 
 			// Don't perform any actions while transactions are not synced through
 			// the tip block.
-
-			log.Info("checking rescan point if transactions are synced")
 			rp, err := w.RescanPoint(ctx)
 			if err != nil {
 				return err
 			}
 			if rp != nil {
-				log.Debugf("Skipping autobuyer actions: transactions are not synced")
+				log.Info("Skipping autobuyer actions: transactions are not synced")
 				continue
 			}
 
-			log.Info("getting BlockHeader")
 			tipHeader, err := w.BlockHeader(ctx, tip)
 			if err != nil {
 				log.Error(err)
@@ -184,12 +194,11 @@ func (v *VSP) AutoTicketsPurchase(balanceToMaintain int64, passphrase []byte) er
 			// at an old ticket price or are no longer able to
 			// create mined tickets the window.
 			if height+2 >= nextIntervalStart {
-				log.Info("Canceling any ongoing ticket purchases buying at an old ticket price or are no longer able to create mined tickets the window.")
-				for i, cancel := range v.w.cancelAutoTicketBuyer {
+				for i, cancel := range cancels {
 					cancel()
-					v.w.cancelAutoTicketBuyer[i] = nil
+					cancels[i] = nil
 				}
-				v.w.cancelAutoTicketBuyer = v.w.cancelAutoTicketBuyer[:0]
+				cancels = cancels[:0]
 
 				intervalSize := int32(w.ChainParams().StakeDiffWindowSize)
 				currentInterval := height / intervalSize
@@ -200,7 +209,7 @@ func (v *VSP) AutoTicketsPurchase(balanceToMaintain int64, passphrase []byte) er
 				// blocks from now, with the next block containing the split transaction
 				// that the ticket purchase spends.
 				if height+2 == nextIntervalStart {
-					log.Debugf("Skipping purchase: next sdiff interval starts soon")
+					log.Info("Skipping purchase: next sdiff interval starts soon")
 					continue
 				}
 				// Set expiry to prevent tickets from being mined in the next
@@ -215,8 +224,7 @@ func (v *VSP) AutoTicketsPurchase(balanceToMaintain int64, passphrase []byte) er
 			}
 
 			cancelCtx, cancel := context.WithCancel(ctx)
-			v.w.cancelAutoTicketBuyer = append(v.w.cancelAutoTicketBuyer, cancel)
-
+			cancels = append(cancels, cancel)
 			go func() {
 				err := v.buyTicket(cancelCtx, passphrase, tipHeader, expiry, balanceToMaintain)
 				if err != nil {
@@ -247,25 +255,32 @@ func (v *VSP) buyTicket(ctx context.Context, passphrase []byte, tip *wire.BlockH
 
 	wal := v.w
 
+	networkBackend, err := wal.Internal().NetworkBackend()
+	if err != nil {
+		return err
+	}
+
 	// Determine how many tickets to buy
 	bal, err := wal.GetAccountBalance(int32(v.purchaseAccount))
 	if err != nil {
 		return err
 	}
-	spendable := bal.Spendable
 
+	spendable := bal.Spendable
 	if spendable < maintain {
-		log.Debugf("Skipping purchase: low available balance")
+		log.Info("Skipping purchase: low available balance")
 		return nil
 	}
+
 	spendable -= maintain
 	sdiff, err := wal.Internal().NextStakeDifficultyAfterHeader(ctx, tip)
 	if err != nil {
 		return err
 	}
+
 	buy := int(dcrutil.Amount(spendable) / sdiff)
 	if buy == 0 {
-		log.Debugf("Skipping purchase: low available balance")
+		log.Info("Skipping purchase: low available balance")
 		return nil
 	}
 
@@ -274,7 +289,13 @@ func (v *VSP) buyTicket(ctx context.Context, passphrase []byte, tip *wire.BlockH
 		buy = max
 	}
 
-	log.Debugf("total tickets to purchase :", buy)
+	//TODO: limit should be set dynamically
+	limit := 1
+	if limit > 0 && buy > limit {
+		buy = limit
+	}
+
+	log.Infof("total tickets to purchase :%v", buy)
 
 	request := &w.PurchaseTicketsRequest{
 		Count:                buy,
@@ -285,27 +306,30 @@ func (v *VSP) buyTicket(ctx context.Context, passphrase []byte, tip *wire.BlockH
 		VSPFeePaymentProcess: v.ProcessFee,
 	}
 
-	networkBackend, err := v.w.Internal().NetworkBackend()
+	tix, err := v.w.Internal().PurchaseTickets(ctx, networkBackend, request)
 	if err != nil {
+		log.Errorf("BUY: %v", err)
 		return err
 	}
 
-	_, err = v.w.Internal().PurchaseTickets(ctx, networkBackend, request)
-	if err != nil {
-		return err
+	if tix != nil {
+		for _, hash := range tix.TicketHashes {
+			log.Infof("Purchased ticket %v at stake difficulty %v", hash, sdiff)
+		}
 	}
 
 	return nil
 }
 
 // IsAutoTicketsPurchaseActive returns true if account mixer is active
-func (v *VSP) IsAutoTicketsPurchaseActive() bool {
-	var ticketBuyerRunning bool
-	for i := range v.w.cancelAutoTicketBuyer {
-		ticketBuyerRunning = v.w.cancelAutoTicketBuyer[i] != nil
+func (mw *MultiWallet) IsAutoTicketsPurchaseActive(walletID int) bool {
+	wallet := mw.WalletWithID(walletID)
+	if wallet == nil {
+		log.Errorf(ErrNotExist)
+		return false
 	}
 
-	return ticketBuyerRunning
+	return wallet.cancelAutoTicketBuyer != nil
 }
 
 // StopAutoTicketsPurchase stops the active account mixer
@@ -315,15 +339,12 @@ func (mw *MultiWallet) StopAutoTicketsPurchase(walletID int) error {
 		return errors.New(ErrNotExist)
 	}
 
-	for i, cancel := range wallet.cancelAutoTicketBuyer {
-		if wallet.cancelAutoTicketBuyer == nil {
-			return errors.New(ErrInvalid)
-		}
-
-		cancel()
-		wallet.cancelAutoTicketBuyer[i] = nil
+	if wallet.cancelAutoTicketBuyer == nil {
+		return errors.New(ErrInvalid)
 	}
 
+	wallet.cancelAutoTicketBuyer()
+	wallet.cancelAutoTicketBuyer = nil
 	return nil
 }
 

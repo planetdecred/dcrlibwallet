@@ -37,7 +37,7 @@ type Wallet struct {
 
 	shuttingDown          chan bool
 	cancelFuncs           []context.CancelFunc
-	cancelAutoTicketBuyer []context.CancelFunc
+	cancelAutoTicketBuyer context.CancelFunc
 	cancelAccountMixer    context.CancelFunc
 
 	// setUserConfigValue saves the provided key-value pair to a config database.

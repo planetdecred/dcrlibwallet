@@ -332,6 +332,11 @@ github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1/go.mod h1:hyedUtir6IdtD/7lIxGeC
 github.com/decred/dcrd/dcrjson v1.0.0 h1:50DnA0XeV2JrQXoHh43TCKmH+kz2gHjZ1Mj/Pdk7Oz0=
 github.com/decred/dcrd/dcrjson v1.0.0/go.mod h1:ozddIaeF+EAvZZvFuB3zpfxhyxBGfvbt22crQh+PYuI=
 github.com/decred/dcrd/dcrjson/v3 v3.0.0/go.mod h1:pWYlHJ3VFidPwqD5HHiJXjfGaplif8uspAL2qFdifkY=
+<<<<<<< HEAD
+=======
+github.com/decred/dcrd/dcrjson/v3 v3.0.1/go.mod h1:fnTHev/ABGp8IxFudDhjGi9ghLiXRff1qZz/wvq12Mg=
+github.com/decred/dcrd/dcrjson/v3 v3.1.0 h1:Y2VjCXCNWbNIa52wMKEuNiU+9rUgnjYb5c1JQW6PuzM=
+>>>>>>> fix context cancelation bug
 github.com/decred/dcrd/dcrjson/v3 v3.1.0/go.mod h1:fnTHev/ABGp8IxFudDhjGi9ghLiXRff1qZz/wvq12Mg=
 github.com/decred/dcrd/dcrjson/v4 v4.0.0 h1:KsaFhHAYO+vLYz7Qmx/fs1gOY5ouTEz8hRuDm8jmJtU=
 github.com/decred/dcrd/dcrjson/v4 v4.0.0/go.mod h1:DMnSpU8lsVh+Nt5kHl63tkrjBDA7UIs4+ov8Kwwgvjs=
@@ -350,6 +355,10 @@ github.com/decred/dcrd/gcs v1.0.1/go.mod h1:YwutGzusSdJM79CJtxCo9t7WRCvnkLtWSD19
 github.com/decred/dcrd/gcs v1.0.2/go.mod h1:eLCvrzUsWro48TlTyrmFcZAZqnllYFz0vEv5VZtufF4=
 github.com/decred/dcrd/gcs v1.1.0 h1:djuYzaFUzUTJR+6ulMSRZOQ+P9rxtIyuxQeViAEfB8s=
 github.com/decred/dcrd/gcs v1.1.0/go.mod h1:yBjhj217Vw5lw3aKnCdHip7fYb9zwMos8bCy5s79M9w=
+<<<<<<< HEAD
+=======
+github.com/decred/dcrd/gcs/v2 v2.0.0/go.mod h1:3XjKcrtvB+r2ezhIsyNCLk6dRnXRJVyYmsd1P3SkU3o=
+>>>>>>> fix context cancelation bug
 github.com/decred/dcrd/gcs/v2 v2.1.0 h1:foECqwfE3UJztU4CYtqUYqvR254x1Z9clXVfNdOjBQ8=
 github.com/decred/dcrd/gcs/v2 v2.1.0/go.mod h1:MbnJOINFcp42NMRAQ+CjX/xGz+53AwNgMzKZhwBibdM=
 github.com/decred/dcrd/gcs/v3 v3.0.0-20210916172859-ca03de05ecd0/go.mod h1:cfMmjV1ArvX+nemwwq1texW5pD0wrUt5TEw4IYuTmMM=
@@ -371,6 +380,13 @@ github.com/decred/dcrd/mining v1.0.0/go.mod h1:VA5H4zhJgXb8LK5lqM5H58dhMRXJRcaQQ
 github.com/decred/dcrd/mining v1.0.1/go.mod h1:+CSOLPi7TM8OlQg7mJ7XzWLXCDb4nHK8R6cvXOzhEoU=
 github.com/decred/dcrd/rpc/jsonrpc/types v1.0.0 h1:d5ptnjuSADTQMa3i83VpeJNoMRTOJZZBqk7P+E41VXM=
 github.com/decred/dcrd/rpc/jsonrpc/types v1.0.0/go.mod h1:0dwmpIP21tJxjg/UuUHWIFMbfoLv2ifCBMokNKlOxpo=
+<<<<<<< HEAD
+=======
+github.com/decred/dcrd/rpc/jsonrpc/types v1.0.1 h1:sWsGtWzdmrna6aysDCHwjANTJh+Lxt2xp6S10ahP79Y=
+github.com/decred/dcrd/rpc/jsonrpc/types v1.0.1/go.mod h1:dJUp9PoyFYklzmlImpVkVLOr6j4zKuUv66YgemP2sd8=
+github.com/decred/dcrd/rpc/jsonrpc/types/v2 v2.0.0/go.mod h1:c5S+PtQWNIA2aUakgrLhrlopkMadcOv51dWhCEdo49c=
+github.com/decred/dcrd/rpc/jsonrpc/types/v2 v2.3.0 h1:KZ2zihwY5Mx6EeYwEA3bL3k+qDXdCraQL+iDIG1BP5k=
+>>>>>>> fix context cancelation bug
 github.com/decred/dcrd/rpc/jsonrpc/types/v2 v2.3.0/go.mod h1:krn89ZOgSa8yc7sA4WpDK95p61NnjNWFkNlMnGrKbMc=
 github.com/decred/dcrd/rpc/jsonrpc/types/v3 v3.0.0-20210129200153-14fd1a785bf2/go.mod h1:9izQEJ5wU0ZwYHESMaaOIvE6H6y3IvDsQL3ByYGn9oc=
 github.com/decred/dcrd/rpc/jsonrpc/types/v3 v3.0.0 h1:WzG2IARR6OghjhWdxfUbXSPE4GEF2hZlCE5y2L/45f4=
