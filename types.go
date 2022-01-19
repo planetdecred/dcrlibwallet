@@ -498,7 +498,6 @@ type VSP struct {
 type Agenda struct {
 	ID               int       `storm:"id,increment"`
 	AgendaID         string    `json:"agenda_id" storm:"index"`
-	WalletID         int       `json:"wallet_id" storm:"index"`
 	Description      string    `json:"description"`
 	Mask             uint32    `json:"mask"`
 	Choices          []*Choice `json:"choices"`
@@ -523,7 +522,6 @@ type GetVoteChoicesResult struct {
 type VoteChoice struct {
 	ID                int    `storm:"id,increment"`
 	AgendaID          string `json:"agenda_id"`
-	WalletID          int    `json:"wallet_id" storm:"index"`
 	AgendaDescription string `json:"agenda_description"`
 	ChoiceID          string `json:"choice_id"`
 	ChoiceDescription string `json:"choice_description"`
@@ -536,9 +534,15 @@ type AgendasResponse struct {
 
 type ConsensusNotificationListener interface {
 	OnAgendasSynced()
-	OnNewAgenda(agenda *Agenda)
-	OnAgendaVoteStarted(agenda *Agenda)
-	OnAgendaVoteFinished(agenda *Agenda)
 }
+
+// ByStartTime implements sort.Interface based on the Agenda.StartTime field.
+type ByStartTime []*Agenda
+
+func (a ByStartTime) Len() int { return len(a) }
+func (a ByStartTime) Less(i, j int) bool {
+	return a[i].StartTime > a[j].StartTime
+}
+func (a ByStartTime) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 
 /** end agenda types */
