@@ -18,6 +18,7 @@ import (
 	"github.com/decred/slog"
 	"github.com/jrick/logrotate/rotator"
 	"github.com/planetdecred/dcrlibwallet/internal/loader"
+	"github.com/planetdecred/dcrlibwallet/internal/vsp"
 	"github.com/planetdecred/dcrlibwallet/spv"
 )
 
@@ -58,6 +59,7 @@ var (
 	legacyRPCLog = backendLog.Logger("RPCS")
 	cmgrLog      = backendLog.Logger("CMGR")
 	amgrLog      = backendLog.Logger("AMGR")
+	vspcLog      = backendLog.Logger("VSPC")
 )
 
 // Initialize package-global logger variables.
@@ -70,6 +72,7 @@ func init() {
 	p2p.UseLogger(syncLog)
 	connmgr.UseLogger(cmgrLog)
 	addrmgr.UseLogger(amgrLog)
+	vsp.UseLogger(vspcLog)
 }
 
 // subsystemLoggers maps each subsystem identifier to its associated logger.
@@ -83,6 +86,7 @@ var subsystemLoggers = map[string]slog.Logger{
 	"RPCS": legacyRPCLog,
 	"CMGR": cmgrLog,
 	"AMGR": amgrLog,
+	"VSPC": vspcLog,
 }
 
 // initLogRotator initializes the logging rotater to write logs to logFile and
