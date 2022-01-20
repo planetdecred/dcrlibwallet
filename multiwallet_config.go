@@ -34,7 +34,7 @@ const (
 	TicketBuyerWalletConfigKey  = "tb_wallet_id"
 	TicketBuyerAccountConfigKey = "tb_account_number"
 	TicketBuyerATMConfigKey     = "tb_amount_to_maintain"
-	TicketBuyerConfigSet        = "tb_config_set"
+	TicketBuyerConfigSet        = "tb_config_set" // check if TB config is set
 
 	PassphraseTypePin  int32 = 0
 	PassphraseTypePass int32 = 1

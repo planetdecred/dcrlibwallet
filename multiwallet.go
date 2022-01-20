@@ -43,7 +43,6 @@ type MultiWallet struct {
 
 	Politeia  *Politeia
 	dexClient *DexClient
-	VspInfo   *VSP
 }
 
 func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWallet, error) {
