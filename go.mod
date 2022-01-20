@@ -23,12 +23,10 @@ require (
 	github.com/kevinburke/nacl v0.0.0-20190829012316-f3ed23dbd7f8
 	github.com/onsi/ginkgo v1.14.0
 	github.com/onsi/gomega v1.10.1
-	github.com/planetdecred/dcrlibwallet/dexdcr v0.0.0-20220111145554-3b9241786979
+	github.com/planetdecred/dcrlibwallet/dexdcr v0.0.0-20220120064155-d700f379abfe
 	go.etcd.io/bbolt v1.3.5
 	golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 )
-
-replace github.com/planetdecred/dcrlibwallet/dexdcr => github.com/itswisdomagain/dcrlibwallet/dexdcr v0.0.0-20220119152459-cdc29cf215c6
 
 go 1.16
