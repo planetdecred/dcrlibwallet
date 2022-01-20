@@ -835,24 +835,26 @@ func (s *Syncer) handleBlockInvs(ctx context.Context, rp *p2p.RemotePeer, hashes
 // transactions.  Transaction invs are ignored when a rescan is
 // necessary or ongoing.
 func (s *Syncer) handleTxInvs(ctx context.Context, rp *p2p.RemotePeer, hashes []*chainhash.Hash) {
+	for walletID := range s.wallets {
+		s.handleTxInvsForWallet(ctx, rp, hashes, walletID)
+	}
+}
+
+func (s *Syncer) handleTxInvsForWallet(ctx context.Context, rp *p2p.RemotePeer, hashes []*chainhash.Hash, walletID int) {
 	const opf = "spv.handleTxInvs(%v)"
 
-	for _, wallet := range s.wallets {
-		rpt, err := wallet.RescanPoint(ctx)
-		if err != nil {
-			op := errors.Opf(opf, rp.RemoteAddr())
-			log.Warn(errors.E(op, err))
-			return
-		}
+	wallet := s.wallets[walletID]
 
-		if rpt == nil {
-			goto ProcessTx
-		}
+	rpt, err := wallet.RescanPoint(ctx)
+	if err != nil {
+		op := errors.Opf(opf, rp.RemoteAddr())
+		log.Warn(errors.E(op, err))
+		return
 	}
 
-	return
-
-ProcessTx:
+	if rpt != nil {
+		return // don't process new txs for wallets with a pending rescan.
+	}
 
 	// Ignore already-processed transactions
 	unseen := hashes[:0]
@@ -894,22 +896,20 @@ ProcessTx:
 	}
 
 	// Save any relevant transaction.
-	for walletID, w := range s.wallets {
-		relevant := s.filterRelevant(txs, walletID)
-		for _, tx := range relevant {
+	relevant := s.filterRelevant(txs, walletID)
+	for _, tx := range relevant {
 
-			if w.ManualTickets() && stake.IsSStx(tx) {
-				continue
-			}
-			err := w.AddTransaction(ctx, tx, nil)
-			if err != nil {
-				op := errors.Opf(opf, rp.RemoteAddr())
-				log.Warn(errors.E(op, err))
-			}
+		if wallet.ManualTickets() && stake.IsSStx(tx) {
+			continue
 		}
-
-		s.mempoolTxs(walletID, relevant)
+		err := wallet.AddTransaction(ctx, tx, nil)
+		if err != nil {
+			op := errors.Opf(opf, rp.RemoteAddr())
+			log.Warn(errors.E(op, err))
+		}
 	}
+
+	s.mempoolTxs(walletID, relevant)
 }
 
 // receiveHeaderAnnouncements receives all block announcements through pushed
