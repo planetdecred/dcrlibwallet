@@ -55,7 +55,6 @@ func (wb *WalletBackend) Blocks(ctx context.Context, blockHashes []*chainhash.Ha
 
 // filterProof is an alias to the same anonymous struct as wallet package's
 // FilterProof struct.
-
 type filterProof = struct {
 	Filter     *gcs.FilterV2
 	ProofIndex uint32
