@@ -28,6 +28,7 @@ type MultiWallet struct {
 
 	chainParams *chaincfg.Params
 	wallets     map[int]*Wallet
+	badWallets  map[int]*Wallet
 	syncData    *syncData
 
 	notificationListenersMu         sync.RWMutex
@@ -93,6 +94,7 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 		db:          mwDB,
 		chainParams: chainParams,
 		wallets:     make(map[int]*Wallet),
+		badWallets:  make(map[int]*Wallet),
 		syncData: &syncData{
 			syncProgressListeners: make(map[string]SyncProgressListener),
 		},
@@ -117,9 +119,11 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 	for _, wallet := range wallets {
 		err = wallet.prepare(rootDir, chainParams, mw.walletConfigSetFn(wallet.ID), mw.walletConfigReadFn(wallet.ID))
 		if err != nil {
-			return nil, err
+			mw.badWallets[wallet.ID] = wallet
+			log.Warnf("Ignored wallet load error for wallet %d (%s)", wallet.ID, wallet.Name)
+		} else {
+			mw.wallets[wallet.ID] = wallet
 		}
-		mw.wallets[wallet.ID] = wallet
 	}
 
 	mw.listenForShutdown()
@@ -538,6 +542,29 @@ func (mw *MultiWallet) DeleteWallet(walletID int, privPass []byte) error {
 	}
 
 	delete(mw.wallets, walletID)
+
+	return nil
+}
+
+func (mw *MultiWallet) BadWallets() map[int]*Wallet {
+	return mw.badWallets
+}
+
+func (mw *MultiWallet) DeleteBadWallet(walletID int) error {
+	wallet := mw.badWallets[walletID]
+	if wallet == nil {
+		return errors.New(ErrNotExist)
+	}
+
+	log.Info("Deleting bad wallet")
+
+	err := mw.db.DeleteStruct(wallet)
+	if err != nil {
+		return translateError(err)
+	}
+
+	os.RemoveAll(wallet.dataDir)
+	delete(mw.badWallets, walletID)
 
 	return nil
 }
