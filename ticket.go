@@ -11,6 +11,7 @@ import (
 	w "decred.org/dcrwallet/v2/wallet"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrutil/v4"
+	"github.com/decred/dcrd/wire"
 	"github.com/planetdecred/dcrlibwallet/internal/vsp"
 	"github.com/planetdecred/dcrlibwallet/utils"
 )
@@ -150,12 +151,7 @@ func (mw *MultiWallet) TicketPrice() (*TicketPriceResponse, error) {
 // PurchaseTickets purchases tickets from the wallet.
 // Returns a slice of hashes for tickets purchased.
 func (wallet *Wallet) PurchaseTickets(account, numTickets int32, vspHost string, vspPubKey []byte, passphrase []byte) ([]*chainhash.Hash, error) {
-	vspPolicy := vsp.Policy{
-		MaxFee:     0.2e8,
-		FeeAcct:    uint32(account),
-		ChangeAcct: uint32(account),
-	}
-	vspClient, err := wallet.VSPClient(vspHost, vspPubKey, vspPolicy)
+	vspClient, err := wallet.VSPClient(vspHost, vspPubKey)
 	if err != nil {
 		return nil, fmt.Errorf("VSP Server instance failed to start: %v", err)
 	}
@@ -168,12 +164,21 @@ func (wallet *Wallet) PurchaseTickets(account, numTickets int32, vspHost string,
 	wallet.UnlockWallet(passphrase)
 	defer wallet.LockWallet()
 
+	// Use the user-specified instructions for processing fee payments
+	// for this ticket, rather than some default policy.
+	vspPolicy := vsp.Policy{
+		MaxFee:     0.2e8,
+		FeeAcct:    uint32(account),
+		ChangeAcct: uint32(account),
+	}
 	request := &w.PurchaseTicketsRequest{
-		Count:                int(numTickets),
-		SourceAccount:        uint32(account),
-		MinConf:              wallet.RequiredConfirmations(),
-		VSPFeeProcess:        vspClient.FeePercentage,
-		VSPFeePaymentProcess: vspClient.Process,
+		Count:         int(numTickets),
+		SourceAccount: uint32(account),
+		MinConf:       wallet.RequiredConfirmations(),
+		VSPFeeProcess: vspClient.FeePercentage,
+		VSPFeePaymentProcess: func(ctx context.Context, ticketHash *chainhash.Hash, feeTx *wire.MsgTx) error {
+			return vspClient.Process(ctx, ticketHash, feeTx, vspPolicy)
+		},
 
 		// TODO: Add CSPP params to purchaseTicketsRequest.
 	}
@@ -213,7 +218,7 @@ func (wallet *Wallet) StartTicketBuyer(vspHost string, vspPubKey []byte, purchas
 	}
 
 	// Check the VSP.
-	vspClient, err := wallet.VSPClient(vspHost, vspPubKey, vsp.Policy{})
+	vspClient, err := wallet.VSPClient(vspHost, vspPubKey)
 	if err != nil {
 		return err
 	}
@@ -410,13 +415,20 @@ func (wallet *Wallet) buyTicket(ctx context.Context, passphrase []byte, sdiff dc
 	// Count is 1 to prevent combining multiple split outputs in one tx,
 	// which can be used to link the tickets eventually purchased with the
 	// split outputs.
+	vspPolicy := vsp.Policy{
+		MaxFee:     0.2e8,
+		FeeAcct:    uint32(cfg.PurchaseAccount),
+		ChangeAcct: uint32(cfg.PurchaseAccount),
+	}
 	request := &w.PurchaseTicketsRequest{
-		Count:                1,
-		SourceAccount:        uint32(cfg.PurchaseAccount),
-		Expiry:               expiry,
-		MinConf:              wallet.RequiredConfirmations(),
-		VSPFeeProcess:        cfg.vspClient.FeePercentage,
-		VSPFeePaymentProcess: cfg.vspClient.Process,
+		Count:         1,
+		SourceAccount: uint32(cfg.PurchaseAccount),
+		Expiry:        expiry,
+		MinConf:       wallet.RequiredConfirmations(),
+		VSPFeeProcess: cfg.vspClient.FeePercentage,
+		VSPFeePaymentProcess: func(ctx context.Context, ticketHash *chainhash.Hash, feeTx *wire.MsgTx) error {
+			return cfg.vspClient.Process(ctx, ticketHash, feeTx, vspPolicy)
+		},
 
 		// TODO: Add CSPP params to purchaseTicketsRequest.
 	}

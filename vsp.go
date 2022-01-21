@@ -14,17 +14,12 @@ import (
 	"github.com/planetdecred/dcrlibwallet/internal/vsp"
 )
 
-// VSPClient loads or creates an instance of the VSPClient client for a host.
-func (wallet *Wallet) VSPClient(host string, pubKey []byte, policy vsp.Policy) (*vsp.Client, error) {
+// VSPClient loads or creates a VSP client instance for the specified host.
+func (wallet *Wallet) VSPClient(host string, pubKey []byte) (*vsp.Client, error) {
 	wallet.vspClientsMu.Lock()
 	defer wallet.vspClientsMu.Unlock()
 	client, ok := wallet.vspClients[host]
 	if ok {
-		// TODO: If the caller passes a policy different from client.Policy,
-		// this could result in fees being processed using the previously
-		// set policy and may produce unexpected results. Consider doing
-		// without a default client.Policy and requesting a policy for
-		// each fee processing.
 		return client, nil
 	}
 
@@ -33,7 +28,6 @@ func (wallet *Wallet) VSPClient(host string, pubKey []byte, policy vsp.Policy) (
 		PubKey: base64.StdEncoding.EncodeToString(pubKey),
 		Dialer: nil, // optional, but consider providing a value
 		Wallet: wallet.Internal(),
-		Policy: policy,
 	}
 	client, err := vsp.New(cfg)
 	if err != nil {
