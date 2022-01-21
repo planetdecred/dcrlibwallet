@@ -1,15 +1,11 @@
 package dcrlibwallet
 
 import (
-	"context"
 	"encoding/json"
 
-	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrutil/v4"
 	"github.com/decred/dcrd/txscript/v4/stdaddr"
 	"github.com/decred/dcrd/wire"
-
-	"decred.org/dcrwallet/v2/wallet"
 )
 
 // WalletConfig defines options for configuring wallet behaviour.
@@ -318,51 +314,9 @@ type TransactionOverview struct {
 
 /** begin ticket-related types */
 
-type PurchaseTicketsRequest struct {
-	Account               uint32
-	RequiredConfirmations uint32
-	NumTickets            uint32
-	Passphrase            []byte
-	Expiry                uint32
-	TxFee                 int64
-	TicketAddress         string
-	PoolAddress           string
-	PoolFees              float64
-	TicketFee             int64
-
-	// VSPFeeProcessFunc Process the fee price for the vsp to register a ticket
-	// so we can reserve the amount.
-	VSPFeeProcess func(context.Context) (float64, error)
-	// VSPFeePaymentProcess processes the payment of the vsp fee and returns
-	// the paid fee tx.
-	VSPFeePaymentProcess func(context.Context, *chainhash.Hash, *wire.MsgTx) error
-}
-
-type GetTicketsRequest struct {
-	StartingBlockHash   []byte
-	StartingBlockHeight int32
-	EndingBlockHash     []byte
-	EndingBlockHeight   int32
-	TargetTicketCount   int32
-}
-
-type TicketInfo struct {
-	BlockHeight int32
-	Status      string
-	Ticket      *wallet.TransactionSummary
-	Spender     *wallet.TransactionSummary
-}
-
 type TicketPriceResponse struct {
 	TicketPrice int64
 	Height      int32
-}
-
-type VSPTicketPurchaseInfo struct {
-	PoolAddress   string
-	PoolFees      float64
-	Script        string
-	TicketAddress string
 }
 
 type StakingOverview struct {

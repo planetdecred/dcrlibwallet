@@ -1,11 +1,6 @@
 package dcrlibwallet
 
 import (
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"net/url"
-	"strings"
 	"time"
 
 	"decred.org/dcrwallet/v2/errors"
@@ -141,39 +136,6 @@ func (mw *MultiWallet) TicketPrice() (*TicketPriceResponse, error) {
 	}
 
 	return nil, errors.New(ErrWalletNotFound)
-}
-
-func CallVSPTicketInfoAPI(vspHost, pubKeyAddr string) (ticketPurchaseInfo *VSPTicketPurchaseInfo, err error) {
-	apiUrl := fmt.Sprintf("%s/api/v2/purchaseticket", strings.TrimSuffix(vspHost, "/"))
-	data := url.Values{}
-	data.Set("UserPubKeyAddr", pubKeyAddr)
-
-	req, err := http.NewRequest("POST", apiUrl, strings.NewReader(data.Encode()))
-	if err != nil {
-		return
-	}
-
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return
-	}
-	defer resp.Body.Close()
-
-	var apiResponse map[string]interface{}
-	err = json.NewDecoder(resp.Body).Decode(&apiResponse)
-	if err == nil {
-		data := apiResponse["data"].(map[string]interface{})
-		ticketPurchaseInfo = &VSPTicketPurchaseInfo{
-			Script:        data["Script"].(string),
-			PoolFees:      data["PoolFees"].(float64),
-			PoolAddress:   data["PoolAddress"].(string),
-			TicketAddress: data["TicketAddress"].(string),
-		}
-	}
-	return
 }
 
 // NextTicketPriceRemaining returns the remaning time in seconds of a ticket for the next block,
