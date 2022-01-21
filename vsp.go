@@ -33,14 +33,14 @@ import (
 const apiVSPInfo = "/api/v3/vspinfo"
 
 type VSP struct {
+	mwRef           *MultiWallet
 	w               *Wallet
 	purchaseAccount uint32
 	changeAccount   uint32
 	chainParams     *chaincfg.Params
 
 	*vspClient
-	ctx                   context.Context
-	cancelAutoTicketBuyer context.CancelFunc
+	ctx context.Context
 
 	ticketToFeeLock sync.Mutex
 	ticketsToFees   map[chainhash.Hash]PendingFee
@@ -54,6 +54,7 @@ func (mw *MultiWallet) NewVSPClient(vspHost string, walletID int, purchaseAccoun
 	}
 
 	vsp := &VSP{
+		mwRef:           mw,
 		w:               sourceWallet,
 		purchaseAccount: purchaseAccount,
 		changeAccount:   purchaseAccount,
@@ -71,7 +72,6 @@ func (mw *MultiWallet) NewVSPClient(vspHost string, walletID int, purchaseAccoun
 		return nil, err
 	}
 
-	vsp.ctx = ctx
 	vsp.vspClient.pub = vspInfo.PubKey
 	return vsp, nil
 }
@@ -127,24 +127,23 @@ func (vsp *VSP) StartTicketBuyer(balanceToMaintain int64, passphrase []byte) err
 		if err != nil {
 			return translateError(err)
 		}
-		defer vsp.w.LockWallet()
 	}
 
-	if vsp.IsAutoTicketsPurchaseActive() {
+	if vsp.mwRef.IsAutoTicketsPurchaseActive(vsp.w.ID) {
 		return errors.New("Ticket buyer already running")
 	}
 
 	go func() {
 		log.Info("Running ticket buyer")
-		ctx, cancel := context.WithCancel(vsp.ctx)
-		vsp.cancelAutoTicketBuyer = cancel
 
+		ctx, cancel := vsp.mwRef.contextWithShutdownCancel()
+		vsp.w.cancelAutoTicketBuyer = cancel
 		err := vsp.ticketBuyer(ctx, balanceToMaintain)
 		if err != nil {
 			log.Errorf("Ticket buyer instance errored: %v", err)
 		}
 
-		vsp.w.cancelAccountMixer = nil
+		vsp.w.cancelAutoTicketBuyer = nil
 	}()
 
 	return nil
@@ -327,18 +326,29 @@ func (vsp *VSP) buyTicket(ctx context.Context, tip *wire.BlockHeader, expiry int
 }
 
 // IsAutoTicketsPurchaseActive returns true if account mixer is active
-func (vsp *VSP) IsAutoTicketsPurchaseActive() bool {
-	return vsp.cancelAutoTicketBuyer != nil
+func (mw *MultiWallet) IsAutoTicketsPurchaseActive(walletID int) bool {
+	wallet := mw.WalletWithID(walletID)
+	if wallet == nil {
+		log.Errorf(ErrNotExist)
+		return false
+	}
+
+	return wallet.cancelAutoTicketBuyer != nil
 }
 
 // StopAutoTicketsPurchase stops the active account mixer
-func (vsp *VSP) StopAutoTicketsPurchase(walletID int) error {
-	if vsp.cancelAutoTicketBuyer == nil {
+func (mw *MultiWallet) StopAutoTicketsPurchase(walletID int) error {
+	wallet := mw.WalletWithID(walletID)
+	if wallet == nil {
+		return errors.New(ErrNotExist)
+	}
+
+	if wallet.cancelAutoTicketBuyer == nil {
 		return errors.New(ErrInvalid)
 	}
 
-	vsp.cancelAutoTicketBuyer()
-	vsp.cancelAutoTicketBuyer = nil
+	wallet.cancelAutoTicketBuyer()
+	wallet.cancelAutoTicketBuyer = nil
 	return nil
 }
 
