@@ -43,7 +43,9 @@ type MultiWallet struct {
 
 	Politeia  *Politeia
 	dexClient *DexClient
-	VspList   []*VSPInfo
+
+	vspMu sync.RWMutex
+	vsps  []*VSP
 }
 
 func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWallet, error) {
@@ -101,7 +103,6 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 		},
 		txAndBlockNotificationListeners:  make(map[string]TxAndBlockNotificationListener),
 		accountMixerNotificationListener: make(map[string]AccountMixerNotificationListener),
-		VspList:                          make([]*VSPInfo, 0),
 	}
 
 	mw.Politeia, err = newPoliteia(mw, politeiaHost)

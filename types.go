@@ -1,11 +1,8 @@
 package dcrlibwallet
 
 import (
-	"encoding/json"
-
 	"github.com/decred/dcrd/dcrutil/v4"
-	"github.com/decred/dcrd/txscript/v4/stdaddr"
-	"github.com/decred/dcrd/wire"
+	"github.com/planetdecred/dcrlibwallet/internal/vsp"
 )
 
 // WalletConfig defines options for configuring wallet behaviour.
@@ -329,6 +326,16 @@ type StakingOverview struct {
 	Expired  int
 }
 
+// TicketBuyerConfig defines configuration parameters for running
+// an automated ticket buyer.
+type TicketBuyerConfig struct {
+	VspHost           string
+	PurchaseAccount   int32
+	BalanceToMaintain int64
+
+	vspClient *vsp.Client
+}
+
 /** end ticket-related types */
 
 /** begin politeia types */
@@ -420,64 +427,9 @@ type VspInfoResponse struct {
 	Revoked       int64   `json:"revoked"`
 }
 
-type PayFeeRequest struct {
-	Timestamp   int64             `json:"timestamp"`
-	TicketHash  string            `json:"tickethash"`
-	FeeTx       json.Marshaler    `json:"feetx"`
-	VotingKey   string            `json:"votingkey"`
-	VoteChoices map[string]string `json:"votechoices"`
-}
-
-type PayFeeResponse struct {
-	Timestamp int64  `json:"timestamp"`
-	Request   []byte `json:"request"`
-}
-
-type VspdTicketInfo struct {
-	Hash            string            `storm:"id,unique" json:"tickethash"`
-	FeeAddress      string            `json:"feeaddress"`
-	FeeAmount       int64             `json:"feeamount"`
-	Expiration      int64             `json:"expiration"`
-	Timestamp       int64             `json:"timestamp"`
-	FeeTx           string            `json:"feetx"`
-	FeeTxHash       string            `json:"feetxhash"`
-	FeeTxStatus     string            `json:"feetxstatus"`
-	VoteChoices     map[string]string `json:"votechoices"`
-	TicketConfirmed bool              `json:"ticketconfirmed"`
-}
-
-type FeeAddressResponse struct {
-	Timestamp  int64  `json:"timestamp"`
-	FeeAddress string `json:"feeaddress"`
-	FeeAmount  int64  `json:"feeamount"`
-	Request    []byte `json:"request"`
-}
-
-type FeeAddressRequest struct {
-	Timestamp  int64          `json:"timestamp"`
-	TicketHash string         `json:"tickethash"`
-	TicketHex  json.Marshaler `json:"tickethex"`
-	ParentHex  json.Marshaler `json:"parenthex"`
-}
-
-type PendingFee struct {
-	CommitmentAddress stdaddr.Address
-	VotingAddress     stdaddr.Address
-	FeeAddress        stdaddr.Address
-	FeeAmount         dcrutil.Amount
-	FeeTx             *wire.MsgTx
-}
-
-type VSPInfo struct {
+type VSP struct {
 	Host string
-	Info *VspInfoResponse
-}
-
-type TicketBuyerConfig struct {
-	VspHost           string
-	WalletID          int
-	PurchaseAccount   int32
-	BalanceToMaintain int64
+	*VspInfoResponse
 }
 
 /** end vspd-related types */
