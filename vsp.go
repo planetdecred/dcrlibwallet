@@ -689,7 +689,7 @@ type valueOut struct {
 	List     []string
 }
 
-func (mw *MultiWallet) GetVSPList(net string) (*VSPList, error) {
+func (mw *MultiWallet) GetVSPList(net string) {
 	var valueOut valueOut
 
 	mw.ReadUserConfigValue(VSPHostConfigKey, &valueOut)
@@ -697,21 +697,15 @@ func (mw *MultiWallet) GetVSPList(net string) (*VSPList, error) {
 
 	for _, host := range valueOut.List {
 		info, err := mw.getInfo(host)
-		if err != nil {
-			return nil, err
+		if err == nil {
+			loadedVSP = append(loadedVSP, &VSPInfo{
+				Host: host,
+				Info: info,
+			})
 		}
-
-		loadedVSP = append(loadedVSP, &VSPInfo{
-			Host: host,
-			Info: info,
-		})
 	}
 
-	l, err := getInitVSPInfo("https://api.decred.org/?c=vsp")
-	if err != nil {
-		return nil, err
-	}
-
+	l, _ := getInitVSPInfo("https://api.decred.org/?c=vsp")
 	for h, v := range l {
 		if strings.Contains(net, v.Network) {
 			loadedVSP = append(loadedVSP, &VSPInfo{
@@ -721,9 +715,9 @@ func (mw *MultiWallet) GetVSPList(net string) (*VSPList, error) {
 		}
 	}
 
-	return &VSPList{
+	mw.VspList = &VSPList{
 		List: loadedVSP,
-	}, nil
+	}
 }
 
 func (mw *MultiWallet) AddVSP(host, net string) error {
@@ -749,10 +743,11 @@ func (mw *MultiWallet) AddVSP(host, net string) error {
 
 	valueOut.List = append(valueOut.List, host)
 	mw.SaveUserConfigValue(VSPHostConfigKey, valueOut)
-	// (*wl.VspInfo).List = append((*wl.VspInfo).List, &wallet.VSPInfo{
-	// 	Host: host,
-	// 	Info: info,
-	// })
+	(*mw.VspList).List = append((*mw.VspList).List, &VSPInfo{
+		Host: host,
+		Info: info,
+	})
+
 	return nil
 }
 
