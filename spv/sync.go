@@ -164,7 +164,6 @@ func (s *Syncer) Synced() bool {
 	for walletID := range s.wallets {
 		synced = synced && atomic.LoadUint32(s.atomicWalletsSynced[walletID]) == 1
 	}
-
 	return synced
 }
 
@@ -173,7 +172,6 @@ func (s *Syncer) Synced() bool {
 // all connected peers and the wallet's current tip. The highest of these values
 // is estimated to be the mainchain's tip height.
 func (s *Syncer) EstimateMainChainTip() int32 {
-
 	_, chainTip, _ := s.highestChainTip(context.Background())
 	s.forRemotes(func(rp *p2p.RemotePeer) error {
 		if rp.InitialHeight() > chainTip {
@@ -806,6 +804,15 @@ func (s *Syncer) receiveInv(ctx context.Context) error {
 func (s *Syncer) handleBlockInvs(ctx context.Context, rp *p2p.RemotePeer, hashes []*chainhash.Hash) error {
 	const opf = "spv.handleBlockInvs(%v)"
 
+	// We send a sendheaders msg at the end of our startup stage. Ignore
+	// any invs sent before that happens, since we'll still be performing
+	// an initial sync with the peer.
+	if !rp.SendHeadersSent() {
+		log.Debugf("Ignoring block invs from %v before "+
+			"sendheaders is sent", rp)
+		return nil
+	}
+
 	blocks, err := rp.Blocks(ctx, hashes)
 	if err != nil {
 		op := errors.Opf(opf, rp)
@@ -828,24 +835,25 @@ func (s *Syncer) handleBlockInvs(ctx context.Context, rp *p2p.RemotePeer, hashes
 // transactions.  Transaction invs are ignored when a rescan is
 // necessary or ongoing.
 func (s *Syncer) handleTxInvs(ctx context.Context, rp *p2p.RemotePeer, hashes []*chainhash.Hash) {
+	for walletID := range s.wallets {
+		s.handleTxInvsForWallet(ctx, rp, hashes, walletID)
+	}
+}
+
+func (s *Syncer) handleTxInvsForWallet(ctx context.Context, rp *p2p.RemotePeer, hashes []*chainhash.Hash, walletID int) {
+	wallet := s.wallets[walletID]
 	const opf = "spv.handleTxInvs(%v)"
 
-	for _, wallet := range s.wallets {
-		rpt, err := wallet.RescanPoint(ctx)
-		if err != nil {
-			op := errors.Opf(opf, rp.RemoteAddr())
-			log.Warn(errors.E(op, err))
-			return
-		}
-
-		if rpt == nil {
-			goto ProcessTx
-		}
+	rpt, err := wallet.RescanPoint(ctx)
+	if err != nil {
+		op := errors.Opf(opf, rp.RemoteAddr())
+		log.Warn(errors.E(op, err))
+		return
 	}
 
-	return
-
-ProcessTx:
+	if rpt != nil {
+		return // don't process new txs for wallets with a pending rescan.
+	}
 
 	// Ignore already-processed transactions
 	unseen := hashes[:0]
@@ -887,22 +895,18 @@ ProcessTx:
 	}
 
 	// Save any relevant transaction.
-	for walletID, w := range s.wallets {
-		relevant := s.filterRelevant(txs, walletID)
-		for _, tx := range relevant {
-
-			if w.ManualTickets() && stake.IsSStx(tx) {
-				continue
-			}
-			err := w.AddTransaction(ctx, tx, nil)
-			if err != nil {
-				op := errors.Opf(opf, rp.RemoteAddr())
-				log.Warn(errors.E(op, err))
-			}
+	relevant := s.filterRelevant(txs, walletID)
+	for _, tx := range relevant {
+		if wallet.ManualTickets() && stake.IsSStx(tx) {
+			continue
 		}
-
-		s.mempoolTxs(walletID, relevant)
+		err := wallet.AddTransaction(ctx, tx, nil)
+		if err != nil {
+			op := errors.Opf(opf, rp.RemoteAddr())
+			log.Warn(errors.E(op, err))
+		}
 	}
+	s.mempoolTxs(walletID, relevant)
 }
 
 // receiveHeaderAnnouncements receives all block announcements through pushed
@@ -1062,124 +1066,203 @@ func (s *Syncer) handleBlockAnnouncements(ctx context.Context, rp *p2p.RemotePee
 		return nil
 	}
 
-	blockHashes := make([]*chainhash.Hash, 0, len(headers))
-	for _, h := range headers {
-		hash := h.BlockHash()
-		blockHashes = append(blockHashes, &hash)
-	}
-	filters, err := rp.CFiltersV2(ctx, blockHashes)
-	if err != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
+	firstHeader := headers[0]
+
+	// Disconnect if the peer announced a header that is significantly
+	// behind our main chain height.
+	const maxAnnHeaderTipDelta = int32(256)
+	_, tipHeight, _ := s.highestChainTip(ctx)
+	if int32(firstHeader.Height) < tipHeight && tipHeight-int32(firstHeader.Height) > maxAnnHeaderTipDelta {
+		err = errors.E(errors.Protocol, "peer announced old header")
 		return err
 	}
 
-	for walletID, w := range s.wallets {
-		newBlocks := make([]*wallet.BlockNode, 0, len(headers))
-		var bestChain []*wallet.BlockNode
-		var matchingTxs map[chainhash.Hash][]*wire.MsgTx
-		cnet := w.ChainParams().Net
-		err = func() error {
-			defer s.sidechainMu.Unlock()
-			s.sidechainMu.Lock()
+	for walletID := range s.wallets {
+		err = s.handleBlockAnnouncementsForWallet(ctx, walletID, rp, headers, bmap)
+		if err != nil {
+			return err
+		}
+	}
 
-			for i := range headers {
-				haveBlock, _, err := w.BlockInMainChain(ctx, blockHashes[i])
+	return nil
+}
+
+func (s *Syncer) handleBlockAnnouncementsForWallet(ctx context.Context, walletID int, rp *p2p.RemotePeer, headers []*wire.BlockHeader,
+	bmap map[chainhash.Hash]*wire.MsgBlock) (err error) {
+
+	firstHeader := headers[0]
+	w := s.wallets[walletID]
+	newBlocks := make([]*wallet.BlockNode, 0, len(headers))
+	var bestChain []*wallet.BlockNode
+	var matchingTxs map[chainhash.Hash][]*wire.MsgTx
+	cnet := w.ChainParams().Net
+	err = func() error {
+		defer s.sidechainMu.Unlock()
+		s.sidechainMu.Lock()
+
+		// Determine if the peer sent a header that connects to an
+		// unknown sidechain (i.e. an orphan chain). In that case,
+		// re-request headers to hopefully find the missing ones.
+		//
+		// The header is an orphan if its parent block is not in the
+		// mainchain nor on a previously known side chain.
+		prevInMainChain, _, err := w.BlockInMainChain(ctx, &firstHeader.PrevBlock)
+		if err != nil {
+			return err
+		}
+		if !prevInMainChain && !s.sidechains.HasSideChainBlock(&firstHeader.PrevBlock) {
+			if err := rp.ReceivedOrphanHeader(); err != nil {
+				return err
+			}
+
+			locators, err := w.BlockLocators(ctx, nil)
+			if err != nil {
+				return err
+			}
+			if err := rp.HeadersAsync(ctx, locators, &hashStop); err != nil {
+				return err
+			}
+
+			// We requested async headers, so return early and wait
+			// for the next headers msg.
+			//
+			// newBlocks and bestChain are empty at this point, so
+			// the rest of this function continues without
+			// producing side effects.
+			return nil
+		}
+
+		for i := range headers {
+			hash := headers[i].BlockHash()
+
+			// Skip the first blocks sent if they are already in
+			// the mainchain or on a known side chain. We only skip
+			// those at the start of the list to ensure every block
+			// in newBlocks still connects in sequence.
+			if len(newBlocks) == 0 {
+				haveBlock, _, err := w.BlockInMainChain(ctx, &hash)
 				if err != nil {
 					return err
 				}
-				if haveBlock {
+				if haveBlock || s.sidechains.HasSideChainBlock(&hash) {
 					continue
 				}
-
-				cf := filters[i]
-				filter, proofIndex, proof := cf.Filter, cf.ProofIndex, cf.Proof
-
-				err = validate.CFilterV2HeaderCommitment(cnet, headers[i],
-					filter, proofIndex, proof)
-				if err != nil {
-					return err
-				}
-
-				n := wallet.NewBlockNode(headers[i], blockHashes[i], filter)
-				if s.sidechains.AddBlockNode(n) {
-					newBlocks = append(newBlocks, n)
-				}
 			}
 
-			bestChain, err = w.EvaluateBestChain(ctx, &s.sidechains)
-			if err != nil {
-				return err
-			}
+			n := wallet.NewBlockNode(headers[i], &hash, nil)
+			newBlocks = append(newBlocks, n)
+		}
 
-			if len(bestChain) == 0 {
-				return nil
-			}
-
-			_, err = w.ValidateHeaderChainDifficulties(ctx, bestChain, 0)
-			if err != nil {
-				return err
-			}
-
-			rpt, err := w.RescanPoint(ctx)
-			if err != nil {
-				return err
-			}
-			if rpt == nil {
-				matchingTxs, err = s.scanChain(ctx, rp, bestChain, bmap, walletID)
-				if err != nil {
-					return err
-				}
-			}
-
-			prevChain, err := w.ChainSwitch(ctx, &s.sidechains, bestChain, matchingTxs)
-			if err != nil {
-				return err
-			}
-			if len(prevChain) != 0 {
-				log.Infof("[%d] Reorganize from %v to %v (total %d block(s) reorged)",
-					walletID, prevChain[len(prevChain)-1].Hash, bestChain[len(bestChain)-1].Hash, len(prevChain))
-				for _, n := range prevChain {
-					s.sidechains.AddBlockNode(n)
-				}
-			}
-			tipHeader := bestChain[len(bestChain)-1].Header
-			s.setRequiredHeight(int32(tipHeader.Height))
-			s.tipChanged(tipHeader, int32(len(prevChain)), matchingTxs)
-
+		if len(newBlocks) == 0 {
+			// Peer did not send any headers we didn't already
+			// have.
 			return nil
-		}()
+		}
+
+		fullsc, err := s.sidechains.FullSideChain(newBlocks)
+		if err != nil {
+			return err
+		}
+		_, err = w.ValidateHeaderChainDifficulties(ctx, fullsc, 0)
 		if err != nil {
 			return err
 		}
 
-		if len(bestChain) != 0 {
-			s.locatorMu.Lock()
-			s.currentLocators = nil
-			s.locatorGeneration++
-			s.locatorMu.Unlock()
+		for _, n := range newBlocks {
+			s.sidechains.AddBlockNode(n)
 		}
 
-		// Log connected blocks.
-		for _, n := range bestChain {
-			log.Infof("[%d] Connected block %v, height %d, %d wallet transaction(s)",
-				walletID, n.Hash, n.Header.Height, len(matchingTxs[*n.Hash]))
+		bestChain, err = w.EvaluateBestChain(ctx, &s.sidechains)
+		if err != nil {
+			return err
 		}
-		// Announced blocks not in the main chain are logged as sidechain or orphan
-		// blocks.
-		for _, n := range newBlocks {
-			haveBlock, _, err := w.BlockInMainChain(ctx, n.Hash)
+
+		if len(bestChain) == 0 {
+			return nil
+		}
+
+		bestChainHashes := make([]*chainhash.Hash, len(bestChain))
+		for i, n := range bestChain {
+			bestChainHashes[i] = n.Hash
+		}
+
+		filters, err := rp.CFiltersV2(ctx, bestChainHashes)
+		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return err
+		}
+
+		for i, cf := range filters {
+			filter, proofIndex, proof := cf.Filter, cf.ProofIndex, cf.Proof
+
+			err = validate.CFilterV2HeaderCommitment(cnet,
+				bestChain[i].Header, filter, proofIndex, proof)
 			if err != nil {
 				return err
 			}
-			if haveBlock {
-				continue
-			}
-			log.Infof("[%d] Received sidechain or orphan block %v, height %v", walletID, n.Hash, n.Header.Height)
+
+			bestChain[i].FilterV2 = filter
 		}
+
+		rpt, err := w.RescanPoint(ctx)
+		if err != nil {
+			return err
+		}
+		if rpt == nil {
+			matchingTxs, err = s.scanChain(ctx, rp, bestChain, bmap, walletID)
+			if err != nil {
+				return err
+			}
+		}
+
+		prevChain, err := w.ChainSwitch(ctx, &s.sidechains, bestChain, matchingTxs)
+		if err != nil {
+			return err
+		}
+		if len(prevChain) != 0 {
+			log.Infof("[%d] Reorganize from %v to %v (total %d block(s) reorged)",
+				walletID, prevChain[len(prevChain)-1].Hash, bestChain[len(bestChain)-1].Hash, len(prevChain))
+			for _, n := range prevChain {
+				s.sidechains.AddBlockNode(n)
+			}
+		}
+		tipHeader := bestChain[len(bestChain)-1].Header
+		s.setRequiredHeight(int32(tipHeader.Height))
+		s.tipChanged(tipHeader, int32(len(prevChain)), matchingTxs)
+
+		return nil
+	}()
+	if err != nil {
+		return err
 	}
 
+	if len(bestChain) != 0 {
+		s.locatorMu.Lock()
+		s.currentLocators = nil
+		s.locatorGeneration++
+		s.locatorMu.Unlock()
+	}
+
+	// Log connected blocks.
+	for _, n := range bestChain {
+		log.Infof("[%d] Connected block %v, height %d, %d wallet transaction(s)",
+			walletID, n.Hash, n.Header.Height, len(matchingTxs[*n.Hash]))
+	}
+	// Announced blocks not in the main chain are logged as sidechain or orphan
+	// blocks.
+	for _, n := range newBlocks {
+		haveBlock, _, err := w.BlockInMainChain(ctx, n.Hash)
+		if err != nil {
+			return err
+		}
+		if haveBlock {
+			continue
+		}
+		log.Infof("[%d] Received sidechain or orphan block %v, height %v", walletID,
+			n.Hash, n.Header.Height)
+	}
 	return nil
 }
 
@@ -1191,7 +1274,6 @@ var hashStop chainhash.Hash
 // Returns when no more headers are available.  A sendheaders message is pushed
 // to the peer when there are no more headers to fetch.
 func (s *Syncer) getHeaders(ctx context.Context, rp *p2p.RemotePeer) error {
-
 	_, _, lowestChainWallet := s.lowestChainTip(ctx)
 
 	var locators []*chainhash.Hash
@@ -1352,10 +1434,9 @@ func (s *Syncer) fetchMissingCFilters(ctx context.Context, rp *p2p.RemotePeer) e
 }
 
 func (s *Syncer) startupSync(ctx context.Context, rp *p2p.RemotePeer) error {
-	_, tipHeight, _ := s.highestChainTip(ctx)
-
 	// Disconnect from the peer if their advertised block height is
 	// significantly behind the highest block height recorded by all wallets.
+	_, tipHeight, _ := s.highestChainTip(ctx)
 	if rp.InitialHeight() < tipHeight-6 {
 		return errors.E("peer is not synced")
 	}
