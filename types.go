@@ -12,6 +12,21 @@ import (
 	"decred.org/dcrwallet/v2/wallet"
 )
 
+// WalletConfig defines options for configuring wallet behaviour.
+// This is a subset of the config used by dcrwallet.
+type WalletConfig struct {
+	// General
+	GapLimit                uint32         // Allowed unused address gap between used addresses of accounts
+	ManualTickets           bool           // Do not discover new tickets through network synchronization
+	AllowHighFees           bool           // Do not perform high fee checks
+	RelayFee                dcrutil.Amount // Transaction fee per kilobyte
+	AccountGapLimit         int            // Allowed gap of unused accounts
+	DisableCoinTypeUpgrades bool           // Never upgrade from legacy to SLIP0044 coin type keys
+
+	// CSPP
+	MixSplitLimit int // Connection limit to CoinShuffle++ server per change amount
+}
+
 type WalletsIterator struct {
 	currentIndex int
 	wallets      []*Wallet

@@ -310,15 +310,25 @@ func backupFile(fileName string, suffix int) (newName string, err error) {
 }
 
 func initWalletLoader(chainParams *chaincfg.Params, walletDataDir, walletDbDriver string) *loader.Loader {
+	// TODO: Allow users provide values to override these defaults.
+	cfg := &WalletConfig{
+		GapLimit:                20,
+		AllowHighFees:           false,
+		RelayFee:                txrules.DefaultRelayFeePerKb,
+		AccountGapLimit:         wallet.DefaultAccountGapLimit,
+		DisableCoinTypeUpgrades: false,
+		ManualTickets:           false,
+		MixSplitLimit:           10,
+	}
+
 	stakeOptions := &loader.StakeOptions{
 		VotingEnabled: false,
 		AddressReuse:  false,
 		VotingAddress: nil,
 	}
-
-	defaultFeePerKb := txrules.DefaultRelayFeePerKb
-	walletLoader := loader.NewLoader(chainParams, walletDataDir, stakeOptions, 20, false,
-		defaultFeePerKb, wallet.DefaultAccountGapLimit, false)
+	walletLoader := loader.NewLoader(chainParams, walletDataDir, stakeOptions,
+		cfg.GapLimit, cfg.AllowHighFees, cfg.RelayFee, cfg.AccountGapLimit,
+		cfg.DisableCoinTypeUpgrades, cfg.ManualTickets, cfg.MixSplitLimit)
 
 	if walletDbDriver != "" {
 		walletLoader.SetDatabaseDriver(walletDbDriver)

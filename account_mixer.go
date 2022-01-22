@@ -17,7 +17,7 @@ import (
 
 const (
 	smalletSplitPoint  = 000.00262144
-	ShuffleServer      = "cspp.decred.org"
+	ShuffleServer      = "mix.decred.org"
 	MainnetShufflePort = "5760"
 	TestnetShufflePort = "15760"
 	MixedAccountBranch = int32(udb.ExternalBranch)
