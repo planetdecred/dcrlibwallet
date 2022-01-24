@@ -2,6 +2,7 @@ package dcrlibwallet
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"sort"
 
@@ -103,51 +104,37 @@ func (c *Consensus) SetVoteChoice(walletID int, vspPubKey []byte, vspHost, agend
 		ChoiceID: choiceID,
 	}
 
-	var ctx context.Context
+	ctx := wallet.shutdownContext()
 	_, err = wal.SetAgendaChoices(ctx, ticketHash, choice)
 	if err != nil {
 		return err
 	}
 
-	println("[][][][] A")
-	_, err = c.GetAllAgendasForWallet(walletID, false)
-	if err != nil {
-		return err
-	}
 	if vspHost == "" {
 		return nil
 	}
-	println("[][][][] B")
 	vspClient, err := wallet.LookupVSP(vspHost)
 	if err != nil && !errors.Is(err, errors.NotExist) {
 		return err
 	} else {
-		println("[][][][] configure vsp if not exist")
-		vspClient, err = wallet.VSP(vspHost, string(vspPubKey))
+		vspClient, err = wallet.VSP(vspHost, base64.StdEncoding.EncodeToString(vspPubKey))
 		if err != nil {
 			return err
 		}
-		println("[][][][] vsp client", vspClient)
 	}
-
-	println("[][][][] C")
 	if ticketHash != nil {
-		println("[][][][] D")
 		err = vspClient.SetVoteChoice(ctx, ticketHash, choice)
-		println("[][][][] E")
 		return err
 	}
-	println("[][][][] 1")
+
 	var firstErr error
 	vspClient.ForUnspentUnexpiredTickets(ctx, func(hash *chainhash.Hash) error {
 		// Never return errors here, so all tickets are tried.
 		// The first error will be returned to the user.
-		println("[][][][] 2")
 		err := vspClient.SetVoteChoice(ctx, hash, choice)
 		if err != nil && firstErr == nil {
 			firstErr = err
 		}
-		println("[][][][] 3")
 		return nil
 	})
 
