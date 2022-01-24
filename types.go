@@ -504,6 +504,7 @@ type Agenda struct {
 	VotingPreference string    `json:"voting_preference"`
 	StartTime        int64     `json:"start_time"`
 	ExpireTime       int64     `json:"expire_time"`
+	Status           string    `json:"status"`
 }
 
 type Choice struct {

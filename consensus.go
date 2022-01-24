@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"sort"
+	"time"
 
 	"decred.org/dcrwallet/v2/errors"
 	w "decred.org/dcrwallet/v2/wallet"
@@ -179,6 +180,18 @@ func (c *Consensus) GetAllAgendasForWallet(walletID int, newestFirst bool) (*Age
 			votingPreference = "abstain"
 		}
 
+		// get agenda status
+
+		currentTime := time.Now().Unix()
+		var status string
+		if currentTime > int64(d.ExpireTime) {
+			status = "Finished"
+		} else if currentTime > int64(d.StartTime) && int64(currentTime) < int64(d.ExpireTime) {
+			status = "In progress"
+		} else if currentTime > int64(d.StartTime) {
+			status = "Upcoming"
+		}
+
 		resp.Agendas[i] = &Agenda{
 			AgendaID:         d.Vote.Id,
 			Description:      d.Vote.Description,
@@ -187,6 +200,7 @@ func (c *Consensus) GetAllAgendasForWallet(walletID int, newestFirst bool) (*Age
 			VotingPreference: votingPreference,
 			StartTime:        int64(d.StartTime),
 			ExpireTime:       int64(d.ExpireTime),
+			Status:           status,
 		}
 		for j := range d.Vote.Choices {
 			choice := &d.Vote.Choices[j]
