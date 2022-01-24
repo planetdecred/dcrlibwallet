@@ -9,10 +9,12 @@ import (
 	"strings"
 	"sync"
 
+	"decred.org/dcrwallet/v2/deployments"
 	"decred.org/dcrwallet/v2/errors"
 	"decred.org/dcrwallet/v2/p2p"
 	w "decred.org/dcrwallet/v2/wallet"
 	"github.com/decred/dcrd/addrmgr/v2"
+	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/planetdecred/dcrlibwallet/spv"
 )
 
@@ -490,4 +492,17 @@ func (mw *MultiWallet) GetLowestBlockTimestamp() int64 {
 		}
 	}
 	return timestamp
+}
+
+func (mw *MultiWallet) GetActivationBlockHeight() int32 {
+	var activationHeight int32 = -1
+	switch strings.ToLower(mw.chainParams.Name) {
+	case strings.ToLower(chaincfg.MainNetParams().Name):
+		activationHeight = deployments.DCP0001.MainNetActivationHeight
+	case strings.ToLower(chaincfg.TestNet3Params().Name):
+		activationHeight = deployments.DCP0001.TestNet3ActivationHeight
+	default:
+	}
+
+	return activationHeight
 }
