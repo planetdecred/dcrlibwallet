@@ -26,7 +26,8 @@ func newConsensus(mwRef *MultiWallet) (*Consensus, error) {
 }
 
 // GetVoteChoices handles a getvotechoices request by returning configured vote
-// preferences for each agenda of the latest supported stake version.
+// preferences for each agenda of the latest supported stake version for the
+// selected wallet.
 func (c *Consensus) GetVoteChoices(ctx context.Context, hash string, walletID int) (*GetVoteChoicesResult, error) {
 	wallet := c.mwRef.WalletWithID(walletID)
 	wal := wallet.Internal()
@@ -111,8 +112,9 @@ func (c *Consensus) SetVoteChoice(walletID int, vspPubKey []byte, vspHost, agend
 	}
 
 	if vspHost == "" {
-		return nil
+		return fmt.Errorf("request requires a vspHost but no vspHost was provided")
 	}
+
 	vspClient, err := wallet.LookupVSP(vspHost)
 	if err != nil && !errors.Is(err, errors.NotExist) {
 		return err
@@ -122,11 +124,15 @@ func (c *Consensus) SetVoteChoice(walletID int, vspPubKey []byte, vspHost, agend
 			return err
 		}
 	}
+
+	// Ticket hash was provided, therefore set vote choice for the selected ticket
 	if ticketHash != nil {
 		err = vspClient.SetVoteChoice(ctx, ticketHash, choice)
 		return err
 	}
 
+	// Ticket hash wasn't provided, therefor set vote choice for all tickets
+	// belonging to the selected wallet and controlled by the set VSP
 	var firstErr error
 	vspClient.ForUnspentUnexpiredTickets(ctx, func(hash *chainhash.Hash) error {
 		// Never return errors here, so all tickets are tried.
@@ -142,7 +148,7 @@ func (c *Consensus) SetVoteChoice(walletID int, vspPubKey []byte, vspHost, agend
 }
 
 // GetAllAgendasForWallet returns all agendas through out the various stake versions for the active network and
-// this version of the software, and all agendas defined by it using the walletID.
+// this version of the software, and all agendas defined by it for a selected wallet.
 func (c *Consensus) GetAllAgendasForWallet(walletID int, newestFirst bool) (*AgendasResponse, error) {
 	wallet := c.mwRef.WalletWithID(walletID)
 	version, deployments := getAllAgendas(wallet.chainParams)
@@ -167,8 +173,8 @@ func (c *Consensus) GetAllAgendasForWallet(walletID int, newestFirst bool) (*Age
 			}
 		}
 
-		// if voting prefrence is nil, it means the wallet didn't participate
-		// in the voting, and the preference can be set to nil
+		// if votingPreference is empty, it means the wallet didn't participate
+		// in the voting, and the votingPreference can default to abstain
 		if votingPreference == "" {
 			votingPreference = "abstain"
 		}
@@ -208,6 +214,8 @@ func getAllAgendas(params *chaincfg.Params) (version uint32, agendas []chaincfg.
 
 	var i uint32
 	allAgendas := make([]chaincfg.ConsensusDeployment, 0)
+	// check for all agendas from the intital stake version to the current stake version,
+	// in order to fetch legacy agendas
 	for i = 1; i <= version; i++ {
 		currentAgendas := params.Deployments[i]
 		for j := 0; j < len(currentAgendas); j++ {
