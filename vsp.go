@@ -302,10 +302,10 @@ func (vsp *VSP) buyTickets(ctx context.Context, tip *wire.BlockHeader, expiry in
 	}
 
 	//TODO: limit should be set dynamically
-	limit := 1
-	if limit > 0 && buy > limit {
-		buy = limit
-	}
+	// limit := 1
+	// if limit > 0 && buy > limit {
+	// 	buy = limit
+	// }
 
 	request := &w.PurchaseTicketsRequest{
 		Count:                buy,
