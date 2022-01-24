@@ -126,7 +126,7 @@ func (c *Consensus) SetVoteChoice(walletID int, vspPubKey []byte, vspHost, agend
 		}
 	}
 
-	// Ticket hash was provided, therefore set vote choice for the selected ticket
+	// If ticket hash is provided, then set vote choice for the selected ticket
 	if ticketHash != nil {
 		err = vspClient.SetVoteChoice(ctx, ticketHash, choice)
 		return err
@@ -181,12 +181,11 @@ func (c *Consensus) GetAllAgendasForWallet(walletID int, newestFirst bool) (*Age
 		}
 
 		// get agenda status
-
 		currentTime := time.Now().Unix()
 		var status string
 		if currentTime > int64(d.ExpireTime) {
 			status = "Finished"
-		} else if currentTime > int64(d.StartTime) && int64(currentTime) < int64(d.ExpireTime) {
+		} else if currentTime > int64(d.StartTime) && currentTime < int64(d.ExpireTime) {
 			status = "In progress"
 		} else if currentTime > int64(d.StartTime) {
 			status = "Upcoming"
