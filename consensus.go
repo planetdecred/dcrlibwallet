@@ -76,7 +76,7 @@ func (c *Consensus) GetVoteChoices(ctx context.Context, hash string, walletID in
 //
 // If a VSP host is configured in the application settings, the voting
 // preferences will also be set with the VSP.
-func (c *Consensus) SetVoteChoice(walletID int, vspHost, agendaID, choiceID, hash, passphrase string) error {
+func (c *Consensus) SetVoteChoice(walletID int, vspPubKey []byte, vspHost, agendaID, choiceID, hash, passphrase string) error {
 	wallet := c.mwRef.WalletWithID(walletID)
 	wal := wallet.Internal()
 	if wal == nil {
@@ -118,42 +118,39 @@ func (c *Consensus) SetVoteChoice(walletID int, vspHost, agendaID, choiceID, has
 		return nil
 	}
 	println("[][][][] B")
-	// vspClient, err := loader.LookupVSP(vspHost)
-	// if err != nil {
-	// 	return err
-	// }
-	// var c.mwRef MultiWallet
-	vsp, err := c.mwRef.NewVSPClient(vspHost, walletID, 0)
-	// vspClient, err := LookupVSP(vspHost)
-	if err != nil {
+	vspClient, err := wallet.LookupVSP(vspHost)
+	if err != nil && !errors.Is(err, errors.NotExist) {
 		return err
+	} else {
+		println("[][][][] configure vsp if not exist")
+		vspClient, err = wallet.VSP(vspHost, string(vspPubKey))
+		if err != nil {
+			return err
+		}
+		println("[][][][] vsp client", vspClient)
 	}
+
+	println("[][][][] C")
 	if ticketHash != nil {
-		err = vsp.SetVoteChoice(ctx, ticketHash, choice)
+		println("[][][][] D")
+		err = vspClient.SetVoteChoice(ctx, ticketHash, choice)
+		println("[][][][] E")
 		return err
 	}
 	println("[][][][] 1")
 	var firstErr error
-	vsp.ForUnspentUnexpiredTickets(ctx, func(hash *chainhash.Hash) error {
+	vspClient.ForUnspentUnexpiredTickets(ctx, func(hash *chainhash.Hash) error {
 		// Never return errors here, so all tickets are tried.
 		// The first error will be returned to the user.
 		println("[][][][] 2")
-		err := vsp.SetVoteChoice(ctx, hash, choice)
+		err := vspClient.SetVoteChoice(ctx, hash, choice)
 		if err != nil && firstErr == nil {
 			firstErr = err
 		}
 		println("[][][][] 3")
-		_, err = c.GetAllAgendasForWallet(walletID, false)
-		if err != nil {
-			return err
-		}
-		println("[][][][] 4")
 		return nil
 	})
-	// _, err = c.mwRef.GetAllAgendas(walletID)
-	// if err != nil {
-	// 	return err
-	// }
+
 	return firstErr
 }
 
