@@ -519,8 +519,4 @@ type VSPInfo struct {
 	Info *VspInfoResponse
 }
 
-type VSPList struct {
-	List []*VSPInfo
-}
-
 /** end vspd-related types */

@@ -43,7 +43,7 @@ type MultiWallet struct {
 
 	Politeia  *Politeia
 	dexClient *DexClient
-	VspList   *VSPList
+	VspList   []*VSPInfo
 }
 
 func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWallet, error) {
@@ -101,14 +101,13 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 		},
 		txAndBlockNotificationListeners:  make(map[string]TxAndBlockNotificationListener),
 		accountMixerNotificationListener: make(map[string]AccountMixerNotificationListener),
+		VspList:                          make([]*VSPInfo, 0),
 	}
 
 	mw.Politeia, err = newPoliteia(mw, politeiaHost)
 	if err != nil {
 		return nil, err
 	}
-
-	mw.VspList = new(VSPList)
 
 	// read saved wallets info from db and initialize wallets
 	query := mw.db.Select(q.True()).OrderBy("ID")
