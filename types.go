@@ -519,4 +519,11 @@ type VSPInfo struct {
 	Info *VspInfoResponse
 }
 
+type TicketBuyerConfig struct {
+	VspHost           string
+	WalletID          int
+	PurchaseAccount   int32
+	BalanceToMaintain int64
+}
+
 /** end vspd-related types */

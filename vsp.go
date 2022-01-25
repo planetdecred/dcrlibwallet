@@ -810,12 +810,18 @@ func (mw *MultiWallet) SetAutoTicketsBuyerConfig(vspHost string, walletID int, p
 	mw.SetStringConfigValueForKey(TicketBuyerVSPHostConfigKey, vspHost)
 }
 
-func (mw *MultiWallet) GetAutoTicketsBuyerConfig() (vspHost string, walletID int, purchaseAccount int32, amountToMaintain int64) {
-	atm := mw.ReadLongConfigValueForKey(TicketBuyerATMConfigKey, -1)
+func (mw *MultiWallet) GetAutoTicketsBuyerConfig() *TicketBuyerConfig {
+	btm := mw.ReadLongConfigValueForKey(TicketBuyerATMConfigKey, -1)
 	walId := mw.ReadIntConfigValueForKey(TicketBuyerWalletConfigKey, -1)
 	accNum := mw.ReadInt32ConfigValueForKey(TicketBuyerAccountConfigKey, -1)
-	vspHost = mw.ReadStringConfigValueForKey(TicketBuyerVSPHostConfigKey)
-	return vspHost, walId, accNum, atm
+	vspHost := mw.ReadStringConfigValueForKey(TicketBuyerVSPHostConfigKey)
+
+	return &TicketBuyerConfig{
+		VspHost:           vspHost,
+		WalletID:          walId,
+		PurchaseAccount:   accNum,
+		BalanceToMaintain: btm,
+	}
 }
 
 func (mw *MultiWallet) TicketBuyerConfigIsSet() bool {
