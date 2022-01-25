@@ -123,6 +123,27 @@ func (vsp *VSP) StartTicketBuyer(balanceToMaintain int64, passphrase []byte) err
 		return errors.New("Ticket buyer already running")
 	}
 
+	go func() {
+
+		log.Infof("Running ticket buyer on Wallet: %s", vsp.w.Name)
+
+		ctx, cancel := vsp.w.shutdownContextWithCancel()
+		vsp.w.cancelAutoTicketBuyer = cancel
+
+		err := vsp.runTicketBuyer(ctx, balanceToMaintain, passphrase)
+		if err != nil {
+			vsp.w.cancelAutoTicketBuyer = nil
+			if ctx.Err() != nil {
+				log.Errorf("TicketBuyerV2 instance canceled, account number: %s", vsp.w.Name)
+			}
+			log.Errorf("Ticket buyer instance errored: %v", err)
+		}
+	}()
+
+	return nil
+}
+
+func (vsp *VSP) runTicketBuyer(ctx context.Context, balanceToMaintain int64, passphrase []byte) error {
 	if len(passphrase) > 0 && vsp.w.IsLocked() {
 		err := vsp.w.UnlockWallet(passphrase)
 		if err != nil {
@@ -132,24 +153,6 @@ func (vsp *VSP) StartTicketBuyer(balanceToMaintain int64, passphrase []byte) err
 
 	defer vsp.w.LockWallet()
 
-	go func() {
-		log.Infof("Running ticket buyer on Wallet: %s", vsp.w.Name)
-
-		ctx, cancel := vsp.w.shutdownContextWithCancel()
-		vsp.w.cancelAutoTicketBuyer = cancel
-
-		err := vsp.runTicketBuyer(ctx, balanceToMaintain, passphrase)
-		if err != nil {
-			log.Errorf("Ticket buyer instance errored: %v", err)
-		}
-
-		vsp.w.cancelAutoTicketBuyer = nil
-	}()
-
-	return nil
-}
-
-func (vsp *VSP) runTicketBuyer(ctx context.Context, balanceToMaintain int64, passphrase []byte) error {
 	c := vsp.w.Internal().NtfnServer.MainTipChangedNotifications()
 	defer c.Done()
 
@@ -230,10 +233,42 @@ func (vsp *VSP) runTicketBuyer(ctx context.Context, balanceToMaintain int64, pas
 				}
 			}
 
+			wal := vsp.w
+			// Get the account balance to determine how many tickets to buy
+			bal, err := wal.GetAccountBalance(int32(vsp.purchaseAccount))
+			if err != nil {
+				return err
+			}
+
+			spendable := bal.Spendable
+			if spendable < balanceToMaintain {
+				log.Debugf("Skipping purchase: low available balance on Wallet: %s", wal.Name)
+				return nil
+			}
+
+			spendable -= balanceToMaintain
+			sdiff, err := wal.Internal().NextStakeDifficultyAfterHeader(ctx, tipHeader)
+			if err != nil {
+				return err
+			}
+
+			buy := int(dcrutil.Amount(spendable) / sdiff)
+			if buy == 0 {
+				log.Debugf("Skipping purchase: low available balance on Wallet: %s", wal.Name)
+				return nil
+			}
+
+			max := int(wal.Internal().ChainParams().MaxFreshStakePerBlock)
+			if buy > max {
+				buy = max
+			}
+
+			multiple := buy // multiple is the max amount of tickets that can be bought based on available funds
+
 			cancelCtx, cancel := context.WithCancel(ctx)
 			cancels = append(cancels, cancel)
-			go func() {
-				err := vsp.buyTickets(cancelCtx, tipHeader, expiry, balanceToMaintain, passphrase)
+			buyTickets := func() {
+				err := vsp.buyTickets(cancelCtx, expiry, sdiff, passphrase)
 				if err != nil {
 					switch {
 					// silence these errors
@@ -250,14 +285,20 @@ func (vsp *VSP) runTicketBuyer(ctx context.Context, balanceToMaintain int64, pas
 						outerCancel()
 					}
 				}
-			}()
+			}
+
+			// start separate ticket purchase for as many tickets that can be purchased
+			// each purchase only buy 1 ticket.
+			for i := 0; i < multiple; i++ {
+				go buyTickets()
+			}
 		}
 	}
 }
 
 // buyTickets purchases one or more tickets depending on the spendable balance of the selected account,
 // the specified minimum balance to maintain and the limit per block.
-func (vsp *VSP) buyTickets(ctx context.Context, tip *wire.BlockHeader, expiry int32, maintain int64, passphrase []byte) error {
+func (vsp *VSP) buyTickets(ctx context.Context, expiry int32, sdiff dcrutil.Amount, passphrase []byte) error {
 	ctx, task := trace.NewTask(ctx, "ticketbuyer.buy")
 	defer task.End()
 
@@ -272,43 +313,8 @@ func (vsp *VSP) buyTickets(ctx context.Context, tip *wire.BlockHeader, expiry in
 
 	defer wal.LockWallet()
 
-	// Get the account balance to determine how many tickets to buy
-	bal, err := wal.GetAccountBalance(int32(vsp.purchaseAccount))
-	if err != nil {
-		return err
-	}
-
-	spendable := bal.Spendable
-	if spendable < maintain {
-		log.Debugf("Skipping purchase: low available balance on Wallet: %s", wal.Name)
-		return nil
-	}
-
-	spendable -= maintain
-	sdiff, err := wal.Internal().NextStakeDifficultyAfterHeader(ctx, tip)
-	if err != nil {
-		return err
-	}
-
-	buy := int(dcrutil.Amount(spendable) / sdiff)
-	if buy == 0 {
-		log.Debugf("Skipping purchase: low available balance on Wallet: %s", wal.Name)
-		return nil
-	}
-
-	max := int(wal.Internal().ChainParams().MaxFreshStakePerBlock)
-	if buy > max {
-		buy = max
-	}
-
-	//TODO: limit should be set dynamically
-	// limit := 1
-	// if limit > 0 && buy > limit {
-	// 	buy = limit
-	// }
-
 	request := &w.PurchaseTicketsRequest{
-		Count:                buy,
+		Count:                1,
 		SourceAccount:        vsp.purchaseAccount,
 		Expiry:               expiry,
 		MinConf:              wal.RequiredConfirmations(),
