@@ -3,6 +3,7 @@ package dcrlibwallet
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -118,6 +119,9 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 	// prepare the wallets loaded from db for use
 	for _, wallet := range wallets {
 		err = wallet.prepare(rootDir, chainParams, mw.walletConfigSetFn(wallet.ID), mw.walletConfigReadFn(wallet.ID))
+		if err == nil && !WalletExistsAt(wallet.dataDir) {
+			err = fmt.Errorf("missing wallet database file")
+		}
 		if err != nil {
 			mw.badWallets[wallet.ID] = wallet
 			log.Warnf("Ignored wallet load error for wallet %d (%s)", wallet.ID, wallet.Name)
