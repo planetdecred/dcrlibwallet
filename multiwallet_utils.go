@@ -4,7 +4,9 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"decred.org/dcrwallet/v2/deployments"
 	"decred.org/dcrwallet/v2/errors"
 	w "decred.org/dcrwallet/v2/wallet"
 	"github.com/asdine/storm"
@@ -106,6 +108,22 @@ func (mw *MultiWallet) RootDirFileSizeInBytes() (int64, error) {
 		return err
 	})
 	return size, err
+}
+
+// DCP0001ActivationBlockHeight returns the hardcoded block height that
+// the DCP0001 deployment activates at. DCP0001 specifies hard forking
+// changes to the stake difficulty algorithm.
+func (mw *MultiWallet) DCP0001ActivationBlockHeight() int32 {
+	var activationHeight int32 = -1
+	switch strings.ToLower(mw.chainParams.Name) {
+	case strings.ToLower(Mainnet):
+		activationHeight = deployments.DCP0001.MainNetActivationHeight
+	case strings.ToLower(Testnet3):
+		activationHeight = deployments.DCP0001.TestNet3ActivationHeight
+	default:
+	}
+
+	return activationHeight
 }
 
 // naclLoadFromPass derives a nacl.Key from pass using scrypt.Key.
