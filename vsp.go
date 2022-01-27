@@ -63,6 +63,7 @@ func (mw *MultiWallet) NewVSPClient(vspHost string, walletID int, purchaseAccoun
 
 	ctx, _ := mw.contextWithShutdownCancel()
 
+	vsp.ctx = ctx
 	vsp.client = newVSPClient(vspHost, nil, sourceWallet.Internal())
 	vspInfo, err := vsp.GetInfo(ctx)
 	if err != nil {
@@ -123,26 +124,34 @@ func (vsp *VSP) StartTicketBuyer(balanceToMaintain int64, passphrase []byte) err
 		return errors.New("Ticket buyer already running")
 	}
 
+	ctx, cancel := vsp.w.shutdownContextWithCancel()
+
+	vsp.w.cancelAutoTicketBuyerMux.Lock()
+	vsp.w.cancelAutoTicketBuyer = cancel
+	vsp.w.cancelAutoTicketBuyerMux.Unlock()
+
 	go func() {
-
 		log.Infof("Running ticket buyer on Wallet: %s", vsp.w.Name)
-
-		ctx, cancel := vsp.w.shutdownContextWithCancel()
-		vsp.w.cancelAutoTicketBuyer = cancel
 
 		err := vsp.runTicketBuyer(ctx, balanceToMaintain, passphrase)
 		if err != nil {
+			vsp.w.cancelAutoTicketBuyerMux.Lock()
 			vsp.w.cancelAutoTicketBuyer = nil
+			vsp.w.cancelAutoTicketBuyerMux.Unlock()
+
 			if ctx.Err() != nil {
-				log.Errorf("TicketBuyerV2 instance canceled, account number: %s", vsp.w.Name)
+				log.Errorf("[%d] TicketBuyerV2 instance v1 canceled, account number: %s", vsp.w.ID, vsp.w.Name)
 			}
-			log.Errorf("Ticket buyer instance errored: %v", err)
+			log.Errorf("[%d] Ticket buyer instance v1 errored: %v", vsp.w.ID, err)
 		}
 	}()
 
 	return nil
 }
 
+// runTicketBuyer executes the ticket buyer. If the private passphrase is incorrect,
+// or ever becomes incorrect due to a wallet passphrase change, Run exits with an
+// errors.Passphrase error.
 func (vsp *VSP) runTicketBuyer(ctx context.Context, balanceToMaintain int64, passphrase []byte) error {
 	if len(passphrase) > 0 && vsp.w.IsLocked() {
 		err := vsp.w.UnlockWallet(passphrase)
@@ -150,8 +159,6 @@ func (vsp *VSP) runTicketBuyer(ctx context.Context, balanceToMaintain int64, pas
 			return translateError(err)
 		}
 	}
-
-	defer vsp.w.LockWallet()
 
 	c := vsp.w.Internal().NtfnServer.MainTipChangedNotifications()
 	defer c.Done()
@@ -260,15 +267,13 @@ func (vsp *VSP) runTicketBuyer(ctx context.Context, balanceToMaintain int64, pas
 
 			max := int(wal.Internal().ChainParams().MaxFreshStakePerBlock)
 			if buy > max {
-				buy = max
+				log.Infof("Ticket buyer is about to purchase %v tickets which is more the max ticket of %v per block.", buy, max)
 			}
-
-			multiple := buy // multiple is the max amount of tickets that can be bought based on available funds
 
 			cancelCtx, cancel := context.WithCancel(ctx)
 			cancels = append(cancels, cancel)
 			buyTickets := func() {
-				err := vsp.buyTickets(cancelCtx, expiry, sdiff, passphrase)
+				err := vsp.buyTickets(cancelCtx, passphrase, sdiff, expiry)
 				if err != nil {
 					switch {
 					// silence these errors
@@ -276,7 +281,7 @@ func (vsp *VSP) runTicketBuyer(ctx context.Context, balanceToMaintain int64, pas
 					case errors.Is(err, context.Canceled):
 					case errors.Is(err, context.DeadlineExceeded):
 					default:
-						log.Errorf("Ticket purchasing failed: %v", err)
+						log.Errorf("[%d] Ticket purchasing failed: %v", wal.ID, err)
 					}
 					if errors.Is(err, errors.Passphrase) {
 						fatalMu.Lock()
@@ -289,16 +294,17 @@ func (vsp *VSP) runTicketBuyer(ctx context.Context, balanceToMaintain int64, pas
 
 			// start separate ticket purchase for as many tickets that can be purchased
 			// each purchase only buy 1 ticket.
-			for i := 0; i < multiple; i++ {
+			for i := 0; i < buy; i++ {
 				go buyTickets()
 			}
 		}
 	}
 }
 
-// buyTickets purchases one or more tickets depending on the spendable balance of the selected account,
-// the specified minimum balance to maintain and the limit per block.
-func (vsp *VSP) buyTickets(ctx context.Context, expiry int32, sdiff dcrutil.Amount, passphrase []byte) error {
+// buyTickets purchases one or more tickets depending on the spendable balance of
+// the selected account, the specified minimum balance to maintain and the limit
+// per block.
+func (vsp *VSP) buyTickets(ctx context.Context, passphrase []byte, sdiff dcrutil.Amount, expiry int32) error {
 	ctx, task := trace.NewTask(ctx, "ticketbuyer.buy")
 	defer task.End()
 
@@ -311,10 +317,8 @@ func (vsp *VSP) buyTickets(ctx context.Context, expiry int32, sdiff dcrutil.Amou
 		}
 	}
 
-	defer wal.LockWallet()
-
 	request := &w.PurchaseTicketsRequest{
-		Count:                1,
+		Count:                1, // prevent combining multi ticket in one transaction. Buy max 1 per txns
 		SourceAccount:        vsp.purchaseAccount,
 		Expiry:               expiry,
 		MinConf:              wal.RequiredConfirmations(),
@@ -341,14 +345,17 @@ func (vsp *VSP) buyTickets(ctx context.Context, expiry int32, sdiff dcrutil.Amou
 func (mw *MultiWallet) IsAutoTicketsPurchaseActive(walletID int) bool {
 	wallet := mw.WalletWithID(walletID)
 	if wallet == nil {
-		log.Errorf(ErrNotExist)
 		return false
 	}
 
-	return wallet.cancelAutoTicketBuyer != nil
+	wallet.cancelAutoTicketBuyerMux.Lock()
+	cancel := wallet.cancelAutoTicketBuyer
+	wallet.cancelAutoTicketBuyerMux.Unlock()
+
+	return cancel != nil
 }
 
-// StopAutoTicketsPurchase stops the active account mixer
+// StopAutoTicketsPurchase stops the active ticket buyer
 func (mw *MultiWallet) StopAutoTicketsPurchase(walletID int) error {
 	wallet := mw.WalletWithID(walletID)
 	if wallet == nil {
@@ -360,7 +367,10 @@ func (mw *MultiWallet) StopAutoTicketsPurchase(walletID int) error {
 	}
 
 	wallet.cancelAutoTicketBuyer()
+
+	wallet.cancelAutoTicketBuyerMux.Lock()
 	wallet.cancelAutoTicketBuyer = nil
+	wallet.cancelAutoTicketBuyerMux.Unlock()
 	return nil
 }
 
