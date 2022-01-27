@@ -341,18 +341,9 @@ func (vsp *VSP) buyTickets(ctx context.Context, passphrase []byte, sdiff dcrutil
 	return err
 }
 
-// IsAutoTicketsPurchaseActive returns true if account mixer is active
-func (mw *MultiWallet) IsAutoTicketsPurchaseActive(walletID int) bool {
-	wallet := mw.WalletWithID(walletID)
-	if wallet == nil {
-		return false
-	}
-
-	wallet.cancelAutoTicketBuyerMux.Lock()
-	cancel := wallet.cancelAutoTicketBuyer
-	wallet.cancelAutoTicketBuyerMux.Unlock()
-
-	return cancel != nil
+// IsAutoTicketsPurchaseActive returns true if ticket buyer is active
+func (wallet *Wallet) IsAutoTicketsPurchaseActive() bool {
+	return wallet.cancelAutoTicketBuyer != nil
 }
 
 // StopAutoTicketsPurchase stops the active ticket buyer
@@ -819,36 +810,43 @@ func (mw *MultiWallet) getInfo(host string) (*VspInfoResponse, error) {
 	return vspInfo, nil
 }
 
-func (mw *MultiWallet) SetAutoTicketsBuyerConfig(vspHost string, walletID int, purchaseAccount int32, amountToMaintain int64) {
-	mw.SetLongConfigValueForKey(TicketBuyerATMConfigKey, amountToMaintain)
-	mw.SetIntConfigValueForKey(TicketBuyerWalletConfigKey, walletID)
-	mw.SetInt32ConfigValueForKey(TicketBuyerAccountConfigKey, purchaseAccount)
-	mw.SetStringConfigValueForKey(TicketBuyerVSPHostConfigKey, vspHost)
+// SetAutoTicketsBuyerConfig set ticket buyer configuration for a particular wallet
+func (wallet *Wallet) SetAutoTicketsBuyerConfig(vspHost string, purchaseAccount int32, amountToMaintain int64) {
+	wallet.SetLongConfigValueForKey(TicketBuyerATMConfigKey, amountToMaintain)
+	wallet.SetInt32ConfigValueForKey(TicketBuyerAccountConfigKey, purchaseAccount)
+	wallet.SetStringConfigValueForKey(TicketBuyerVSPHostConfigKey, vspHost)
 }
 
-func (mw *MultiWallet) GetAutoTicketsBuyerConfig() *TicketBuyerConfig {
-	btm := mw.ReadLongConfigValueForKey(TicketBuyerATMConfigKey, -1)
-	walId := mw.ReadIntConfigValueForKey(TicketBuyerWalletConfigKey, -1)
-	accNum := mw.ReadInt32ConfigValueForKey(TicketBuyerAccountConfigKey, -1)
-	vspHost := mw.ReadStringConfigValueForKey(TicketBuyerVSPHostConfigKey)
+// GetAutoTicketsBuyerConfig gets ticekt buyer config for a selected wallet
+func (wallet *Wallet) GetAutoTicketsBuyerConfig() *TicketBuyerConfig {
+	btm := wallet.ReadLongConfigValueForKey(TicketBuyerATMConfigKey, -1)
+	accNum := wallet.ReadInt32ConfigValueForKey(TicketBuyerAccountConfigKey, -1)
+	vspHost := wallet.ReadStringConfigValueForKey(TicketBuyerVSPHostConfigKey, "")
 
 	return &TicketBuyerConfig{
 		VspHost:           vspHost,
-		WalletID:          walId,
 		PurchaseAccount:   accNum,
 		BalanceToMaintain: btm,
 	}
 }
 
-func (mw *MultiWallet) TicketBuyerConfigIsSet() bool {
-	return mw.ReadStringConfigValueForKey(TicketBuyerVSPHostConfigKey) != ""
+// TicketBuyerConfigIsSet checks if ticket buyer config has been set for a selected wallet
+func (wallet *Wallet) TicketBuyerConfigIsSet() bool {
+	return wallet.ReadStringConfigValueForKey(TicketBuyerVSPHostConfigKey, "") != ""
 }
 
-func (mw *MultiWallet) ClearTicketBuyerConfig() {
+// ClearTicketBuyerConfig clear all save ticket buyer config for a selected wallet
+func (mw *MultiWallet) ClearTicketBuyerConfig(walletID int) error {
+	wallet := mw.WalletWithID(walletID)
+	if wallet == nil {
+		return errors.New(ErrNotExist)
+	}
+
 	mw.SetLongConfigValueForKey(TicketBuyerATMConfigKey, -1)
-	mw.SetIntConfigValueForKey(TicketBuyerWalletConfigKey, -1)
 	mw.SetInt32ConfigValueForKey(TicketBuyerAccountConfigKey, -1)
 	mw.SetStringConfigValueForKey(TicketBuyerVSPHostConfigKey, "")
+
+	return nil
 }
 
 // getInitVSPInfo returns the list information of the VSP
