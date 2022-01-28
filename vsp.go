@@ -120,7 +120,10 @@ func (vsp *VSP) StartTicketBuyer(balanceToMaintain int64, passphrase []byte) err
 		return errors.New("Negative balance to maintain given")
 	}
 
-	if vsp.w.cancelAutoTicketBuyer != nil {
+	vsp.w.cancelAutoTicketBuyerMux.Lock()
+	cancelFunc := vsp.w.cancelAutoTicketBuyer
+	vsp.w.cancelAutoTicketBuyerMux.Unlock()
+	if cancelFunc != nil {
 		return errors.New("Ticket buyer already running")
 	}
 
@@ -130,27 +133,35 @@ func (vsp *VSP) StartTicketBuyer(balanceToMaintain int64, passphrase []byte) err
 	vsp.w.cancelAutoTicketBuyer = cancel
 	vsp.w.cancelAutoTicketBuyerMux.Unlock()
 
+	if len(passphrase) > 0 && vsp.w.IsLocked() {
+		err := vsp.w.UnlockWallet(passphrase)
+		if err != nil {
+			return translateError(err)
+		}
+		defer vsp.w.LockWallet()
+	}
+
 	go func() {
 		log.Infof("Running ticket buyer on Wallet: %s", vsp.w.Name)
 
 		err := vsp.runTicketBuyer(ctx, balanceToMaintain, passphrase)
 		if err != nil {
-			vsp.w.cancelAutoTicketBuyerMux.Lock()
-			vsp.w.cancelAutoTicketBuyer = nil
-			vsp.w.cancelAutoTicketBuyerMux.Unlock()
-
 			if ctx.Err() != nil {
-				log.Errorf("[%d] TicketBuyerV2 instance v1 canceled, account number: %s", vsp.w.ID, vsp.w.Name)
+				log.Errorf("[%d] TicketBuyer instance canceled, account number: %s", vsp.w.ID, vsp.w.Name)
 			}
-			log.Errorf("[%d] Ticket buyer instance v1 errored: %v", vsp.w.ID, err)
+			log.Errorf("[%d] Ticket buyer instance errored: %v", vsp.w.ID, err)
 		}
+
+		vsp.w.cancelAutoTicketBuyerMux.Lock()
+		vsp.w.cancelAutoTicketBuyer = nil
+		vsp.w.cancelAutoTicketBuyerMux.Unlock()
 	}()
 
 	return nil
 }
 
 // runTicketBuyer executes the ticket buyer. If the private passphrase is incorrect,
-// or ever becomes incorrect due to a wallet passphrase change, Run exits with an
+// or ever becomes incorrect due to a wallet passphrase change, runTicketBuyer exits with an
 // errors.Passphrase error.
 func (vsp *VSP) runTicketBuyer(ctx context.Context, balanceToMaintain int64, passphrase []byte) error {
 	if len(passphrase) > 0 && vsp.w.IsLocked() {
@@ -265,11 +276,6 @@ func (vsp *VSP) runTicketBuyer(ctx context.Context, balanceToMaintain int64, pas
 				return nil
 			}
 
-			max := int(wal.Internal().ChainParams().MaxFreshStakePerBlock)
-			if buy > max {
-				log.Infof("Ticket buyer is about to purchase %v tickets which is more the max ticket of %v per block.", buy, max)
-			}
-
 			cancelCtx, cancel := context.WithCancel(ctx)
 			cancels = append(cancels, cancel)
 			buyTickets := func() {
@@ -302,8 +308,7 @@ func (vsp *VSP) runTicketBuyer(ctx context.Context, balanceToMaintain int64, pas
 }
 
 // buyTickets purchases one or more tickets depending on the spendable balance of
-// the selected account, the specified minimum balance to maintain and the limit
-// per block.
+// the selected account and the specified minimum balance to maintain.
 func (vsp *VSP) buyTickets(ctx context.Context, passphrase []byte, sdiff dcrutil.Amount, expiry int32) error {
 	ctx, task := trace.NewTask(ctx, "ticketbuyer.buy")
 	defer task.End()
@@ -343,6 +348,8 @@ func (vsp *VSP) buyTickets(ctx context.Context, passphrase []byte, sdiff dcrutil
 
 // IsAutoTicketsPurchaseActive returns true if ticket buyer is active
 func (wallet *Wallet) IsAutoTicketsPurchaseActive() bool {
+	wallet.cancelAutoTicketBuyerMux.Lock()
+	defer wallet.cancelAutoTicketBuyerMux.Unlock()
 	return wallet.cancelAutoTicketBuyer != nil
 }
 
@@ -353,13 +360,15 @@ func (mw *MultiWallet) StopAutoTicketsPurchase(walletID int) error {
 		return errors.New(ErrNotExist)
 	}
 
-	if wallet.cancelAutoTicketBuyer == nil {
+	wallet.cancelAutoTicketBuyerMux.Lock()
+	cancelFunc := wallet.cancelAutoTicketBuyer
+	wallet.cancelAutoTicketBuyerMux.Unlock()
+	if cancelFunc == nil {
 		return errors.New(ErrInvalid)
 	}
 
-	wallet.cancelAutoTicketBuyer()
-
 	wallet.cancelAutoTicketBuyerMux.Lock()
+	wallet.cancelAutoTicketBuyer()
 	wallet.cancelAutoTicketBuyer = nil
 	wallet.cancelAutoTicketBuyerMux.Unlock()
 	return nil
@@ -830,7 +839,8 @@ func (wallet *Wallet) GetAutoTicketsBuyerConfig() *TicketBuyerConfig {
 	}
 }
 
-// TicketBuyerConfigIsSet checks if ticket buyer config has been set for a selected wallet
+// TicketBuyerConfigIsSet checks if ticket buyer config has been set for a
+// selected wallet
 func (wallet *Wallet) TicketBuyerConfigIsSet() bool {
 	return wallet.ReadStringConfigValueForKey(TicketBuyerVSPHostConfigKey, "") != ""
 }
