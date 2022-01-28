@@ -40,8 +40,8 @@ type Wallet struct {
 	cancelFuncs        []context.CancelFunc
 	cancelAccountMixer context.CancelFunc
 
-	cancelAutoTicketBuyerMux sync.Mutex
-	cancelAutoTicketBuyer    context.CancelFunc
+	cancelAutoTicketBuyerMu sync.Mutex
+	cancelAutoTicketBuyer   context.CancelFunc
 	// setUserConfigValue saves the provided key-value pair to a config database.
 	// This function is ideally assigned when the `wallet.prepare` method is
 	// called from a MultiWallet instance.

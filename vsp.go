@@ -120,49 +120,47 @@ func (vsp *VSP) StartTicketBuyer(balanceToMaintain int64, passphrase []byte) err
 		return errors.New("Negative balance to maintain given")
 	}
 
-	vsp.w.cancelAutoTicketBuyerMux.Lock()
-	cancelFunc := vsp.w.cancelAutoTicketBuyer
-	vsp.w.cancelAutoTicketBuyerMux.Unlock()
-	if cancelFunc != nil {
+	vsp.w.cancelAutoTicketBuyerMu.Lock()
+	if vsp.w.cancelAutoTicketBuyer != nil {
+		vsp.w.cancelAutoTicketBuyerMu.Unlock()
 		return errors.New("Ticket buyer already running")
 	}
 
 	ctx, cancel := vsp.w.shutdownContextWithCancel()
 
-	vsp.w.cancelAutoTicketBuyerMux.Lock()
 	vsp.w.cancelAutoTicketBuyer = cancel
-	vsp.w.cancelAutoTicketBuyerMux.Unlock()
+	vsp.w.cancelAutoTicketBuyerMu.Unlock()
 
 	if len(passphrase) > 0 && vsp.w.IsLocked() {
 		err := vsp.w.UnlockWallet(passphrase)
 		if err != nil {
 			return translateError(err)
 		}
-		defer vsp.w.LockWallet()
 	}
 
 	go func() {
-		log.Infof("Running ticket buyer on Wallet: %s", vsp.w.Name)
+		log.Infof("[%d] Running ticket buyer", vsp.w.ID)
 
 		err := vsp.runTicketBuyer(ctx, balanceToMaintain, passphrase)
 		if err != nil {
 			if ctx.Err() != nil {
-				log.Errorf("[%d] TicketBuyer instance canceled, account number: %s", vsp.w.ID, vsp.w.Name)
+				log.Errorf("[%d] TicketBuyer instance canceled", vsp.w.ID)
+			} else {
+				log.Errorf("[%d] Ticket buyer instance errored: %v", vsp.w.ID, err)
 			}
-			log.Errorf("[%d] Ticket buyer instance errored: %v", vsp.w.ID, err)
 		}
 
-		vsp.w.cancelAutoTicketBuyerMux.Lock()
+		vsp.w.cancelAutoTicketBuyerMu.Lock()
 		vsp.w.cancelAutoTicketBuyer = nil
-		vsp.w.cancelAutoTicketBuyerMux.Unlock()
+		vsp.w.cancelAutoTicketBuyerMu.Unlock()
 	}()
 
 	return nil
 }
 
-// runTicketBuyer executes the ticket buyer. If the private passphrase is incorrect,
-// or ever becomes incorrect due to a wallet passphrase change, runTicketBuyer exits with an
-// errors.Passphrase error.
+// runTicketBuyer executes the ticket buyer. If the private passphrase is
+// incorrect, or ever becomes incorrect due to a wallet passphrase change,
+// runTicketBuyer exits with an errors.Passphrase error.
 func (vsp *VSP) runTicketBuyer(ctx context.Context, balanceToMaintain int64, passphrase []byte) error {
 	if len(passphrase) > 0 && vsp.w.IsLocked() {
 		err := vsp.w.UnlockWallet(passphrase)
@@ -207,7 +205,7 @@ func (vsp *VSP) runTicketBuyer(ctx context.Context, balanceToMaintain int64, pas
 				return err
 			}
 			if rp != nil {
-				log.Debugf("Skipping autobuyer actions: transactions are not synced on Wallet: %s", vsp.w.Name)
+				log.Debugf("[%d] Skipping autobuyer actions: transactions are not synced", vsp.w.ID)
 				continue
 			}
 
@@ -237,7 +235,7 @@ func (vsp *VSP) runTicketBuyer(ctx context.Context, balanceToMaintain int64, pas
 				// blocks from now, with the next block containing the split transaction
 				// that the ticket purchase spends.
 				if height+2 == nextIntervalStart {
-					log.Debugf("Skipping purchase: next sdiff interval starts soon")
+					log.Debugf("[%d] Skipping purchase: next sdiff interval starts soon", vsp.w.ID)
 					continue
 				}
 				// Set expiry to prevent tickets from being mined in the next
@@ -260,7 +258,7 @@ func (vsp *VSP) runTicketBuyer(ctx context.Context, balanceToMaintain int64, pas
 
 			spendable := bal.Spendable
 			if spendable < balanceToMaintain {
-				log.Debugf("Skipping purchase: low available balance on Wallet: %s", wal.Name)
+				log.Debugf("[%d] Skipping purchase: low available balance", wal.ID)
 				return nil
 			}
 
@@ -272,14 +270,14 @@ func (vsp *VSP) runTicketBuyer(ctx context.Context, balanceToMaintain int64, pas
 
 			buy := int(dcrutil.Amount(spendable) / sdiff)
 			if buy == 0 {
-				log.Debugf("Skipping purchase: low available balance on Wallet: %s", wal.Name)
+				log.Debugf("[%d] Skipping purchase: low available balance", wal.ID)
 				return nil
 			}
 
 			cancelCtx, cancel := context.WithCancel(ctx)
 			cancels = append(cancels, cancel)
-			buyTickets := func() {
-				err := vsp.buyTickets(cancelCtx, passphrase, sdiff, expiry)
+			buyTicket := func() {
+				err := vsp.buyTicket(cancelCtx, passphrase, sdiff, expiry)
 				if err != nil {
 					switch {
 					// silence these errors
@@ -301,15 +299,14 @@ func (vsp *VSP) runTicketBuyer(ctx context.Context, balanceToMaintain int64, pas
 			// start separate ticket purchase for as many tickets that can be purchased
 			// each purchase only buy 1 ticket.
 			for i := 0; i < buy; i++ {
-				go buyTickets()
+				go buyTicket()
 			}
 		}
 	}
 }
 
-// buyTickets purchases one or more tickets depending on the spendable balance of
-// the selected account and the specified minimum balance to maintain.
-func (vsp *VSP) buyTickets(ctx context.Context, passphrase []byte, sdiff dcrutil.Amount, expiry int32) error {
+// buyTicket purchase one ticket per transaction
+func (vsp *VSP) buyTicket(ctx context.Context, passphrase []byte, sdiff dcrutil.Amount, expiry int32) error {
 	ctx, task := trace.NewTask(ctx, "ticketbuyer.buy")
 	defer task.End()
 
@@ -339,7 +336,7 @@ func (vsp *VSP) buyTickets(ctx context.Context, passphrase []byte, sdiff dcrutil
 	tix, err := wal.Internal().PurchaseTickets(ctx, networkBackend, request)
 	if tix != nil {
 		for _, hash := range tix.TicketHashes {
-			log.Infof("Purchased ticket %v at stake difficulty %v from wallet: %s", hash, sdiff, wal.Name)
+			log.Infof("[%d] Purchased ticket %v at stake difficulty %v", wal.ID, hash, sdiff)
 		}
 	}
 
@@ -348,8 +345,8 @@ func (vsp *VSP) buyTickets(ctx context.Context, passphrase []byte, sdiff dcrutil
 
 // IsAutoTicketsPurchaseActive returns true if ticket buyer is active
 func (wallet *Wallet) IsAutoTicketsPurchaseActive() bool {
-	wallet.cancelAutoTicketBuyerMux.Lock()
-	defer wallet.cancelAutoTicketBuyerMux.Unlock()
+	wallet.cancelAutoTicketBuyerMu.Lock()
+	defer wallet.cancelAutoTicketBuyerMu.Unlock()
 	return wallet.cancelAutoTicketBuyer != nil
 }
 
@@ -360,17 +357,15 @@ func (mw *MultiWallet) StopAutoTicketsPurchase(walletID int) error {
 		return errors.New(ErrNotExist)
 	}
 
-	wallet.cancelAutoTicketBuyerMux.Lock()
-	cancelFunc := wallet.cancelAutoTicketBuyer
-	wallet.cancelAutoTicketBuyerMux.Unlock()
-	if cancelFunc == nil {
+	wallet.cancelAutoTicketBuyerMu.Lock()
+	if wallet.cancelAutoTicketBuyer == nil {
+		wallet.cancelAutoTicketBuyerMu.Unlock()
 		return errors.New(ErrInvalid)
 	}
 
-	wallet.cancelAutoTicketBuyerMux.Lock()
 	wallet.cancelAutoTicketBuyer()
 	wallet.cancelAutoTicketBuyer = nil
-	wallet.cancelAutoTicketBuyerMux.Unlock()
+	wallet.cancelAutoTicketBuyerMu.Unlock()
 	return nil
 }
 
@@ -819,15 +814,15 @@ func (mw *MultiWallet) getInfo(host string) (*VspInfoResponse, error) {
 	return vspInfo, nil
 }
 
-// SetAutoTicketsBuyerConfig set ticket buyer configuration for a particular wallet
+// SetAutoTicketsBuyerConfig set ticket buyer config for a selected wallet
 func (wallet *Wallet) SetAutoTicketsBuyerConfig(vspHost string, purchaseAccount int32, amountToMaintain int64) {
 	wallet.SetLongConfigValueForKey(TicketBuyerATMConfigKey, amountToMaintain)
 	wallet.SetInt32ConfigValueForKey(TicketBuyerAccountConfigKey, purchaseAccount)
 	wallet.SetStringConfigValueForKey(TicketBuyerVSPHostConfigKey, vspHost)
 }
 
-// GetAutoTicketsBuyerConfig gets ticekt buyer config for a selected wallet
-func (wallet *Wallet) GetAutoTicketsBuyerConfig() *TicketBuyerConfig {
+// AutoTicketsBuyerConfig gets ticekt buyer config for a selected wallet
+func (wallet *Wallet) AutoTicketsBuyerConfig() *TicketBuyerConfig {
 	btm := wallet.ReadLongConfigValueForKey(TicketBuyerATMConfigKey, -1)
 	accNum := wallet.ReadInt32ConfigValueForKey(TicketBuyerAccountConfigKey, -1)
 	vspHost := wallet.ReadStringConfigValueForKey(TicketBuyerVSPHostConfigKey, "")
@@ -845,7 +840,7 @@ func (wallet *Wallet) TicketBuyerConfigIsSet() bool {
 	return wallet.ReadStringConfigValueForKey(TicketBuyerVSPHostConfigKey, "") != ""
 }
 
-// ClearTicketBuyerConfig clear all save ticket buyer config for a selected wallet
+// ClearTicketBuyerConfig clears saved ticket buyer config for a selected wallet
 func (mw *MultiWallet) ClearTicketBuyerConfig(walletID int) error {
 	wallet := mw.WalletWithID(walletID)
 	if wallet == nil {
