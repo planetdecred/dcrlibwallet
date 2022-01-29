@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
 	"decred.org/dcrwallet/v2/errors"
@@ -39,6 +40,8 @@ type Wallet struct {
 	cancelFuncs        []context.CancelFunc
 	cancelAccountMixer context.CancelFunc
 
+	cancelAutoTicketBuyerMu sync.Mutex
+	cancelAutoTicketBuyer   context.CancelFunc
 	// setUserConfigValue saves the provided key-value pair to a config database.
 	// This function is ideally assigned when the `wallet.prepare` method is
 	// called from a MultiWallet instance.
@@ -204,12 +207,6 @@ func (wallet *Wallet) UnlockWallet(privPass []byte) error {
 	if !ok {
 		return fmt.Errorf("wallet has not been loaded")
 	}
-
-	defer func() {
-		for i := range privPass {
-			privPass[i] = 0
-		}
-	}()
 
 	ctx, _ := wallet.shutdownContextWithCancel()
 	err := loadedWallet.Unlock(ctx, privPass, nil)

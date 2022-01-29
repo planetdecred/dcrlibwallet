@@ -514,4 +514,16 @@ type PendingFee struct {
 	FeeTx             *wire.MsgTx
 }
 
+type VSPInfo struct {
+	Host string
+	Info *VspInfoResponse
+}
+
+type TicketBuyerConfig struct {
+	VspHost           string
+	WalletID          int
+	PurchaseAccount   int32
+	BalanceToMaintain int64
+}
+
 /** end vspd-related types */

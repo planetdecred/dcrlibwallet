@@ -6,6 +6,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"runtime/trace"
 	"strings"
 	"sync"
 	"time"
@@ -35,20 +38,21 @@ type VSP struct {
 	changeAccount   uint32
 	chainParams     *chaincfg.Params
 
-	*vspClient
-	ctx context.Context
+	client *vspClient
+	ctx    context.Context
 
 	ticketToFeeLock sync.Mutex
 	ticketsToFees   map[chainhash.Hash]PendingFee
 }
 
+// NewVSPClient starts a new vsp client
 func (mw *MultiWallet) NewVSPClient(vspHost string, walletID int, purchaseAccount uint32) (*VSP, error) {
 	sourceWallet := mw.WalletWithID(walletID)
 	if sourceWallet == nil {
 		return nil, fmt.Errorf("wallet doesn't exist")
 	}
 
-	v := &VSP{
+	vsp := &VSP{
 		w:               sourceWallet,
 		purchaseAccount: purchaseAccount,
 		changeAccount:   purchaseAccount,
@@ -57,23 +61,23 @@ func (mw *MultiWallet) NewVSPClient(vspHost string, walletID int, purchaseAccoun
 		ticketsToFees: make(map[chainhash.Hash]PendingFee),
 	}
 
-	ctx, cancel := mw.contextWithShutdownCancel()
-	mw.cancelFuncs = append(mw.cancelFuncs, cancel)
+	ctx, _ := mw.contextWithShutdownCancel()
 
-	v.vspClient = newVSPClient(vspHost, nil, sourceWallet.Internal())
-	vspInfo, err := v.GetInfo(ctx)
+	vsp.ctx = ctx
+	vsp.client = newVSPClient(vspHost, nil, sourceWallet.Internal())
+	vspInfo, err := vsp.GetInfo(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	v.ctx = ctx
-	v.vspClient.pub = vspInfo.PubKey
-	return v, nil
+	vsp.client.pub = vspInfo.PubKey
+	return vsp, nil
 }
 
-func (v *VSP) PoolFee(ctx context.Context) (float64, error) {
+//  PoolFee returns the vsp fee percentage.
+func (vsp *VSP) PoolFee(ctx context.Context) (float64, error) {
 	var vspInfo VspInfoResponse
-	err := v.vspClient.get(ctx, apiVSPInfo, &vspInfo)
+	err := vsp.client.get(ctx, apiVSPInfo, &vspInfo)
 	if err != nil {
 		return -1, err
 	}
@@ -81,28 +85,28 @@ func (v *VSP) PoolFee(ctx context.Context) (float64, error) {
 }
 
 // PurchaseStakeTickets purchases the number of tickets passed as an argument and pays the fees for the tickets
-func (v *VSP) PurchaseTickets(ticketCount, expiryBlocks int32, passphrase []byte) error {
-	err := v.w.UnlockWallet(passphrase)
+func (vsp *VSP) PurchaseTickets(ticketCount, expiryBlocks int32, passphrase []byte) error {
+	err := vsp.w.UnlockWallet(passphrase)
 	if err != nil {
 		return translateError(err)
 	}
-	defer v.w.LockWallet()
+	defer vsp.w.LockWallet()
 
 	request := &w.PurchaseTicketsRequest{
 		Count:                int(ticketCount),
-		SourceAccount:        v.purchaseAccount,
-		Expiry:               v.w.GetBestBlock() + expiryBlocks,
+		SourceAccount:        vsp.purchaseAccount,
+		Expiry:               vsp.w.GetBestBlock() + expiryBlocks,
 		MinConf:              DefaultRequiredConfirmations,
-		VSPFeeProcess:        v.PoolFee,
-		VSPFeePaymentProcess: v.ProcessFee,
+		VSPFeeProcess:        vsp.PoolFee,
+		VSPFeePaymentProcess: vsp.ProcessFee,
 	}
 
-	networkBackend, err := v.w.Internal().NetworkBackend()
+	networkBackend, err := vsp.w.Internal().NetworkBackend()
 	if err != nil {
 		return err
 	}
 
-	_, err = v.w.Internal().PurchaseTickets(v.ctx, networkBackend, request)
+	_, err = vsp.w.Internal().PurchaseTickets(vsp.ctx, networkBackend, request)
 	if err != nil {
 		return err
 	}
@@ -110,12 +114,267 @@ func (v *VSP) PurchaseTickets(ticketCount, expiryBlocks int32, passphrase []byte
 	return nil
 }
 
+// StartTicketBuyer starts the automatic ticket buyer.
+func (vsp *VSP) StartTicketBuyer(balanceToMaintain int64, passphrase []byte) error {
+	if balanceToMaintain < 0 {
+		return errors.New("Negative balance to maintain given")
+	}
+
+	vsp.w.cancelAutoTicketBuyerMu.Lock()
+	if vsp.w.cancelAutoTicketBuyer != nil {
+		vsp.w.cancelAutoTicketBuyerMu.Unlock()
+		return errors.New("Ticket buyer already running")
+	}
+
+	ctx, cancel := vsp.w.shutdownContextWithCancel()
+
+	vsp.w.cancelAutoTicketBuyer = cancel
+	vsp.w.cancelAutoTicketBuyerMu.Unlock()
+
+	if len(passphrase) > 0 && vsp.w.IsLocked() {
+		err := vsp.w.UnlockWallet(passphrase)
+		if err != nil {
+			return translateError(err)
+		}
+	}
+
+	go func() {
+		log.Infof("[%d] Running ticket buyer", vsp.w.ID)
+
+		err := vsp.runTicketBuyer(ctx, balanceToMaintain, passphrase)
+		if err != nil {
+			if ctx.Err() != nil {
+				log.Errorf("[%d] TicketBuyer instance canceled", vsp.w.ID)
+			} else {
+				log.Errorf("[%d] Ticket buyer instance errored: %v", vsp.w.ID, err)
+			}
+		}
+
+		vsp.w.cancelAutoTicketBuyerMu.Lock()
+		vsp.w.cancelAutoTicketBuyer = nil
+		vsp.w.cancelAutoTicketBuyerMu.Unlock()
+	}()
+
+	return nil
+}
+
+// runTicketBuyer executes the ticket buyer. If the private passphrase is
+// incorrect, or ever becomes incorrect due to a wallet passphrase change,
+// runTicketBuyer exits with an errors.Passphrase error.
+func (vsp *VSP) runTicketBuyer(ctx context.Context, balanceToMaintain int64, passphrase []byte) error {
+	if len(passphrase) > 0 && vsp.w.IsLocked() {
+		err := vsp.w.UnlockWallet(passphrase)
+		if err != nil {
+			return translateError(err)
+		}
+	}
+
+	c := vsp.w.Internal().NtfnServer.MainTipChangedNotifications()
+	defer c.Done()
+
+	ctx, outerCancel := context.WithCancel(ctx)
+	defer outerCancel()
+	var fatal error
+	var fatalMu sync.Mutex
+
+	var nextIntervalStart, expiry int32
+	var cancels []func()
+	for {
+		select {
+		case <-ctx.Done():
+			defer outerCancel()
+			fatalMu.Lock()
+			err := fatal
+			fatalMu.Unlock()
+			if err != nil {
+				return err
+			}
+			return ctx.Err()
+		case n := <-c.C:
+			if len(n.AttachedBlocks) == 0 {
+				continue
+			}
+
+			tip := n.AttachedBlocks[len(n.AttachedBlocks)-1]
+			w := vsp.w.Internal()
+
+			// Don't perform any actions while transactions are not synced through
+			// the tip block.
+			rp, err := w.RescanPoint(ctx)
+			if err != nil {
+				return err
+			}
+			if rp != nil {
+				log.Debugf("[%d] Skipping autobuyer actions: transactions are not synced", vsp.w.ID)
+				continue
+			}
+
+			tipHeader, err := w.BlockHeader(ctx, tip)
+			if err != nil {
+				log.Error(err)
+				continue
+			}
+			height := int32(tipHeader.Height)
+
+			// Cancel any ongoing ticket purchases which are buying
+			// at an old ticket price or are no longer able to
+			// create mined tickets the window.
+			if height+2 >= nextIntervalStart {
+				for i, cancel := range cancels {
+					cancel()
+					cancels[i] = nil
+				}
+				cancels = cancels[:0]
+
+				intervalSize := int32(w.ChainParams().StakeDiffWindowSize)
+				currentInterval := height / intervalSize
+				nextIntervalStart = (currentInterval + 1) * intervalSize
+
+				// Skip this purchase when no more tickets may be purchased in the interval and
+				// the next sdiff is unknown.  The earliest any ticket may be mined is two
+				// blocks from now, with the next block containing the split transaction
+				// that the ticket purchase spends.
+				if height+2 == nextIntervalStart {
+					log.Debugf("[%d] Skipping purchase: next sdiff interval starts soon", vsp.w.ID)
+					continue
+				}
+				// Set expiry to prevent tickets from being mined in the next
+				// sdiff interval.  When the next block begins the new interval,
+				// the ticket is being purchased for the next interval; therefore
+				// increment expiry by a full sdiff window size to prevent it
+				// being mined in the interval after the next.
+				expiry = nextIntervalStart
+				if height+1 == nextIntervalStart {
+					expiry += intervalSize
+				}
+			}
+
+			wal := vsp.w
+			// Get the account balance to determine how many tickets to buy
+			bal, err := wal.GetAccountBalance(int32(vsp.purchaseAccount))
+			if err != nil {
+				return err
+			}
+
+			spendable := bal.Spendable
+			if spendable < balanceToMaintain {
+				log.Debugf("[%d] Skipping purchase: low available balance", wal.ID)
+				return nil
+			}
+
+			spendable -= balanceToMaintain
+			sdiff, err := wal.Internal().NextStakeDifficultyAfterHeader(ctx, tipHeader)
+			if err != nil {
+				return err
+			}
+
+			buy := int(dcrutil.Amount(spendable) / sdiff)
+			if buy == 0 {
+				log.Debugf("[%d] Skipping purchase: low available balance", wal.ID)
+				return nil
+			}
+
+			cancelCtx, cancel := context.WithCancel(ctx)
+			cancels = append(cancels, cancel)
+			buyTicket := func() {
+				err := vsp.buyTicket(cancelCtx, passphrase, sdiff, expiry)
+				if err != nil {
+					switch {
+					// silence these errors
+					case errors.Is(err, errors.InsufficientBalance):
+					case errors.Is(err, context.Canceled):
+					case errors.Is(err, context.DeadlineExceeded):
+					default:
+						log.Errorf("[%d] Ticket purchasing failed: %v", wal.ID, err)
+					}
+					if errors.Is(err, errors.Passphrase) {
+						fatalMu.Lock()
+						fatal = err
+						fatalMu.Unlock()
+						outerCancel()
+					}
+				}
+			}
+
+			// start separate ticket purchase for as many tickets that can be purchased
+			// each purchase only buy 1 ticket.
+			for i := 0; i < buy; i++ {
+				go buyTicket()
+			}
+		}
+	}
+}
+
+// buyTicket purchase one ticket per transaction
+func (vsp *VSP) buyTicket(ctx context.Context, passphrase []byte, sdiff dcrutil.Amount, expiry int32) error {
+	ctx, task := trace.NewTask(ctx, "ticketbuyer.buy")
+	defer task.End()
+
+	wal := vsp.w
+
+	if len(passphrase) > 0 && wal.IsLocked() {
+		err := wal.UnlockWallet(passphrase)
+		if err != nil {
+			return translateError(err)
+		}
+	}
+
+	request := &w.PurchaseTicketsRequest{
+		Count:                1, // prevent combining multi ticket in one transaction. Buy max 1 per txns
+		SourceAccount:        vsp.purchaseAccount,
+		Expiry:               expiry,
+		MinConf:              wal.RequiredConfirmations(),
+		VSPFeeProcess:        vsp.PoolFee,
+		VSPFeePaymentProcess: vsp.ProcessFee,
+	}
+
+	networkBackend, err := wal.Internal().NetworkBackend()
+	if err != nil {
+		return err
+	}
+
+	tix, err := wal.Internal().PurchaseTickets(ctx, networkBackend, request)
+	if tix != nil {
+		for _, hash := range tix.TicketHashes {
+			log.Infof("[%d] Purchased ticket %v at stake difficulty %v", wal.ID, hash, sdiff)
+		}
+	}
+
+	return err
+}
+
+// IsAutoTicketsPurchaseActive returns true if ticket buyer is active
+func (wallet *Wallet) IsAutoTicketsPurchaseActive() bool {
+	wallet.cancelAutoTicketBuyerMu.Lock()
+	defer wallet.cancelAutoTicketBuyerMu.Unlock()
+	return wallet.cancelAutoTicketBuyer != nil
+}
+
+// StopAutoTicketsPurchase stops the active ticket buyer
+func (mw *MultiWallet) StopAutoTicketsPurchase(walletID int) error {
+	wallet := mw.WalletWithID(walletID)
+	if wallet == nil {
+		return errors.New(ErrNotExist)
+	}
+
+	wallet.cancelAutoTicketBuyerMu.Lock()
+	if wallet.cancelAutoTicketBuyer == nil {
+		wallet.cancelAutoTicketBuyerMu.Unlock()
+		return errors.New(ErrInvalid)
+	}
+
+	wallet.cancelAutoTicketBuyer()
+	wallet.cancelAutoTicketBuyer = nil
+	wallet.cancelAutoTicketBuyerMu.Unlock()
+	return nil
+}
+
 // ProcessFee
-func (v *VSP) ProcessFee(ctx context.Context, ticketHash *chainhash.Hash, feeTx *wire.MsgTx) error {
+func (vsp *VSP) ProcessFee(ctx context.Context, ticketHash *chainhash.Hash, feeTx *wire.MsgTx) error {
 	var feeAmount dcrutil.Amount
 	var err error
 	for i := 0; i < 2; i++ {
-		feeAmount, err = v.GetFeeAddress(ctx, *ticketHash)
+		feeAmount, err = vsp.GetFeeAddress(ctx, *ticketHash)
 		if err == nil {
 			break
 		}
@@ -134,7 +393,7 @@ func (v *VSP) ProcessFee(ctx context.Context, ticketHash *chainhash.Hash, feeTx 
 	// outputs would already be reserved.
 	if len(feeTx.TxIn) == 0 {
 		const minconf = 1
-		inputs, err := v.w.Internal().ReserveOutputsForAmount(ctx, v.purchaseAccount, feeAmount, minconf)
+		inputs, err := vsp.w.Internal().ReserveOutputsForAmount(ctx, vsp.purchaseAccount, feeAmount, minconf)
 		if err != nil {
 			return fmt.Errorf("unable to reserve enough output value to "+
 				"pay VSP fee for ticket %v: %w", ticketHash, err)
@@ -146,7 +405,7 @@ func (v *VSP) ProcessFee(ctx context.Context, ticketHash *chainhash.Hash, feeTx 
 		// state, so there is no need to leave the outputs locked.
 		defer func() {
 			for _, in := range inputs {
-				v.w.Internal().UnlockOutpoint(&in.OutPoint.Hash, in.OutPoint.Index)
+				vsp.w.Internal().UnlockOutpoint(&in.OutPoint.Hash, in.OutPoint.Index)
 			}
 		}()
 	}
@@ -161,50 +420,50 @@ func (v *VSP) ProcessFee(ctx context.Context, ticketHash *chainhash.Hash, feeTx 
 		return err
 	}
 
-	err = v.CreateFeeTx(ctx, *ticketHash, feeTx)
+	err = vsp.CreateFeeTx(ctx, *ticketHash, feeTx)
 	if err != nil {
 		return err
 	}
 	// set fee tx as unpublished, because it will be published by the vsp.
 	feeHash := feeTx.TxHash()
-	err = v.w.Internal().AddTransaction(ctx, feeTx, nil)
+	err = vsp.w.Internal().AddTransaction(ctx, feeTx, nil)
 	if err != nil {
 		return err
 	}
 
-	err = v.w.Internal().SetPublished(ctx, &feeHash, false)
+	err = vsp.w.Internal().SetPublished(ctx, &feeHash, false)
 	if err != nil {
 		return err
 	}
 
-	err = v.PayFee(ctx, *ticketHash, feeTx)
+	err = vsp.PayFee(ctx, *ticketHash, feeTx)
 	if err != nil {
 		return err
 	}
 
-	err = v.w.Internal().UpdateVspTicketFeeToPaid(ctx, ticketHash, &feeHash, v.url, v.pub)
+	err = vsp.w.Internal().UpdateVspTicketFeeToPaid(ctx, ticketHash, &feeHash, vsp.client.url, vsp.client.pub)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (v *VSP) CreateFeeTx(ctx context.Context, ticketHash chainhash.Hash, tx *wire.MsgTx) error {
+func (vsp *VSP) CreateFeeTx(ctx context.Context, ticketHash chainhash.Hash, tx *wire.MsgTx) error {
 	if tx == nil {
 		tx = wire.NewMsgTx()
 	}
 
-	v.ticketToFeeLock.Lock()
-	feeInfo, exists := v.ticketsToFees[ticketHash]
-	v.ticketToFeeLock.Unlock()
+	vsp.ticketToFeeLock.Lock()
+	feeInfo, exists := vsp.ticketsToFees[ticketHash]
+	vsp.ticketToFeeLock.Unlock()
 	if !exists {
-		_, err := v.GetFeeAddress(ctx, ticketHash)
+		_, err := vsp.GetFeeAddress(ctx, ticketHash)
 		if err != nil {
 			return err
 		}
-		v.ticketToFeeLock.Lock()
-		feeInfo, exists = v.ticketsToFees[ticketHash]
-		v.ticketToFeeLock.Unlock()
+		vsp.ticketToFeeLock.Lock()
+		feeInfo, exists = vsp.ticketsToFees[ticketHash]
+		vsp.ticketToFeeLock.Unlock()
 		if !exists {
 			return fmt.Errorf("failed to find fee info for ticket %v", ticketHash)
 		}
@@ -213,7 +472,7 @@ func (v *VSP) CreateFeeTx(ctx context.Context, ticketHash chainhash.Hash, tx *wi
 	// Reserve outputs to pay for fee if it hasn't already been reserved
 	if len(tx.TxIn) == 0 {
 		const minConf = 1
-		inputs, err := v.w.Internal().ReserveOutputsForAmount(ctx, v.purchaseAccount, feeInfo.FeeAmount, minConf)
+		inputs, err := vsp.w.Internal().ReserveOutputsForAmount(ctx, vsp.purchaseAccount, feeInfo.FeeAmount, minConf)
 		if err != nil {
 			return fmt.Errorf("unable to reserve enough output value to "+
 				"pay VSP fee for ticket %v: %w", ticketHash, err)
@@ -225,7 +484,7 @@ func (v *VSP) CreateFeeTx(ctx context.Context, ticketHash chainhash.Hash, tx *wi
 
 		defer func() {
 			for _, in := range inputs {
-				v.w.Internal().UnlockOutpoint(&in.OutPoint.Hash, in.OutPoint.Index)
+				vsp.w.Internal().UnlockOutpoint(&in.OutPoint.Hash, in.OutPoint.Index)
 			}
 		}()
 	}
@@ -242,7 +501,7 @@ func (v *VSP) CreateFeeTx(ctx context.Context, ticketHash chainhash.Hash, tx *wi
 	}
 
 	_, feeScript := feeInfo.FeeAddress.PaymentScript()
-	addr, err := v.w.Internal().NewChangeAddress(ctx, v.changeAccount)
+	addr, err := vsp.w.Internal().NewChangeAddress(ctx, vsp.changeAccount)
 	if err != nil {
 		return errors.Errorf("failed to get new change address: %v", err)
 	}
@@ -257,7 +516,7 @@ func (v *VSP) CreateFeeTx(ctx context.Context, ticketHash chainhash.Hash, tx *wi
 	}
 
 	tx.TxOut = append(tx.TxOut[:0], wire.NewTxOut(int64(feeInfo.FeeAmount), feeScript))
-	feeRate := v.w.Internal().RelayFee()
+	feeRate := vsp.w.Internal().RelayFee()
 	scriptSizes := make([]int, len(tx.TxIn))
 	for i := range scriptSizes {
 		scriptSizes[i] = txsizes.RedeemP2PKHSigScriptSize
@@ -273,7 +532,7 @@ func (v *VSP) CreateFeeTx(ctx context.Context, ticketHash chainhash.Hash, tx *wi
 		txauthor.RandomizeOutputPosition(tx.TxOut, 0)
 	}
 
-	sigErrs, err := v.w.Internal().SignTransaction(ctx, tx, txscript.SigHashAll, nil, nil, nil)
+	sigErrs, err := vsp.w.Internal().SignTransaction(ctx, tx, txscript.SigHashAll, nil, nil, nil)
 	if err != nil {
 		for _, sigErr := range sigErrs {
 			log.Errorf("\t%v", sigErr)
@@ -286,25 +545,25 @@ func (v *VSP) CreateFeeTx(ctx context.Context, ticketHash chainhash.Hash, tx *wi
 
 // PayFee receives an unsigned fee tx, signs it and make a pays fee request to
 // the vsp, so the ticket get registered.
-func (v *VSP) PayFee(ctx context.Context, ticketHash chainhash.Hash, feeTx *wire.MsgTx) error {
+func (vsp *VSP) PayFee(ctx context.Context, ticketHash chainhash.Hash, feeTx *wire.MsgTx) error {
 	if feeTx == nil {
 		return fmt.Errorf("nil fee tx")
 	}
 
-	v.ticketToFeeLock.Lock()
-	feeInfo, exists := v.ticketsToFees[ticketHash]
-	v.ticketToFeeLock.Unlock()
+	vsp.ticketToFeeLock.Lock()
+	feeInfo, exists := vsp.ticketsToFees[ticketHash]
+	vsp.ticketToFeeLock.Unlock()
 	if !exists {
 		return fmt.Errorf("call GetFeeAddress first")
 	}
 
-	votingKeyWIF, err := v.w.Internal().DumpWIFPrivateKey(ctx, feeInfo.VotingAddress)
+	votingKeyWIF, err := vsp.w.Internal().DumpWIFPrivateKey(ctx, feeInfo.VotingAddress)
 	if err != nil {
 		return errors.Errorf("failed to retrieve privkey for %v: %v", feeInfo.VotingAddress, err)
 	}
 
 	// Retrieve voting preferences
-	agendaChoices, _, err := v.w.Internal().AgendaChoices(ctx, &ticketHash)
+	agendaChoices, _, err := vsp.w.Internal().AgendaChoices(ctx, &ticketHash)
 	if err != nil {
 		return errors.Errorf("failed to retrieve agenda choices for %v: %v", ticketHash, err)
 	}
@@ -326,7 +585,7 @@ func (v *VSP) PayFee(ctx context.Context, ticketHash chainhash.Hash, feeTx *wire
 		return err
 	}
 
-	err = v.vspClient.post(ctx, "/api/v3/payfee", feeInfo.CommitmentAddress,
+	err = vsp.client.post(ctx, "/api/v3/payfee", feeInfo.CommitmentAddress,
 		&payfeeResponse, json.RawMessage(requestBody))
 	if err != nil {
 		return err
@@ -337,18 +596,18 @@ func (v *VSP) PayFee(ctx context.Context, ticketHash chainhash.Hash, feeTx *wire
 		return fmt.Errorf("server response contains differing request")
 	}
 	// TODO - validate server timestamp?
-	v.ticketToFeeLock.Lock()
+	vsp.ticketToFeeLock.Lock()
 	feeInfo.FeeTx = feeTx
-	v.ticketsToFees[ticketHash] = feeInfo
-	v.ticketToFeeLock.Unlock()
+	vsp.ticketsToFees[ticketHash] = feeInfo
+	vsp.ticketToFeeLock.Unlock()
 
 	return nil
 }
 
 // GetInfo returns the information of the specified VSP base URL
-func (v *VSP) GetInfo(ctx context.Context) (*VspInfoResponse, error) {
+func (vsp *VSP) GetInfo(ctx context.Context) (*VspInfoResponse, error) {
 	var response VspInfoResponse
-	err := v.vspClient.get(ctx, apiVSPInfo, &response)
+	err := vsp.client.get(ctx, apiVSPInfo, &response)
 	if err != nil {
 		return nil, err
 	}
@@ -356,17 +615,17 @@ func (v *VSP) GetInfo(ctx context.Context) (*VspInfoResponse, error) {
 	return &response, nil
 }
 
-func (v *VSP) tx(hash *chainhash.Hash) (*wire.MsgTx, error) {
-	txs, _, err := v.w.Internal().GetTransactionsByHashes(v.ctx, []*chainhash.Hash{hash})
+func (vsp *VSP) tx(hash *chainhash.Hash) (*wire.MsgTx, error) {
+	txs, _, err := vsp.w.Internal().GetTransactionsByHashes(vsp.ctx, []*chainhash.Hash{hash})
 	if err != nil {
 		return nil, err
 	}
 	return txs[0], nil
 }
 
-func (v *VSP) GetFeeAddress(ctx context.Context, ticketHash chainhash.Hash) (dcrutil.Amount, error) {
+func (vsp *VSP) GetFeeAddress(ctx context.Context, ticketHash chainhash.Hash) (dcrutil.Amount, error) {
 	// Fetch ticket
-	txs, _, err := v.w.Internal().GetTransactionsByHashes(ctx, []*chainhash.Hash{&ticketHash})
+	txs, _, err := vsp.w.Internal().GetTransactionsByHashes(ctx, []*chainhash.Hash{&ticketHash})
 	if err != nil {
 		return 0, errors.Errorf("failed to retrieve ticket %v: %v", ticketHash, err)
 	}
@@ -375,7 +634,7 @@ func (v *VSP) GetFeeAddress(ctx context.Context, ticketHash chainhash.Hash) (dcr
 	// Fetch parent transaction
 	parentHash := ticketTx.TxIn[0].PreviousOutPoint.Hash
 	const scriptVersion = 0
-	_, addrs := stdscript.ExtractAddrs(scriptVersion, ticketTx.TxOut[0].PkScript, v.w.Internal().ChainParams())
+	_, addrs := stdscript.ExtractAddrs(scriptVersion, ticketTx.TxOut[0].PkScript, vsp.w.Internal().ChainParams())
 	if err != nil {
 		return 0, errors.Errorf("failed to extract stake submission address from %v: %v", ticketHash, err)
 	}
@@ -384,20 +643,20 @@ func (v *VSP) GetFeeAddress(ctx context.Context, ticketHash chainhash.Hash) (dcr
 	}
 	votingAddress := addrs[0]
 
-	commitmentAddr, err := stake.AddrFromSStxPkScrCommitment(ticketTx.TxOut[1].PkScript, v.chainParams)
+	commitmentAddr, err := stake.AddrFromSStxPkScrCommitment(ticketTx.TxOut[1].PkScript, vsp.chainParams)
 	if err != nil {
 		return 0, errors.Errorf("failed to extract script addr from %v: %v", ticketHash, err)
 	}
 
 	// Fetch ticket and its parent transaction (typically, a split
 	// transaction).
-	parent, err := v.tx(&parentHash)
+	parent, err := vsp.tx(&parentHash)
 	if err != nil {
 		return 0, fmt.Errorf("failed to retrieve parent %v of ticket: %w",
 			parentHash, err)
 	}
 
-	ticket, err := v.tx(&ticketHash)
+	ticket, err := vsp.tx(&ticketHash)
 	if err != nil {
 		return 0, fmt.Errorf("failed to retrieve ticket: %w", err)
 	}
@@ -412,7 +671,7 @@ func (v *VSP) GetFeeAddress(ctx context.Context, ticketHash chainhash.Hash) (dcr
 	if err != nil {
 		return 0, err
 	}
-	err = v.vspClient.post(ctx, "/api/v3/feeaddress", commitmentAddr, &feeResponse,
+	err = vsp.client.post(ctx, "/api/v3/feeaddress", commitmentAddr, &feeResponse,
 		json.RawMessage(requestBody))
 	if err != nil {
 		return 0, err
@@ -424,7 +683,7 @@ func (v *VSP) GetFeeAddress(ctx context.Context, ticketHash chainhash.Hash) (dcr
 	}
 	// TODO - validate server timestamp?
 
-	feeAddress, err := stdaddr.DecodeAddress(feeResponse.FeeAddress, v.w.Internal().ChainParams())
+	feeAddress, err := stdaddr.DecodeAddress(feeResponse.FeeAddress, vsp.w.Internal().ChainParams())
 	if err != nil {
 		return 0, fmt.Errorf("server fee address invalid: %v", err)
 	}
@@ -440,16 +699,186 @@ func (v *VSP) GetFeeAddress(ctx context.Context, ticketHash chainhash.Hash) (dcr
 		return 0, fmt.Errorf("server fee amount too high: %v > %v", feeAmount, maxFee)
 	}
 
-	v.ticketToFeeLock.Lock()
-	v.ticketsToFees[ticketHash] = PendingFee{
+	vsp.ticketToFeeLock.Lock()
+	vsp.ticketsToFees[ticketHash] = PendingFee{
 		CommitmentAddress: commitmentAddr,
 		VotingAddress:     votingAddress,
 		FeeAddress:        feeAddress,
 		FeeAmount:         feeAmount,
 	}
-	v.ticketToFeeLock.Unlock()
+	vsp.ticketToFeeLock.Unlock()
 
 	return feeAmount, nil
+}
+
+type valueOut struct {
+	Remember string
+	List     []string
+}
+
+func (mw *MultiWallet) GetVSPList(net string) {
+	var valueOut valueOut
+
+	mw.ReadUserConfigValue(VSPHostConfigKey, &valueOut)
+	var loadedVSP []*VSPInfo
+
+	for _, host := range valueOut.List {
+		info, err := mw.getInfo(host)
+		if err == nil {
+			loadedVSP = append(loadedVSP, &VSPInfo{
+				Host: host,
+				Info: info,
+			})
+		}
+	}
+
+	l, _ := getInitVSPInfo("https://api.decred.org/?c=vsp")
+	for h, v := range l {
+		if strings.Contains(net, v.Network) {
+			loadedVSP = append(loadedVSP, &VSPInfo{
+				Host: fmt.Sprintf("https://%s", h),
+				Info: v,
+			})
+		}
+	}
+
+	mw.VspList = loadedVSP
+}
+
+func (mw *MultiWallet) AddVSP(host, net string) error {
+	var valueOut valueOut
+
+	// check if host already exists
+	_ = mw.ReadUserConfigValue(VSPHostConfigKey, &valueOut)
+	for _, vsp := range valueOut.List {
+		if vsp == host {
+			return fmt.Errorf("existing host %s", host)
+		}
+	}
+
+	// validate host network
+	info, err := mw.getInfo(host)
+	if err != nil {
+		return err
+	}
+
+	if info.Network != net {
+		return fmt.Errorf("invalid net %s", info.Network)
+	}
+
+	valueOut.List = append(valueOut.List, host)
+	mw.SaveUserConfigValue(VSPHostConfigKey, valueOut)
+	mw.VspList = append(mw.VspList, &VSPInfo{
+		Host: host,
+		Info: info,
+	})
+
+	return nil
+}
+
+func (mw *MultiWallet) GetRememberVSP() string {
+	var valueOut valueOut
+
+	mw.ReadUserConfigValue(VSPHostConfigKey, &valueOut)
+	return valueOut.Remember
+}
+
+func (mw *MultiWallet) RememberVSP(host string) {
+	var valueOut valueOut
+
+	err := mw.ReadUserConfigValue(VSPHostConfigKey, &valueOut)
+	if err != nil {
+		log.Error(err.Error())
+	}
+
+	valueOut.Remember = host
+	mw.SaveUserConfigValue(VSPHostConfigKey, valueOut)
+}
+
+func (mw *MultiWallet) getInfo(host string) (*VspInfoResponse, error) {
+	sourceWallet := mw.WalletWithID(mw.OpenedWalletIDsRaw()[0])
+	if sourceWallet == nil {
+		return nil, fmt.Errorf("wallet doesn't exist")
+	}
+
+	ctx, cancel := mw.contextWithShutdownCancel()
+	mw.cancelFuncs = append(mw.cancelFuncs, cancel)
+
+	vsp := &VSP{}
+	vsp.client = newVSPClient(host, nil, sourceWallet.Internal())
+	vspInfo, err := vsp.GetInfo(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return vspInfo, nil
+}
+
+// SetAutoTicketsBuyerConfig set ticket buyer config for a selected wallet
+func (wallet *Wallet) SetAutoTicketsBuyerConfig(vspHost string, purchaseAccount int32, amountToMaintain int64) {
+	wallet.SetLongConfigValueForKey(TicketBuyerATMConfigKey, amountToMaintain)
+	wallet.SetInt32ConfigValueForKey(TicketBuyerAccountConfigKey, purchaseAccount)
+	wallet.SetStringConfigValueForKey(TicketBuyerVSPHostConfigKey, vspHost)
+}
+
+// AutoTicketsBuyerConfig gets ticekt buyer config for a selected wallet
+func (wallet *Wallet) AutoTicketsBuyerConfig() *TicketBuyerConfig {
+	btm := wallet.ReadLongConfigValueForKey(TicketBuyerATMConfigKey, -1)
+	accNum := wallet.ReadInt32ConfigValueForKey(TicketBuyerAccountConfigKey, -1)
+	vspHost := wallet.ReadStringConfigValueForKey(TicketBuyerVSPHostConfigKey, "")
+
+	return &TicketBuyerConfig{
+		VspHost:           vspHost,
+		PurchaseAccount:   accNum,
+		BalanceToMaintain: btm,
+	}
+}
+
+// TicketBuyerConfigIsSet checks if ticket buyer config has been set for a
+// selected wallet
+func (wallet *Wallet) TicketBuyerConfigIsSet() bool {
+	return wallet.ReadStringConfigValueForKey(TicketBuyerVSPHostConfigKey, "") != ""
+}
+
+// ClearTicketBuyerConfig clears saved ticket buyer config for a selected wallet
+func (mw *MultiWallet) ClearTicketBuyerConfig(walletID int) error {
+	wallet := mw.WalletWithID(walletID)
+	if wallet == nil {
+		return errors.New(ErrNotExist)
+	}
+
+	mw.SetLongConfigValueForKey(TicketBuyerATMConfigKey, -1)
+	mw.SetInt32ConfigValueForKey(TicketBuyerAccountConfigKey, -1)
+	mw.SetStringConfigValueForKey(TicketBuyerVSPHostConfigKey, "")
+
+	return nil
+}
+
+// getInitVSPInfo returns the list information of the VSP
+func getInitVSPInfo(url string) (map[string]*VspInfoResponse, error) {
+	rq := new(http.Client)
+	resp, err := rq.Get((url))
+	if err != nil {
+		return nil, err
+	}
+
+	b, err := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("non 200 response from server: %v", string(b))
+	}
+
+	var vspInfoResponse map[string]*VspInfoResponse
+	err = json.Unmarshal(b, &vspInfoResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	return vspInfoResponse, nil
 }
 
 type marshaler struct {
