@@ -192,6 +192,80 @@ func (wallet *Wallet) PurchaseTickets(account, numTickets int32, vspHost string,
 	return ticketsResponse.TicketHashes, err
 }
 
+// VSPTicketInfo returns vsp-related info for a given ticket. Returns an error
+// if the ticket is not yet assigned to a VSP.
+func (mw *MultiWallet) VSPTicketInfo(walletID int, hash string) (*VSPTicketInfo, error) {
+	wallet := mw.WalletWithID(walletID)
+	if wallet == nil {
+		return nil, fmt.Errorf("no wallet with ID %d", walletID)
+	}
+
+	ticketHash, err := chainhash.NewHashFromStr(hash)
+	if err != nil {
+		return nil, err
+	}
+
+	// Read the VSP info for this ticket from the wallet db.
+	ctx := wallet.shutdownContext()
+	walletTicketInfo, err := wallet.Internal().VSPTicketInfo(ctx, ticketHash)
+	if err != nil {
+		return nil, err
+	}
+
+	ticketInfo := &VSPTicketInfo{
+		VSP:         walletTicketInfo.Host,
+		FeeTxHash:   walletTicketInfo.FeeHash.String(),
+		FeeTxStatus: VSPFeeStatus(walletTicketInfo.FeeTxStatus),
+	}
+
+	// Cannot submit a ticketstatus api request to the VSP if
+	// the wallet is locked. Return just the wallet info.
+	if wallet.IsLocked() {
+		return ticketInfo, nil
+	}
+
+	vspClient, err := wallet.VSPClient(walletTicketInfo.Host, walletTicketInfo.PubKey)
+	if err != nil {
+		log.Warnf("unable to get vsp ticket info for %s: %v", hash, err)
+		return ticketInfo, nil
+	}
+	vspTicketStatus, err := vspClient.TicketStatus(ctx, ticketHash)
+	if err != nil {
+		log.Warnf("unable to get vsp ticket info for %s: %v", hash, err)
+		return ticketInfo, nil
+	}
+
+	// Parse the fee status returned by the vsp.
+	var vspFeeStatus VSPFeeStatus
+	switch vspTicketStatus.FeeTxStatus {
+	case "received": // received but not broadcast
+		vspFeeStatus = VSPFeeProcessStarted
+	case "broadcast": // broadcast but not confirmed
+		vspFeeStatus = VSPFeeProcessPaid
+	case "confirmed": // broadcast and confirmed
+		vspFeeStatus = VSPFeeProcessConfirmed
+	case "error":
+		vspFeeStatus = VSPFeeProcessErrored
+	default:
+		vspFeeStatus = VSPFeeProcessErrored
+		log.Warnf("VSP responded with %v for %v", vspTicketStatus.FeeTxStatus, ticketHash)
+	}
+
+	// Sanity check and log any observed discrepancies.
+	if ticketInfo.FeeTxHash != vspTicketStatus.FeeTxHash {
+		ticketInfo.FeeTxHash = vspTicketStatus.FeeTxHash
+		log.Warnf("wallet fee tx hash %s differs from vsp fee tx hash %s for ticket %s",
+			ticketInfo.FeeTxHash, vspTicketStatus.FeeTxHash, ticketHash)
+	}
+	if ticketInfo.FeeTxStatus != vspFeeStatus {
+		ticketInfo.FeeTxStatus = vspFeeStatus
+		log.Warnf("wallet fee status %s differs from vsp fee status %s for ticket %s",
+			ticketInfo.FeeTxStatus, vspFeeStatus, ticketHash)
+	}
+
+	return ticketInfo, nil
+}
+
 // StartTicketBuyer starts the automatic ticket buyer.
 // TODO: Get config from wallet instead of using params.
 func (wallet *Wallet) StartTicketBuyer(vspHost string, vspPubKey []byte, purchaseAccount int32, balanceToMaintain int64, passphrase []byte) error {

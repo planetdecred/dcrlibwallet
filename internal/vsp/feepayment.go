@@ -614,6 +614,12 @@ type ticketStatus struct {
 	Request         []byte            `json:"request"`
 }
 
+// TicketStatus calls the VSP's ticketstatus API for the provided ticket hash
+// and returns the VSP's response.
+func (c *Client) TicketStatus(ctx context.Context, ticketHash *chainhash.Hash) (*ticketStatus, error) {
+	return c.status(ctx, ticketHash)
+}
+
 func (c *Client) status(ctx context.Context, ticketHash *chainhash.Hash) (*ticketStatus, error) {
 	w := c.Wallet
 	params := w.ChainParams()

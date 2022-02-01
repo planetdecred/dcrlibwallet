@@ -1,6 +1,9 @@
 package dcrlibwallet
 
 import (
+	"fmt"
+
+	"decred.org/dcrwallet/v2/wallet/udb"
 	"github.com/decred/dcrd/dcrutil/v4"
 	"github.com/planetdecred/dcrlibwallet/internal/vsp"
 )
@@ -334,6 +337,52 @@ type TicketBuyerConfig struct {
 	BalanceToMaintain int64
 
 	vspClient *vsp.Client
+}
+
+// VSPFeeStatus represents the current fee status of a ticket.
+type VSPFeeStatus uint8
+
+const (
+	// VSPFeeProcessStarted represents the state which process has being
+	// called but fee still not paid.
+	VSPFeeProcessStarted VSPFeeStatus = iota
+	// VSPFeeProcessPaid represents the state where the process has being
+	// paid, but not published.
+	VSPFeeProcessPaid
+	VSPFeeProcessErrored
+	// VSPFeeProcessConfirmed represents the state where the fee has been
+	// confirmed by the VSP.
+	VSPFeeProcessConfirmed
+)
+
+// String returns a human-readable interpretation of the vsp fee status.
+func (status VSPFeeStatus) String() string {
+	switch udb.FeeStatus(status) {
+	case udb.VSPFeeProcessStarted:
+		return "fee process started"
+	case udb.VSPFeeProcessPaid:
+		return "fee paid"
+	case udb.VSPFeeProcessErrored:
+		return "fee payment errored"
+	case udb.VSPFeeProcessConfirmed:
+		return "fee confirmed by vsp"
+	default:
+		return fmt.Sprintf("invalid fee status %d", status)
+	}
+}
+
+// VSPTicketInfo is information about a ticket that is assigned to a VSP.
+type VSPTicketInfo struct {
+	VSP         string
+	FeeTxHash   string
+	FeeTxStatus VSPFeeStatus
+	// ConfirmedByVSP is nil if the ticket status could not be obtained
+	// from the VSP, false if the VSP hasn't confirmed the fee and true
+	// if the VSP has fully registered the ticket.
+	ConfirmedByVSP *bool
+	// VoteChoices is only set if the ticket status was obtained from the
+	// VSP.
+	VoteChoices map[string]string
 }
 
 /** end ticket-related types */
