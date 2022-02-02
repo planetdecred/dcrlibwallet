@@ -151,7 +151,6 @@ func (mw *MultiWallet) ReadyToMix(walletID int) (bool, error) {
 
 // StartAccountMixer starts the automatic account mixer
 func (mw *MultiWallet) StartAccountMixer(walletID int, walletPassphrase string) error {
-
 	if !mw.IsConnectedToDecredNetwork() {
 		return errors.New(ErrNotConnected)
 	}
@@ -161,48 +160,26 @@ func (mw *MultiWallet) StartAccountMixer(walletID int, walletPassphrase string) 
 		return errors.New(ErrNotExist)
 	}
 
-	tb := ticketbuyer.New(wallet.Internal())
+	cfg := wallet.readCSPPConfig()
+	if cfg == nil {
+		return errors.New(ErrFailedPrecondition)
+	}
 
-	mixedAccount := wallet.ReadInt32ConfigValueForKey(AccountMixerMixedAccount, -1)
-	unmixedAccount := wallet.ReadInt32ConfigValueForKey(AccountMixerUnmixedAccount, -1)
-
-	hasMixableOutput, err := wallet.accountHasMixableOutput(unmixedAccount)
+	hasMixableOutput, err := wallet.accountHasMixableOutput(int32(cfg.ChangeAccount))
 	if err != nil {
 		return translateError(err)
 	} else if !hasMixableOutput {
 		return errors.New(ErrNoMixableOutput)
 	}
 
-	var shufflePort = TestnetShufflePort
-	var dialCSPPServer func(ctx context.Context, network, addr string) (net.Conn, error)
-	if mw.chainParams.Net == chaincfg.MainNetParams().Net {
-		shufflePort = MainnetShufflePort
-
-		pool := x509.NewCertPool()
-		pool.AppendCertsFromPEM([]byte(certs.CSPP))
-
-		csppTLSConfig := new(tls.Config)
-		csppTLSConfig.ServerName = ShuffleServer
-		csppTLSConfig.RootCAs = pool
-
-		dailer := new(net.Dialer)
-		dialCSPPServer = func(ctx context.Context, network, addr string) (net.Conn, error) {
-			conn, err := dailer.DialContext(context.Background(), network, addr)
-			if err != nil {
-				return nil, err
-			}
-
-			conn = tls.Client(conn, csppTLSConfig)
-			return conn, nil
-		}
-	}
-
+	tb := ticketbuyer.New(wallet.Internal())
 	tb.AccessConfig(func(c *ticketbuyer.Config) {
-		c.MixedAccountBranch = uint32(MixedAccountBranch)
-		c.MixedAccount = uint32(mixedAccount)
-		c.ChangeAccount = uint32(unmixedAccount)
-		c.CSPPServer = ShuffleServer + ":" + shufflePort
-		c.DialCSPPServer = dialCSPPServer
+		c.MixedAccountBranch = cfg.MixedAccountBranch
+		c.MixedAccount = cfg.MixedAccount
+		c.ChangeAccount = cfg.ChangeAccount
+		c.CSPPServer = cfg.CSPPServer
+		c.DialCSPPServer = cfg.DialCSPPServer
+		c.TicketSplitAccount = cfg.TicketSplitAccount
 		c.BuyTickets = false
 		c.MixChange = true
 	})
@@ -232,6 +209,49 @@ func (mw *MultiWallet) StartAccountMixer(walletID int, walletPassphrase string) 
 	}()
 
 	return nil
+}
+
+func (wallet *Wallet) readCSPPConfig() *CSPPConfig {
+	mixedAccount := wallet.ReadInt32ConfigValueForKey(AccountMixerMixedAccount, -1)
+	unmixedAccount := wallet.ReadInt32ConfigValueForKey(AccountMixerUnmixedAccount, -1)
+
+	if mixedAccount == -1 || unmixedAccount == -1 {
+		// not configured for mixing
+		return nil
+	}
+
+	var shufflePort = TestnetShufflePort
+	var dialCSPPServer func(ctx context.Context, network, addr string) (net.Conn, error)
+	if wallet.chainParams.Net == chaincfg.MainNetParams().Net {
+		shufflePort = MainnetShufflePort
+
+		pool := x509.NewCertPool()
+		pool.AppendCertsFromPEM([]byte(certs.CSPP))
+
+		csppTLSConfig := new(tls.Config)
+		csppTLSConfig.ServerName = ShuffleServer
+		csppTLSConfig.RootCAs = pool
+
+		dailer := new(net.Dialer)
+		dialCSPPServer = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			conn, err := dailer.DialContext(context.Background(), network, addr)
+			if err != nil {
+				return nil, err
+			}
+
+			conn = tls.Client(conn, csppTLSConfig)
+			return conn, nil
+		}
+	}
+
+	return &CSPPConfig{
+		CSPPServer:         ShuffleServer + ":" + shufflePort,
+		DialCSPPServer:     dialCSPPServer,
+		MixedAccount:       uint32(mixedAccount),
+		MixedAccountBranch: uint32(MixedAccountBranch),
+		ChangeAccount:      uint32(unmixedAccount),
+		// TicketSplitAccount is unset
+	}
 }
 
 // StopAccountMixer stops the active account mixer

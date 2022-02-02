@@ -179,8 +179,16 @@ func (wallet *Wallet) PurchaseTickets(account, numTickets int32, vspHost string,
 		VSPFeePaymentProcess: func(ctx context.Context, ticketHash *chainhash.Hash, feeTx *wire.MsgTx) error {
 			return vspClient.Process(ctx, ticketHash, feeTx, vspPolicy)
 		},
+	}
 
-		// TODO: Add CSPP params to purchaseTicketsRequest.
+	// Mixed split buying through CoinShuffle++, if configured.
+	if csppCfg := wallet.readCSPPConfig(); csppCfg != nil {
+		request.CSPPServer = csppCfg.CSPPServer
+		request.DialCSPPServer = csppCfg.DialCSPPServer
+		request.MixedAccount = csppCfg.MixedAccount
+		request.MixedAccountBranch = csppCfg.MixedAccountBranch
+		request.ChangeAccount = csppCfg.ChangeAccount
+		request.MixedSplitAccount = csppCfg.TicketSplitAccount
 	}
 
 	ctx := wallet.shutdownContext()
@@ -253,14 +261,14 @@ func (mw *MultiWallet) VSPTicketInfo(walletID int, hash string) (*VSPTicketInfo,
 
 	// Sanity check and log any observed discrepancies.
 	if ticketInfo.FeeTxHash != vspTicketStatus.FeeTxHash {
-		ticketInfo.FeeTxHash = vspTicketStatus.FeeTxHash
 		log.Warnf("wallet fee tx hash %s differs from vsp fee tx hash %s for ticket %s",
 			ticketInfo.FeeTxHash, vspTicketStatus.FeeTxHash, ticketHash)
+		ticketInfo.FeeTxHash = vspTicketStatus.FeeTxHash
 	}
 	if ticketInfo.FeeTxStatus != vspFeeStatus {
-		ticketInfo.FeeTxStatus = vspFeeStatus
-		log.Warnf("wallet fee status %s differs from vsp fee status %s for ticket %s",
+		log.Warnf("wallet fee status %q differs from vsp fee status %q for ticket %s",
 			ticketInfo.FeeTxStatus, vspFeeStatus, ticketHash)
+		ticketInfo.FeeTxStatus = vspFeeStatus
 	}
 
 	return ticketInfo, nil
@@ -505,8 +513,15 @@ func (wallet *Wallet) buyTicket(ctx context.Context, passphrase []byte, sdiff dc
 		VSPFeePaymentProcess: func(ctx context.Context, ticketHash *chainhash.Hash, feeTx *wire.MsgTx) error {
 			return cfg.vspClient.Process(ctx, ticketHash, feeTx, vspPolicy)
 		},
-
-		// TODO: Add CSPP params to purchaseTicketsRequest.
+	}
+	// Mixed split buying through CoinShuffle++, if configured.
+	if csppCfg := wallet.readCSPPConfig(); csppCfg != nil {
+		request.CSPPServer = csppCfg.CSPPServer
+		request.DialCSPPServer = csppCfg.DialCSPPServer
+		request.MixedAccount = csppCfg.MixedAccount
+		request.MixedAccountBranch = csppCfg.MixedAccountBranch
+		request.ChangeAccount = csppCfg.ChangeAccount
+		request.MixedSplitAccount = csppCfg.TicketSplitAccount
 	}
 
 	tix, err := wallet.Internal().PurchaseTickets(ctx, networkBackend, request)

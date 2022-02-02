@@ -1,7 +1,9 @@
 package dcrlibwallet
 
 import (
+	"context"
 	"fmt"
+	"net"
 
 	"decred.org/dcrwallet/v2/wallet/udb"
 	"github.com/decred/dcrd/dcrutil/v4"
@@ -21,6 +23,15 @@ type WalletConfig struct {
 
 	// CSPP
 	MixSplitLimit int // Connection limit to CoinShuffle++ server per change amount
+}
+
+type CSPPConfig struct {
+	CSPPServer         string
+	DialCSPPServer     func(ctx context.Context, network, addr string) (net.Conn, error)
+	MixedAccount       uint32
+	MixedAccountBranch uint32
+	TicketSplitAccount uint32
+	ChangeAccount      uint32
 }
 
 type WalletsIterator struct {
