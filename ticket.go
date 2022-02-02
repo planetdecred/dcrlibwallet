@@ -266,11 +266,16 @@ func (mw *MultiWallet) VSPTicketInfo(walletID int, hash string) (*VSPTicketInfo,
 	return ticketInfo, nil
 }
 
-// StartTicketBuyer starts the automatic ticket buyer.
-// TODO: Get config from wallet instead of using params.
-func (wallet *Wallet) StartTicketBuyer(vspHost string, vspPubKey []byte, purchaseAccount int32, balanceToMaintain int64, passphrase []byte) error {
-	if balanceToMaintain < 0 {
-		return errors.New("Negative balance to maintain given")
+// StartTicketBuyer starts the automatic ticket buyer. The wallet
+// should already be configured with the required parameters using
+// wallet.SetAutoTicketsBuyerConfig().
+func (wallet *Wallet) StartTicketBuyer(passphrase []byte) error {
+	cfg := wallet.AutoTicketsBuyerConfig()
+	if cfg.VspHost == "" {
+		return errors.New("ticket buyer config not set for this wallet")
+	}
+	if cfg.BalanceToMaintain < 0 {
+		return errors.New("Negative balance to maintain in ticket buyer config")
 	}
 
 	wallet.cancelAutoTicketBuyerMu.Lock()
@@ -292,20 +297,17 @@ func (wallet *Wallet) StartTicketBuyer(vspHost string, vspPubKey []byte, purchas
 	}
 
 	// Check the VSP.
-	vspClient, err := wallet.VSPClient(vspHost, vspPubKey)
+	vspInfo, err := vspInfo(cfg.VspHost)
+	if err == nil {
+		cfg.vspClient, err = wallet.VSPClient(cfg.VspHost, vspInfo.PubKey)
+	}
 	if err != nil {
-		return err
+		return fmt.Errorf("error setting up vsp client: %v", err)
 	}
 
 	go func() {
 		log.Infof("[%d] Running ticket buyer", wallet.ID)
 
-		cfg := &TicketBuyerConfig{ // or cfg := wallet.AutoTicketsBuyerConfig()
-			VspHost:           vspHost,
-			PurchaseAccount:   purchaseAccount,
-			BalanceToMaintain: balanceToMaintain,
-			vspClient:         vspClient,
-		}
 		err := wallet.runTicketBuyer(ctx, passphrase, cfg)
 		if err != nil {
 			if ctx.Err() != nil {
