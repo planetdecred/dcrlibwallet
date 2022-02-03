@@ -14,6 +14,7 @@ import (
 	"decred.org/dcrwallet/v2/walletseed"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/planetdecred/dcrlibwallet/internal/loader"
+	"github.com/planetdecred/dcrlibwallet/internal/vsp"
 	"github.com/planetdecred/dcrlibwallet/walletdata"
 )
 
@@ -42,6 +43,10 @@ type Wallet struct {
 
 	cancelAutoTicketBuyerMu sync.Mutex
 	cancelAutoTicketBuyer   context.CancelFunc
+
+	vspClientsMu sync.Mutex
+	vspClients   map[string]*vsp.Client
+
 	// setUserConfigValue saves the provided key-value pair to a config database.
 	// This function is ideally assigned when the `wallet.prepare` method is
 	// called from a MultiWallet instance.
@@ -62,6 +67,7 @@ func (wallet *Wallet) prepare(rootDir string, chainParams *chaincfg.Params,
 
 	wallet.chainParams = chainParams
 	wallet.dataDir = filepath.Join(rootDir, strconv.Itoa(wallet.ID))
+	wallet.vspClients = make(map[string]*vsp.Client)
 	wallet.setUserConfigValue = setUserConfigValueFn
 	wallet.readUserConfigValue = readUserConfigValueFn
 
@@ -71,7 +77,7 @@ func (wallet *Wallet) prepare(rootDir string, chainParams *chaincfg.Params,
 	if exists, _ := fileExists(oldTxDBPath); exists {
 		moveFile(oldTxDBPath, walletDataDBPath)
 	}
-	wallet.walletDataDB, err = walletdata.Initialize(walletDataDBPath, chainParams, &Transaction{}, &VspdTicketInfo{})
+	wallet.walletDataDB, err = walletdata.Initialize(walletDataDBPath, chainParams, &Transaction{})
 	if err != nil {
 		log.Error(err.Error())
 		return err

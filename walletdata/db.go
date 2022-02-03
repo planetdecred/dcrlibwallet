@@ -31,7 +31,7 @@ type DB struct {
 // and checks the database version for compatibility.
 // If there is a version mismatch or the db does not exist at `dbPath`,
 // a new db is created and the current db version number saved to the db.
-func Initialize(dbPath string, chainParams *chaincfg.Params, txData, vspdData interface{}) (*DB, error) {
+func Initialize(dbPath string, chainParams *chaincfg.Params, txData interface{}) (*DB, error) {
 	walletDataDB, err := openOrCreateDB(dbPath)
 	if err != nil {
 		return nil, err
@@ -46,12 +46,6 @@ func Initialize(dbPath string, chainParams *chaincfg.Params, txData, vspdData in
 	err = walletDataDB.Init(txData)
 	if err != nil {
 		return nil, fmt.Errorf("error initializing tx bucket for wallet: %s", err.Error())
-	}
-
-	// init bucket for saving/reading vspd ticket objects
-	err = walletDataDB.Init(vspdData)
-	if err != nil {
-		return nil, fmt.Errorf("error initializing vspd ticket database for wallet: %s", err.Error())
 	}
 
 	return &DB{

@@ -2,14 +2,12 @@ package dcrlibwallet
 
 import (
 	"context"
-	"encoding/json"
+	"fmt"
+	"net"
 
-	"github.com/decred/dcrd/chaincfg/chainhash"
+	"decred.org/dcrwallet/v2/wallet/udb"
 	"github.com/decred/dcrd/dcrutil/v4"
-	"github.com/decred/dcrd/txscript/v4/stdaddr"
-	"github.com/decred/dcrd/wire"
-
-	"decred.org/dcrwallet/v2/wallet"
+	"github.com/planetdecred/dcrlibwallet/internal/vsp"
 )
 
 // WalletConfig defines options for configuring wallet behaviour.
@@ -25,6 +23,15 @@ type WalletConfig struct {
 
 	// CSPP
 	MixSplitLimit int // Connection limit to CoinShuffle++ server per change amount
+}
+
+type CSPPConfig struct {
+	CSPPServer         string
+	DialCSPPServer     func(ctx context.Context, network, addr string) (net.Conn, error)
+	MixedAccount       uint32
+	MixedAccountBranch uint32
+	TicketSplitAccount uint32
+	ChangeAccount      uint32
 }
 
 type WalletsIterator struct {
@@ -318,51 +325,9 @@ type TransactionOverview struct {
 
 /** begin ticket-related types */
 
-type PurchaseTicketsRequest struct {
-	Account               uint32
-	RequiredConfirmations uint32
-	NumTickets            uint32
-	Passphrase            []byte
-	Expiry                uint32
-	TxFee                 int64
-	TicketAddress         string
-	PoolAddress           string
-	PoolFees              float64
-	TicketFee             int64
-
-	// VSPFeeProcessFunc Process the fee price for the vsp to register a ticket
-	// so we can reserve the amount.
-	VSPFeeProcess func(context.Context) (float64, error)
-	// VSPFeePaymentProcess processes the payment of the vsp fee and returns
-	// the paid fee tx.
-	VSPFeePaymentProcess func(context.Context, *chainhash.Hash, *wire.MsgTx) error
-}
-
-type GetTicketsRequest struct {
-	StartingBlockHash   []byte
-	StartingBlockHeight int32
-	EndingBlockHash     []byte
-	EndingBlockHeight   int32
-	TargetTicketCount   int32
-}
-
-type TicketInfo struct {
-	BlockHeight int32
-	Status      string
-	Ticket      *wallet.TransactionSummary
-	Spender     *wallet.TransactionSummary
-}
-
 type TicketPriceResponse struct {
 	TicketPrice int64
 	Height      int32
-}
-
-type VSPTicketPurchaseInfo struct {
-	PoolAddress   string
-	PoolFees      float64
-	Script        string
-	TicketAddress string
 }
 
 type StakingOverview struct {
@@ -373,6 +338,62 @@ type StakingOverview struct {
 	Voted    int
 	Revoked  int
 	Expired  int
+}
+
+// TicketBuyerConfig defines configuration parameters for running
+// an automated ticket buyer.
+type TicketBuyerConfig struct {
+	VspHost           string
+	PurchaseAccount   int32
+	BalanceToMaintain int64
+
+	vspClient *vsp.Client
+}
+
+// VSPFeeStatus represents the current fee status of a ticket.
+type VSPFeeStatus uint8
+
+const (
+	// VSPFeeProcessStarted represents the state which process has being
+	// called but fee still not paid.
+	VSPFeeProcessStarted VSPFeeStatus = iota
+	// VSPFeeProcessPaid represents the state where the process has being
+	// paid, but not published.
+	VSPFeeProcessPaid
+	VSPFeeProcessErrored
+	// VSPFeeProcessConfirmed represents the state where the fee has been
+	// confirmed by the VSP.
+	VSPFeeProcessConfirmed
+)
+
+// String returns a human-readable interpretation of the vsp fee status.
+func (status VSPFeeStatus) String() string {
+	switch udb.FeeStatus(status) {
+	case udb.VSPFeeProcessStarted:
+		return "fee process started"
+	case udb.VSPFeeProcessPaid:
+		return "fee paid"
+	case udb.VSPFeeProcessErrored:
+		return "fee payment errored"
+	case udb.VSPFeeProcessConfirmed:
+		return "fee confirmed by vsp"
+	default:
+		return fmt.Sprintf("invalid fee status %d", status)
+	}
+}
+
+// VSPTicketInfo is information about a ticket that is assigned to a VSP.
+type VSPTicketInfo struct {
+	VSP         string
+	FeeTxHash   string
+	FeeTxStatus VSPFeeStatus
+	// ConfirmedByVSP is nil if the ticket status could not be obtained
+	// from the VSP, false if the VSP hasn't confirmed the fee and true
+	// if the VSP has fully registered the ticket.
+	ConfirmedByVSP *bool
+	// VoteChoices is only set if the ticket status was obtained from the
+	// VSP.
+	VoteChoices map[string]string
 }
 
 /** end ticket-related types */
@@ -466,64 +487,9 @@ type VspInfoResponse struct {
 	Revoked       int64   `json:"revoked"`
 }
 
-type PayFeeRequest struct {
-	Timestamp   int64             `json:"timestamp"`
-	TicketHash  string            `json:"tickethash"`
-	FeeTx       json.Marshaler    `json:"feetx"`
-	VotingKey   string            `json:"votingkey"`
-	VoteChoices map[string]string `json:"votechoices"`
-}
-
-type PayFeeResponse struct {
-	Timestamp int64  `json:"timestamp"`
-	Request   []byte `json:"request"`
-}
-
-type VspdTicketInfo struct {
-	Hash            string            `storm:"id,unique" json:"tickethash"`
-	FeeAddress      string            `json:"feeaddress"`
-	FeeAmount       int64             `json:"feeamount"`
-	Expiration      int64             `json:"expiration"`
-	Timestamp       int64             `json:"timestamp"`
-	FeeTx           string            `json:"feetx"`
-	FeeTxHash       string            `json:"feetxhash"`
-	FeeTxStatus     string            `json:"feetxstatus"`
-	VoteChoices     map[string]string `json:"votechoices"`
-	TicketConfirmed bool              `json:"ticketconfirmed"`
-}
-
-type FeeAddressResponse struct {
-	Timestamp  int64  `json:"timestamp"`
-	FeeAddress string `json:"feeaddress"`
-	FeeAmount  int64  `json:"feeamount"`
-	Request    []byte `json:"request"`
-}
-
-type FeeAddressRequest struct {
-	Timestamp  int64          `json:"timestamp"`
-	TicketHash string         `json:"tickethash"`
-	TicketHex  json.Marshaler `json:"tickethex"`
-	ParentHex  json.Marshaler `json:"parenthex"`
-}
-
-type PendingFee struct {
-	CommitmentAddress stdaddr.Address
-	VotingAddress     stdaddr.Address
-	FeeAddress        stdaddr.Address
-	FeeAmount         dcrutil.Amount
-	FeeTx             *wire.MsgTx
-}
-
-type VSPInfo struct {
+type VSP struct {
 	Host string
-	Info *VspInfoResponse
-}
-
-type TicketBuyerConfig struct {
-	VspHost           string
-	WalletID          int
-	PurchaseAccount   int32
-	BalanceToMaintain int64
+	*VspInfoResponse
 }
 
 /** end vspd-related types */

@@ -1,4 +1,4 @@
-package dcrlibwallet
+package vsp
 
 import (
 	"bytes"
@@ -8,16 +8,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 
 	"github.com/decred/dcrd/txscript/v4/stdaddr"
 )
 
-type vspClient struct {
+type client struct {
 	http.Client
-	pub  []byte
 	url  string
+	pub  []byte
 	sign func(context.Context, string, stdaddr.Address) ([]byte, error)
 }
 
@@ -25,8 +24,8 @@ type signer interface {
 	SignMessage(ctx context.Context, message string, address stdaddr.Address) ([]byte, error)
 }
 
-func newVSPClient(url string, pub []byte, s signer) *vspClient {
-	return &vspClient{url: url, pub: pub, sign: s.SignMessage}
+func newClient(url string, pub []byte, s signer) *client {
+	return &client{url: url, pub: pub, sign: s.SignMessage}
 }
 
 type BadRequestError struct {
@@ -37,15 +36,15 @@ type BadRequestError struct {
 
 func (e *BadRequestError) Error() string { return e.Message }
 
-func (c *vspClient) post(ctx context.Context, path string, addr stdaddr.Address, resp, req interface{}) error {
+func (c *client) post(ctx context.Context, path string, addr stdaddr.Address, resp, req interface{}) error {
 	return c.do(ctx, "POST", path, addr, resp, req)
 }
 
-func (c *vspClient) get(ctx context.Context, path string, resp interface{}) error {
+func (c *client) get(ctx context.Context, path string, resp interface{}) error {
 	return c.do(ctx, "GET", path, nil, resp, nil)
 }
 
-func (c *vspClient) do(ctx context.Context, method, path string, addr stdaddr.Address, resp, req interface{}) error {
+func (c *client) do(ctx context.Context, method, path string, addr stdaddr.Address, resp, req interface{}) error {
 	var reqBody io.Reader
 	var sig []byte
 	if method == "POST" {
@@ -70,6 +69,8 @@ func (c *vspClient) do(ctx context.Context, method, path string, addr stdaddr.Ad
 	if err != nil {
 		return fmt.Errorf("%s %s: %w", method, httpReq.URL.String(), err)
 	}
+	defer reply.Body.Close()
+
 	status := reply.StatusCode
 	is200 := status == 200
 	is4xx := status >= 400 && status <= 499
@@ -85,17 +86,13 @@ func (c *vspClient) do(ctx context.Context, method, path string, addr stdaddr.Ad
 	if err != nil {
 		return fmt.Errorf("cannot authenticate server: %w", err)
 	}
-	respBody, err := ioutil.ReadAll(reply.Body)
+	respBody, err := io.ReadAll(reply.Body)
 	if err != nil {
 		return fmt.Errorf("read response body: %w", err)
 	}
-
-	if len(c.pub) > 0 {
-		if !ed25519.Verify(c.pub, respBody, sig) {
-			return fmt.Errorf("cannot authenticate server: invalid signature")
-		}
+	if !ed25519.Verify(c.pub, respBody, sig) {
+		return fmt.Errorf("cannot authenticate server: invalid signature")
 	}
-
 	var apiError *BadRequestError
 	if is4xx {
 		apiError = new(BadRequestError)

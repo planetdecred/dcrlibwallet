@@ -28,7 +28,7 @@ const (
 
 	LastTxHashConfigKey = "last_tx_hash"
 
-	VSPHostConfigKey = "vsp_host"
+	KnownVSPsConfigKey = "known_vsps"
 
 	TicketBuyerVSPHostConfigKey = "tb_vsp_host"
 	TicketBuyerWalletConfigKey  = "tb_wallet_id"
