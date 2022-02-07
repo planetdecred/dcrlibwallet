@@ -44,8 +44,8 @@ type MultiWallet struct {
 	Politeia  *Politeia
 	dexClient *DexClient
 
-	vspMu sync.RWMutex
-	vsps  []*VSP
+	vspMu     sync.RWMutex
+	vsps      []*VSP
 	Consensus *Consensus
 }
 

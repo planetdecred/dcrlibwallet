@@ -2,7 +2,6 @@ package dcrlibwallet
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"sort"
 	"time"
@@ -116,14 +115,9 @@ func (c *Consensus) SetVoteChoice(walletID int, vspPubKey []byte, vspHost, agend
 		return fmt.Errorf("request requires a vspHost but no vspHost was provided")
 	}
 
-	vspClient, err := wallet.LookupVSP(vspHost)
+	vspClient, err := wallet.VSPClient(vspHost, vspPubKey)
 	if err != nil && !errors.Is(err, errors.NotExist) {
 		return err
-	} else {
-		vspClient, err = wallet.VSP(vspHost, base64.StdEncoding.EncodeToString(vspPubKey))
-		if err != nil {
-			return err
-		}
 	}
 
 	// If ticket hash is provided, then set vote choice for the selected ticket
