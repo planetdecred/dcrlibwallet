@@ -87,7 +87,7 @@ func (mw *MultiWallet) SetVoteChoice(walletID int, vspHost string, vspPubKey []b
 	}
 	wal := wallet.Internal()
 
-	err := wallet.UnlockWallet([]byte(passphrase))
+	err := wallet.UnlockWallet(passphrase)
 	if err != nil {
 		return translateError(err)
 	}
