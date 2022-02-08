@@ -1,7 +1,6 @@
 package dcrlibwallet
 
 import (
-	"context"
 	"fmt"
 	"sort"
 	"time"
@@ -12,28 +11,14 @@ import (
 	"github.com/decred/dcrd/chaincfg/v3"
 )
 
-type Consensus struct {
-	mwRef *MultiWallet
-	ctx   context.Context
-}
-
-func newConsensus(mwRef *MultiWallet) (*Consensus, error) {
-	c := &Consensus{
-		mwRef: mwRef,
-	}
-
-	return c, nil
-}
-
-// GetVoteChoices handles a getvotechoices request by returning configured vote
-// preferences for each agenda of the latest supported stake version for the
-// selected wallet.
-func (c *Consensus) GetVoteChoices(ctx context.Context, hash string, walletID int) (*GetVoteChoicesResult, error) {
-	wallet := c.mwRef.WalletWithID(walletID)
-	wal := wallet.Internal()
-	if wal == nil {
+// GetVoteChoices returns configured vote preferences for each agenda of the latest
+// supported stake version for the wallet with the specified walletID
+func (mw *MultiWallet) GetVoteChoices(hash string, walletID int) (*GetVoteChoicesResult, error) {
+	wallet := mw.WalletWithID(walletID)
+	if wallet == nil {
 		return nil, fmt.Errorf("request requires a wallet but wallet has not loaded yet")
 	}
+	wal := wallet.Internal()
 
 	var ticketHash *chainhash.Hash
 	if hash != "" {
@@ -50,15 +35,17 @@ func (c *Consensus) GetVoteChoices(ctx context.Context, hash string, walletID in
 		Choices: make([]VoteChoice, len(agendas)),
 	}
 
+	ctx := wallet.shutdownContext()
 	choices, _, err := wal.AgendaChoices(ctx, ticketHash)
 	if err != nil {
 		return nil, err
 	}
 
 	for i := range choices {
+		agenda := mw.agenda(walletID, choices[i].AgendaID)
 		resp.Choices[i] = VoteChoice{
 			AgendaID:          choices[i].AgendaID,
-			AgendaDescription: agendas[i].Vote.Description,
+			AgendaDescription: agenda.Vote.Description,
 			ChoiceID:          choices[i].ChoiceID,
 			ChoiceDescription: "", // Set below
 		}
@@ -73,17 +60,32 @@ func (c *Consensus) GetVoteChoices(ctx context.Context, hash string, walletID in
 	return resp, nil
 }
 
-// SetVoteChoice handles a setvotechoice request by modifying the preferred
-// choice for a voting agenda.
-//
-// If a VSP host is configured in the application settings, the voting
-// preferences will also be set with the VSP.
-func (c *Consensus) SetVoteChoice(walletID int, vspPubKey []byte, vspHost, agendaID, choiceID, hash, passphrase string) error {
-	wallet := c.mwRef.WalletWithID(walletID)
+func (mw *MultiWallet) agenda(walletID int, agendaID string) *chaincfg.ConsensusDeployment {
+	wallet := mw.WalletWithID(walletID)
 	wal := wallet.Internal()
-	if wal == nil {
+
+	_, agendas := getAllAgendas(wal.ChainParams())
+
+	for _, agenda := range agendas {
+		if agenda.Vote.Id == agendaID {
+			return &agenda
+		}
+	}
+
+	return nil
+}
+
+// SetVoteChoice sets a voting choice for an agenda using the set voting preference.
+// The voting preference is first saved locally, to the database.
+//
+// However, if a VSP host is configured in the application settings, the voting
+// preferences will also be set with the VSP.
+func (mw *MultiWallet) SetVoteChoice(walletID int, vspHost string, vspPubKey []byte, agendaID, choiceID, hash string, passphrase []byte) error {
+	wallet := mw.WalletWithID(walletID)
+	if wallet == nil {
 		return fmt.Errorf("request requires a wallet but wallet has not loaded yet")
 	}
+	wal := wallet.Internal()
 
 	err := wallet.UnlockWallet([]byte(passphrase))
 	if err != nil {
@@ -122,11 +124,20 @@ func (c *Consensus) SetVoteChoice(walletID int, vspPubKey []byte, vspHost, agend
 
 	// If ticket hash is provided, then set vote choice for the selected ticket
 	if ticketHash != nil {
+		vspTicketInfo, err := wal.VSPTicketInfo(ctx, ticketHash)
+		if err != nil {
+			return err
+		}
+		// Register the provided ticket hash with the VSP client
+		vspClient, err = wallet.VSPClient(vspTicketInfo.Host, vspTicketInfo.PubKey)
+		if err != nil && !errors.Is(err, errors.NotExist) {
+			return err
+		}
 		err = vspClient.SetVoteChoice(ctx, ticketHash, choice)
 		return err
 	}
 
-	// Ticket hash wasn't provided, therefor set vote choice for all tickets
+	// Ticket hash wasn't provided, therefore set vote choice for all tickets
 	// belonging to the selected wallet and controlled by the set VSP
 	var firstErr error
 	vspClient.ForUnspentUnexpiredTickets(ctx, func(hash *chainhash.Hash) error {
@@ -144,16 +155,15 @@ func (c *Consensus) SetVoteChoice(walletID int, vspPubKey []byte, vspHost, agend
 
 // GetAllAgendasForWallet returns all agendas through out the various stake versions for the active network and
 // this version of the software, and all agendas defined by it for a selected wallet.
-func (c *Consensus) GetAllAgendasForWallet(walletID int, newestFirst bool) (*AgendasResponse, error) {
-	wallet := c.mwRef.WalletWithID(walletID)
+func (mw *MultiWallet) GetAllAgendasForWallet(walletID int, newestFirst bool) (*AgendasResponse, error) {
+	wallet := mw.WalletWithID(walletID)
 	version, deployments := getAllAgendas(wallet.chainParams)
 	resp := &AgendasResponse{
 		Version: version,
 		Agendas: make([]*Agenda, len(deployments)),
 	}
 
-	var ctx context.Context
-	voteChoicesResult, err := c.GetVoteChoices(ctx, "", wallet.ID)
+	voteChoicesResult, err := mw.GetVoteChoices("", wallet.ID)
 	if err != nil {
 		return nil, errors.Errorf("error getting voteChoicesResult: %s", err.Error())
 	}

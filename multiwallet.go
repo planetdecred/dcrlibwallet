@@ -44,9 +44,8 @@ type MultiWallet struct {
 	Politeia  *Politeia
 	dexClient *DexClient
 
-	vspMu     sync.RWMutex
-	vsps      []*VSP
-	Consensus *Consensus
+	vspMu sync.RWMutex
+	vsps  []*VSP
 }
 
 func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWallet, error) {
@@ -114,11 +113,6 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 	}
 
 	mw.Politeia, err = newPoliteia(mw, politeiaHost)
-	if err != nil {
-		return nil, err
-	}
-
-	mw.Consensus, err = newConsensus(mw)
 	if err != nil {
 		return nil, err
 	}

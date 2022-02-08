@@ -533,10 +533,6 @@ type AgendasResponse struct {
 	Agendas []*Agenda `json:"agendas"`
 }
 
-type ConsensusNotificationListener interface {
-	OnAgendasSynced()
-}
-
 // ByStartTime implements sort.Interface based on the Agenda.StartTime field.
 type ByStartTime []*Agenda
 
