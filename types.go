@@ -495,19 +495,22 @@ type VSP struct {
 /** end vspd-related types */
 
 /** begin agenda types */
+
+// Agenda contains information about a consensus deployment
 type Agenda struct {
-	ID               int       `storm:"id,increment"`
-	AgendaID         string    `json:"agenda_id" storm:"index"`
-	Description      string    `json:"description"`
-	Mask             uint32    `json:"mask"`
-	Choices          []*Choice `json:"choices"`
-	VotingPreference string    `json:"voting_preference"`
-	StartTime        int64     `json:"start_time"`
-	ExpireTime       int64     `json:"expire_time"`
-	Status           string    `json:"status"`
+	AgendaID         string        `json:"agenda_id"`
+	Description      string        `json:"description"`
+	Mask             uint32        `json:"mask"`
+	Choices          []*VoteChoice `json:"choices"`
+	VotingPreference string        `json:"voting_preference"`
+	StartTime        int64         `json:"start_time"`
+	ExpireTime       int64         `json:"expire_time"`
+	Status           string        `json:"status"`
 }
 
-type Choice struct {
+// VoteChoice holds information about the possible choices that
+// an agenda can vote with.
+type VoteChoice struct {
 	Id          string `json:"id"`
 	Description string `json:"description"`
 	Bits        uint32 `json:"bits"`
@@ -515,22 +518,19 @@ type Choice struct {
 	IsNo        bool   `json:"is_no"`
 }
 
+// GetVoteChoicesResult holds the stake version for the VoteChoices result
+// fetched and the AgendaVoteChoices.
 type GetVoteChoicesResult struct {
-	Version uint32       `json:"version"`
-	Choices []VoteChoice `json:"choices"`
+	Version uint32             `json:"version"`
+	Choices []AgendaVoteChoice `json:"choices"`
 }
 
-type VoteChoice struct {
-	ID                int    `storm:"id,increment"`
+// AgendaVoteChoice holds information about the current vote choice of an agenda
+type AgendaVoteChoice struct {
 	AgendaID          string `json:"agenda_id"`
 	AgendaDescription string `json:"agenda_description"`
 	ChoiceID          string `json:"choice_id"`
 	ChoiceDescription string `json:"choice_description"`
-}
-
-type AgendasResponse struct {
-	Version uint32    `json:"version,omitempty"`
-	Agendas []*Agenda `json:"agendas"`
 }
 
 // ByStartTime implements sort.Interface based on the Agenda.StartTime field.
