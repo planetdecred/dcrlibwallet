@@ -161,7 +161,10 @@ func (wallet *Wallet) PurchaseTickets(account, numTickets int32, vspHost string,
 		return nil, err
 	}
 
-	wallet.UnlockWallet(passphrase)
+	err = wallet.UnlockWallet(passphrase)
+	if err != nil {
+		return nil, translateError(err)
+	}
 	defer wallet.LockWallet()
 
 	// Use the user-specified instructions for processing fee payments
