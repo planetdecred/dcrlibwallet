@@ -6,12 +6,15 @@ package dexdcr
 
 import (
 	"fmt"
+
+	"decred.org/dcrwallet/v2/p2p"
 )
 
 // SpvSyncer defines methods we expect to find in an spv wallet backend.
 type SpvSyncer interface {
 	Synced() bool
 	EstimateMainChainTip() int32
+	GetRemotePeers() map[string]*p2p.RemotePeer
 }
 
 // spvSyncer returns the spv syncer connected to the wallet or returns an error

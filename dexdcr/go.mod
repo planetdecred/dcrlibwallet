@@ -1,8 +1,8 @@
 module github.com/planetdecred/dcrlibwallet/dexdcr
 
 require (
-	decred.org/dcrdex v0.4.0-rc3
-	decred.org/dcrwallet/v2 v2.0.0-rc3
+	decred.org/dcrdex v0.4.1
+	decred.org/dcrwallet/v2 v2.0.1
 	github.com/decred/dcrd/blockchain/stake/v4 v4.0.0
 	github.com/decred/dcrd/blockchain/standalone/v2 v2.1.0
 	github.com/decred/dcrd/chaincfg/chainhash v1.0.3

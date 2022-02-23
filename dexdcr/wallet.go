@@ -163,6 +163,18 @@ func (spvw *SpvWallet) SyncStatus(ctx context.Context) (bool, float32, error) {
 	return syncedAndReadyForUse, headersFetchProgress, nil
 }
 
+// PeerCount returns the number of network peers to which the wallet or its
+// backing node are connected.
+// Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
+func (spvw *SpvWallet) PeerCount(ctx context.Context) (uint32, error) {
+	syncer, err := spvw.spvSyncer()
+	if err != nil {
+		return 0, err
+	}
+	peers := syncer.GetRemotePeers()
+	return uint32(len(peers)), nil
+}
+
 // AccountOwnsAddress checks if the provided address belongs to the
 // specified account.
 // Part of the decred.org/dcrdex/client/asset/dcr.Wallet interface.
