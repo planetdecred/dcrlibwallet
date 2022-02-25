@@ -11,8 +11,9 @@ import (
 	"github.com/decred/dcrd/chaincfg/v3"
 )
 
-// GetVoteChoices returns configured vote preferences for each agenda of the
-// latest supported stake version for the wallet with the specified walletID.
+// GetVoteChoices returns configured vote preferences for each agenda of
+// all supported stake versions, but only preferences saved for the
+// current stake version agendas for the wallet with the specified walletID.
 func (mw *MultiWallet) GetVoteChoices(hash string, walletID int) (*GetVoteChoicesResult, error) {
 	wallet := mw.WalletWithID(walletID)
 	if wallet == nil {
