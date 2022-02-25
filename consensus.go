@@ -83,7 +83,7 @@ func (mw *MultiWallet) SetVoteChoice(walletID int, vspHost string, vspPubKey []b
 	wal := wallet.Internal()
 
 	if vspHost == "" {
-		return fmt.Errorf("request requires a vspHost but no vspHost was provided")
+		return fmt.Errorf("request requires a vsp host but no vsp host was provided")
 	}
 
 	// Test to ensure the passphrase is correct, and the voting is authorized.
@@ -91,7 +91,7 @@ func (mw *MultiWallet) SetVoteChoice(walletID int, vspHost string, vspPubKey []b
 	if err != nil {
 		return translateError(err)
 	}
-	defer wallet.LockWallet()
+	wallet.LockWallet()
 
 	var ticketHash *chainhash.Hash
 	if hash != "" {
@@ -113,23 +113,23 @@ func (mw *MultiWallet) SetVoteChoice(walletID int, vspHost string, vspPubKey []b
 		return err
 	}
 
-	vspClient, err := wallet.VSPClient(vspHost, vspPubKey)
-	if err != nil {
-		return err
-	}
-
 	// If ticket hash is provided, then set vote choice for the selected ticket.
 	if ticketHash != nil {
 		vspTicketInfo, err := wal.VSPTicketInfo(ctx, ticketHash)
 		if err != nil {
 			return err
 		}
-		// Register the provided ticket hash with the VSP client.
-		vspClient, err = wallet.VSPClient(vspTicketInfo.Host, vspTicketInfo.PubKey)
+		// Update the vote choice for the ticket with the vsp
+		vspClient, err := wallet.VSPClient(vspTicketInfo.Host, vspTicketInfo.PubKey)
 		if err != nil {
 			return err
 		}
 		err = vspClient.SetVoteChoice(ctx, ticketHash, choice)
+		return err
+	}
+
+	vspClient, err := wallet.VSPClient(vspHost, vspPubKey)
+	if err != nil {
 		return err
 	}
 
