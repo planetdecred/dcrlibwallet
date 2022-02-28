@@ -18,8 +18,6 @@ import (
 	"github.com/decred/dcrd/wire"
 )
 
-const requiredConfs = 6 + 2
-
 type DialFunc func(ctx context.Context, network, addr string) (net.Conn, error)
 
 type Policy struct {
@@ -87,47 +85,11 @@ func (c *Client) FeePercentage(ctx context.Context) (float64, error) {
 	return resp.FeePercentage, nil
 }
 
-// ForUnspentUnexpiredTickets performs a function on every unexpired and unspent
-// ticket from the wallet.
-func (c *Client) ForUnspentUnexpiredTickets(ctx context.Context,
-	f func(hash *chainhash.Hash) error) error {
-
-	w := c.Wallet
-	params := w.ChainParams()
-
-	iter := func(ticketSummaries []*wallet.TicketSummary, _ *wire.BlockHeader) (bool, error) {
-		for _, ticketSummary := range ticketSummaries {
-			switch ticketSummary.Status {
-			case wallet.TicketStatusLive:
-			case wallet.TicketStatusImmature:
-			case wallet.TicketStatusUnspent:
-			default:
-				continue
-			}
-
-			ticketHash := *ticketSummary.Ticket.Hash
-			err := f(&ticketHash)
-			if err != nil {
-				return false, err
-			}
-		}
-
-		return false, nil
-	}
-
-	_, blockHeight := w.MainChainTip(ctx)
-	startBlockNum := blockHeight -
-		int32(params.TicketExpiry+uint32(params.TicketMaturity)-requiredConfs)
-	startBlock := wallet.NewBlockIdentifierFromHeight(startBlockNum)
-	endBlock := wallet.NewBlockIdentifierFromHeight(blockHeight)
-	return w.GetTickets(ctx, iter, startBlock, endBlock)
-}
-
 // ProcessUnprocessedTickets processes all tickets that don't currently have
 // any association with a VSP.
 func (c *Client) ProcessUnprocessedTickets(ctx context.Context, policy Policy) {
 	var wg sync.WaitGroup
-	c.ForUnspentUnexpiredTickets(ctx, func(hash *chainhash.Hash) error {
+	c.Wallet.ForUnspentUnexpiredTickets(ctx, func(hash *chainhash.Hash) error {
 		// Skip tickets which have a fee tx already associated with
 		// them; they are already processed by some vsp.
 		_, err := c.Wallet.VSPFeeHashForTicket(ctx, hash)
@@ -181,7 +143,7 @@ func (c *Client) ProcessTicket(ctx context.Context, hash *chainhash.Hash, policy
 // tracking after seed restores, and is only performed on unspent and unexpired
 // tickets.
 func (c *Client) ProcessManagedTickets(ctx context.Context, policy Policy) error {
-	err := c.ForUnspentUnexpiredTickets(ctx, func(hash *chainhash.Hash) error {
+	err := c.Wallet.ForUnspentUnexpiredTickets(ctx, func(hash *chainhash.Hash) error {
 		// We only want to process tickets that haven't been confirmed yet.
 		confirmed, err := c.Wallet.IsVSPTicketConfirmed(ctx, hash)
 		if err != nil && !errors.Is(err, errors.NotExist) {
@@ -318,30 +280,75 @@ func (c *Client) Process(ctx context.Context, ticketHash *chainhash.Hash, feeTx 
 	return nil
 }
 
-// SetVoteChoice takes the provided AgendaChoices and ticket hash, checks the
-// status of the ticket from the connected vsp.  The status provides the
-// current vote choice so we can just update from there if need be.
-func (c *Client) SetVoteChoice(ctx context.Context, hash *chainhash.Hash, choices ...wallet.AgendaChoice) error {
+// SetVoteChoice takes the provided consensus, tspend and treasury key voting
+// preferences, and checks if they match the status of the specified ticket from
+// the connected VSP. The status provides the current voting preferences so we
+// can just update from there if need be.
+func (c *Client) SetVoteChoice(ctx context.Context, hash *chainhash.Hash,
+	choices []wallet.AgendaChoice, tspendPolicy map[string]string, treasuryPolicy map[string]string) error {
+
+	// Retrieve current voting preferences from VSP.
 	status, err := c.status(ctx, hash)
 	if err != nil {
 		if errors.Is(err, errors.Locked) {
 			return err
 		}
+		log.Errorf("Could not check status of VSP ticket %s: %v", hash, err)
 		return nil
 	}
-	setVoteChoices := status.VoteChoices
+
+	// Check for any mismatch between the provided voting preferences and the
+	// VSP preferences to determine if VSP needs to be updated.
 	update := false
-	for agenda, choice := range setVoteChoices {
-		for _, newChoice := range choices {
-			if agenda == newChoice.AgendaID && choice != newChoice.ChoiceID {
-				update = true
-			}
+
+	// Check consensus vote choices.
+	for _, newChoice := range choices {
+		vspChoice, ok := status.VoteChoices[newChoice.AgendaID]
+		if !ok {
+			update = true
+			break
+		}
+		if vspChoice != newChoice.ChoiceID {
+			update = true
+			break
 		}
 	}
+
+	// Apply the above changes to the two checks below.
+
+	// Check tspend policies.
+	for newTSpend, newChoice := range tspendPolicy {
+		vspChoice, ok := status.TSpendPolicy[newTSpend]
+		if !ok {
+			update = true
+			break
+		}
+		if vspChoice != newChoice {
+			update = true
+			break
+		}
+	}
+
+	// Check treasury policies.
+	for newKey, newChoice := range treasuryPolicy {
+		vspChoice, ok := status.TSpendPolicy[newKey]
+		if !ok {
+			update = true
+			break
+		}
+		if vspChoice != newChoice {
+			update = true
+			break
+		}
+	}
+
 	if !update {
+		log.Debugf("VSP already has correct vote choices for ticket %s", hash)
 		return nil
 	}
-	err = c.setVoteChoices(ctx, hash, choices)
+
+	log.Debugf("Updating vote choices on VSP for ticket %s", hash)
+	err = c.setVoteChoices(ctx, hash, choices, tspendPolicy, treasuryPolicy)
 	if err != nil {
 		return err
 	}
