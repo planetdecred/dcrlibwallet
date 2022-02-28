@@ -5,7 +5,6 @@ import (
 	"sort"
 	"time"
 
-	"decred.org/dcrwallet/v2/errors"
 	w "decred.org/dcrwallet/v2/wallet"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v3"
@@ -21,22 +20,19 @@ func agenda(agendas []chaincfg.ConsensusDeployment, agendaID string) *chaincfg.C
 	return nil
 }
 
-// SetVoteChoice sets a voting choice for the specified agenda using the
-// specified ticket hash controlled by a VSP.
-//
-// If a ticket hash isn't provided, the vote choice is set for all tickets
-// controlled by the set VSP.
+// SetVoteChoice sets a voting choice for the specified agenda. If a ticket
+// hash is provided, the voting choice is also updated with the VSP controlling
+// the ticket. If a ticket hash isn't provided, the vote choice is set for all
+// tickets controlled by the specified VSP.
 func (wallet *Wallet) SetVoteChoice(vspHost string, vspPubKey []byte, agendaID, choiceID, hash string, passphrase []byte) error {
-	if wallet == nil {
-		return errors.New(ErrNotExist)
-	}
 	wal := wallet.Internal()
 
-	if vspHost == "" {
-		return fmt.Errorf("request requires a vsp host but no vsp host was provided")
+	if vspHost == "" && hash == "" {
+		return fmt.Errorf("request requires either a vsp host or a ticket hash")
 	}
 
-	// Test to ensure the passphrase is correct, and the voting is authorized.
+	// Test to ensure the passphrase is correct, before setting a voting
+	// preference.
 	err := wallet.UnlockWallet(passphrase)
 	if err != nil {
 		return translateError(err)
@@ -63,7 +59,8 @@ func (wallet *Wallet) SetVoteChoice(vspHost string, vspPubKey []byte, agendaID, 
 		return err
 	}
 
-	// If ticket hash is provided, then set vote choice for the selected ticket.
+	// If ticket hash is provided, then set vote choice for the selected ticket
+	// with the associated vsp.
 	if ticketHash != nil {
 		vspTicketInfo, err := wal.VSPTicketInfo(ctx, ticketHash)
 		if err != nil {
@@ -99,13 +96,11 @@ func (wallet *Wallet) SetVoteChoice(vspHost string, vspPubKey []byte, agendaID, 
 	return firstErr
 }
 
-// GetAllAgendasForWallet returns all agendas through out the various
+// AllVoteAgendas returns all agendas through out the various
 // stake versions for the active network and this version of the software,
+// as well as returns the vote preferences for the current version,
 // and all agendas defined by it for a selected wallet.
-func (wallet *Wallet) GetAllAgendasForWallet(hash string, newestFirst bool) (uint32, []*Agenda, error) {
-	if wallet == nil {
-		return 0, nil, errors.New(ErrNotExist)
-	}
+func (wallet *Wallet) AllVoteAgendas(hash string, newestFirst bool) (uint32, []*Agenda, error) {
 	wal := wallet.Internal()
 
 	version, deployments := getAllAgendas(wallet.chainParams)
@@ -120,10 +115,7 @@ func (wallet *Wallet) GetAllAgendasForWallet(hash string, newestFirst bool) (uin
 		ticketHash = hash
 	}
 
-	voteChoicesResult := &GetVoteChoicesResult{
-		Version: version,
-		Choices: make([]AgendaVoteChoice, len(deployments)),
-	}
+	agendaVoteChoices := make([]AgendaVoteChoice, len(deployments))
 
 	ctx := wallet.shutdownContext()
 	choices, _, err := wal.AgendaChoices(ctx, ticketHash)
@@ -133,7 +125,7 @@ func (wallet *Wallet) GetAllAgendasForWallet(hash string, newestFirst bool) (uin
 
 	for i := range choices {
 		agenda := agenda(deployments, choices[i].AgendaID)
-		voteChoicesResult.Choices[i] = AgendaVoteChoice{
+		agendaVoteChoices[i] = AgendaVoteChoice{
 			AgendaID:          choices[i].AgendaID,
 			AgendaDescription: agenda.Vote.Description,
 			ChoiceID:          choices[i].ChoiceID,
@@ -141,7 +133,7 @@ func (wallet *Wallet) GetAllAgendasForWallet(hash string, newestFirst bool) (uin
 		}
 		for _, choice := range agenda.Vote.Choices {
 			if choices[i].ChoiceID == choice.Id {
-				voteChoicesResult.Choices[i].ChoiceDescription = choice.Description
+				agendaVoteChoices[i].ChoiceDescription = choice.Description
 				break
 			}
 		}
@@ -151,9 +143,9 @@ func (wallet *Wallet) GetAllAgendasForWallet(hash string, newestFirst bool) (uin
 		d := &deployments[i]
 
 		var votingPreference string
-		for j := range voteChoicesResult.Choices {
-			if voteChoicesResult.Choices[j].AgendaID == d.Vote.Id {
-				votingPreference = voteChoicesResult.Choices[j].ChoiceID
+		for j := range agendaVoteChoices {
+			if agendaVoteChoices[j].AgendaID == d.Vote.Id {
+				votingPreference = agendaVoteChoices[j].ChoiceID
 			}
 		}
 

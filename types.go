@@ -518,13 +518,6 @@ type VoteChoice struct {
 	IsNo        bool   `json:"is_no"`
 }
 
-// GetVoteChoicesResult holds the stake version for the VoteChoices result
-// fetched and the AgendaVoteChoices.
-type GetVoteChoicesResult struct {
-	Version uint32             `json:"version"`
-	Choices []AgendaVoteChoice `json:"choices"`
-}
-
 // AgendaVoteChoice holds information about the current vote choice of an agenda
 type AgendaVoteChoice struct {
 	AgendaID          string `json:"agenda_id"`
