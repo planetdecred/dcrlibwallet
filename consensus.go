@@ -11,55 +11,6 @@ import (
 	"github.com/decred/dcrd/chaincfg/v3"
 )
 
-// GetVoteChoices returns configured vote preferences for each agenda of
-// all supported stake versions, but only preferences saved for the
-// current stake version agendas for the wallet with the specified walletID.
-func (wallet *Wallet) GetVoteChoices(hash string) (*GetVoteChoicesResult, error) {
-	if wallet == nil {
-		return nil, errors.New(ErrNotExist)
-	}
-	wal := wallet.Internal()
-
-	var ticketHash *chainhash.Hash
-	if hash != "" {
-		hash, err := chainhash.NewHashFromStr(hash)
-		if err != nil {
-			return nil, fmt.Errorf("inavlid hash: %w", err)
-		}
-		ticketHash = hash
-	}
-
-	version, agendas := getAllAgendas(wal.ChainParams())
-	resp := &GetVoteChoicesResult{
-		Version: version,
-		Choices: make([]AgendaVoteChoice, len(agendas)),
-	}
-
-	ctx := wallet.shutdownContext()
-	choices, _, err := wal.AgendaChoices(ctx, ticketHash)
-	if err != nil {
-		return nil, err
-	}
-
-	for i := range choices {
-		agenda := agenda(agendas, choices[i].AgendaID)
-		resp.Choices[i] = AgendaVoteChoice{
-			AgendaID:          choices[i].AgendaID,
-			AgendaDescription: agenda.Vote.Description,
-			ChoiceID:          choices[i].ChoiceID,
-			ChoiceDescription: "", // Set below
-		}
-		for _, choice := range agenda.Vote.Choices {
-			if choices[i].ChoiceID == choice.Id {
-				resp.Choices[i].ChoiceDescription = choice.Description
-				break
-			}
-		}
-	}
-
-	return resp, nil
-}
-
 func agenda(agendas []chaincfg.ConsensusDeployment, agendaID string) *chaincfg.ConsensusDeployment {
 	for _, agenda := range agendas {
 		if agenda.Vote.Id == agendaID {
@@ -151,13 +102,49 @@ func (wallet *Wallet) SetVoteChoice(vspHost string, vspPubKey []byte, agendaID, 
 // GetAllAgendasForWallet returns all agendas through out the various
 // stake versions for the active network and this version of the software,
 // and all agendas defined by it for a selected wallet.
-func (wallet *Wallet) GetAllAgendasForWallet(newestFirst bool) (uint32, []*Agenda, error) {
+func (wallet *Wallet) GetAllAgendasForWallet(hash string, newestFirst bool) (uint32, []*Agenda, error) {
+	if wallet == nil {
+		return 0, nil, errors.New(ErrNotExist)
+	}
+	wal := wallet.Internal()
+
 	version, deployments := getAllAgendas(wallet.chainParams)
 	agendas := make([]*Agenda, len(deployments))
 
-	voteChoicesResult, err := wallet.GetVoteChoices("")
+	var ticketHash *chainhash.Hash
+	if hash != "" {
+		hash, err := chainhash.NewHashFromStr(hash)
+		if err != nil {
+			return 0, nil, fmt.Errorf("inavlid hash: %w", err)
+		}
+		ticketHash = hash
+	}
+
+	voteChoicesResult := &GetVoteChoicesResult{
+		Version: version,
+		Choices: make([]AgendaVoteChoice, len(deployments)),
+	}
+
+	ctx := wallet.shutdownContext()
+	choices, _, err := wal.AgendaChoices(ctx, ticketHash)
 	if err != nil {
-		return 0, nil, errors.Errorf("error getting voteChoicesResult: %s", err.Error())
+		return 0, nil, err
+	}
+
+	for i := range choices {
+		agenda := agenda(deployments, choices[i].AgendaID)
+		voteChoicesResult.Choices[i] = AgendaVoteChoice{
+			AgendaID:          choices[i].AgendaID,
+			AgendaDescription: agenda.Vote.Description,
+			ChoiceID:          choices[i].ChoiceID,
+			ChoiceDescription: "", // Set below
+		}
+		for _, choice := range agenda.Vote.Choices {
+			if choices[i].ChoiceID == choice.Id {
+				voteChoicesResult.Choices[i].ChoiceDescription = choice.Description
+				break
+			}
+		}
 	}
 
 	for i := range deployments {
