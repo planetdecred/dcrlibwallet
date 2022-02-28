@@ -48,13 +48,32 @@ func (wallet *Wallet) SetVoteChoice(vspHost string, vspPubKey []byte, agendaID, 
 		ticketHash = hash
 	}
 
-	choice := w.AgendaChoice{
+	ctx := wallet.shutdownContext()
+
+	// get choices
+	choices, _, err := wallet.Internal().AgendaChoices(ctx, ticketHash) // returns saved prefs for current agendas
+	if err != nil {
+		return err
+	}
+
+	currentChoice := w.AgendaChoice{
+		AgendaID: agendaID,
+		ChoiceID: "abstain", // default to abstain as current choice if not found in wallet
+	}
+
+	for i := range choices {
+		if choices[i].AgendaID == agendaID {
+			currentChoice.ChoiceID = choices[i].ChoiceID
+			break
+		}
+	}
+
+	newChoice := w.AgendaChoice{
 		AgendaID: agendaID,
 		ChoiceID: choiceID,
 	}
 
-	ctx := wallet.shutdownContext()
-	_, err = wal.SetAgendaChoices(ctx, ticketHash, choice)
+	_, err = wal.SetAgendaChoices(ctx, ticketHash, newChoice)
 	if err != nil {
 		return err
 	}
@@ -71,8 +90,16 @@ func (wallet *Wallet) SetVoteChoice(vspHost string, vspPubKey []byte, agendaID, 
 		if err != nil {
 			return err
 		}
-		err = vspClient.SetVoteChoice(ctx, ticketHash, choice)
-		return err
+		err = vspClient.SetVoteChoice(ctx, ticketHash, newChoice)
+		if err != nil {
+			// Updating the agenda voting preference with the vsp failed, therefore
+			// revert the locally saved voting preference for the agenda.
+			_, err = wal.SetAgendaChoices(ctx, ticketHash, currentChoice)
+			if err != nil {
+				return err
+			}
+		}
+
 	}
 
 	vspClient, err := wallet.VSPClient(vspHost, vspPubKey)
@@ -86,8 +113,11 @@ func (wallet *Wallet) SetVoteChoice(vspHost string, vspPubKey []byte, agendaID, 
 	vspClient.ForUnspentUnexpiredTickets(ctx, func(hash *chainhash.Hash) error {
 		// Never return errors here, so all tickets are tried.
 		// The first error will be returned to the user.
-		err := vspClient.SetVoteChoice(ctx, hash, choice)
+		err := vspClient.SetVoteChoice(ctx, hash, newChoice)
 		if err != nil && firstErr == nil {
+			// Updating the agenda voting preference with the vsp failed, therefore
+			// revert the locally saved voting preference for the agenda.
+			_, err = wal.SetAgendaChoices(ctx, ticketHash, currentChoice)
 			firstErr = err
 		}
 		return nil
@@ -125,17 +155,17 @@ func (wallet *Wallet) AllVoteAgendas(hash string, newestFirst bool) (uint32, []*
 
 	for i := range deployments {
 
-		for i := range choices {
-			agenda := agenda(deployments, choices[i].AgendaID)
-			agendaVoteChoices[i] = AgendaVoteChoice{
-				AgendaID:          choices[i].AgendaID,
+		for j := range choices {
+			agenda := agenda(deployments, choices[j].AgendaID)
+			agendaVoteChoices[j] = AgendaVoteChoice{
+				AgendaID:          choices[j].AgendaID,
 				AgendaDescription: agenda.Vote.Description,
-				ChoiceID:          choices[i].ChoiceID,
+				ChoiceID:          choices[j].ChoiceID,
 				ChoiceDescription: "", // Set below
 			}
 			for _, choice := range agenda.Vote.Choices {
-				if choices[i].ChoiceID == choice.Id {
-					agendaVoteChoices[i].ChoiceDescription = choice.Description
+				if choices[j].ChoiceID == choice.Id {
+					agendaVoteChoices[j].ChoiceDescription = choice.Description
 					break
 				}
 			}
@@ -144,9 +174,9 @@ func (wallet *Wallet) AllVoteAgendas(hash string, newestFirst bool) (uint32, []*
 		d := &deployments[i]
 
 		var votingPreference string
-		for j := range agendaVoteChoices {
-			if agendaVoteChoices[j].AgendaID == d.Vote.Id {
-				votingPreference = agendaVoteChoices[j].ChoiceID
+		for k := range agendaVoteChoices {
+			if agendaVoteChoices[k].AgendaID == d.Vote.Id {
+				votingPreference = agendaVoteChoices[k].ChoiceID
 			}
 		}
 
