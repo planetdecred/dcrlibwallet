@@ -14,8 +14,7 @@ import (
 // GetVoteChoices returns configured vote preferences for each agenda of
 // all supported stake versions, but only preferences saved for the
 // current stake version agendas for the wallet with the specified walletID.
-func (mw *MultiWallet) GetVoteChoices(hash string, walletID int) (*GetVoteChoicesResult, error) {
-	wallet := mw.WalletWithID(walletID)
+func (wallet *Wallet) GetVoteChoices(hash string) (*GetVoteChoicesResult, error) {
 	if wallet == nil {
 		return nil, errors.New(ErrNotExist)
 	}
@@ -43,7 +42,7 @@ func (mw *MultiWallet) GetVoteChoices(hash string, walletID int) (*GetVoteChoice
 	}
 
 	for i := range choices {
-		agenda := mw.agenda(agendas, choices[i].AgendaID)
+		agenda := agenda(agendas, choices[i].AgendaID)
 		resp.Choices[i] = AgendaVoteChoice{
 			AgendaID:          choices[i].AgendaID,
 			AgendaDescription: agenda.Vote.Description,
@@ -61,7 +60,7 @@ func (mw *MultiWallet) GetVoteChoices(hash string, walletID int) (*GetVoteChoice
 	return resp, nil
 }
 
-func (mw *MultiWallet) agenda(agendas []chaincfg.ConsensusDeployment, agendaID string) *chaincfg.ConsensusDeployment {
+func agenda(agendas []chaincfg.ConsensusDeployment, agendaID string) *chaincfg.ConsensusDeployment {
 	for _, agenda := range agendas {
 		if agenda.Vote.Id == agendaID {
 			return &agenda
@@ -76,8 +75,7 @@ func (mw *MultiWallet) agenda(agendas []chaincfg.ConsensusDeployment, agendaID s
 //
 // If a ticket hash isn't provided, the vote choice is set for all tickets
 // controlled by the set VSP.
-func (mw *MultiWallet) SetVoteChoice(walletID int, vspHost string, vspPubKey []byte, agendaID, choiceID, hash string, passphrase []byte) error {
-	wallet := mw.WalletWithID(walletID)
+func (wallet *Wallet) SetVoteChoice(vspHost string, vspPubKey []byte, agendaID, choiceID, hash string, passphrase []byte) error {
 	if wallet == nil {
 		return errors.New(ErrNotExist)
 	}
@@ -153,12 +151,11 @@ func (mw *MultiWallet) SetVoteChoice(walletID int, vspHost string, vspPubKey []b
 // GetAllAgendasForWallet returns all agendas through out the various
 // stake versions for the active network and this version of the software,
 // and all agendas defined by it for a selected wallet.
-func (mw *MultiWallet) GetAllAgendasForWallet(walletID int, newestFirst bool) (uint32, []*Agenda, error) {
-	wallet := mw.WalletWithID(walletID)
+func (wallet *Wallet) GetAllAgendasForWallet(newestFirst bool) (uint32, []*Agenda, error) {
 	version, deployments := getAllAgendas(wallet.chainParams)
 	agendas := make([]*Agenda, len(deployments))
 
-	voteChoicesResult, err := mw.GetVoteChoices("", wallet.ID)
+	voteChoicesResult, err := wallet.GetVoteChoices("")
 	if err != nil {
 		return 0, nil, errors.Errorf("error getting voteChoicesResult: %s", err.Error())
 	}
