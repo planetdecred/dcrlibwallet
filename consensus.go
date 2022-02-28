@@ -123,23 +123,24 @@ func (wallet *Wallet) AllVoteAgendas(hash string, newestFirst bool) (uint32, []*
 		return 0, nil, err
 	}
 
-	for i := range choices {
-		agenda := agenda(deployments, choices[i].AgendaID)
-		agendaVoteChoices[i] = AgendaVoteChoice{
-			AgendaID:          choices[i].AgendaID,
-			AgendaDescription: agenda.Vote.Description,
-			ChoiceID:          choices[i].ChoiceID,
-			ChoiceDescription: "", // Set below
-		}
-		for _, choice := range agenda.Vote.Choices {
-			if choices[i].ChoiceID == choice.Id {
-				agendaVoteChoices[i].ChoiceDescription = choice.Description
-				break
+	for i := range deployments {
+
+		for i := range choices {
+			agenda := agenda(deployments, choices[i].AgendaID)
+			agendaVoteChoices[i] = AgendaVoteChoice{
+				AgendaID:          choices[i].AgendaID,
+				AgendaDescription: agenda.Vote.Description,
+				ChoiceID:          choices[i].ChoiceID,
+				ChoiceDescription: "", // Set below
+			}
+			for _, choice := range agenda.Vote.Choices {
+				if choices[i].ChoiceID == choice.Id {
+					agendaVoteChoices[i].ChoiceDescription = choice.Description
+					break
+				}
 			}
 		}
-	}
 
-	for i := range deployments {
 		d := &deployments[i]
 
 		var votingPreference string
