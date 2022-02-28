@@ -189,7 +189,9 @@ func (wallet *Wallet) AllVoteAgendas(hash string, newestFirst bool) (uint32, []*
 	}
 
 	if newestFirst {
-		sort.Sort(ByStartTime(agendas))
+		sort.Slice(agendas, func(i, j int) bool {
+			return agendas[i].StartTime > agendas[j].StartTime
+		})
 	}
 	return version, agendas, nil
 }
