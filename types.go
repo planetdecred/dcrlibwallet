@@ -4,8 +4,11 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"time"
 
 	"decred.org/dcrwallet/v2/wallet/udb"
+
+	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/dcrutil/v4"
 	"github.com/planetdecred/dcrlibwallet/internal/vsp"
 )
@@ -498,32 +501,25 @@ type VSP struct {
 
 // Agenda contains information about a consensus deployment
 type Agenda struct {
-	AgendaID         string        `json:"agenda_id"`
-	Description      string        `json:"description"`
-	Mask             uint32        `json:"mask"`
-	Choices          []*VoteChoice `json:"choices"`
-	VotingPreference string        `json:"voting_preference"`
-	StartTime        int64         `json:"start_time"`
-	ExpireTime       int64         `json:"expire_time"`
-	Status           string        `json:"status"`
+	AgendaID         string            `json:"agenda_id"`
+	Description      string            `json:"description"`
+	Mask             uint32            `json:"mask"`
+	Choices          []chaincfg.Choice `json:"choices"`
+	VotingPreference string            `json:"voting_preference"`
+	StartTime        int64             `json:"start_time"`
+	ExpireTime       int64             `json:"expire_time"`
 }
 
-// VoteChoice holds information about the possible choices that
-// an agenda can vote with.
-type VoteChoice struct {
-	Id          string `json:"id"`
-	Description string `json:"description"`
-	Bits        uint32 `json:"bits"`
-	IsAbstain   bool   `json:"is_abstain"`
-	IsNo        bool   `json:"is_no"`
-}
-
-// AgendaVoteChoice holds information about the current vote choice of an agenda
-type AgendaVoteChoice struct {
-	AgendaID          string `json:"agenda_id"`
-	AgendaDescription string `json:"agenda_description"`
-	ChoiceID          string `json:"choice_id"`
-	ChoiceDescription string `json:"choice_description"`
+// Status is the status of the agenda as at the current time.
+func (agenda *Agenda) Status() string {
+	currentTime := time.Now().Unix()
+	if currentTime > agenda.ExpireTime { // now is after expireTime
+		return "Finished"
+	} else if currentTime < agenda.StartTime { // now is before startTime, but not after expireTime
+		return "Upcoming"
+	} else { // now is between startTime and expireTime
+		return "In progress"
+	}
 }
 
 /** end agenda types */

@@ -458,6 +458,9 @@ func TimeElapsed(now, then time.Time, abbreviationFormat string, fullTime bool) 
 	return parts[0] + text
 }
 
+// voteVersion was borrowed from upstream, and needs to always be in
+// sync with the upstream method. This is the LOC to the upstream version:
+// https://github.com/decred/dcrwallet/blob/master/wallet/wallet.go#L266
 func voteVersion(params *chaincfg.Params) uint32 {
 	switch params.Net {
 	case wire.MainNet:
