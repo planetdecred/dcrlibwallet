@@ -11,6 +11,12 @@ import (
 	"github.com/decred/dcrd/chaincfg/v3"
 )
 
+const (
+	AgendaStatusUpcoming   = "Upcoming"
+	AgendaStatusInProgress = "In progress"
+	AgendaStatusFinished   = "Finished"
+)
+
 // SetVoteChoice sets a voting choice for the specified agenda. If a ticket
 // hash is provided, the voting choice is also updated with the VSP controlling
 // the ticket. If a ticket hash isn't provided, the vote choice is saved to the
