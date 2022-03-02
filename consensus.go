@@ -4,20 +4,19 @@ import (
 	"fmt"
 	"sort"
 
+	"decred.org/dcrwallet/v2/errors"
 	w "decred.org/dcrwallet/v2/wallet"
+
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v3"
 )
 
 // SetVoteChoice sets a voting choice for the specified agenda. If a ticket
 // hash is provided, the voting choice is also updated with the VSP controlling
-// the ticket. If a ticket hash isn't provided, the vote choice is set for all
-// tickets controlled by the specified VSP.
-func (wallet *Wallet) SetVoteChoice(vspHost string, vspPubKey []byte, agendaID, choiceID, hash string, passphrase []byte) error {
-	if vspHost == "" && hash == "" {
-		return fmt.Errorf("request requires either a vsp host or a ticket hash")
-	}
-
+// the ticket. If a ticket hash isn't provided, the vote choice is saved to the
+// local wallet database and the VSPs controlling all unspent, unexpired tickets
+// are updated to use the specified vote choice.
+func (wallet *Wallet) SetVoteChoice(agendaID, choiceID, hash string, passphrase []byte) error {
 	var ticketHash *chainhash.Hash
 	if hash != "" {
 		hash, err := chainhash.NewHashFromStr(hash)
@@ -65,57 +64,62 @@ func (wallet *Wallet) SetVoteChoice(vspHost string, vspPubKey []byte, agendaID, 
 		return err
 	}
 
-	// If ticket hash is provided, then set vote choice for the selected ticket
-	// with the associated vsp.
-	if ticketHash != nil {
-		vspTicketInfo, err := wallet.Internal().VSPTicketInfo(ctx, ticketHash)
-		if err != nil {
-			return err
-		}
-		// Update the vote choice for the ticket with the vsp
-		vspClient, err := wallet.VSPClient(vspTicketInfo.Host, vspTicketInfo.PubKey)
-		if err != nil {
-			return err
-		}
-		err = vspClient.SetVoteChoice(ctx, ticketHash, newChoice)
-		if err != nil {
+	var vspPreferenceUpdateSuccess bool
+	defer func() {
+		if !vspPreferenceUpdateSuccess {
 			// Updating the agenda voting preference with the vsp failed,
 			// revert the locally saved voting preference for the agenda.
 			_, revertError := wallet.Internal().SetAgendaChoices(ctx, ticketHash, currentChoice)
 			if revertError != nil {
 				log.Errorf("unable to revert locally saved voting preference: %v", revertError)
 			}
-			return err
+		}
+	}()
+
+	// If a ticket hash is provided, set the specified vote choice with
+	// the VSP associated with the provided ticket. Otherwise, set the
+	// vote choice with the VSPs associated with all "votable" tickets.
+	ticketHashes := make([]*chainhash.Hash, 0)
+	if ticketHash != nil {
+		ticketHashes = append(ticketHashes, ticketHash)
+	} else {
+		err = wallet.Internal().ForUnspentUnexpiredTickets(ctx, func(hash *chainhash.Hash) error {
+			ticketHashes = append(ticketHashes, hash)
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("unable to fetch hashes for all unspent, unexpired tickets: %v", err)
 		}
 	}
 
-	vspClient, err := wallet.VSPClient(vspHost, vspPubKey)
-	if err != nil {
-		return err
-	}
-
-	// Ticket hash wasn't provided, therefore set vote choice for all tickets
-	// belonging to the selected wallet and controlled by the specififed VSP
+	// Never return errors from this for loop, so all tickets are tried.
+	// The first error will be returned to the caller.
 	var firstErr error
-	vspClient.ForUnspentUnexpiredTickets(ctx, func(hash *chainhash.Hash) error {
-		// Never return errors here, so all tickets are tried.
-		// The first error will be returned to the user.
-		err := vspClient.SetVoteChoice(ctx, hash, newChoice)
+	for _, tHash := range ticketHashes {
+		vspTicketInfo, err := wallet.Internal().VSPTicketInfo(ctx, tHash)
+		if err != nil {
+			// Ignore NotExist error, just means the ticket is not
+			// registered with a VSP, nothing more to do here.
+			if firstErr == nil && !errors.Is(err, errors.NotExist) {
+				firstErr = err
+			}
+			continue // try next tHash
+		}
+
+		// Update the vote choice for the ticket with the associated VSP.
+		vspClient, err := wallet.VSPClient(vspTicketInfo.Host, vspTicketInfo.PubKey)
 		if err != nil && firstErr == nil {
 			firstErr = err
+			continue // try next tHash
 		}
-		return nil
-	})
-
-	if firstErr != nil {
-		// Updating the agenda voting preference with the vsp failed, therefore
-		// revert the locally saved voting preference for the agenda.
-		_, revertError := wallet.Internal().SetAgendaChoices(ctx, ticketHash, currentChoice)
-		if revertError != nil {
-			log.Errorf("unable to revert locally saved voting preference: %v", revertError)
+		err = vspClient.SetVoteChoice(ctx, tHash, newChoice)
+		if err != nil && firstErr == nil {
+			firstErr = err
+			continue // try next tHash
 		}
 	}
 
+	vspPreferenceUpdateSuccess = firstErr == nil
 	return firstErr
 }
 
