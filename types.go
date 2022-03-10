@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"time"
 
 	"decred.org/dcrwallet/v2/wallet/udb"
 
@@ -508,18 +507,24 @@ type Agenda struct {
 	VotingPreference string            `json:"voting_preference"`
 	StartTime        int64             `json:"start_time"`
 	ExpireTime       int64             `json:"expire_time"`
+	Status           string            `json:"status"`
 }
 
-// Status is the status of the agenda as at the current time.
-func (agenda *Agenda) Status() string {
-	currentTime := time.Now().Unix()
-	if currentTime > agenda.ExpireTime { // now is after expireTime
-		return "Finished"
-	} else if currentTime < agenda.StartTime { // now is before startTime, but not after expireTime
-		return "Upcoming"
-	} else { // now is between startTime and expireTime
-		return "In progress"
-	}
+// AgendaTagged gets agenda information for the active network
+// from the dcrdata api https://dcrdata.decred.org/api/agendas for mainnet
+// or https://testnet.decred.org/api/agendas for testnet.
+type AgendaTagged struct {
+	Name          string `json:"name"`
+	Description   string `json:"-"`
+	Status        string `json:"status"`
+	VotingStarted int64  `json:"-"`
+	VotingDone    int64  `json:"-"`
+	Activated     int64  `json:"-"`
+	HardForked    int64  `json:"-"`
+	StartTime     string `json:"-"`
+	ExpireTime    string `json:"-"`
+	VoteVersion   uint32 `json:"-"`
+	Mask          uint16 `json:"-"`
 }
 
 /** end agenda types */
