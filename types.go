@@ -510,10 +510,10 @@ type Agenda struct {
 	Status           string            `json:"status"`
 }
 
-// AgendaTagged gets agenda information for the active network
-// from the dcrdata api https://dcrdata.decred.org/api/agendas for mainnet
-// or https://testnet.decred.org/api/agendas for testnet.
-type AgendaTagged struct {
+// DcrdataAgenda models agenda information for the active network from the
+// dcrdata api https://dcrdata.decred.org/api/agendas for mainnet or
+// https://testnet.decred.org/api/agendas for testnet.
+type DcrdataAgenda struct {
 	Name          string `json:"name"`
 	Description   string `json:"-"`
 	Status        string `json:"status"`

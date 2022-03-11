@@ -1,10 +1,7 @@
 package dcrlibwallet
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"sort"
 
 	"decred.org/dcrwallet/v2/errors"
@@ -16,12 +13,12 @@ import (
 )
 
 const (
-	DcrdataMainnetHost = "https://dcrdata.decred.org/api/agendas"
-	DcrdataTestnetHost = "https://testnet.decred.org/api/agendas"
+	dcrdataAgendasAPIMainnetUrl = "https://dcrdata.decred.org/api/agendas"
+	dcrdataAgendasAPITestnetUrl = "https://testnet.decred.org/api/agendas"
 
-	AgendaStatusUpcoming   = "upcoming"
-	AgendaStatusInProgress = "in progress"
-	AgendaStatusFinished   = "finished"
+	AgendaStatusUpcoming   = "upcoming"    // AgendaStatusUpcoming used to define an agenda yet to vote, called from godcr.
+	AgendaStatusInProgress = "in progress" // AgendaStatusInProgress used to define an agenda with voting ongoing, called from godcr.
+	AgendaStatusFinished   = "finished"    // AgendaStatusFinished used to define an agenda that has finished voting, called from godcr.
 )
 
 // SetVoteChoice sets a voting choice for the specified agenda. If a ticket
@@ -169,12 +166,12 @@ func (wallet *Wallet) AllVoteAgendas(hash string, newestFirst bool) ([]*Agenda, 
 	}
 
 	// Fetch high level agenda detail form dcrdata api.
-	var agendaTagged []AgendaTagged
-	host := DcrdataMainnetHost
+	var dcrdataAgenda []DcrdataAgenda
+	host := dcrdataAgendasAPIMainnetUrl
 	if wallet.chainParams.Net == wire.TestNet3 {
-		host = DcrdataTestnetHost
+		host = dcrdataAgendasAPITestnetUrl
 	}
-	err = unmarshal(host, &agendaTagged)
+	_, _, err = HttpGet(host, &dcrdataAgenda)
 	if err != nil {
 		return nil, err
 	}
@@ -192,9 +189,9 @@ func (wallet *Wallet) AllVoteAgendas(hash string, newestFirst bool) ([]*Agenda, 
 			}
 		}
 
-		for j := range agendaTagged {
-			if agendaTagged[j].Name == d.Vote.Id {
-				status = agendaTagged[j].Status
+		for j := range dcrdataAgenda {
+			if dcrdataAgenda[j].Name == d.Vote.Id {
+				status = dcrdataAgenda[j].Status
 			}
 		}
 
@@ -216,23 +213,4 @@ func (wallet *Wallet) AllVoteAgendas(hash string, newestFirst bool) ([]*Agenda, 
 		})
 	}
 	return agendas, nil
-}
-
-func unmarshal(host string, target interface{}) error {
-	res, err := http.Get(host)
-	if err != nil {
-		return err
-	}
-
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return err
-	}
-
-	err = json.Unmarshal(body, target)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }

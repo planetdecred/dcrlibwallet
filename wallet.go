@@ -293,8 +293,7 @@ func (wallet *Wallet) DecryptSeed(privatePassphrase []byte) (string, error) {
 // UnspentUnexpiredTickets returns all Unmined, Immature and Live tickets.
 func (wallet *Wallet) UnspentUnexpiredTickets() ([]Transaction, error) {
 	var tickets []Transaction
-	unspentUnexpiredTickets := []int32{TxFilterUnmined, TxFilterImmature, TxFilterLive}
-	for _, filter := range unspentUnexpiredTickets {
+	for _, filter := range []int32{TxFilterUnmined, TxFilterImmature, TxFilterLive} {
 		tx, err := wallet.GetTransactionsRaw(0, 0, filter, true)
 		if err != nil {
 			return nil, err

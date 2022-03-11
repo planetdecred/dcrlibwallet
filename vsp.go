@@ -154,6 +154,11 @@ func (mw *MultiWallet) ReloadVSPList(ctx context.Context) {
 	mw.vspMu.Unlock()
 }
 
+// HttpGet helps to convert json(Byte data) into struct object.
+func HttpGet(url string, respObj interface{}) (*http.Response, []byte, error) {
+	return httpGet(url, respObj)
+}
+
 func httpGet(url string, respObj interface{}) (*http.Response, []byte, error) {
 	rq := new(http.Client)
 	resp, err := rq.Get((url))
