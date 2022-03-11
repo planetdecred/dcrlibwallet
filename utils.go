@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -474,4 +477,26 @@ func voteVersion(params *chaincfg.Params) uint32 {
 	default:
 		return 1
 	}
+}
+
+// HttpGet helps to convert json(Byte data) into a struct object.
+func HttpGet(url string, respObj interface{}) (*http.Response, []byte, error) {
+	rq := new(http.Client)
+	resp, err := rq.Get((url))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return resp, respBytes, fmt.Errorf("%d response from server: %v", resp.StatusCode, string(respBytes))
+	}
+
+	err = json.Unmarshal(respBytes, respObj)
+	return resp, respBytes, err
 }

@@ -16,9 +16,17 @@ const (
 	dcrdataAgendasAPIMainnetUrl = "https://dcrdata.decred.org/api/agendas"
 	dcrdataAgendasAPITestnetUrl = "https://testnet.decred.org/api/agendas"
 
-	AgendaStatusUpcoming   = "upcoming"    // AgendaStatusUpcoming used to define an agenda yet to vote, called from godcr.
-	AgendaStatusInProgress = "in progress" // AgendaStatusInProgress used to define an agenda with voting ongoing, called from godcr.
-	AgendaStatusFinished   = "finished"    // AgendaStatusFinished used to define an agenda that has finished voting, called from godcr.
+	// AgendaStatusUpcoming used to define an agenda yet to vote,
+	// called from godcr.
+	AgendaStatusUpcoming = "upcoming"
+
+	// AgendaStatusInProgress used to define an agenda with voting ongoing,
+	// called from godcr.
+	AgendaStatusInProgress = "in progress"
+
+	// AgendaStatusFinished used to define an agenda that has finished voting,
+	// called from godcr.
+	AgendaStatusFinished = "finished"
 )
 
 // SetVoteChoice sets a voting choice for the specified agenda. If a ticket

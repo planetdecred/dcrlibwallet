@@ -623,3 +623,18 @@ func (mw *MultiWallet) NextTicketPriceRemaining() (secs int64, err error) {
 	secs, err = int64(time.Duration(x).Seconds()), nil
 	return
 }
+
+// UnspentUnexpiredTickets returns all Unmined, Immature and Live tickets.
+func (wallet *Wallet) UnspentUnexpiredTickets() ([]Transaction, error) {
+	var tickets []Transaction
+	for _, filter := range []int32{TxFilterUnmined, TxFilterImmature, TxFilterLive} {
+		tx, err := wallet.GetTransactionsRaw(0, 0, filter, true)
+		if err != nil {
+			return nil, err
+		}
+
+		tickets = append(tickets, tx...)
+	}
+
+	return tickets, nil
+}
