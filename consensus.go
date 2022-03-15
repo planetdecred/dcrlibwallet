@@ -16,16 +16,13 @@ const (
 	dcrdataAgendasAPIMainnetUrl = "https://dcrdata.decred.org/api/agendas"
 	dcrdataAgendasAPITestnetUrl = "https://testnet.decred.org/api/agendas"
 
-	// AgendaStatusUpcoming used to define an agenda yet to vote,
-	// called from godcr.
+	// AgendaStatusUpcoming used to define an agenda yet to vote.
 	AgendaStatusUpcoming = "upcoming"
 
-	// AgendaStatusInProgress used to define an agenda with voting ongoing,
-	// called from godcr.
+	// AgendaStatusInProgress used to define an agenda with voting ongoing.
 	AgendaStatusInProgress = "in progress"
 
-	// AgendaStatusFinished used to define an agenda that has finished voting,
-	// called from godcr.
+	// AgendaStatusFinished used to define an agenda that has finished voting.
 	AgendaStatusFinished = "finished"
 )
 
