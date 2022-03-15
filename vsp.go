@@ -4,10 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"strings"
 
 	"decred.org/dcrwallet/v2/errors"
@@ -154,30 +151,9 @@ func (mw *MultiWallet) ReloadVSPList(ctx context.Context) {
 	mw.vspMu.Unlock()
 }
 
-func httpGet(url string, respObj interface{}) (*http.Response, []byte, error) {
-	rq := new(http.Client)
-	resp, err := rq.Get((url))
-	if err != nil {
-		return nil, nil, err
-	}
-
-	respBytes, err := ioutil.ReadAll(resp.Body)
-	resp.Body.Close()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return resp, respBytes, fmt.Errorf("%d response from server: %v", resp.StatusCode, string(respBytes))
-	}
-
-	err = json.Unmarshal(respBytes, respObj)
-	return resp, respBytes, err
-}
-
 func vspInfo(vspHost string) (*VspInfoResponse, error) {
 	vspInfoResponse := new(VspInfoResponse)
-	resp, respBytes, err := httpGet(vspHost+"/api/v3/vspinfo", vspInfoResponse)
+	resp, respBytes, err := HttpGet(vspHost+"/api/v3/vspinfo", vspInfoResponse)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +174,7 @@ func vspInfo(vspHost string) (*VspInfoResponse, error) {
 // defaultVSPs returns a list of known VSPs.
 func defaultVSPs(network string) ([]string, error) {
 	var vspInfoResponse map[string]*VspInfoResponse
-	_, _, err := httpGet("https://api.decred.org/?c=vsp", &vspInfoResponse)
+	_, _, err := HttpGet("https://api.decred.org/?c=vsp", &vspInfoResponse)
 	if err != nil {
 		return nil, err
 	}

@@ -6,6 +6,8 @@ import (
 	"net"
 
 	"decred.org/dcrwallet/v2/wallet/udb"
+
+	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/dcrutil/v4"
 	"github.com/planetdecred/dcrlibwallet/internal/vsp"
 )
@@ -493,3 +495,36 @@ type VSP struct {
 }
 
 /** end vspd-related types */
+
+/** begin agenda types */
+
+// Agenda contains information about a consensus deployment
+type Agenda struct {
+	AgendaID         string            `json:"agenda_id"`
+	Description      string            `json:"description"`
+	Mask             uint32            `json:"mask"`
+	Choices          []chaincfg.Choice `json:"choices"`
+	VotingPreference string            `json:"voting_preference"`
+	StartTime        int64             `json:"start_time"`
+	ExpireTime       int64             `json:"expire_time"`
+	Status           string            `json:"status"`
+}
+
+// DcrdataAgenda models agenda information for the active network from the
+// dcrdata api https://dcrdata.decred.org/api/agendas for mainnet or
+// https://testnet.decred.org/api/agendas for testnet.
+type DcrdataAgenda struct {
+	Name          string `json:"name"`
+	Description   string `json:"-"`
+	Status        string `json:"status"`
+	VotingStarted int64  `json:"-"`
+	VotingDone    int64  `json:"-"`
+	Activated     int64  `json:"-"`
+	HardForked    int64  `json:"-"`
+	StartTime     string `json:"-"`
+	ExpireTime    string `json:"-"`
+	VoteVersion   uint32 `json:"-"`
+	Mask          uint16 `json:"-"`
+}
+
+/** end agenda types */

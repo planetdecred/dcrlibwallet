@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -21,6 +24,7 @@ import (
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/dcrutil/v4"
 	"github.com/decred/dcrd/hdkeychain/v3"
+	"github.com/decred/dcrd/wire"
 	"github.com/planetdecred/dcrlibwallet/internal/loader"
 )
 
@@ -455,4 +459,44 @@ func TimeElapsed(now, then time.Time, abbreviationFormat string, fullTime bool) 
 		return strings.Join(parts, ", ") + text
 	}
 	return parts[0] + text
+}
+
+// voteVersion was borrowed from upstream, and needs to always be in
+// sync with the upstream method. This is the LOC to the upstream version:
+// https://github.com/decred/dcrwallet/blob/master/wallet/wallet.go#L266
+func voteVersion(params *chaincfg.Params) uint32 {
+	switch params.Net {
+	case wire.MainNet:
+		return 9
+	case 0x48e7a065: // TestNet2
+		return 6
+	case wire.TestNet3:
+		return 10
+	case wire.SimNet:
+		return 10
+	default:
+		return 1
+	}
+}
+
+// HttpGet helps to convert json(Byte data) into a struct object.
+func HttpGet(url string, respObj interface{}) (*http.Response, []byte, error) {
+	rq := new(http.Client)
+	resp, err := rq.Get((url))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return resp, respBytes, fmt.Errorf("%d response from server: %v", resp.StatusCode, string(respBytes))
+	}
+
+	err = json.Unmarshal(respBytes, respObj)
+	return resp, respBytes, err
 }
