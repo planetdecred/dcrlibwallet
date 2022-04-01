@@ -63,7 +63,7 @@ type Syncer struct {
 	seenTxs lru.Cache
 
 	// Sidechain management
-	sidechains  wallet.SidechainForest
+	sidechains  map[int]*wallet.SidechainForest
 	sidechainMu sync.Mutex
 
 	currentLocators   []*chainhash.Hash
@@ -112,14 +112,16 @@ type Notifications struct {
 
 // NewSyncer creates a Syncer that will sync the wallet using SPV.
 func NewSyncer(wallets map[int]*wallet.Wallet, lp *p2p.LocalPeer) *Syncer {
-	rescanFilter := make(map[int]*wallet.RescanFilter)
-	filterData := make(map[int]*blockcf2.Entries)
 	atomicWalletsSynced := make(map[int]*uint32, len(wallets))
+	rescanFilter := make(map[int]*wallet.RescanFilter, len(wallets))
+	filterData := make(map[int]*blockcf2.Entries, len(wallets))
+	sidechains := make(map[int]*wallet.SidechainForest, len(wallets))
 
 	for walletID := range wallets {
+		atomicWalletsSynced[walletID] = new(uint32)
 		rescanFilter[walletID] = wallet.NewRescanFilter(nil, nil)
 		filterData[walletID] = &blockcf2.Entries{}
-		atomicWalletsSynced[walletID] = new(uint32)
+		sidechains[walletID] = &wallet.SidechainForest{}
 	}
 
 	return &Syncer{
@@ -131,6 +133,7 @@ func NewSyncer(wallets map[int]*wallet.Wallet, lp *p2p.LocalPeer) *Syncer {
 		rescanFilter:        rescanFilter,
 		filterData:          filterData,
 		seenTxs:             lru.NewCache(2000),
+		sidechains:          sidechains,
 		lp:                  lp,
 		mempoolAdds:         make(chan *chainhash.Hash),
 	}
@@ -1110,7 +1113,7 @@ func (s *Syncer) handleBlockAnnouncementsForWallet(ctx context.Context, walletID
 		if err != nil {
 			return err
 		}
-		if !prevInMainChain && !s.sidechains.HasSideChainBlock(&firstHeader.PrevBlock) {
+		if !prevInMainChain && !s.sidechains[walletID].HasSideChainBlock(&firstHeader.PrevBlock) {
 			if err := rp.ReceivedOrphanHeader(); err != nil {
 				return err
 			}
@@ -1144,7 +1147,7 @@ func (s *Syncer) handleBlockAnnouncementsForWallet(ctx context.Context, walletID
 				if err != nil {
 					return err
 				}
-				if haveBlock || s.sidechains.HasSideChainBlock(&hash) {
+				if haveBlock || s.sidechains[walletID].HasSideChainBlock(&hash) {
 					continue
 				}
 			}
@@ -1159,7 +1162,7 @@ func (s *Syncer) handleBlockAnnouncementsForWallet(ctx context.Context, walletID
 			return nil
 		}
 
-		fullsc, err := s.sidechains.FullSideChain(newBlocks)
+		fullsc, err := s.sidechains[walletID].FullSideChain(newBlocks)
 		if err != nil {
 			return err
 		}
@@ -1169,10 +1172,10 @@ func (s *Syncer) handleBlockAnnouncementsForWallet(ctx context.Context, walletID
 		}
 
 		for _, n := range newBlocks {
-			s.sidechains.AddBlockNode(n)
+			s.sidechains[walletID].AddBlockNode(n)
 		}
 
-		bestChain, err = w.EvaluateBestChain(ctx, &s.sidechains)
+		bestChain, err = w.EvaluateBestChain(ctx, s.sidechains[walletID])
 		if err != nil {
 			return err
 		}
@@ -1217,7 +1220,7 @@ func (s *Syncer) handleBlockAnnouncementsForWallet(ctx context.Context, walletID
 			}
 		}
 
-		prevChain, err := w.ChainSwitch(ctx, &s.sidechains, bestChain, matchingTxs)
+		prevChain, err := w.ChainSwitch(ctx, s.sidechains[walletID], bestChain, matchingTxs)
 		if err != nil {
 			return err
 		}
@@ -1225,7 +1228,7 @@ func (s *Syncer) handleBlockAnnouncementsForWallet(ctx context.Context, walletID
 			log.Infof("[%d] Reorganize from %v to %v (total %d block(s) reorged)",
 				walletID, prevChain[len(prevChain)-1].Hash, bestChain[len(bestChain)-1].Hash, len(prevChain))
 			for _, n := range prevChain {
-				s.sidechains.AddBlockNode(n)
+				s.sidechains[walletID].AddBlockNode(n)
 			}
 		}
 		tipHeader := bestChain[len(bestChain)-1].Header
@@ -1354,7 +1357,7 @@ func (s *Syncer) getHeaders(ctx context.Context, rp *p2p.RemotePeer) error {
 				if haveBlock {
 					continue
 				}
-				if s.sidechains.AddBlockNode(n) {
+				if s.sidechains[walletID].AddBlockNode(n) {
 					added++
 				}
 			}
@@ -1362,7 +1365,7 @@ func (s *Syncer) getHeaders(ctx context.Context, rp *p2p.RemotePeer) error {
 			log.Debugf("[%d] Fetched %d new header(s) ending at height %d from %v",
 				walletID, added, nodes[len(nodes)-1].Header.Height, rp)
 
-			bestChain, err := w.EvaluateBestChain(ctx, &s.sidechains)
+			bestChain, err := w.EvaluateBestChain(ctx, s.sidechains[walletID])
 			if err != nil {
 				s.sidechainMu.Unlock()
 				return err
@@ -1378,7 +1381,7 @@ func (s *Syncer) getHeaders(ctx context.Context, rp *p2p.RemotePeer) error {
 				return err
 			}
 
-			prevChain, err := w.ChainSwitch(ctx, &s.sidechains, bestChain, nil)
+			prevChain, err := w.ChainSwitch(ctx, s.sidechains[walletID], bestChain, nil)
 			if err != nil {
 				s.sidechainMu.Unlock()
 				return err
@@ -1388,7 +1391,7 @@ func (s *Syncer) getHeaders(ctx context.Context, rp *p2p.RemotePeer) error {
 				log.Infof("[%d] Reorganize from %v to %v (total %d block(s) reorged)",
 					walletID, prevChain[len(prevChain)-1].Hash, bestChain[len(bestChain)-1].Hash, len(prevChain))
 				for _, n := range prevChain {
-					s.sidechains.AddBlockNode(n)
+					s.sidechains[walletID].AddBlockNode(n)
 				}
 			}
 			tip := bestChain[len(bestChain)-1]
