@@ -127,7 +127,7 @@ func (wallet *Wallet) SetVoteChoice(agendaID, choiceID, hash string, passphrase 
 			firstErr = err
 			continue // try next tHash
 		}
-		err = vspClient.SetVoteChoice(ctx, tHash, newChoice)
+		err = vspClient.SetVoteChoice(ctx, tHash, []w.AgendaChoice{newChoice}, nil, nil)
 		if err != nil && firstErr == nil {
 			firstErr = err
 			continue // try next tHash

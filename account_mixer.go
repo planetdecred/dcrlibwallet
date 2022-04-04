@@ -182,6 +182,7 @@ func (mw *MultiWallet) StartAccountMixer(walletID int, walletPassphrase string) 
 		c.TicketSplitAccount = cfg.TicketSplitAccount
 		c.BuyTickets = false
 		c.MixChange = true
+		// c.VotingAccount = 0 // TODO: VotingAccount should be configurable.
 	})
 
 	err = wallet.UnlockWallet([]byte(walletPassphrase))
@@ -250,7 +251,7 @@ func (wallet *Wallet) readCSPPConfig() *CSPPConfig {
 		MixedAccount:       uint32(mixedAccount),
 		MixedAccountBranch: uint32(MixedAccountBranch),
 		ChangeAccount:      uint32(unmixedAccount),
-		// TicketSplitAccount is unset
+		TicketSplitAccount: uint32(mixedAccount), // upstream desc: Account to derive fresh addresses from for mixed ticket splits; uses mixedaccount if unset
 	}
 }
 
