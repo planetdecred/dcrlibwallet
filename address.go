@@ -75,6 +75,9 @@ func (wallet *Wallet) AddressInfo(address string) (*AddressInfo, error) {
 	return addressInfo, nil
 }
 
+// CurrentAddress gets the most recently requested payment address from the
+// wallet. If that address has already been used to receive funds, the next
+// chained address is returned.
 func (wallet *Wallet) CurrentAddress(account int32) (string, error) {
 	if wallet.IsRestored && !wallet.HasDiscoveredAccounts {
 		return "", errors.E(ErrAddressDiscoveryNotDone)
@@ -82,23 +85,32 @@ func (wallet *Wallet) CurrentAddress(account int32) (string, error) {
 
 	addr, err := wallet.Internal().CurrentAddress(uint32(account))
 	if err != nil {
-		log.Error(err)
+		log.Errorf("CurrentAddress error: %w", err)
 		return "", err
 	}
 	return addr.String(), nil
 }
 
+// NextAddress returns the address immediately following the last requested
+// payment address. If that address has already been used to receive funds,
+// the next chained address is returned.
 func (wallet *Wallet) NextAddress(account int32) (string, error) {
 	if wallet.IsRestored && !wallet.HasDiscoveredAccounts {
 		return "", errors.E(ErrAddressDiscoveryNotDone)
 	}
 
-	addr, err := wallet.Internal().NewExternalAddress(wallet.shutdownContext(), uint32(account), w.WithGapPolicyWrap())
+	// NewExternalAddress increments the lastReturnedAddressIndex but does
+	// not return the address at the new index. The actual new address (at
+	// the newly incremented index) is returned below by CurrentAddress.
+	// NOTE: This workaround will be unnecessary once this anomaly is corrected
+	// upstream.
+	_, err := wallet.Internal().NewExternalAddress(wallet.shutdownContext(), uint32(account), w.WithGapPolicyWrap())
 	if err != nil {
-		log.Error(err)
+		log.Errorf("NewExternalAddress error: %w", err)
 		return "", err
 	}
-	return addr.String(), nil
+
+	return wallet.CurrentAddress(account)
 }
 
 func (wallet *Wallet) AddressPubKey(address string) (string, error) {
