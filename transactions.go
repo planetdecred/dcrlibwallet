@@ -142,6 +142,17 @@ func (mw *MultiWallet) GetTransactionsRaw(offset, limit, txFilter int32, newestF
 		return transactions[i].Timestamp < transactions[j].Timestamp
 	})
 
+	// Remove duplicate transactions from wallets imported more than once.
+	txHashes := make(map[string]bool)
+	txs := make([]Transaction, 0)
+	for _, tx := range transactions {
+		if _, hasHash := txHashes[tx.Hash]; !hasHash {
+			txHashes[tx.Hash] = true
+			txs = append(txs, tx)
+		}
+	}
+	transactions = txs
+
 	if len(transactions) > int(limit) && limit > 0 {
 		transactions = transactions[:limit]
 	}
