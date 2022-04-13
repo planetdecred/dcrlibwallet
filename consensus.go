@@ -3,6 +3,7 @@ package dcrlibwallet
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"decred.org/dcrwallet/v2/errors"
 	w "decred.org/dcrwallet/v2/wallet"
@@ -12,19 +13,70 @@ import (
 	"github.com/decred/dcrd/wire"
 )
 
+// AgendaStatusType defines the various agenda statuses.
+type AgendaStatusType string
+
 const (
 	dcrdataAgendasAPIMainnetUrl = "https://dcrdata.decred.org/api/agendas"
 	dcrdataAgendasAPITestnetUrl = "https://testnet.decred.org/api/agendas"
 
 	// AgendaStatusUpcoming used to define an agenda yet to vote.
-	AgendaStatusUpcoming = "upcoming"
+	AgendaStatusUpcoming AgendaStatusType = "upcoming"
 
 	// AgendaStatusInProgress used to define an agenda with voting ongoing.
-	AgendaStatusInProgress = "in progress"
+	AgendaStatusInProgress AgendaStatusType = "in progress"
+
+	// AgendaStatusFailed used to define an agenda when the votes tally does not
+	// attain the minimum threshold set. Activation height is not set for such an
+	// agenda.
+	AgendaStatusFailed AgendaStatusType = "failed"
+
+	// AgendaStatusLockedIn used to define an agenda that has passed after attaining
+	// the minimum set threshold.
+	AgendaStatusLockedIn AgendaStatusType = "locked in"
 
 	// AgendaStatusFinished used to define an agenda that has finished voting.
-	AgendaStatusFinished = "finished"
+	AgendaStatusFinished AgendaStatusType = "finished"
+
+	// UnknownStatus is used when a status string is not recognized.
+	UnknownStatus AgendaStatusType = "unknown"
 )
+
+func (a AgendaStatusType) String() string {
+	switch a {
+	case AgendaStatusUpcoming:
+		return "upcoming"
+	case AgendaStatusInProgress:
+		return "in progress"
+	case AgendaStatusLockedIn:
+		return "locked in"
+	case AgendaStatusFailed:
+		return "failed"
+	case AgendaStatusFinished:
+		return "finished"
+	default:
+		return "unknown"
+	}
+}
+
+// AgendaStatusFromStr creates an agenda status from a string. If "UnknownStatus"
+// is returned then an invalid status string has been passed.
+func AgendaStatusFromStr(status string) AgendaStatusType {
+	switch strings.ToLower(status) {
+	case "defined", "upcoming":
+		return AgendaStatusUpcoming
+	case "started", "in progress":
+		return AgendaStatusInProgress
+	case "failed":
+		return AgendaStatusFailed
+	case "lockedin", "locked in":
+		return AgendaStatusLockedIn
+	case "active", "finished":
+		return AgendaStatusFinished
+	default:
+		return UnknownStatus
+	}
+}
 
 // SetVoteChoice sets a voting choice for the specified agenda. If a ticket
 // hash is provided, the voting choice is also updated with the VSP controlling
@@ -196,7 +248,7 @@ func (wallet *Wallet) AllVoteAgendas(hash string, newestFirst bool) ([]*Agenda, 
 
 		for j := range dcrdataAgenda {
 			if dcrdataAgenda[j].Name == d.Vote.Id {
-				status = dcrdataAgenda[j].Status
+				status = AgendaStatusFromStr(dcrdataAgenda[j].Status).String()
 			}
 		}
 
