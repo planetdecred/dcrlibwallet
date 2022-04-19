@@ -289,3 +289,34 @@ func (wallet *Wallet) DecryptSeed(privatePassphrase []byte) (string, error) {
 
 	return decryptWalletSeed(privatePassphrase, wallet.EncryptedSeed)
 }
+
+// AccountXPubMatches checks if the xpub of the provided account matches the
+// provided legacy or SLIP0044 xpub. While both the legacy and SLIP0044 xpubs
+// will be checked for watch-only wallets, other wallets will only check the
+// xpub that matches the coin type key used by the wallet.
+func (wallet *Wallet) AccountXPubMatches(account uint32, legacyXPub, slip044XPub string) (bool, error) {
+	ctx := wallet.shutdownContext()
+
+	acctXPubKey, err := wallet.Internal().AccountXpub(ctx, account)
+	if err != nil {
+		return false, err
+	}
+	acctXPub := acctXPubKey.String()
+
+	if wallet.IsWatchingOnlyWallet() {
+		// Coin type info isn't saved for watch-only wallets, so check
+		// against both legacy and SLIP0044 coin types.
+		return acctXPub == legacyXPub || acctXPub == slip044XPub, nil
+	}
+
+	cointype, err := wallet.Internal().CoinType(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	if cointype == wallet.chainParams.LegacyCoinType {
+		return acctXPub == legacyXPub, nil
+	} else {
+		return acctXPub == slip044XPub, nil
+	}
+}
