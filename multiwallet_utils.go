@@ -128,6 +128,33 @@ func (mw *MultiWallet) DCP0001ActivationBlockHeight() int32 {
 	return activationHeight
 }
 
+// WalletWithXPub returns the ID of the wallet that has an account with the
+// provided xpub. Returns -1 if there is no such wallet.
+func (mw *MultiWallet) WalletWithXPub(xpub string) (int, error) {
+	ctx, cancel := mw.contextWithShutdownCancel()
+	defer cancel()
+
+	for _, w := range mw.wallets {
+		if !w.WalletOpened() {
+			return -1, errors.Errorf("wallet %d is not open and cannot be checked", w.ID)
+		}
+		accounts, err := w.Internal().Accounts(ctx)
+		if err != nil {
+			return -1, err
+		}
+		for _, account := range accounts.Accounts {
+			acctXPub, err := w.Internal().AccountXpub(ctx, account.AccountNumber)
+			if err != nil {
+				return -1, err
+			}
+			if acctXPub.String() == xpub {
+				return w.ID, nil
+			}
+		}
+	}
+	return -1, nil
+}
+
 // WalletWithSeed returns the ID of the wallet that was created or restored
 // using the same seed as the one provided. Returns -1 if no wallet uses the
 // provided seed.
