@@ -9,8 +9,10 @@ import (
 	"decred.org/dcrwallet/v2/deployments"
 	"decred.org/dcrwallet/v2/errors"
 	w "decred.org/dcrwallet/v2/wallet"
+	"decred.org/dcrwallet/v2/walletseed"
 	"github.com/asdine/storm"
 	"github.com/decred/dcrd/chaincfg/v3"
+	"github.com/decred/dcrd/hdkeychain/v3"
 	"github.com/kevinburke/nacl"
 	"github.com/kevinburke/nacl/secretbox"
 	"golang.org/x/crypto/scrypt"
@@ -124,6 +126,120 @@ func (mw *MultiWallet) DCP0001ActivationBlockHeight() int32 {
 	}
 
 	return activationHeight
+}
+
+// WalletWithXPub returns the ID of the wallet that has an account with the
+// provided xpub. Returns -1 if there is no such wallet.
+func (mw *MultiWallet) WalletWithXPub(xpub string) (int, error) {
+	ctx, cancel := mw.contextWithShutdownCancel()
+	defer cancel()
+
+	for _, w := range mw.wallets {
+		if !w.WalletOpened() {
+			return -1, errors.Errorf("wallet %d is not open and cannot be checked", w.ID)
+		}
+		accounts, err := w.Internal().Accounts(ctx)
+		if err != nil {
+			return -1, err
+		}
+		for _, account := range accounts.Accounts {
+			acctXPub, err := w.Internal().AccountXpub(ctx, account.AccountNumber)
+			if err != nil {
+				return -1, err
+			}
+			if acctXPub.String() == xpub {
+				return w.ID, nil
+			}
+		}
+	}
+	return -1, nil
+}
+
+// WalletWithSeed returns the ID of the wallet that was created or restored
+// using the same seed as the one provided. Returns -1 if no wallet uses the
+// provided seed.
+func (mw *MultiWallet) WalletWithSeed(seedMnemonic string) (int, error) {
+	if len(seedMnemonic) == 0 {
+		return -1, errors.New(ErrEmptySeed)
+	}
+
+	newSeedLegacyXPUb, newSeedSLIP0044XPUb, err := deriveBIP44AccountXPubs(seedMnemonic, DefaultAccountNum, mw.chainParams)
+	if err != nil {
+		return -1, err
+	}
+
+	for _, wallet := range mw.wallets {
+		if !wallet.WalletOpened() {
+			return -1, errors.Errorf("cannot check if seed matches unloaded wallet %d", wallet.ID)
+		}
+		// NOTE: Existing watch-only wallets may have been created using the
+		// xpub of an account that is NOT the default account and may return
+		// incorrect result from the check below. But this would return true
+		// if the watch-only wallet was created using the xpub of the default
+		// account of the provided seed.
+		usesSameSeed, err := wallet.AccountXPubMatches(DefaultAccountNum, newSeedLegacyXPUb, newSeedSLIP0044XPUb)
+		if err != nil {
+			return -1, err
+		}
+		if usesSameSeed {
+			return wallet.ID, nil
+		}
+	}
+
+	return -1, nil
+}
+
+// deriveBIP44AccountXPub derives and returns the legacy and SLIP0044 account
+// xpubs using the BIP44 HD path for accounts: m/44'/<coin type>'/<account>'.
+func deriveBIP44AccountXPubs(seedMnemonic string, account uint32, params *chaincfg.Params) (string, string, error) {
+	seed, err := walletseed.DecodeUserInput(seedMnemonic)
+	if err != nil {
+		return "", "", err
+	}
+	defer func() {
+		for i := range seed {
+			seed[i] = 0
+		}
+	}()
+
+	// Derive the master extended key from the provided seed.
+	masterNode, err := hdkeychain.NewMaster(seed, params)
+	if err != nil {
+		return "", "", err
+	}
+	defer masterNode.Zero()
+
+	// Derive the purpose key as a child of the master node.
+	purpose, err := masterNode.Child(44 + hdkeychain.HardenedKeyStart)
+	if err != nil {
+		return "", "", err
+	}
+	defer purpose.Zero()
+
+	accountXPub := func(coinType uint32) (string, error) {
+		coinTypePrivKey, err := purpose.Child(coinType + hdkeychain.HardenedKeyStart)
+		if err != nil {
+			return "", err
+		}
+		defer coinTypePrivKey.Zero()
+		acctPrivKey, err := coinTypePrivKey.Child(account + hdkeychain.HardenedKeyStart)
+		if err != nil {
+			return "", err
+		}
+		defer acctPrivKey.Zero()
+		return acctPrivKey.Neuter().String(), nil
+	}
+
+	legacyXPUb, err := accountXPub(params.LegacyCoinType)
+	if err != nil {
+		return "", "", err
+	}
+	slip0044XPUb, err := accountXPub(params.SLIP0044CoinType)
+	if err != nil {
+		return "", "", err
+	}
+
+	return legacyXPUb, slip0044XPUb, nil
 }
 
 // naclLoadFromPass derives a nacl.Key from pass using scrypt.Key.
