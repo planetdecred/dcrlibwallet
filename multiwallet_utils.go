@@ -143,6 +143,9 @@ func (mw *MultiWallet) WalletWithXPub(xpub string) (int, error) {
 			return -1, err
 		}
 		for _, account := range accounts.Accounts {
+			if account.AccountNumber == ImportedAccountNumber {
+				continue
+			}
 			acctXPub, err := w.Internal().AccountXpub(ctx, account.AccountNumber)
 			if err != nil {
 				return -1, err
