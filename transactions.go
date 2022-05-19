@@ -26,6 +26,7 @@ const (
 	TxFilterImmature    = walletdata.TxFilterImmature
 	TxFilterLive        = walletdata.TxFilterLive
 	TxFilterUnmined     = walletdata.TxFilterUnmined
+	TxFilterMissed      = walletdata.TxFilterMissed
 	TxFilterExpired     = walletdata.TxFilterExpired
 	TxFilterTickets     = walletdata.TxFilterTickets
 

@@ -20,8 +20,9 @@ const (
 	TxFilterImmature    int32 = 10
 	TxFilterLive        int32 = 11
 	TxFilterUnmined     int32 = 12
-	TxFilterExpired     int32 = 13
-	TxFilterTickets     int32 = 14
+	TxFilterMissed      int32 = 13
+	TxFilterExpired     int32 = 14
+	TxFilterTickets     int32 = 15
 )
 
 func (db *DB) prepareTxQuery(txFilter, requiredConfirmations, bestBlock int32) (query storm.Query) {
@@ -96,6 +97,13 @@ func (db *DB) prepareTxQuery(txFilter, requiredConfirmations, bestBlock int32) (
 			q.Or(
 				q.Eq("BlockHeight", -1),
 			),
+		)
+	case TxFilterMissed:
+		query = db.walletDataDB.Select(
+			q.Eq("Type", txhelper.TxTypeTicketPurchase),
+			q.Eq("TicketSpender", ""), // not spent by a vote or revoke
+			q.Gt("BlockHeight", 0),    // mined
+			q.Lt("BlockHeight", expiryBlock),
 		)
 	case TxFilterExpired:
 		query = db.walletDataDB.Select(
