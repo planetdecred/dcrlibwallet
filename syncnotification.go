@@ -166,7 +166,7 @@ func (mw *MultiWallet) fetchHeadersStarted(peerInitialHeight int32) {
 		return
 	}
 
-	for _, wallet := range mw.wallets {
+	for _, wallet := range mw.walletsCopy() {
 		wallet.waitingForHeaders = true
 	}
 
@@ -200,7 +200,7 @@ func (mw *MultiWallet) fetchHeadersProgress(lastFetchedHeaderHeight int32, lastF
 		return
 	}
 
-	for _, wallet := range mw.wallets {
+	for _, wallet := range mw.walletsCopy() {
 		if wallet.waitingForHeaders {
 			wallet.waitingForHeaders = wallet.GetBestBlock() > lastFetchedHeaderHeight
 		}
@@ -484,7 +484,7 @@ func (mw *MultiWallet) rescanProgress(walletID int, rescannedThrough int32) {
 		return
 	}
 
-	wallet := mw.wallets[walletID]
+	wallet := mw.walletsCopy()[walletID]
 	totalHeadersToScan := wallet.GetBestBlock()
 
 	rescanRate := float64(rescannedThrough) / float64(totalHeadersToScan)
@@ -621,7 +621,7 @@ func (mw *MultiWallet) resetSyncData() {
 	mw.syncData.activeSyncData = nil
 	mw.syncData.mu.Unlock()
 
-	for _, wallet := range mw.wallets {
+	for _, wallet := range mw.walletsCopy() {
 		wallet.waitingForHeaders = true
 		wallet.LockWallet() // lock wallet if previously unlocked to perform account discovery.
 	}
@@ -633,7 +633,7 @@ func (mw *MultiWallet) synced(walletID int, synced bool) {
 		// begin indexing transactions after sync is completed,
 		// syncProgressListeners.OnSynced() will be invoked after transactions are indexed
 		var txIndexing errgroup.Group
-		for _, wallet := range mw.wallets {
+		for _, wallet := range mw.walletsCopy() {
 			txIndexing.Go(wallet.IndexTransactions)
 		}
 
@@ -662,7 +662,7 @@ func (mw *MultiWallet) synced(walletID int, synced bool) {
 		return
 	}
 
-	wallet := mw.wallets[walletID]
+	wallet := mw.walletsCopy()[walletID]
 	wallet.synced = synced
 	wallet.syncing = false
 	mw.listenForTransactions(wallet.ID)

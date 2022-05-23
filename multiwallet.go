@@ -23,14 +23,19 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// MultiWallet allows for tracking/managing multiple Wallets.
+// It is safe to use concurrently from multiple go-routines.
 type MultiWallet struct {
 	dbDriver string
 	rootDir  string
 	db       *storm.DB
 
+	walletsMu    sync.RWMutex
+	wallets      map[int]*Wallet
+	badWalletsMu sync.RWMutex
+	badWallets   map[int]*Wallet
+
 	chainParams *chaincfg.Params
-	wallets     map[int]*Wallet
-	badWallets  map[int]*Wallet
 	syncData    *syncData
 
 	notificationListenersMu         sync.RWMutex
@@ -120,10 +125,10 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 			err = fmt.Errorf("missing wallet database file")
 		}
 		if err != nil {
-			mw.badWallets[wallet.ID] = wallet
+			mw.badWalletsCopy()[wallet.ID] = wallet
 			log.Warnf("Ignored wallet load error for wallet %d (%s)", wallet.ID, wallet.Name)
 		} else {
-			mw.wallets[wallet.ID] = wallet
+			mw.walletsCopy()[wallet.ID] = wallet
 		}
 	}
 
@@ -150,7 +155,7 @@ func (mw *MultiWallet) Shutdown() {
 	mw.CancelRescan()
 	mw.CancelSync()
 
-	for _, wallet := range mw.wallets {
+	for _, wallet := range mw.walletsCopy() {
 		wallet.Shutdown()
 	}
 
@@ -270,7 +275,7 @@ func (mw *MultiWallet) OpenWallets(startupPassphrase []byte) error {
 		return err
 	}
 
-	for _, wallet := range mw.wallets {
+	for _, wallet := range mw.walletsCopy() {
 		err = wallet.openWallet()
 		if err != nil {
 			return err
@@ -281,11 +286,11 @@ func (mw *MultiWallet) OpenWallets(startupPassphrase []byte) error {
 }
 
 func (mw *MultiWallet) AllWalletsAreWatchOnly() (bool, error) {
-	if len(mw.wallets) == 0 {
+	if len(mw.walletsCopy()) == 0 {
 		return false, errors.New(ErrInvalid)
 	}
 
-	for _, w := range mw.wallets {
+	for _, w := range mw.walletsCopy() {
 		if !w.IsWatchingOnlyWallet() {
 			return false, nil
 		}
@@ -424,6 +429,30 @@ func (mw *MultiWallet) LinkExistingWallet(walletName, walletDataDir, originalPub
 	})
 }
 
+func (mw *MultiWallet) walletsCopy() map[int]*Wallet {
+	result := make(map[int]*Wallet, len(mw.wallets))
+
+	mw.walletsMu.RLock()
+	for key, value := range mw.wallets {
+		result[key] = value
+	}
+	mw.walletsMu.RUnlock()
+
+	return result
+}
+
+func (mw *MultiWallet) badWalletsCopy() map[int]*Wallet {
+	result := make(map[int]*Wallet, len(mw.badWallets))
+
+	mw.badWalletsMu.RLock()
+	for key, value := range mw.badWallets {
+		result[key] = value
+	}
+	mw.badWalletsMu.RUnlock()
+
+	return result
+}
+
 // saveNewWallet performs the following tasks using a db batch operation to ensure
 // that db changes are rolled back if any of the steps below return an error.
 //
@@ -491,7 +520,7 @@ func (mw *MultiWallet) saveNewWallet(wallet *Wallet, setupWallet func() error) (
 		return nil, translateError(err)
 	}
 
-	mw.wallets[wallet.ID] = wallet
+	mw.walletsCopy()[wallet.ID] = wallet
 
 	return wallet, nil
 }
@@ -542,17 +571,17 @@ func (mw *MultiWallet) DeleteWallet(walletID int, privPass []byte) error {
 		return translateError(err)
 	}
 
-	delete(mw.wallets, walletID)
+	delete(mw.walletsCopy(), walletID)
 
 	return nil
 }
 
 func (mw *MultiWallet) BadWallets() map[int]*Wallet {
-	return mw.badWallets
+	return mw.badWalletsCopy()
 }
 
 func (mw *MultiWallet) DeleteBadWallet(walletID int) error {
-	wallet := mw.badWallets[walletID]
+	wallet := mw.badWalletsCopy()[walletID]
 	if wallet == nil {
 		return errors.New(ErrNotExist)
 	}
@@ -565,13 +594,13 @@ func (mw *MultiWallet) DeleteBadWallet(walletID int) error {
 	}
 
 	os.RemoveAll(wallet.dataDir)
-	delete(mw.badWallets, walletID)
+	delete(mw.badWalletsCopy(), walletID)
 
 	return nil
 }
 
 func (mw *MultiWallet) WalletWithID(walletID int) *Wallet {
-	if wallet, ok := mw.wallets[walletID]; ok {
+	if wallet, ok := mw.walletsCopy()[walletID]; ok {
 		return wallet
 	}
 	return nil
@@ -600,7 +629,7 @@ func (mw *MultiWallet) VerifySeedForWallet(walletID int, seedMnemonic string, pr
 // NumWalletsNeedingSeedBackup returns the number of opened wallets whose seed haven't been verified.
 func (mw *MultiWallet) NumWalletsNeedingSeedBackup() int32 {
 	var backupsNeeded int32
-	for _, wallet := range mw.wallets {
+	for _, wallet := range mw.walletsCopy() {
 		if wallet.WalletOpened() && wallet.EncryptedSeed != nil {
 			backupsNeeded++
 		}
@@ -609,12 +638,12 @@ func (mw *MultiWallet) NumWalletsNeedingSeedBackup() int32 {
 }
 
 func (mw *MultiWallet) LoadedWalletsCount() int32 {
-	return int32(len(mw.wallets))
+	return int32(len(mw.walletsCopy()))
 }
 
 func (mw *MultiWallet) OpenedWalletIDsRaw() []int {
 	walletIDs := make([]int, 0)
-	for _, wallet := range mw.wallets {
+	for _, wallet := range mw.walletsCopy() {
 		if wallet.WalletOpened() {
 			walletIDs = append(walletIDs, wallet.ID)
 		}
@@ -634,7 +663,7 @@ func (mw *MultiWallet) OpenedWalletsCount() int32 {
 
 func (mw *MultiWallet) SyncedWalletsCount() int32 {
 	var syncedWallets int32
-	for _, wallet := range mw.wallets {
+	for _, wallet := range mw.walletsCopy() {
 		if wallet.WalletOpened() && wallet.synced {
 			syncedWallets++
 		}
