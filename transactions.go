@@ -125,7 +125,7 @@ func (mw *MultiWallet) GetTransactions(offset, limit, txFilter int32, newestFirs
 
 func (mw *MultiWallet) GetTransactionsRaw(offset, limit, txFilter int32, newestFirst bool) ([]Transaction, error) {
 	transactions := make([]Transaction, 0)
-	for _, wallet := range mw.walletsCopy() {
+	for _, wallet := range mw.walletsReadCopy() {
 		walletTransactions, err := wallet.GetTransactionsRaw(offset, limit, txFilter, newestFirst)
 		if err != nil {
 			return nil, err

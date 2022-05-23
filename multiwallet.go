@@ -155,7 +155,7 @@ func (mw *MultiWallet) Shutdown() {
 	mw.CancelRescan()
 	mw.CancelSync()
 
-	for _, wallet := range mw.walletsCopy() {
+	for _, wallet := range mw.walletsReadCopy() {
 		wallet.Shutdown()
 	}
 
@@ -275,7 +275,7 @@ func (mw *MultiWallet) OpenWallets(startupPassphrase []byte) error {
 		return err
 	}
 
-	for _, wallet := range mw.walletsCopy() {
+	for _, wallet := range mw.walletsReadCopy() {
 		err = wallet.openWallet()
 		if err != nil {
 			return err
@@ -286,11 +286,11 @@ func (mw *MultiWallet) OpenWallets(startupPassphrase []byte) error {
 }
 
 func (mw *MultiWallet) AllWalletsAreWatchOnly() (bool, error) {
-	if len(mw.walletsCopy()) == 0 {
+	if len(mw.walletsReadCopy()) == 0 {
 		return false, errors.New(ErrInvalid)
 	}
 
-	for _, w := range mw.walletsCopy() {
+	for _, w := range mw.walletsReadCopy() {
 		if !w.IsWatchingOnlyWallet() {
 			return false, nil
 		}
@@ -429,8 +429,8 @@ func (mw *MultiWallet) LinkExistingWallet(walletName, walletDataDir, originalPub
 	})
 }
 
-// walletsCopy is concurrently-safe way to read from mw.wallets map.
-func (mw *MultiWallet) walletsCopy() map[int]*Wallet {
+// walletsReadCopy is concurrently-safe way to read from mw.wallets map.
+func (mw *MultiWallet) walletsReadCopy() map[int]*Wallet {
 	result := make(map[int]*Wallet, len(mw.wallets))
 
 	mw.walletsMu.RLock()
@@ -456,6 +456,19 @@ func (mw *MultiWallet) walletsDelete(key int) {
 	mw.walletsMu.Unlock()
 }
 
+// badWalletsReadCopy is concurrently-safe way to read from mw.badWallets map.
+func (mw *MultiWallet) badWalletsReadCopy() map[int]*Wallet {
+	result := make(map[int]*Wallet, len(mw.badWallets))
+
+	mw.badWalletsMu.RLock()
+	for key, value := range mw.badWallets {
+		result[key] = value
+	}
+	mw.badWalletsMu.RUnlock()
+
+	return result
+}
+
 // badWalletsUpdate is concurrently-safe way to update mw.badWallets map.
 func (mw *MultiWallet) badWalletsUpdate(key int, newBadWallet *Wallet) {
 	mw.badWalletsMu.Lock()
@@ -468,19 +481,6 @@ func (mw *MultiWallet) badWalletsDelete(key int) {
 	mw.badWalletsMu.Lock()
 	delete(mw.badWallets, key)
 	mw.badWalletsMu.Unlock()
-}
-
-// badWalletsCopy is concurrently-safe way to read from mw.badWallets map.
-func (mw *MultiWallet) badWalletsCopy() map[int]*Wallet {
-	result := make(map[int]*Wallet, len(mw.badWallets))
-
-	mw.badWalletsMu.RLock()
-	for key, value := range mw.badWallets {
-		result[key] = value
-	}
-	mw.badWalletsMu.RUnlock()
-
-	return result
 }
 
 // saveNewWallet performs the following tasks using a db batch operation to ensure
@@ -607,11 +607,11 @@ func (mw *MultiWallet) DeleteWallet(walletID int, privPass []byte) error {
 }
 
 func (mw *MultiWallet) BadWallets() map[int]*Wallet {
-	return mw.badWalletsCopy()
+	return mw.badWalletsReadCopy()
 }
 
 func (mw *MultiWallet) DeleteBadWallet(walletID int) error {
-	wallet := mw.badWalletsCopy()[walletID]
+	wallet := mw.badWalletsReadCopy()[walletID]
 	if wallet == nil {
 		return errors.New(ErrNotExist)
 	}
@@ -630,7 +630,7 @@ func (mw *MultiWallet) DeleteBadWallet(walletID int) error {
 }
 
 func (mw *MultiWallet) WalletWithID(walletID int) *Wallet {
-	if wallet, ok := mw.walletsCopy()[walletID]; ok {
+	if wallet, ok := mw.walletsReadCopy()[walletID]; ok {
 		return wallet
 	}
 	return nil
@@ -659,7 +659,7 @@ func (mw *MultiWallet) VerifySeedForWallet(walletID int, seedMnemonic string, pr
 // NumWalletsNeedingSeedBackup returns the number of opened wallets whose seed haven't been verified.
 func (mw *MultiWallet) NumWalletsNeedingSeedBackup() int32 {
 	var backupsNeeded int32
-	for _, wallet := range mw.walletsCopy() {
+	for _, wallet := range mw.walletsReadCopy() {
 		if wallet.WalletOpened() && wallet.EncryptedSeed != nil {
 			backupsNeeded++
 		}
@@ -668,12 +668,12 @@ func (mw *MultiWallet) NumWalletsNeedingSeedBackup() int32 {
 }
 
 func (mw *MultiWallet) LoadedWalletsCount() int32 {
-	return int32(len(mw.walletsCopy()))
+	return int32(len(mw.walletsReadCopy()))
 }
 
 func (mw *MultiWallet) OpenedWalletIDsRaw() []int {
 	walletIDs := make([]int, 0)
-	for _, wallet := range mw.walletsCopy() {
+	for _, wallet := range mw.walletsReadCopy() {
 		if wallet.WalletOpened() {
 			walletIDs = append(walletIDs, wallet.ID)
 		}
@@ -693,7 +693,7 @@ func (mw *MultiWallet) OpenedWalletsCount() int32 {
 
 func (mw *MultiWallet) SyncedWalletsCount() int32 {
 	var syncedWallets int32
-	for _, wallet := range mw.walletsCopy() {
+	for _, wallet := range mw.walletsReadCopy() {
 		if wallet.WalletOpened() && wallet.synced {
 			syncedWallets++
 		}

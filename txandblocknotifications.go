@@ -9,7 +9,7 @@ import (
 func (mw *MultiWallet) listenForTransactions(walletID int) {
 	go func() {
 
-		wallet := mw.walletsCopy()[walletID]
+		wallet := mw.walletsReadCopy()[walletID]
 		n := wallet.Internal().NtfnServer.TransactionNotifications()
 
 		for {
@@ -112,7 +112,7 @@ func (mw *MultiWallet) RemoveTxAndBlockNotificationListener(uniqueIdentifier str
 }
 
 func (mw *MultiWallet) checkWalletMixers() {
-	for _, wallet := range mw.walletsCopy() {
+	for _, wallet := range mw.walletsReadCopy() {
 		if wallet.IsAccountMixerActive() {
 			unmixedAccount := wallet.ReadInt32ConfigValueForKey(AccountMixerUnmixedAccount, -1)
 			hasMixableOutput, err := wallet.accountHasMixableOutput(unmixedAccount)
