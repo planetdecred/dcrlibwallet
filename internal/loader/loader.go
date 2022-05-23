@@ -13,11 +13,15 @@ import (
 
 	"decred.org/dcrwallet/v2/errors"
 	"decred.org/dcrwallet/v2/wallet"
-	_ "decred.org/dcrwallet/v2/wallet/drivers/bdb" // driver loaded during init
+
+	// driver loaded during init
+	_ "decred.org/dcrwallet/v2/wallet/drivers/bdb"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/dcrutil/v4"
 	"github.com/decred/dcrd/txscript/v4/stdaddr"
-	_ "github.com/planetdecred/dcrlibwallet/badgerdb" // initialize badger driver
+
+	// initialize badger driver
+	_ "github.com/planetdecred/dcrlibwallet/badgerdb"
 )
 
 const (
