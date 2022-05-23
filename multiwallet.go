@@ -125,10 +125,10 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 			err = fmt.Errorf("missing wallet database file")
 		}
 		if err != nil {
-			mw.badWalletsCopy()[wallet.ID] = wallet
+			mw.badWalletsUpdate(wallet.ID, wallet)
 			log.Warnf("Ignored wallet load error for wallet %d (%s)", wallet.ID, wallet.Name)
 		} else {
-			mw.walletsCopy()[wallet.ID] = wallet
+			mw.walletsUpdate(wallet.ID, wallet)
 		}
 	}
 
@@ -429,6 +429,7 @@ func (mw *MultiWallet) LinkExistingWallet(walletName, walletDataDir, originalPub
 	})
 }
 
+// walletsCopy is concurrently-safe way to read from mw.wallets map.
 func (mw *MultiWallet) walletsCopy() map[int]*Wallet {
 	result := make(map[int]*Wallet, len(mw.wallets))
 
@@ -441,6 +442,35 @@ func (mw *MultiWallet) walletsCopy() map[int]*Wallet {
 	return result
 }
 
+// walletsUpdate is concurrently-safe way to update mw.wallets map.
+func (mw *MultiWallet) walletsUpdate(key int, newWallet *Wallet) {
+	mw.walletsMu.Lock()
+	mw.wallets[key] = newWallet
+	mw.walletsMu.Unlock()
+}
+
+// walletsUpdate is concurrently-safe way to delete from mw.wallets map.
+func (mw *MultiWallet) walletsDelete(key int) {
+	mw.walletsMu.Lock()
+	delete(mw.wallets, key)
+	mw.walletsMu.Unlock()
+}
+
+// badWalletsUpdate is concurrently-safe way to update mw.badWallets map.
+func (mw *MultiWallet) badWalletsUpdate(key int, newBadWallet *Wallet) {
+	mw.badWalletsMu.Lock()
+	mw.badWallets[key] = newBadWallet
+	mw.badWalletsMu.Unlock()
+}
+
+// badWalletsUpdate is concurrently-safe way to delete from mw.badWallets map.
+func (mw *MultiWallet) badWalletsDelete(key int) {
+	mw.badWalletsMu.Lock()
+	delete(mw.badWallets, key)
+	mw.badWalletsMu.Unlock()
+}
+
+// badWalletsCopy is concurrently-safe way to read from mw.badWallets map.
 func (mw *MultiWallet) badWalletsCopy() map[int]*Wallet {
 	result := make(map[int]*Wallet, len(mw.badWallets))
 
@@ -520,7 +550,7 @@ func (mw *MultiWallet) saveNewWallet(wallet *Wallet, setupWallet func() error) (
 		return nil, translateError(err)
 	}
 
-	mw.walletsCopy()[wallet.ID] = wallet
+	mw.walletsUpdate(wallet.ID, wallet)
 
 	return wallet, nil
 }
@@ -571,7 +601,7 @@ func (mw *MultiWallet) DeleteWallet(walletID int, privPass []byte) error {
 		return translateError(err)
 	}
 
-	delete(mw.walletsCopy(), walletID)
+	mw.walletsDelete(walletID)
 
 	return nil
 }
@@ -594,7 +624,7 @@ func (mw *MultiWallet) DeleteBadWallet(walletID int) error {
 	}
 
 	os.RemoveAll(wallet.dataDir)
-	delete(mw.badWalletsCopy(), walletID)
+	mw.badWalletsDelete(walletID)
 
 	return nil
 }
