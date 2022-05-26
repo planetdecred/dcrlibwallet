@@ -29,6 +29,7 @@ require (
 	github.com/kevinburke/nacl v0.0.0-20190829012316-f3ed23dbd7f8
 	github.com/onsi/ginkgo v1.14.0
 	github.com/onsi/gomega v1.10.1
+	github.com/planetdecred/dcrlibwallet/btcwallet v0.0.0-00010101000000-000000000000
 	github.com/planetdecred/dcrlibwallet/dexdcr v0.0.0-20220223161805-c736f970653d
 	go.etcd.io/bbolt v1.3.6
 	golang.org/x/crypto v0.0.0-20220427172511-eb4f295cb31f
@@ -43,6 +44,9 @@ require (
 // and dcrdex (v1.10.3) but only v1.10.4 and above can be compiled for
 // the android OS using gomobile. This replace can be removed once any
 // of those projects update their github.com/lib/pq dependency.
-replace github.com/lib/pq => github.com/lib/pq v1.10.4
+replace (
+	github.com/lib/pq => github.com/lib/pq v1.10.4
+	github.com/planetdecred/dcrlibwallet/btcwallet => ./btcwallet // TODO: testing purpose, will remove when have new version 
+)
 
 go 1.16

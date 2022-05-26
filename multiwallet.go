@@ -32,6 +32,8 @@ type MultiWallet struct {
 	cancelFuncs  []context.CancelFunc
 
 	dexClient *DexClient
+
+	btcWallet *btcWallet
 }
 
 func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWallet, error) {
@@ -91,6 +93,10 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 
 	if err = mw.initDexClient(); err != nil {
 		log.Errorf("DEX client set up error: %v", err)
+	}
+
+	if err = mw.initBtcWallet(); err != nil {
+		log.Errorf("BTC wallet set up error: %v", err)
 	}
 
 	return mw, nil
