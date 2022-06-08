@@ -142,3 +142,65 @@ func (wallet *Wallet) SetTreasuryPolicy(key, newVotingPolicy, hash string, passp
 	vspPreferenceUpdateSuccess = firstErr == nil
 	return firstErr
 }
+
+// AllTreasuryPolicies returns voting policies for treasury spends by a particular
+// key.  If a key is specified, that policy is returned; otherwise the policies
+// for all keys are returned in an array.  If both a key and ticket hash are
+// provided, the per-ticket key policy is returned.
+func (wallet *Wallet) AllTreasuryPolicies(key, hash string) ([]*TreasuryKeyPolicy, error) {
+	var ticketHash *chainhash.Hash
+	if hash != "" {
+		var err error
+		ticketHash, err = chainhash.NewHashFromStr(hash)
+		if err != nil {
+			return nil, fmt.Errorf("inavlid hash: %w", err)
+		}
+	}
+
+	if key != "" {
+		pikey, err := hex.DecodeString(key)
+		if err != nil {
+			return nil, fmt.Errorf("parameter contains invalid hexadecimal: %w", err)
+		}
+		var policy string
+		switch wallet.Internal().TreasuryKeyPolicy(pikey, ticketHash) {
+		case stake.TreasuryVoteYes:
+			policy = "yes"
+		case stake.TreasuryVoteNo:
+			policy = "no"
+		default:
+			policy = "abstain"
+		}
+		res := []*TreasuryKeyPolicy{
+			{
+				Key:    key,
+				Policy: policy,
+			},
+		}
+		if hash != "" {
+			res[0].TicketHash = hash
+		}
+		return res, nil
+	}
+
+	policies := wallet.Internal().TreasuryKeyPolicies()
+	res := make([]*TreasuryKeyPolicy, 0, len(policies))
+	for i := range policies {
+		var policy string
+		switch policies[i].Policy {
+		case stake.TreasuryVoteYes:
+			policy = "yes"
+		case stake.TreasuryVoteNo:
+			policy = "no"
+		}
+		r := &TreasuryKeyPolicy{
+			Key:    hex.EncodeToString(policies[i].PiKey),
+			Policy: policy,
+		}
+		if policies[i].Ticket != nil {
+			r.TicketHash = policies[i].Ticket.String()
+		}
+		res = append(res, r)
+	}
+	return res, nil
+}
