@@ -166,9 +166,11 @@ func (mw *MultiWallet) fetchHeadersStarted(peerInitialHeight int32) {
 		return
 	}
 
-	for _, wallet := range mw.walletsReadCopy() {
+	mw.walletsMu.RLock()
+	for _, wallet := range mw.wallets {
 		wallet.waitingForHeaders = true
 	}
+	mw.walletsMu.RUnlock()
 
 	lowestBlockHeight := mw.GetLowestBlock().Height
 
@@ -484,7 +486,7 @@ func (mw *MultiWallet) rescanProgress(walletID int, rescannedThrough int32) {
 		return
 	}
 
-	wallet := mw.walletsReadCopy()[walletID]
+	wallet := mw.walletsGet(walletID)
 	totalHeadersToScan := wallet.GetBestBlock()
 
 	rescanRate := float64(rescannedThrough) / float64(totalHeadersToScan)
@@ -662,7 +664,7 @@ func (mw *MultiWallet) synced(walletID int, synced bool) {
 		return
 	}
 
-	wallet := mw.walletsReadCopy()[walletID]
+	wallet := mw.walletsGet(walletID)
 	wallet.synced = synced
 	wallet.syncing = false
 	mw.listenForTransactions(wallet.ID)

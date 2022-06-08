@@ -1,7 +1,10 @@
 package dcrlibwallet
 
 func (mw *MultiWallet) AllWallets() (wallets []*Wallet) {
-	for _, wallet := range mw.walletsReadCopy() {
+	mw.walletsMu.RLock()
+	defer mw.walletsMu.RUnlock()
+
+	for _, wallet := range mw.wallets {
 		wallets = append(wallets, wallet)
 	}
 	return wallets

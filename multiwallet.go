@@ -125,10 +125,10 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 			err = fmt.Errorf("missing wallet database file")
 		}
 		if err != nil {
-			mw.badWalletsUpdate(wallet.ID, wallet)
+			mw.badWallets[wallet.ID] = wallet
 			log.Warnf("Ignored wallet load error for wallet %d (%s)", wallet.ID, wallet.Name)
 		} else {
-			mw.walletsUpdate(wallet.ID, wallet)
+			mw.wallets[wallet.ID] = wallet
 		}
 	}
 
@@ -155,9 +155,14 @@ func (mw *MultiWallet) Shutdown() {
 	mw.CancelRescan()
 	mw.CancelSync()
 
-	for _, wallet := range mw.walletsReadCopy() {
+	// Locking mw.walletsMu to prevent other actors from accessing wallets during shutdown.
+	mw.walletsMu.Lock()
+	for key, wallet := range mw.wallets {
 		wallet.Shutdown()
+		// Wallet is no longer operational after it's been shut down.
+		delete(mw.wallets, key)
 	}
+	mw.walletsMu.Unlock()
 
 	if mw.db != nil {
 		if err := mw.db.Close(); err != nil {
@@ -275,22 +280,27 @@ func (mw *MultiWallet) OpenWallets(startupPassphrase []byte) error {
 		return err
 	}
 
-	for _, wallet := range mw.walletsReadCopy() {
+	mw.walletsMu.Lock()
+	for _, wallet := range mw.wallets {
 		err = wallet.openWallet()
 		if err != nil {
 			return err
 		}
 	}
+	mw.walletsMu.Unlock()
 
 	return nil
 }
 
 func (mw *MultiWallet) AllWalletsAreWatchOnly() (bool, error) {
-	if len(mw.walletsReadCopy()) == 0 {
+	mw.walletsMu.Lock()
+	defer mw.walletsMu.Unlock()
+
+	if len(mw.wallets) == 0 {
 		return false, errors.New(ErrInvalid)
 	}
 
-	for _, w := range mw.walletsReadCopy() {
+	for _, w := range mw.wallets {
 		if !w.IsWatchingOnlyWallet() {
 			return false, nil
 		}
@@ -429,24 +439,34 @@ func (mw *MultiWallet) LinkExistingWallet(walletName, walletDataDir, originalPub
 	})
 }
 
-// walletsReadCopy is concurrently-safe way to read from mw.wallets map.
+// walletsReadCopy returns a copy of mw.wallets map, copying it in concurrently-safe
+// manner. This allows iterating over map without holding mutex during iterations
+// (useful when iteration takes long time).
 func (mw *MultiWallet) walletsReadCopy() map[int]*Wallet {
-	result := make(map[int]*Wallet, len(mw.wallets))
-
 	mw.walletsMu.RLock()
+	defer mw.walletsMu.RUnlock()
+
+	result := make(map[int]*Wallet, len(mw.wallets))
 	for key, value := range mw.wallets {
 		result[key] = value
 	}
-	mw.walletsMu.RUnlock()
-
 	return result
 }
 
-// walletsUpdate is concurrently-safe way to update mw.wallets map.
+// walletsUpdate is concurrently-safe way to update mw.wallets map element.
 func (mw *MultiWallet) walletsUpdate(key int, newWallet *Wallet) {
 	mw.walletsMu.Lock()
+	defer mw.walletsMu.Unlock()
+
 	mw.wallets[key] = newWallet
-	mw.walletsMu.Unlock()
+}
+
+// walletsUpdate is concurrently-safe way to get an element from mw.wallets map.
+func (mw *MultiWallet) walletsGet(key int) *Wallet {
+	mw.walletsMu.RLock()
+	defer mw.walletsMu.RUnlock()
+
+	return mw.wallets[key]
 }
 
 // walletsUpdate is concurrently-safe way to delete from mw.wallets map.
@@ -454,33 +474,6 @@ func (mw *MultiWallet) walletsDelete(key int) {
 	mw.walletsMu.Lock()
 	delete(mw.wallets, key)
 	mw.walletsMu.Unlock()
-}
-
-// badWalletsReadCopy is concurrently-safe way to read from mw.badWallets map.
-func (mw *MultiWallet) badWalletsReadCopy() map[int]*Wallet {
-	result := make(map[int]*Wallet, len(mw.badWallets))
-
-	mw.badWalletsMu.RLock()
-	for key, value := range mw.badWallets {
-		result[key] = value
-	}
-	mw.badWalletsMu.RUnlock()
-
-	return result
-}
-
-// badWalletsUpdate is concurrently-safe way to update mw.badWallets map.
-func (mw *MultiWallet) badWalletsUpdate(key int, newBadWallet *Wallet) {
-	mw.badWalletsMu.Lock()
-	mw.badWallets[key] = newBadWallet
-	mw.badWalletsMu.Unlock()
-}
-
-// badWalletsUpdate is concurrently-safe way to delete from mw.badWallets map.
-func (mw *MultiWallet) badWalletsDelete(key int) {
-	mw.badWalletsMu.Lock()
-	delete(mw.badWallets, key)
-	mw.badWalletsMu.Unlock()
 }
 
 // saveNewWallet performs the following tasks using a db batch operation to ensure
@@ -607,11 +600,16 @@ func (mw *MultiWallet) DeleteWallet(walletID int, privPass []byte) error {
 }
 
 func (mw *MultiWallet) BadWallets() map[int]*Wallet {
-	return mw.badWalletsReadCopy()
+	mw.badWalletsMu.RLock()
+	defer mw.badWalletsMu.RUnlock()
+
+	return mw.badWallets
 }
 
 func (mw *MultiWallet) DeleteBadWallet(walletID int) error {
-	wallet := mw.badWalletsReadCopy()[walletID]
+	mw.badWalletsMu.RLock()
+	wallet := mw.badWallets[walletID]
+	mw.badWalletsMu.RUnlock()
 	if wallet == nil {
 		return errors.New(ErrNotExist)
 	}
@@ -624,16 +622,19 @@ func (mw *MultiWallet) DeleteBadWallet(walletID int) error {
 	}
 
 	os.RemoveAll(wallet.dataDir)
-	mw.badWalletsDelete(walletID)
+
+	mw.badWalletsMu.Lock()
+	delete(mw.badWallets, walletID)
+	mw.badWalletsMu.Unlock()
 
 	return nil
 }
 
 func (mw *MultiWallet) WalletWithID(walletID int) *Wallet {
-	if wallet, ok := mw.walletsReadCopy()[walletID]; ok {
-		return wallet
-	}
-	return nil
+	mw.walletsMu.RLock()
+	defer mw.walletsMu.RUnlock()
+
+	return mw.wallets[walletID]
 }
 
 // VerifySeedForWallet compares seedMnemonic with the decrypted wallet.EncryptedSeed and clears wallet.EncryptedSeed if they match.
@@ -668,7 +669,10 @@ func (mw *MultiWallet) NumWalletsNeedingSeedBackup() int32 {
 }
 
 func (mw *MultiWallet) LoadedWalletsCount() int32 {
-	return int32(len(mw.walletsReadCopy()))
+	mw.walletsMu.RLock()
+	defer mw.walletsMu.RUnlock()
+
+	return int32(len(mw.wallets))
 }
 
 func (mw *MultiWallet) OpenedWalletIDsRaw() []int {

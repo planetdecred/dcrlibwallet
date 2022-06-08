@@ -9,7 +9,7 @@ import (
 func (mw *MultiWallet) listenForTransactions(walletID int) {
 	go func() {
 
-		wallet := mw.walletsReadCopy()[walletID]
+		wallet := mw.walletsGet(walletID)
 		n := wallet.Internal().NtfnServer.TransactionNotifications()
 
 		for {
