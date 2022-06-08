@@ -280,6 +280,8 @@ func (mw *MultiWallet) OpenWallets(startupPassphrase []byte) error {
 		return err
 	}
 
+	// Locking mw.walletsMu to prevent other actors from accessing wallets until all are
+	// opened (means ready to work with).
 	mw.walletsMu.Lock()
 	for _, wallet := range mw.wallets {
 		err = wallet.openWallet()
