@@ -24,22 +24,24 @@ const (
 //
 // If a VSP host is configured in the application settings, the voting
 // preferences will also be set with the VSP.
-func (wallet *Wallet) SetTreasuryPolicy(key, votingPolicy, hash string, passphrase []byte) error {
+func (wallet *Wallet) SetTreasuryPolicy(key, newVotingPolicy, hash string, passphrase []byte) error {
 	var ticketHash *chainhash.Hash
 	if hash != "" {
+		println("len of hash is", len(hash))
 		if len(hash) != chainhash.MaxHashStringSize {
 			err := fmt.Errorf("invalid ticket hash length, expected %d got %d",
 				chainhash.MaxHashStringSize, len(hash))
-			return fmt.Errorf("Parameter contains invalid hexadecimal: %w", err)
+			return fmt.Errorf("parameter contains invalid hexadecimal: %w", err)
 		}
 		var err error
 		ticketHash, err = chainhash.NewHashFromStr(hash)
 		if err != nil {
-			return fmt.Errorf("Parameter contains invalid hexadecimal: %w", err)
+			return fmt.Errorf("invalid hash: %w", err)
 		}
 	}
 
-	// The wallet will need to be unlocked to ....
+	// The wallet will need to be unlocked to sign the API
+	// request(s) for setting this voting policy with the VSP.
 	err := wallet.UnlockWallet(passphrase)
 	if err != nil {
 		return translateError(err)
@@ -50,14 +52,17 @@ func (wallet *Wallet) SetTreasuryPolicy(key, votingPolicy, hash string, passphra
 
 	pikey, err := hex.DecodeString(key)
 	if err != nil {
-		return fmt.Errorf("Parameter contains invalid hexadecimal: %w", err)
+		return fmt.Errorf("parameter contains invalid hexadecimal: %w", err)
 	}
 	if len(pikey) != secp256k1.PubKeyBytesLenCompressed {
 		err := errors.New("treasury key must be 33 bytes")
 		return fmt.Errorf("Hashes is not evenly divisible by the hash size: %w", err)
 	}
+
+	currentVotingPolicy := wallet.Internal().TreasuryKeyPolicy(pikey, nil)
+
 	var policy stake.TreasuryVoteT
-	switch votingPolicy {
+	switch newVotingPolicy {
 	case "abstain", "invalid", "":
 		policy = stake.TreasuryVoteInvalid
 	case "yes":
@@ -65,7 +70,7 @@ func (wallet *Wallet) SetTreasuryPolicy(key, votingPolicy, hash string, passphra
 	case "no":
 		policy = stake.TreasuryVoteNo
 	default:
-		err := fmt.Errorf("unknown policy %q", votingPolicy)
+		err := fmt.Errorf("unknown policy %q", newVotingPolicy)
 		return fmt.Errorf("invalid policy: %w", err)
 	}
 
@@ -76,9 +81,20 @@ func (wallet *Wallet) SetTreasuryPolicy(key, votingPolicy, hash string, passphra
 
 	// Update voting preferences on VSPs if required.
 	policyMap := map[string]string{
-		key: votingPolicy,
+		key: newVotingPolicy,
 	}
-	// err = s.updateVSPVoteChoices(ctx, w, ticketHash, nil, nil, policyMap)
+
+	var vspPreferenceUpdateSuccess bool
+	defer func() {
+		if !vspPreferenceUpdateSuccess {
+			// Updating the treaury spend voting preference with the vsp failed,
+			// revert the locally saved voting preference for the treasury spend.
+			revertError := wallet.Internal().SetTreasuryKeyPolicy(ctx, pikey, currentVotingPolicy, ticketHash)
+			if revertError != nil {
+				log.Errorf("unable to revert locally saved voting preference: %v", revertError)
+			}
+		}
+	}()
 
 	// If a ticket hash is provided, set the specified vote choice with
 	// the VSP associated with the provided ticket. Otherwise, set the
@@ -123,6 +139,6 @@ func (wallet *Wallet) SetTreasuryPolicy(key, votingPolicy, hash string, passphra
 		}
 	}
 
-	// vspPreferenceUpdateSuccess = firstErr == nil
+	vspPreferenceUpdateSuccess = firstErr == nil
 	return firstErr
 }
