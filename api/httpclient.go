@@ -124,7 +124,7 @@ func (c *Client) Do(method, resource string, payload interface{}) (response []by
 	response, err = ioutil.ReadAll(resp.Body)
 
 	//test
-	if c.Debug {
+	/*if c.Debug {
 		fmt.Printf("\n|*** URL %s RESPONSE ***|\n", req.URL)
 		if err != nil {
 			fmt.Printf("%s err: %s", response, err.Error())
@@ -133,7 +133,7 @@ func (c *Client) Do(method, resource string, payload interface{}) (response []by
 		}
 		fmt.Printf("\n|*** END RESPONSE ***|\n")
 	}
-
+	*/
 	if err != nil {
 		return response, err
 	}

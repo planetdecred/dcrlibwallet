@@ -19,4 +19,21 @@ type (
 		// TicketPoolInfo may be nil for side chain blocks.
 		PoolInfo *types.TicketPoolInfo `json:"ticket_pool,omitempty"`
 	}
+
+	// TreasuryDetails is the current balance, spent amount, and tx count for the
+	// treasury.
+	TreasuryDetails struct {
+		Height         int64 `json:"height"`
+		MaturityHeight int64 `json:"maturity_height"`
+		Balance        int64 `json:"balance"`
+		TxCount        int64 `json:"output_count"`
+		AddCount       int64 `json:"add_count"`
+		Added          int64 `json:"added"`
+		SpendCount     int64 `json:"spend_count"`
+		Spent          int64 `json:"spent"`
+		TBaseCount     int64 `json:"tbase_count"`
+		TBase          int64 `json:"tbase"`
+		ImmatureCount  int64 `json:"immature_count"`
+		Immature       int64 `json:"immature"`
+	}
 )
