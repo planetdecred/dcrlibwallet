@@ -11,23 +11,21 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-const (
-	PiKey = "03f6e7041f1cf51ee10e0a01cd2b0385ce3cd9debaabb2296f7e9dee9329da946c"
-	// PiKeys = [][]byte{
-	// 	hexDecode("03f6e7041f1cf51ee10e0a01cd2b0385ce3cd9debaabb2296f7e9dee9329da946c"),
-	// 	hexDecode("0319a37405cb4d1691971847d7719cfce70857c0f6e97d7c9174a3998cf0ab86dd"),
-	// }
-)
+// Sanctioned Politeia keys.
+var MainnetPiKeys = [...]string{"03f6e7041f1cf51ee10e0a01cd2b0385ce3cd9debaabb2296f7e9dee9329da946c",
+	"0319a37405cb4d1691971847d7719cfce70857c0f6e97d7c9174a3998cf0ab86dd"}
+var TestnetPiKeys = [...]string{"03beca9bbd227ca6bb5a58e03a36ba2b52fff09093bd7a50aee1193bccd257fb8a",
+	"03e647c014f55265da506781f0b2d67674c35cb59b873d9926d483c4ced9a7bbd3"}
 
 // SetTreasuryPolicy saves the voting policy for treasury spends by a particular
-// key, and optionally, setting the key policy used by a specific ticket.
-//
-// If a VSP host is configured in the application settings, the voting
-// preferences will also be set with the VSP.
+// key.
+// If a ticket hash is provided, the voting policy is also updated with the VSP
+// controlling the ticket. If a ticket hash isn't provided, the vote choice is
+// saved to the local wallet database and the VSPs controlling all unspent,
+// unexpired tickets are updated to use the specified vote policy.
 func (wallet *Wallet) SetTreasuryPolicy(key, newVotingPolicy, hash string, passphrase []byte) error {
 	var ticketHash *chainhash.Hash
 	if hash != "" {
-		println("len of hash is", len(hash))
 		if len(hash) != chainhash.MaxHashStringSize {
 			err := fmt.Errorf("invalid ticket hash length, expected %d got %d",
 				chainhash.MaxHashStringSize, len(hash))
@@ -96,9 +94,9 @@ func (wallet *Wallet) SetTreasuryPolicy(key, newVotingPolicy, hash string, passp
 		}
 	}()
 
-	// If a ticket hash is provided, set the specified vote choice with
+	// If a ticket hash is provided, set the specified vote policy with
 	// the VSP associated with the provided ticket. Otherwise, set the
-	// vote choice with the VSPs associated with all "votable" tickets.
+	// vote policy with the VSPs associated with all "votable" tickets.
 	ticketHashes := make([]*chainhash.Hash, 0)
 	if ticketHash != nil {
 		ticketHashes = append(ticketHashes, ticketHash)
@@ -126,7 +124,7 @@ func (wallet *Wallet) SetTreasuryPolicy(key, newVotingPolicy, hash string, passp
 			continue // try next tHash
 		}
 
-		// Update the vote choice for the ticket with the associated VSP.
+		// Update the vote policy for the ticket with the associated VSP.
 		vspClient, err := wallet.VSPClient(vspTicketInfo.Host, vspTicketInfo.PubKey)
 		if err != nil && firstErr == nil {
 			firstErr = err
@@ -144,8 +142,8 @@ func (wallet *Wallet) SetTreasuryPolicy(key, newVotingPolicy, hash string, passp
 }
 
 // AllTreasuryPolicies returns voting policies for treasury spends by a particular
-// key.  If a key is specified, that policy is returned; otherwise the policies
-// for all keys are returned in an array.  If both a key and ticket hash are
+// key. If a key is specified, that policy is returned; otherwise the policies
+// for all keys are returned in an array. If both a key and ticket hash are
 // provided, the per-ticket key policy is returned.
 func (wallet *Wallet) AllTreasuryPolicies(key, hash string) ([]*TreasuryKeyPolicy, error) {
 	var ticketHash *chainhash.Hash
