@@ -1,10 +1,10 @@
 package api
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"strings"
@@ -13,7 +13,7 @@ import (
 
 const (
 	// Default http client timeout in secs.
-	defaultHttpClientTimeout = 10
+	defaultHttpClientTimeout = 30 * time.Second
 )
 
 //Client is the base for http calls
@@ -44,8 +44,18 @@ type (
 
 // NewClient return a new HTTP client
 func NewClient(conf *ClientConf) (c *Client) {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.TLSClientConfig = &tls.Config{
+		InsecureSkipVerify: true,
+	}
+
+	client := &http.Client{
+		Timeout:   defaultHttpClientTimeout,
+		Transport: t,
+	}
+
 	return &Client{
-		httpClient: &http.Client{},
+		httpClient: client,
 		Debug:      conf.Debug,
 		BaseUrl:    conf.BaseUrl,
 		ReqFilter:  nil,
@@ -61,13 +71,9 @@ func (c *Client) doTimeoutRequest(timer *time.Timer, req *http.Request) (*http.R
 	}
 	done := make(chan result, 1)
 	go func() {
-		if c.Debug {
-			c.dumpRequest(req)
-		}
+		c.dumpRequest(req)
 		resp, err := c.httpClient.Do(req)
-		if c.Debug {
-			c.dumpResponse(resp)
-		}
+		c.dumpResponse(resp)
 		done <- result{resp, err}
 	}()
 	// Wait for the read or the timeout
@@ -84,7 +90,7 @@ func (c *Client) doTimeoutRequest(timer *time.Timer, req *http.Request) (*http.R
 func (c *Client) Do(method, resource string, payload interface{}) (response []byte, err error) {
 	var connectTimer *time.Timer
 	// connect timer should be configureable
-	connectTimer = time.NewTimer(defaultHttpClientTimeout * time.Second)
+	connectTimer = time.NewTimer(defaultHttpClientTimeout)
 	var rawurl string
 	if strings.HasPrefix(resource, "http") {
 		rawurl = resource
@@ -151,26 +157,26 @@ func (c *Client) Do(method, resource string, payload interface{}) (response []by
 
 func (c *Client) dumpRequest(r *http.Request) {
 	if r == nil {
-		log.Print("dumpReq ok: <nil>")
+		log.Debug("dumpReq ok: <nil>")
 		return
 	}
 	dump, err := httputil.DumpRequest(r, true)
 	if err != nil {
-		log.Print("dumpReq err:", err)
+		log.Debug("dumpReq err:", err)
 	} else {
-		log.Print("dumpReq ok:", string(dump))
+		log.Debug("dumpReq ok:", string(dump))
 	}
 }
 
 func (c *Client) dumpResponse(r *http.Response) {
 	if r == nil {
-		log.Print("dumpResponse ok: <nil>")
+		log.Debug("dumpResponse ok: <nil>")
 		return
 	}
 	dump, err := httputil.DumpResponse(r, true)
 	if err != nil {
-		log.Print("dumpResponse err:", err)
+		log.Debug("dumpResponse err:", err)
 	} else {
-		log.Print("dumpResponse ok:", string(dump))
+		log.Debug("dumpResponse ok:", string(dump))
 	}
 }

@@ -7,18 +7,27 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/decred/dcrd/chaincfg/v3"
 	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v3"
 	apiTypes "github.com/decred/dcrdata/v7/api/types"
 )
 
+const (
+	mainnetBaseUrl = "https://explorer.planetdecred.org/"
+	testnetBaseUrl = "https://testnet.planetdecred.org/"
+)
+
 type Service struct {
-	client *Client
+	client      *Client
+	chainParams *chaincfg.Params
 }
 
-func NewService() *Service {
-	conf := &ClientConf{
-		BaseUrl: "https://explorer.planetdecred.org/",
-		Debug:   false,
+func NewService(chainParams *chaincfg.Params) *Service {
+	conf := &ClientConf{}
+	if chainParams.Name == chaincfg.TestNet3Params().Name {
+		conf.BaseUrl = testnetBaseUrl
+	} else {
+		conf.BaseUrl = mainnetBaseUrl
 	}
 
 	client := NewClient(conf)
@@ -37,7 +46,8 @@ func NewService() *Service {
 	}
 
 	return &Service{
-		client: client,
+		client:      client,
+		chainParams: chainParams,
 	}
 }
 

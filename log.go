@@ -21,6 +21,7 @@ import (
 	"github.com/planetdecred/dcrlibwallet/internal/politeia"
 	"github.com/planetdecred/dcrlibwallet/internal/vsp"
 	"github.com/planetdecred/dcrlibwallet/spv"
+	"github.com/planetdecred/dcrlibwallet/api"
 )
 
 // logWriter implements an io.Writer that outputs to both standard output and
@@ -62,6 +63,7 @@ var (
 	amgrLog      = backendLog.Logger("AMGR")
 	vspcLog      = backendLog.Logger("VSPC")
 	politeiaLog  = backendLog.Logger("POLT")
+	apiLog       = backendLog.Logger("API")
 )
 
 // Initialize package-global logger variables.
@@ -76,6 +78,7 @@ func init() {
 	addrmgr.UseLogger(amgrLog)
 	vsp.UseLogger(vspcLog)
 	politeia.UseLogger(politeiaLog)
+	api.UseLogger(apiLog)
 }
 
 // subsystemLoggers maps each subsystem identifier to its associated logger.
@@ -91,6 +94,7 @@ var subsystemLoggers = map[string]slog.Logger{
 	"AMGR": amgrLog,
 	"VSPC": vspcLog,
 	"POLT": politeiaLog,
+	"API":  apiLog,
 }
 
 // initLogRotator initializes the logging rotater to write logs to logFile and
