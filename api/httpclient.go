@@ -16,7 +16,7 @@ const (
 	defaultHttpClientTimeout = 30 * time.Second
 )
 
-//Client is the base for http calls
+// Client is the base for http calls
 type (
 	Client struct {
 		httpClient *http.Client
@@ -32,7 +32,7 @@ type (
 		BaseUrl string
 	}
 
-	//RequestInfo models the http request data.
+	// RequestInfo models the http request data.
 	RequestInfo struct {
 		client  *Client
 		request *http.Request
@@ -64,7 +64,7 @@ func NewClient(conf *ClientConf) (c *Client) {
 
 // doTimeoutRequest sends a HTTP request with a timeout
 func (c *Client) doTimeoutRequest(timer *time.Timer, req *http.Request) (*http.Response, error) {
-	// Send the request in the background so we can check the timeout
+	// Send the request in the background
 	type result struct {
 		resp *http.Response
 		err  error
@@ -76,7 +76,7 @@ func (c *Client) doTimeoutRequest(timer *time.Timer, req *http.Request) (*http.R
 		c.dumpResponse(resp)
 		done <- result{resp, err}
 	}()
-	// Wait for the read or the timeout
+	// Wait for the read or timeout
 	select {
 	case r := <-done:
 		return r.resp, r.err
@@ -88,9 +88,7 @@ func (c *Client) doTimeoutRequest(timer *time.Timer, req *http.Request) (*http.R
 
 //Do prepare and process HTTP request to API
 func (c *Client) Do(method, resource string, payload interface{}) (response []byte, err error) {
-	var connectTimer *time.Timer
-	// connect timer should be configureable
-	connectTimer = time.NewTimer(defaultHttpClientTimeout)
+	connectTimer := time.NewTimer(defaultHttpClientTimeout)
 	var rawurl string
 	if strings.HasPrefix(resource, "http") {
 		rawurl = resource
@@ -129,17 +127,6 @@ func (c *Client) Do(method, resource string, payload interface{}) (response []by
 	defer resp.Body.Close()
 	response, err = ioutil.ReadAll(resp.Body)
 
-	//test
-	/*if c.Debug {
-		fmt.Printf("\n|*** URL %s RESPONSE ***|\n", req.URL)
-		if err != nil {
-			fmt.Printf("%s err: %s", response, err.Error())
-		} else {
-			fmt.Printf("%s", response)
-		}
-		fmt.Printf("\n|*** END RESPONSE ***|\n")
-	}
-	*/
 	if err != nil {
 		return response, err
 	}

@@ -17,11 +17,11 @@ import (
 	"github.com/decred/dcrd/connmgr/v3"
 	"github.com/decred/slog"
 	"github.com/jrick/logrotate/rotator"
+	"github.com/planetdecred/dcrlibwallet/api"
 	"github.com/planetdecred/dcrlibwallet/internal/loader"
 	"github.com/planetdecred/dcrlibwallet/internal/politeia"
 	"github.com/planetdecred/dcrlibwallet/internal/vsp"
 	"github.com/planetdecred/dcrlibwallet/spv"
-	"github.com/planetdecred/dcrlibwallet/api"
 )
 
 // logWriter implements an io.Writer that outputs to both standard output and

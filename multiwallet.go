@@ -17,9 +17,9 @@ import (
 	"github.com/asdine/storm/q"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/planetdecred/dcrlibwallet/internal/politeia"
+	"github.com/planetdecred/dcrlibwallet/api"
 	"github.com/planetdecred/dcrlibwallet/utils"
 	"github.com/planetdecred/dcrlibwallet/walletdata"
-	"github.com/planetdecred/dcrlibwallet/api"
 	bolt "go.etcd.io/bbolt"
 	"golang.org/x/crypto/bcrypt"
 )
