@@ -3,10 +3,18 @@ package api
 import (
 	"reflect"
 	"testing"
+
+	"github.com/planetdecred/dcrlibwallet/utils"
 )
 
 func TestGetBestBlock(t *testing.T) {
-	service := NewService()
+	chainParams, err := utils.ChainParams("mainnet")
+	if err != nil {
+		log.Error("Error creating chain params.")
+		return
+	}
+
+	service := NewService(chainParams)
 	height := service.GetBestBlock()
 	if reflect.TypeOf(height).Kind() != reflect.Int32 {
 		t.Errorf("api.GetBestBlock returned %v; want unit32", reflect.TypeOf(height))

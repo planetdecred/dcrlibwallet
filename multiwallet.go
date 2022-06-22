@@ -19,6 +19,7 @@ import (
 	"github.com/planetdecred/dcrlibwallet/internal/politeia"
 	"github.com/planetdecred/dcrlibwallet/utils"
 	"github.com/planetdecred/dcrlibwallet/walletdata"
+	"github.com/planetdecred/dcrlibwallet/api"
 	bolt "go.etcd.io/bbolt"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -47,6 +48,8 @@ type MultiWallet struct {
 
 	vspMu sync.RWMutex
 	vsps  []*VSP
+
+	ApiService *api.Service
 }
 
 func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWallet, error) {
@@ -104,6 +107,14 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 		txAndBlockNotificationListeners:  make(map[string]TxAndBlockNotificationListener),
 		accountMixerNotificationListener: make(map[string]AccountMixerNotificationListener),
 	}
+
+	mw.Politeia, err = newPoliteia(mw, politeiaHost)
+	if err != nil {
+		return nil, err
+	}
+
+	// API service.
+	mw.ApiService = api.NewService(chainParams)
 
 	// read saved wallets info from db and initialize wallets
 	query := mw.db.Select(q.True()).OrderBy("ID")
