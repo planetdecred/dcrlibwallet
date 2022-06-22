@@ -36,4 +36,33 @@ type (
 		ImmatureCount  int64 `json:"immature_count"`
 		Immature       int64 `json:"immature"`
 	}
+
+	// BaseState are the non-iterable fields of the ExchangeState, which embeds
+	// BaseState.
+	BaseState struct {
+		Price float64 `json:"price"`
+		// BaseVolume is poorly named. This is the volume in terms of (usually) BTC,
+		// not the base asset of any particular market.
+		BaseVolume float64 `json:"base_volume,omitempty"`
+		Volume     float64 `json:"volume,omitempty"`
+		Change     float64 `json:"change,omitempty"`
+		Stamp      int64   `json:"timestamp,omitempty"`
+	}
+
+	// ExchangeRates is the dcr and btc prices converted to fiat.
+	ExchangeRates struct {
+		BtcIndex  string               `json:"btcIndex"`
+		DcrPrice  float64              `json:"dcrPrice"`
+		BtcPrice  float64              `json:"btcPrice"`
+		Exchanges map[string]BaseState `json:"exchanges"`
+	}
+
+	ExchangeState struct {
+		BtcIndex    string                    `json:"btc_index"`
+		BtcPrice    float64                   `json:"btc_fiat_price"`
+		Price       float64                   `json:"price"`
+		Volume      float64                   `json:"volume"`
+		DcrBtc      map[string]*ExchangeState `json:"dcr_btc_exchanges"`
+		FiatIndices map[string]*ExchangeState `json:"btc_indices"`
+	}
 )

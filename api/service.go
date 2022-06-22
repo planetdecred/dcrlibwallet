@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	mainnetBaseUrl = "https://explorer.planetdecred.org/"
-	testnetBaseUrl = "https://testnet.planetdecred.org/"
+	mainnetBaseUrl = "https://mainnet.dcrdata.org/"
+	testnetBaseUrl = "https://testnet.dcrdata.org/"
 )
 
 type Service struct {
@@ -35,6 +35,7 @@ func NewService(chainParams *chaincfg.Params) *Service {
 
 		req, err = http.NewRequest(info.Method, info.Url, bytes.NewBuffer([]byte(info.Payload.(string))))
 		if err != nil {
+			log.Error(err)
 			return
 		}
 		if info.Method == "POST" || info.Method == "PUT" {
@@ -55,7 +56,6 @@ func NewService(chainParams *chaincfg.Params) *Service {
 func (s *Service) GetBestBlock() int32 {
 	r, err := s.client.Do("GET", "api/block/best/height", "")
 	if err != nil {
-		fmt.Println(err)
 		return -1
 	}
 
@@ -67,7 +67,6 @@ func (s *Service) GetBestBlock() int32 {
 func (s *Service) GetBestBlockTimeStamp() int64 {
 	r, err := s.client.Do("GET", "api/block/best?txtotals=false", "")
 	if err != nil {
-		fmt.Println(err)
 		return -1
 	}
 	var blockDataBasic *BlockDataBasic
@@ -79,28 +78,16 @@ func (s *Service) GetBestBlockTimeStamp() int64 {
 	return blockDataBasic.Time.UNIX()
 }
 
-// GetTransactionRaw
-/*func (s *Service) GetTransactionRaw(txHash string) (*Transaction, error) {
-	r, err := s.client.Do("GET", "insight/api/tx/"+txHash, "")
-	if err != nil {
-		fmt.Println(err)
-		return -1
-	}
-	return
-}*/
-
 // GetCurrentAgendaStatus returns the current agenda and its status.
 func (s *Service) GetCurrentAgendaStatus() (agenda *chainjson.GetVoteInfoResult, err error) {
 	r, err := s.client.Do("GET", "api/stake/vote/info", "")
 	if err != nil {
-		fmt.Println(err)
-		return agenda, err
+		return
 	}
 	err = json.Unmarshal(r, &agenda)
 	if err != nil {
 		return
 	}
-	fmt.Printf("Agenda: %+v \n", agenda)
 	return
 }
 
@@ -108,7 +95,6 @@ func (s *Service) GetCurrentAgendaStatus() (agenda *chainjson.GetVoteInfoResult,
 func (s *Service) GetAgendas() (agendas []apiTypes.AgendasInfo, err error) {
 	r, err := s.client.Do("GET", "api/agendas", "")
 	if err != nil {
-		fmt.Println(err)
 		return
 	}
 	err = json.Unmarshal(r, &agendas)
@@ -122,7 +108,6 @@ func (s *Service) GetAgendas() (agendas []apiTypes.AgendasInfo, err error) {
 func (s *Service) GetAgendaDetails(agendaId string) (agendaDetails *apiTypes.AgendaAPIResponse, err error) {
 	r, err := s.client.Do("GET", "api/agenda/"+agendaId, "")
 	if err != nil {
-		fmt.Println(err)
 		return
 	}
 	err = json.Unmarshal(r, &agendaDetails)
@@ -137,7 +122,6 @@ func (s *Service) GetTreasuryBalance() (bal int64, err error) {
 	bal = -1
 	r, err := s.client.Do("GET", "api/treasury/balance", "")
 	if err != nil {
-		fmt.Println(err)
 		return
 	}
 
@@ -155,11 +139,104 @@ func (s *Service) GetTreasuryBalance() (bal int64, err error) {
 func (s *Service) GetTreasuryDetails() (treasuryDetails *TreasuryDetails, err error) {
 	r, err := s.client.Do("GET", "api/treasury/balance", "")
 	if err != nil {
-		fmt.Println(err)
 		return
 	}
 
 	err = json.Unmarshal(r, &treasuryDetails)
+	if err != nil {
+		return
+	}
+	return
+}
+
+// GetExchangeRate fetches exchange rate data summary
+func (s *Service) GetExchangeRate() (rates *ExchangeRates, err error) {
+	r, err := s.client.Do("GET", "api/exchangerate", "")
+	if err != nil {
+		return
+	}
+
+	err = json.Unmarshal(r, &rates)
+	if err != nil {
+		return
+	}
+	return
+}
+
+// GetExchanges fetches the current known state of all exchanges
+func (s *Service) GetExchanges() (state *ExchangeState, err error) {
+	r, err := s.client.Do("GET", "api/exchanges", "")
+	if err != nil {
+		return
+	}
+
+	err = json.Unmarshal(r, &state)
+	if err != nil {
+		return
+	}
+	return
+}
+
+// GetTicketFeeRateSummary fetches the current known state of all exchanges
+func (s *Service) GetTicketFeeRateSummary() (ticketInfo *apiTypes.MempoolTicketFeeInfo, err error) {
+	r, err := s.client.Do("GET", "api/mempool/sstx", "")
+	if err != nil {
+		return
+	}
+
+	err = json.Unmarshal(r, &ticketInfo)
+	if err != nil {
+		return
+	}
+	return
+}
+
+func (s *Service) GetTicketFeeRate() (ticketFeeRate *apiTypes.MempoolTicketFees, err error) {
+	r, err := s.client.Do("GET", "api/mempool/sstx/fees", "")
+	if err != nil {
+		return
+	}
+
+	err = json.Unmarshal(r, &ticketFeeRate)
+	if err != nil {
+		return
+	}
+	return
+}
+
+func (s *Service) GetNHighestTicketFeeRate(nHighest int) (ticketFeeRate *apiTypes.MempoolTicketFees, err error) {
+	r, err := s.client.Do("GET", "api/mempool/sstx/fees/"+strconv.Itoa(nHighest), "")
+	if err != nil {
+		return
+	}
+
+	err = json.Unmarshal(r, &ticketFeeRate)
+	if err != nil {
+		return
+	}
+	return
+}
+
+func (s *Service) GetTicketDetails() (ticketDetails *apiTypes.MempoolTicketDetails, err error) {
+	r, err := s.client.Do("GET", "api/mempool/sstx/details", "")
+	if err != nil {
+		return
+	}
+
+	err = json.Unmarshal(r, &ticketDetails)
+	if err != nil {
+		return
+	}
+	return
+}
+
+func (s *Service) GetNHighestTicketDetails(nHighest int) (ticketDetails *apiTypes.MempoolTicketDetails, err error) {
+	r, err := s.client.Do("GET", "api/mempool/sstx/details/"+strconv.Itoa(nHighest), "")
+	if err != nil {
+		return
+	}
+
+	err = json.Unmarshal(r, &ticketDetails)
 	if err != nil {
 		return
 	}
