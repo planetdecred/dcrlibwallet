@@ -18,24 +18,19 @@ var TestnetPiKeys = [...]string{"03beca9bbd227ca6bb5a58e03a36ba2b52fff09093bd7a5
 	"03e647c014f55265da506781f0b2d67674c35cb59b873d9926d483c4ced9a7bbd3"}
 
 // SetTreasuryPolicy saves the voting policy for treasury spends by a particular
-// key.
+// PI key.
 // If a ticket hash is provided, the voting policy is also updated with the VSP
 // controlling the ticket. If a ticket hash isn't provided, the vote choice is
 // saved to the local wallet database and the VSPs controlling all unspent,
 // unexpired tickets are updated to use the specified vote policy.
-func (wallet *Wallet) SetTreasuryPolicy(key, newVotingPolicy, hash string, passphrase []byte) error {
+func (wallet *Wallet) SetTreasuryPolicy(PiKey, newVotingPolicy, tixHash string, passphrase []byte) error {
 	var ticketHash *chainhash.Hash
-	if hash != "" {
-		if len(hash) != chainhash.MaxHashStringSize {
-			err := fmt.Errorf("invalid ticket hash length, expected %d got %d",
-				chainhash.MaxHashStringSize, len(hash))
-			return fmt.Errorf("parameter contains invalid hexadecimal: %w", err)
-		}
-		var err error
-		ticketHash, err = chainhash.NewHashFromStr(hash)
+	if tixHash != "" {
+		tixHash, err := chainhash.NewHashFromStr(tixHash)
 		if err != nil {
-			return fmt.Errorf("invalid hash: %w", err)
+			return fmt.Errorf("inavlid hash: %w", err)
 		}
+		ticketHash = tixHash
 	}
 
 	// The wallet will need to be unlocked to sign the API
@@ -48,7 +43,7 @@ func (wallet *Wallet) SetTreasuryPolicy(key, newVotingPolicy, hash string, passp
 
 	ctx := wallet.shutdownContext()
 
-	pikey, err := hex.DecodeString(key)
+	pikey, err := hex.DecodeString(PiKey)
 	if err != nil {
 		return fmt.Errorf("parameter contains invalid hexadecimal: %w", err)
 	}
@@ -57,7 +52,7 @@ func (wallet *Wallet) SetTreasuryPolicy(key, newVotingPolicy, hash string, passp
 		return fmt.Errorf("Hashes is not evenly divisible by the hash size: %w", err)
 	}
 
-	currentVotingPolicy := wallet.Internal().TreasuryKeyPolicy(pikey, nil)
+	currentVotingPolicy := wallet.Internal().TreasuryKeyPolicy(pikey, ticketHash)
 
 	var policy stake.TreasuryVoteT
 	switch newVotingPolicy {
@@ -79,7 +74,7 @@ func (wallet *Wallet) SetTreasuryPolicy(key, newVotingPolicy, hash string, passp
 
 	// Update voting preferences on VSPs if required.
 	policyMap := map[string]string{
-		key: newVotingPolicy,
+		PiKey: newVotingPolicy,
 	}
 
 	var vspPreferenceUpdateSuccess bool
@@ -141,22 +136,22 @@ func (wallet *Wallet) SetTreasuryPolicy(key, newVotingPolicy, hash string, passp
 	return firstErr
 }
 
-// AllTreasuryPolicies returns voting policies for treasury spends by a particular
-// key. If a key is specified, that policy is returned; otherwise the policies
-// for all keys are returned in an array. If both a key and ticket hash are
-// provided, the per-ticket key policy is returned.
-func (wallet *Wallet) AllTreasuryPolicies(key, hash string) ([]*TreasuryKeyPolicy, error) {
+// TreasuryPolicies returns saved voting policies for treasury spends per pi key.
+// If a pi key is specified, the policy for that pi key is returned; otherwise the policies
+// for all pi keys are returned. If a ticket hash is provided, the policy(ies) for that ticket
+// is/are returned.
+func (wallet *Wallet) TreasuryPolicies(PiKey, tixHash string) ([]*TreasuryKeyPolicy, error) {
 	var ticketHash *chainhash.Hash
-	if hash != "" {
-		var err error
-		ticketHash, err = chainhash.NewHashFromStr(hash)
+	if tixHash != "" {
+		tixHash, err := chainhash.NewHashFromStr(tixHash)
 		if err != nil {
 			return nil, fmt.Errorf("inavlid hash: %w", err)
 		}
+		ticketHash = tixHash
 	}
 
-	if key != "" {
-		pikey, err := hex.DecodeString(key)
+	if PiKey != "" {
+		pikey, err := hex.DecodeString(PiKey)
 		if err != nil {
 			return nil, fmt.Errorf("parameter contains invalid hexadecimal: %w", err)
 		}
@@ -171,12 +166,12 @@ func (wallet *Wallet) AllTreasuryPolicies(key, hash string) ([]*TreasuryKeyPolic
 		}
 		res := []*TreasuryKeyPolicy{
 			{
-				Key:    key,
+				PiKey:  PiKey,
 				Policy: policy,
 			},
 		}
-		if hash != "" {
-			res[0].TicketHash = hash
+		if tixHash != "" {
+			res[0].TicketHash = tixHash
 		}
 		return res, nil
 	}
@@ -192,7 +187,7 @@ func (wallet *Wallet) AllTreasuryPolicies(key, hash string) ([]*TreasuryKeyPolic
 			policy = "no"
 		}
 		r := &TreasuryKeyPolicy{
-			Key:    hex.EncodeToString(policies[i].PiKey),
+			PiKey:  hex.EncodeToString(policies[i].PiKey),
 			Policy: policy,
 		}
 		if policies[i].Ticket != nil {

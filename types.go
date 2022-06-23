@@ -533,7 +533,7 @@ type DcrdataAgenda struct {
 // by a particular key, and possibly for a particular ticket being voted on by a
 // VSP.
 type TreasuryKeyPolicy struct {
-	Key        string `json:"key"`
+	PiKey      string `json:"pi_key"`
 	TicketHash string `json:"ticket_hash"` // nil unless for per-ticket VSP policies
 	Policy     string `json:"policy"`
 }

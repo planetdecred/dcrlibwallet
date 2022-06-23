@@ -22,6 +22,91 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// type Params struct {
+// 	Name                           string
+// 	Net                            CurrencyNet
+// 	DefaultPort                    string
+// 	DNSSeeds                       []DNSSeed
+// 	GenesisBlock                   *MsgBlock
+// 	GenesisHash                    Hash
+// 	PowLimit                       *Int
+// 	PowLimitBits                   uint32
+// 	ReduceMinDifficulty            bool
+// 	MinDiffReductionTime           Duration
+// 	GenerateSupported              bool
+// 	MaximumBlockSizes              []int
+// 	MaxTxSize                      int
+// 	TargetTimePerBlock             Duration
+// 	WorkDiffAlpha                  int64
+// 	WorkDiffWindowSize             int64
+// 	WorkDiffWindows                int64
+// 	TargetTimespan                 Duration
+// 	RetargetAdjustmentFactor       int64
+// 	BaseSubsidy                    int64
+// 	MulSubsidy                     int64
+// 	DivSubsidy                     int64
+// 	SubsidyReductionInterval       int64
+// 	WorkRewardProportion           uint16
+// 	WorkRewardProportionV2         uint16
+// 	StakeRewardProportion          uint16
+// 	StakeRewardProportionV2        uint16
+// 	BlockTaxProportion             uint16
+// 	Checkpoints                    []Checkpoint
+// 	AssumeValid                    Hash
+// 	MinKnownChainWork              *Int
+// 	RuleChangeActivationQuorum     uint32
+// 	RuleChangeActivationMultiplier uint32
+// 	RuleChangeActivationDivisor    uint32
+// 	RuleChangeActivationInterval   uint32
+// 	Deployments                    map[uint32][]ConsensusDeployment
+// 	BlockEnforceNumRequired        uint64
+// 	BlockRejectNumRequired         uint64
+// 	BlockUpgradeNumToCheck         uint64
+// 	AcceptNonStdTxs                bool
+// 	NetworkAddressPrefix           string
+// 	PubKeyAddrID                   [2]byte
+// 	PubKeyHashAddrID               [2]byte
+// 	PKHEdwardsAddrID               [2]byte
+// 	PKHSchnorrAddrID               [2]byte
+// 	ScriptHashAddrID               [2]byte
+// 	PrivateKeyID                   [2]byte
+// 	HDPrivateKeyID                 [4]byte
+// 	HDPublicKeyID                  [4]byte
+// 	SLIP0044CoinType               uint32
+// 	LegacyCoinType                 uint32
+// 	MinimumStakeDiff               int64
+// 	TicketPoolSize                 uint16
+// 	TicketsPerBlock                uint16
+// 	TicketMaturity                 uint16
+// 	TicketExpiry                   uint32
+// 	CoinbaseMaturity               uint16
+// 	SStxChangeMaturity             uint16
+// 	TicketPoolSizeWeight           uint16
+// 	StakeDiffAlpha                 int64
+// 	StakeDiffWindowSize            int64
+// 	StakeDiffWindows               int64
+// 	StakeVersionInterval           int64
+// 	MaxFreshStakePerBlock          uint8
+// 	StakeEnabledHeight             int64
+// 	StakeValidationHeight          int64
+// 	StakeBaseSigScript             []byte
+// 	StakeMajorityMultiplier        int32
+// 	StakeMajorityDivisor           int32
+// 	OrganizationPkScript           []byte
+// 	OrganizationPkScriptVersion    uint16
+// 	BlockOneLedger                 []TokenPayout
+// 	PiKeys                         [][]byte
+// 	TreasuryVoteInterval           uint64
+// 	TreasuryVoteIntervalMultiplier uint64
+// 	TreasuryVoteQuorumMultiplier   uint64
+// 	TreasuryVoteQuorumDivisor      uint64
+// 	TreasuryVoteRequiredMultiplier uint64
+// 	TreasuryVoteRequiredDivisor    uint64
+// 	TreasuryExpenditureWindow      uint64
+// 	TreasuryExpenditurePolicy      uint64
+// 	TreasuryExpenditureBootstrap   uint64
+// 	seeders                        []string
+// }
 type MultiWallet struct {
 	dbDriver string
 	rootDir  string
@@ -42,6 +127,7 @@ type MultiWallet struct {
 	cancelFuncs  []context.CancelFunc
 
 	Politeia  *Politeia
+	PiKeys    []byte
 	dexClient *DexClient
 
 	vspMu sync.RWMutex
@@ -55,6 +141,8 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 	if err != nil {
 		return nil, err
 	}
+
+	a := chainParams.PiKeys[0]
 
 	rootDir = filepath.Join(rootDir, netType)
 	err = os.MkdirAll(rootDir, os.ModePerm)
@@ -96,6 +184,7 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 		rootDir:     rootDir,
 		db:          mwDB,
 		chainParams: chainParams,
+		PiKeys:      a,
 		wallets:     make(map[int]*Wallet),
 		badWallets:  make(map[int]*Wallet),
 		syncData: &syncData{
