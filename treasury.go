@@ -11,12 +11,6 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-// Sanctioned Politeia keys.
-var MainnetPiKeys = [...]string{"03f6e7041f1cf51ee10e0a01cd2b0385ce3cd9debaabb2296f7e9dee9329da946c",
-	"0319a37405cb4d1691971847d7719cfce70857c0f6e97d7c9174a3998cf0ab86dd"}
-var TestnetPiKeys = [...]string{"03beca9bbd227ca6bb5a58e03a36ba2b52fff09093bd7a50aee1193bccd257fb8a",
-	"03e647c014f55265da506781f0b2d67674c35cb59b873d9926d483c4ced9a7bbd3"}
-
 // SetTreasuryPolicy saves the voting policy for treasury spends by a particular
 // PI key.
 // If a ticket hash is provided, the voting policy is also updated with the VSP
@@ -196,4 +190,15 @@ func (wallet *Wallet) TreasuryPolicies(PiKey, tixHash string) ([]*TreasuryKeyPol
 		res = append(res, r)
 	}
 	return res, nil
+}
+
+// PiKeys returns the sanctioned Politeia keys for the current network.
+func (mw *MultiWallet) PiKeys() [][]byte {
+	return mw.chainParams.PiKeys
+}
+
+// PiKey returns a single politiea key (converted to string) from the
+// available politiea keys specified by the provided index.
+func (mw *MultiWallet) PiKey(index int) string {
+	return hex.EncodeToString(mw.chainParams.PiKeys[index])
 }
