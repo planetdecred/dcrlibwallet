@@ -49,7 +49,7 @@ func (wallet *Wallet) SetTreasuryPolicy(PiKey, newVotingPolicy, tixHash string, 
 	}
 	if len(pikey) != secp256k1.PubKeyBytesLenCompressed {
 		err := errors.New("treasury key must be 33 bytes")
-		return fmt.Errorf("Hashes is not evenly divisible by the hash size: %w", err)
+		return err
 	}
 
 	currentVotingPolicy := wallet.Internal().TreasuryKeyPolicy(pikey, ticketHash)
