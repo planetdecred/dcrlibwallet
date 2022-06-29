@@ -13,7 +13,6 @@ import (
 	"decred.org/dcrdex/client/core"
 	"decred.org/dcrdex/dex"
 	"github.com/decred/dcrd/chaincfg/v3"
-	"github.com/planetdecred/dcrlibwallet/dexdcr"
 )
 
 const (
@@ -72,18 +71,25 @@ func (mw *MultiWallet) prepareDexSupportForDcrWalletLibrary() error {
 			DisplayName: "Wallet ID",
 			Description: "ID of existing wallet to use",
 		},
+		{
+			Key:         "account",
+			DisplayName: "Account Name",
+			Description: "Name of account to use for funding trades.",
+		},
+		// TODO: Add support for mixed accounts.
 	}
 	def := &asset.WalletDefinition{
 		Type:        CustomDexDcrWalletType,
 		Description: "Uses an existing dcrlibwallet Wallet instance instead of an rpc connection.",
-		ConfigOpts:  append(customWalletConfigOpts, dexdcr.DefaultConfigOpts...),
+		ConfigOpts:  append(customWalletConfigOpts, dcr.WalletOpts...),
 	}
 
 	// This function will be invoked when the DEX client needs to
 	// setup a dcr ExchangeWallet; it allows us to use an existing
-	// wallet instance for wallet operations instead of json-rpc.
-	walletMaker := func(cfg *asset.WalletConfig, chainParams *chaincfg.Params, logger dex.Logger) (dcr.Wallet, error) {
-		walletIDStr := cfg.Settings[DexDcrWalletIDConfigKey]
+	// wallet instance for wallet operations instead of json-rpc or
+	// a freshly created spv wallet.
+	walletMaker := func(settings map[string]string, chainParams *chaincfg.Params, logger dex.Logger) (dcr.Wallet, error) {
+		walletIDStr := settings[DexDcrWalletIDConfigKey]
 		walletID, err := strconv.Atoi(walletIDStr)
 		if err != nil || walletID < 0 {
 			return nil, fmt.Errorf("invalid wallet ID %q in settings", walletIDStr)
@@ -93,20 +99,21 @@ func (mw *MultiWallet) prepareDexSupportForDcrWalletLibrary() error {
 		if wallet == nil {
 			return nil, fmt.Errorf("no wallet exists with ID %q", walletIDStr)
 		}
-		if wallet.Internal().ChainParams().Net != chainParams.Net {
+
+		w := wallet.Internal()
+		if w.ChainParams().Net != chainParams.Net {
 			return nil, fmt.Errorf("selected wallet is for %s network, expected %s",
-				wallet.Internal().ChainParams().Name, chainParams.Name)
+				w.ChainParams().Name, chainParams.Name)
 		}
 
 		// Ensure the account exists.
-		account := cfg.Settings["account"]
-		_, err = wallet.AccountNumber(account)
+		account := settings["account"]
+		accountNumber, err := w.AccountNumber(wallet.shutdownContext(), account)
 		if err != nil {
 			return nil, fmt.Errorf("account error: %v", err)
 		}
 
-		walletDesc := fmt.Sprintf("%q in %s", wallet.Name, wallet.dataDir)
-		return dexdcr.NewSpvWallet(wallet.Internal(), walletDesc, chainParams, logger.SubLogger("DLWL")), nil
+		return dcr.ExternalWallet(w, accountNumber, account, logger)
 	}
 
 	return dcr.RegisterCustomWallet(walletMaker, def)
