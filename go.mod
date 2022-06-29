@@ -7,7 +7,6 @@ require (
 	github.com/asdine/storm v0.0.0-20190216191021-fe89819f6282
 	github.com/companyzero/sntrup4591761 v0.0.0-20220309191932-9e0f3af2f07a // indirect
 	github.com/dchest/siphash v1.2.3 // indirect
-	github.com/decred/base58 v1.0.4 // indirect
 	github.com/decred/dcrd/addrmgr/v2 v2.0.0
 	github.com/decred/dcrd/blockchain/stake/v4 v4.0.0
 	github.com/decred/dcrd/chaincfg/chainhash v1.0.3
@@ -22,16 +21,12 @@ require (
 	github.com/decred/politeia v1.3.1
 	github.com/decred/slog v1.2.0
 	github.com/dgraph-io/badger v1.6.2
-	github.com/gorilla/websocket v1.5.0 // indirect
-	github.com/jessevdk/go-flags v1.5.0 // indirect
 	github.com/jrick/logrotate v1.0.0
 	github.com/kevinburke/nacl v0.0.0-20190829012316-f3ed23dbd7f8
-	github.com/onsi/ginkgo v1.14.0
-	github.com/onsi/gomega v1.10.1
-	github.com/planetdecred/dcrlibwallet/dexdcr v0.0.0-20220223161805-c736f970653d
-	go.etcd.io/bbolt v1.3.6
-	golang.org/x/crypto v0.0.0-20220427172511-eb4f295cb31f
-	golang.org/x/net v0.0.0-20220425223048-2871e0cb64e4 // indirect
+	github.com/onsi/ginkgo v1.15.0
+	github.com/onsi/gomega v1.10.5
+	go.etcd.io/bbolt v1.3.7-0.20220130032806-d5db64bdbfde
+	golang.org/x/crypto v0.0.0-20220507011949-2cf3adece122
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20220503163025-988cb79eb6c6 // indirect
 	golang.org/x/term v0.0.0-20220411215600-e5f449aeb171 // indirect
@@ -43,5 +38,7 @@ require (
 // the android OS using gomobile. This replace can be removed once any
 // of those projects update their github.com/lib/pq dependency.
 replace github.com/lib/pq => github.com/lib/pq v1.10.4
+
+replace decred.org/dcrdex => github.com/itswisdomagain/dcrdex v0.0.0-20220629130229-5652cebb4e8c
 
 go 1.16
