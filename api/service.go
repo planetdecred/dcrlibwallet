@@ -3,13 +3,27 @@ package api
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/decred/dcrd/chaincfg/v3"
 	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v3"
 	apiTypes "github.com/decred/dcrdata/v7/api/types"
+)
+
+type Service struct {
+	client      *Client
+	chainParams *chaincfg.Params
+}
+
+type Exchange int
+
+const (
+	Bittrex Exchange = iota
+	Binance
+	KuCoin
 )
 
 const (
@@ -19,10 +33,9 @@ const (
 	blockbookTestnet = "https://blockbook.decred.org:19161/"
 )
 
-type Service struct {
-	client      *Client
-	chainParams *chaincfg.Params
-}
+var (
+	supportedExchanges = []string{"Bittrex", "Binance", "KuCoin"}
+)
 
 func NewService(chainParams *chaincfg.Params) *Service {
 	conf := &ClientConf{
@@ -76,7 +89,7 @@ func (s *Service) GetBestBlockTimeStamp() int64 {
 	var blockDataBasic *BlockDataBasic
 	err = json.Unmarshal(r, &blockDataBasic)
 	if err != nil {
-		fmt.Println(err)
+		log.Error(err)
 		return -1
 	}
 	return blockDataBasic.Time.UNIX()
@@ -263,16 +276,108 @@ func (s *Service) GetAddress(address string) (addressState *AddressState, err er
 }
 
 //GetXpub Returns balances and transactions of an xpub
-func (s *Service) GetXpub(xPub string) (xPubBalAndTxs XpubBalAndTxs, err error) {
+func (s *Service) GetXpub(xPub string) (xPubBalAndTxs *XpubBalAndTxs, err error) {
 	err = s.client.setBlockbookURL(s.chainParams.Name)
 	if err != nil {
 		return
 	}
 
 	r, err := s.client.Do("GET", "api/v2/xpub/"+xPub, "")
+	if err != nil {
+		return
+	}
+
 	err = json.Unmarshal(r, &xPubBalAndTxs)
 	if err != nil {
 		return
+	}
+	return
+}
+
+// GetTicker
+func (s *Service) GetTicker(exchange Exchange, market string) (ticker *Ticker, err error) {
+	switch exchange {
+	case Binance:
+		if s.chainParams.Name == chaincfg.MainNetParams().Name {
+			s.client.BaseUrl = "https://api.binance.com"
+		} else {
+			s.client.BaseUrl = "https://testnet.binance.vision"
+		}
+
+		symbArr := strings.Split(market, "-")
+		if len(symbArr) != 2 {
+			return ticker, errors.New("Invalid symbol format")
+		}
+
+		symb := strings.Join(symbArr[:], "")
+		r, err := s.client.Do("GET", "/api/v3/ticker/24hr?symbol="+strings.ToUpper(symb), "")
+		if err != nil {
+			return ticker, err
+		}
+
+		var tempTicker BinanceTicker
+		err = json.Unmarshal(r, &tempTicker)
+		if err != nil {
+			return ticker, err
+		}
+
+		t := &Ticker{
+			Exchange:       supportedExchanges[exchange],
+			Symbol:         tempTicker.Symbol,
+			AskPrice:       tempTicker.AskPrice,
+			BidPrice:       tempTicker.BidPrice,
+			LastTradePrice: tempTicker.LastPrice,
+		}
+		return t, err
+	case Bittrex:
+		if s.chainParams.Name == chaincfg.TestNet3Params().Name {
+			return ticker, errors.New("Bittrex doesn't support testnet")
+		}
+
+		s.client.BaseUrl = "https://api.bittrex.com/v3"
+		r, err := s.client.Do("GET", "/markets/"+strings.ToUpper(market)+"/ticker", "")
+		if err != nil {
+			return ticker, err
+		}
+
+		var bTicker BittrexTicker
+		err = json.Unmarshal(r, &bTicker)
+		if err != nil {
+			return ticker, err
+		}
+		t := &Ticker{
+			Exchange:       supportedExchanges[exchange],
+			Symbol:         bTicker.Symbol,
+			AskPrice:       bTicker.Ask,
+			BidPrice:       bTicker.Bid,
+			LastTradePrice: bTicker.LastTradeRate,
+		}
+		return t, err
+	case KuCoin:
+		if s.chainParams.Name == chaincfg.MainNetParams().Name {
+			s.client.BaseUrl = "https://api.kucoin.com"
+		} else {
+			s.client.BaseUrl = "https://openapi-sandbox.kucoin.com"
+		}
+
+		r, err := s.client.Do("GET", "/api/v1/market/orderbook/level1?symbol="+strings.ToUpper(market), "")
+		if err != nil {
+			return ticker, err
+		}
+
+		var kTicker KuCoinTicker
+		err = json.Unmarshal(r, &kTicker)
+		if err != nil {
+			return ticker, err
+		}
+		t := &Ticker{
+			Exchange:       supportedExchanges[exchange],
+			Symbol:         strings.ToUpper(market),
+			AskPrice:       kTicker.Data.BestAsk,
+			BidPrice:       kTicker.Data.BestBid,
+			LastTradePrice: kTicker.Data.Price,
+		}
+		return t, err
 	}
 	return
 }

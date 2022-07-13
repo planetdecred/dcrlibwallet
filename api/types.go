@@ -101,4 +101,57 @@ type (
 		UsedTokens         int32         `json:"usedTokens"`
 		XpubAddress        []XpubAddress `json:"tokens"`
 	}
+
+	Ticker struct {
+		Exchange       string
+		Symbol         string
+		LastTradePrice float64
+		BidPrice       float64
+		AskPrice       float64
+	}
+
+	BittrexTicker struct {
+		Symbol        string  `json:"symbol"`
+		LastTradeRate float64 `json:"lastTradeRate,string"`
+		Bid           float64 `json:"bidRate,string"`
+		Ask           float64 `json:"askRate,string"`
+	}
+
+	BinanceTicker struct {
+		AskPrice           float64 `json:"askPrice,string"`
+		AskQty             float64 `json:"askQty,string"`
+		BidPrice           float64 `json:"bidPrice,string"`
+		BidQty             float64 `json:"bidQty,string"`
+		CloseTime          int     `json:"closeTime"`
+		Count              int     `json:"count"`
+		FirstID            int     `json:"firstId"`
+		HighPrice          float64 `json:"highPrice,string"`
+		LastID             int     `json:"lastId"`
+		LastPrice          float64 `json:"lastPrice,string"`
+		LastQty            float64 `json:"lastQty,string"`
+		LowPrice           float64 `json:"lowPrice,string"`
+		OpenPrice          float64 `json:"openPrice,string"`
+		OpenTime           int     `json:"openTime"`
+		PrevClosePrice     float64 `json:"prevClosePrice,string"`
+		PriceChange        float64 `json:"priceChange,string"`
+		PriceChangePercent float64 `json:"priceChangePercent,string"`
+		QuoteVolume        float64 `json:"quoteVolume,string"`
+		Symbol             string  `json:"symbol"`
+		Volume             float64 `json:"volume,string"`
+		WeightedAvgPrice   float64 `json:"weightedAvgPrice,string"`
+	}
+
+	KuCoinTicker struct {
+		Code int `json:"code,string"`
+		Data struct {
+			Time        int64   `json:"time"`
+			Sequence    int64   `json:"sequence,string"`
+			Price       float64 `json:"price,string"`
+			Size        float64 `json:"size,string"`
+			BestBid     float64 `json:"bestBid,string"`
+			BestBidSize float64 `json:"bestBidSize,string"`
+			BestAsk     float64 `json:"bestAsk,string"`
+			BestAskSize float64 `json:"bestAskSize,string"`
+		} `json:"data"`
+	}
 )
