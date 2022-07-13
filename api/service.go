@@ -13,8 +13,10 @@ import (
 )
 
 const (
-	mainnetBaseUrl = "https://mainnet.dcrdata.org/"
-	testnetBaseUrl = "https://testnet.dcrdata.org/"
+	mainnetBaseUrl   = "https://mainnet.dcrdata.org/"
+	testnetBaseUrl   = "https://testnet.dcrdata.org/"
+	blockbookMainnet = "https://blockbook.decred.org:9161/"
+	blockbookTestnet = "https://blockbook.decred.org:19161/"
 )
 
 type Service struct {
@@ -23,7 +25,9 @@ type Service struct {
 }
 
 func NewService(chainParams *chaincfg.Params) *Service {
-	conf := &ClientConf{}
+	conf := &ClientConf{
+		Debug: true,
+	}
 	if chainParams.Name == chaincfg.TestNet3Params().Name {
 		conf.BaseUrl = testnetBaseUrl
 	} else {
@@ -177,7 +181,6 @@ func (s *Service) GetExchanges() (state *ExchangeState, err error) {
 	return
 }
 
-// GetTicketFeeRateSummary fetches the current known state of all exchanges
 func (s *Service) GetTicketFeeRateSummary() (ticketInfo *apiTypes.MempoolTicketFeeInfo, err error) {
 	r, err := s.client.Do("GET", "api/mempool/sstx", "")
 	if err != nil {
@@ -237,6 +240,37 @@ func (s *Service) GetNHighestTicketDetails(nHighest int) (ticketDetails *apiType
 	}
 
 	err = json.Unmarshal(r, &ticketDetails)
+	if err != nil {
+		return
+	}
+	return
+}
+
+// GetAddress returns the balances and transactions of an address.
+// The returned transactions are sorted by block height, newest blocks first.
+func (s *Service) GetAddress(address string) (addressState *AddressState, err error) {
+	err = s.client.setBlockbookURL(s.chainParams.Name)
+	if err != nil {
+		return
+	}
+
+	r, err := s.client.Do("GET", "api/v2/address/"+address, "")
+	err = json.Unmarshal(r, &addressState)
+	if err != nil {
+		return
+	}
+	return
+}
+
+//GetXpub Returns balances and transactions of an xpub
+func (s *Service) GetXpub(xPub string) (xPubBalAndTxs XpubBalAndTxs, err error) {
+	err = s.client.setBlockbookURL(s.chainParams.Name)
+	if err != nil {
+		return
+	}
+
+	r, err := s.client.Do("GET", "api/v2/xpub/"+xPub, "")
+	err = json.Unmarshal(r, &xPubBalAndTxs)
 	if err != nil {
 		return
 	}

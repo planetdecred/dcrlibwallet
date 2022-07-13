@@ -65,4 +65,40 @@ type (
 		DcrBtc      map[string]*ExchangeState `json:"dcr_btc_exchanges"`
 		FiatIndices map[string]*ExchangeState `json:"btc_indices"`
 	}
+
+	// AddressState models the adddress balances and transactions.
+	AddressState struct {
+		Address            string   `json:"adddress"`
+		Balance            int64    `json:"balance,string"`
+		TotalReceived      int64    `json:"totalReceived,string"`
+		TotalSent          int64    `json:"totalSent,string"`
+		UnconfirmedBalance int64    `json:"unconfirmedBalance,string"`
+		UnconfirmedTxs     int64    `json:"unconfirmedTxs"`
+		Txs                int32    `json:"txs"`
+		TxIds              []string `json:"txids"`
+	}
+
+	XpubAddress struct {
+		Address       string `json:"name"`
+		Path          string `json:"path"`
+		Transfers     int32  `json:"transfers"`
+		Decimals      int32  `json:"decimals"`
+		Balance       int64  `json:"balance,string"`
+		TotalReceived int64  `json:"totalReceived,string"`
+		TotalSent     int64  `json:"totalSent,string"`
+	}
+
+	// XpubBalAndTxs models xpub transactions and balance.
+	XpubBalAndTxs struct {
+		Xpub               string        `json:"adddress"`
+		Balance            int64         `json:"balance,string"`
+		TotalReceived      int64         `json:"totalReceived,string"`
+		TotalSent          int64         `json:"totalSent,string"`
+		UnconfirmedBalance int64         `json:"unconfirmedBalance,string"`
+		UnconfirmedTxs     int64         `json:"unconfirmedTxs"`
+		Txs                int32         `json:"txs"`
+		TxIds              []string      `json:"txids"`
+		UsedTokens         int32         `json:"usedTokens"`
+		XpubAddress        []XpubAddress `json:"tokens"`
+	}
 )
