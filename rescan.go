@@ -25,24 +25,25 @@ func (mw *MultiWallet) RescanBlocksFromHeight(walletID int, startHeight int32) e
 		return errors.E(ErrNotConnected)
 	}
 
-	if mw.IsRescanning() || !mw.IsSynced() {
-		return errors.E(ErrInvalid)
-	}
+	// if mw.IsRescanning() || !mw.IsSynced() {
+	// 	return errors.E(ErrInvalid)
+	// }
 
 	go func() {
 		defer func() {
-			mw.syncData.mu.Lock()
-			mw.syncData.rescanning = false
-			mw.syncData.cancelRescan = nil
-			mw.syncData.mu.Unlock()
+			// mw.syncData.mu.Lock()
+			// mw.syncData.rescanning = false
+			// mw.syncData.cancelRescan = nil
+			// mw.syncData.mu.Unlock()
 		}()
 
-		ctx, cancel := wallet.shutdownContextWithCancel()
+		ctx, _ := wallet.ShutdownContextWithCancel()
+		// ctx, cancel := wallet.ShutdownContextWithCancel() //undo this lateer
 
-		mw.syncData.mu.Lock()
-		mw.syncData.rescanning = true
-		mw.syncData.cancelRescan = cancel
-		mw.syncData.mu.Unlock()
+		// mw.syncData.mu.Lock()
+		// mw.syncData.rescanning = true
+		// mw.syncData.cancelRescan = cancel
+		// mw.syncData.mu.Unlock()
 
 		if mw.blocksRescanProgressListener != nil {
 			mw.blocksRescanProgressListener.OnBlocksRescanStarted(walletID)
@@ -104,9 +105,9 @@ func (mw *MultiWallet) RescanBlocksFromHeight(walletID int, startHeight int32) e
 
 		var err error
 		if startHeight == 0 {
-			err = wallet.reindexTransactions()
+			err = wallet.ReindexTransactions()
 		} else {
-			err = wallet.walletDataDB.SaveLastIndexPoint(startHeight)
+			err = wallet.WalletDataDB.SaveLastIndexPoint(startHeight)
 			if err != nil {
 				if mw.blocksRescanProgressListener != nil {
 					mw.blocksRescanProgressListener.OnBlocksRescanEnded(walletID, err)
@@ -125,20 +126,22 @@ func (mw *MultiWallet) RescanBlocksFromHeight(walletID int, startHeight int32) e
 }
 
 func (mw *MultiWallet) CancelRescan() {
-	mw.syncData.mu.Lock()
-	defer mw.syncData.mu.Unlock()
-	if mw.syncData.cancelRescan != nil {
-		mw.syncData.cancelRescan()
-		mw.syncData.cancelRescan = nil
+	// mw.syncData.mu.Lock()
+	// defer mw.syncData.mu.Unlock()
+	// if mw.syncData.cancelRescan != nil {
+	// 	mw.syncData.cancelRescan()
+	// 	mw.syncData.cancelRescan = nil
 
-		log.Info("Rescan canceled.")
-	}
+	// 	log.Info("Rescan canceled.")
+	// }
 }
 
 func (mw *MultiWallet) IsRescanning() bool {
-	mw.syncData.mu.RLock()
-	defer mw.syncData.mu.RUnlock()
-	return mw.syncData.rescanning
+	// mw.syncData.mu.RLock()
+	// defer mw.syncData.mu.RUnlock()
+	// return mw.syncData.rescanning
+
+	return true
 }
 
 func (mw *MultiWallet) SetBlocksRescanProgressListener(blocksRescanProgressListener BlocksRescanProgressListener) {

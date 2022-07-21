@@ -1,4 +1,4 @@
-package dcrlibwallet
+package dcr
 
 import (
 	"context"
@@ -36,10 +36,10 @@ type CSPPConfig struct {
 	ChangeAccount      uint32
 }
 
-// type WalletsIterator struct {
-// 	currentIndex int
-// 	wallets      []*Wallet
-// }
+type WalletsIterator struct {
+	currentIndex int
+	wallets      []*Wallet
+}
 
 type BlockInfo struct {
 	Height    int32
@@ -528,12 +528,3 @@ type DcrdataAgenda struct {
 }
 
 /** end agenda types */
-
-// TreasuryKeyPolicy records the voting policy for treasury spend transactions
-// by a particular key, and possibly for a particular ticket being voted on by a
-// VSP.
-type TreasuryKeyPolicy struct {
-	PiKey      string `json:"pi_key"`
-	TicketHash string `json:"ticket_hash"` // nil unless for per-ticket VSP policies
-	Policy     string `json:"policy"`
-}

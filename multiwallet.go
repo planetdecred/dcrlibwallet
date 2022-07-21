@@ -17,8 +17,10 @@ import (
 	"github.com/asdine/storm/q"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/planetdecred/dcrlibwallet/utils"
-	"github.com/planetdecred/dcrlibwallet/walletdata"
-	bolt "go.etcd.io/bbolt"
+	"github.com/planetdecred/dcrlibwallet/wallets/dcr/walletdata"
+
+	"github.com/planetdecred/dcrlibwallet/wallets/dcr"
+
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -28,15 +30,16 @@ type MultiWallet struct {
 	db       *storm.DB
 
 	chainParams *chaincfg.Params
-	wallets     map[int]*Wallet
-	badWallets  map[int]*Wallet
-	syncData    *syncData
+	wallets     map[int]*dcr.Wallet
+	badWallets  map[int]*dcr.Wallet
 
-	notificationListenersMu         sync.RWMutex
+	// syncData *dcr.SyncData
+
+	// notificationListenersMu         sync.RWMutex
 	txAndBlockNotificationListeners map[string]TxAndBlockNotificationListener
 
 	blocksRescanProgressListener     BlocksRescanProgressListener
-	accountMixerNotificationListener map[string]AccountMixerNotificationListener
+	// accountMixerNotificationListener map[string]AccountMixerNotificationListener
 
 	shuttingDown chan bool
 	cancelFuncs  []context.CancelFunc
@@ -56,54 +59,28 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 		return nil, err
 	}
 
-	rootDir = filepath.Join(rootDir, netType)
-	err = os.MkdirAll(rootDir, os.ModePerm)
+	dcrDB, dcrRootDir, err := initializeDCRWallet(rootDir, dbDriver, netType)
 	if err != nil {
-		return nil, errors.Errorf("failed to create rootDir: %v", err)
-	}
-
-	err = initLogRotator(filepath.Join(rootDir, logFileName))
-	if err != nil {
-		return nil, errors.Errorf("failed to init logRotator: %v", err.Error())
-	}
-
-	mwDB, err := storm.Open(filepath.Join(rootDir, walletsDbName))
-	if err != nil {
-		log.Errorf("Error opening wallets database: %s", err.Error())
-		if err == bolt.ErrTimeout {
-			// timeout error occurs if storm fails to acquire a lock on the database file
-			return nil, errors.E(ErrWalletDatabaseInUse)
-		}
-		return nil, errors.Errorf("error opening wallets database: %s", err.Error())
-	}
-
-	// init database for saving/reading wallet objects
-	err = mwDB.Init(&Wallet{})
-	if err != nil {
-		log.Errorf("Error initializing wallets database: %s", err.Error())
-		return nil, err
-	}
-
-	// init database for saving/reading proposal objects
-	err = mwDB.Init(&Proposal{})
-	if err != nil {
-		log.Errorf("Error initializing wallets database: %s", err.Error())
-		return nil, err
+		log.Errorf("error initializing DCRWallet: %s", err.Error())
+		return nil, errors.Errorf("error initializing DCRWallet: %s", err.Error())
 	}
 
 	mw := &MultiWallet{
 		dbDriver:    dbDriver,
-		rootDir:     rootDir,
-		db:          mwDB,
+		rootDir:     dcrRootDir,
+		db:          dcrDB,
 		chainParams: chainParams,
-		wallets:     make(map[int]*Wallet),
-		badWallets:  make(map[int]*Wallet),
-		syncData: &syncData{
-			syncProgressListeners: make(map[string]SyncProgressListener),
-		},
+		wallets:     make(map[int]*dcr.Wallet),
+		badWallets:  make(map[int]*dcr.Wallet),
+		// syncData: &dcr.SyncData{
+		// 	SyncProgressListeners: make(map[string]dcr.SyncProgressListener),
+		// },
 		txAndBlockNotificationListeners:  make(map[string]TxAndBlockNotificationListener),
-		accountMixerNotificationListener: make(map[string]AccountMixerNotificationListener),
 	}
+
+		// 	syncData: &dcr.SyncData{
+		// 	SyncProgressListeners: make(map[string]dcr.SyncProgressListener),
+		// },
 
 	mw.Politeia, err = newPoliteia(mw, politeiaHost)
 	if err != nil {
@@ -112,7 +89,7 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 
 	// read saved wallets info from db and initialize wallets
 	query := mw.db.Select(q.True()).OrderBy("ID")
-	var wallets []*Wallet
+	var wallets []*dcr.Wallet
 	err = query.Find(&wallets)
 	if err != nil && err != storm.ErrNotFound {
 		return nil, err
@@ -120,8 +97,8 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 
 	// prepare the wallets loaded from db for use
 	for _, wallet := range wallets {
-		err = wallet.prepare(rootDir, chainParams, mw.walletConfigSetFn(wallet.ID), mw.walletConfigReadFn(wallet.ID))
-		if err == nil && !WalletExistsAt(wallet.dataDir) {
+		err = wallet.Prepare(rootDir, chainParams, mw.walletConfigSetFn(wallet.ID), mw.walletConfigReadFn(wallet.ID))
+		if err == nil && !WalletExistsAt(wallet.DataDir) {
 			err = fmt.Errorf("missing wallet database file")
 		}
 		if err != nil {
@@ -153,7 +130,9 @@ func (mw *MultiWallet) Shutdown() {
 	mw.shuttingDown <- true
 
 	mw.CancelRescan()
-	mw.CancelSync()
+	for _, wallet := range mw.wallets {
+		wallet.CancelSync(mw.wallets)
+	}
 
 	for _, wallet := range mw.wallets {
 		wallet.Shutdown()
@@ -266,9 +245,9 @@ func (mw *MultiWallet) StartupSecurityType() int32 {
 }
 
 func (mw *MultiWallet) OpenWallets(startupPassphrase []byte) error {
-	if mw.IsSyncing() {
-		return errors.New(ErrSyncAlreadyInProgress)
-	}
+	// if mw.IsSyncing() {
+	// 	return errors.New(ErrSyncAlreadyInProgress)
+	// }
 
 	err := mw.VerifyStartupPassphrase(startupPassphrase)
 	if err != nil {
@@ -276,7 +255,7 @@ func (mw *MultiWallet) OpenWallets(startupPassphrase []byte) error {
 	}
 
 	for _, wallet := range mw.wallets {
-		err = wallet.openWallet()
+		err = wallet.OpenWallet()
 		if err != nil {
 			return err
 		}
@@ -299,24 +278,24 @@ func (mw *MultiWallet) AllWalletsAreWatchOnly() (bool, error) {
 	return true, nil
 }
 
-func (mw *MultiWallet) CreateWatchOnlyWallet(walletName, extendedPublicKey string) (*Wallet, error) {
-	wallet := &Wallet{
+func (mw *MultiWallet) CreateWatchOnlyWallet(walletName, extendedPublicKey string) (*dcr.Wallet, error) {
+	wallet := &dcr.Wallet{
 		Name:                  walletName,
 		IsRestored:            true,
 		HasDiscoveredAccounts: true,
 	}
 
 	return mw.saveNewWallet(wallet, func() error {
-		err := wallet.prepare(mw.rootDir, mw.chainParams, mw.walletConfigSetFn(wallet.ID), mw.walletConfigReadFn(wallet.ID))
+		err := wallet.Prepare(mw.rootDir, mw.chainParams, mw.walletConfigSetFn(wallet.ID), mw.walletConfigReadFn(wallet.ID))
 		if err != nil {
 			return err
 		}
 
-		return wallet.createWatchingOnlyWallet(extendedPublicKey)
+		return wallet.CreateWatchingOnlyWallet(extendedPublicKey)
 	})
 }
 
-func (mw *MultiWallet) CreateNewWallet(walletName, privatePassphrase string, privatePassphraseType int32) (*Wallet, error) {
+func (mw *MultiWallet) CreateNewWallet(walletName, privatePassphrase string, privatePassphraseType int32) (*dcr.Wallet, error) {
 	seed, err := GenerateSeed()
 	if err != nil {
 		return nil, err
@@ -326,7 +305,7 @@ func (mw *MultiWallet) CreateNewWallet(walletName, privatePassphrase string, pri
 	if err != nil {
 		return nil, err
 	}
-	wallet := &Wallet{
+	wallet := &dcr.Wallet{
 		Name:                  walletName,
 		CreatedAt:             time.Now(),
 		EncryptedSeed:         encryptedSeed,
@@ -335,18 +314,18 @@ func (mw *MultiWallet) CreateNewWallet(walletName, privatePassphrase string, pri
 	}
 
 	return mw.saveNewWallet(wallet, func() error {
-		err := wallet.prepare(mw.rootDir, mw.chainParams, mw.walletConfigSetFn(wallet.ID), mw.walletConfigReadFn(wallet.ID))
+		err := wallet.Prepare(mw.rootDir, mw.chainParams, mw.walletConfigSetFn(wallet.ID), mw.walletConfigReadFn(wallet.ID))
 		if err != nil {
 			return err
 		}
 
-		return wallet.createWallet(privatePassphrase, seed)
+		return wallet.CreateWallet(privatePassphrase, seed)
 	})
 }
 
-func (mw *MultiWallet) RestoreWallet(walletName, seedMnemonic, privatePassphrase string, privatePassphraseType int32) (*Wallet, error) {
+func (mw *MultiWallet) RestoreWallet(walletName, seedMnemonic, privatePassphrase string, privatePassphraseType int32) (*dcr.Wallet, error) {
 
-	wallet := &Wallet{
+	wallet := &dcr.Wallet{
 		Name:                  walletName,
 		PrivatePassphraseType: privatePassphraseType,
 		IsRestored:            true,
@@ -354,16 +333,16 @@ func (mw *MultiWallet) RestoreWallet(walletName, seedMnemonic, privatePassphrase
 	}
 
 	return mw.saveNewWallet(wallet, func() error {
-		err := wallet.prepare(mw.rootDir, mw.chainParams, mw.walletConfigSetFn(wallet.ID), mw.walletConfigReadFn(wallet.ID))
+		err := wallet.Prepare(mw.rootDir, mw.chainParams, mw.walletConfigSetFn(wallet.ID), mw.walletConfigReadFn(wallet.ID))
 		if err != nil {
 			return err
 		}
 
-		return wallet.createWallet(privatePassphrase, seedMnemonic)
+		return wallet.CreateWallet(privatePassphrase, seedMnemonic)
 	})
 }
 
-func (mw *MultiWallet) LinkExistingWallet(walletName, walletDataDir, originalPubPass string, privatePassphraseType int32) (*Wallet, error) {
+func (mw *MultiWallet) LinkExistingWallet(walletName, walletDataDir, originalPubPass string, privatePassphraseType int32) (*dcr.Wallet, error) {
 	// check if `walletDataDir` contains wallet.db
 	if !WalletExistsAt(walletDataDir) {
 		return nil, errors.New(ErrNotExist)
@@ -376,7 +355,7 @@ func (mw *MultiWallet) LinkExistingWallet(walletName, walletDataDir, originalPub
 		return nil, err
 	}
 
-	wallet := &Wallet{
+	wallet := &dcr.Wallet{
 		Name:                  walletName,
 		PrivatePassphraseType: privatePassphraseType,
 		IsRestored:            true,
@@ -386,36 +365,36 @@ func (mw *MultiWallet) LinkExistingWallet(walletName, walletDataDir, originalPub
 	return mw.saveNewWallet(wallet, func() error {
 		// move wallet.db and tx.db files to newly created dir for the wallet
 		currentWalletDbFilePath := filepath.Join(walletDataDir, walletDbName)
-		newWalletDbFilePath := filepath.Join(wallet.dataDir, walletDbName)
+		newWalletDbFilePath := filepath.Join(wallet.DataDir, walletDbName)
 		if err := moveFile(currentWalletDbFilePath, newWalletDbFilePath); err != nil {
 			return err
 		}
 
 		currentTxDbFilePath := filepath.Join(walletDataDir, walletdata.OldDbName)
-		newTxDbFilePath := filepath.Join(wallet.dataDir, walletdata.DbName)
+		newTxDbFilePath := filepath.Join(wallet.DataDir, walletdata.DbName)
 		if err := moveFile(currentTxDbFilePath, newTxDbFilePath); err != nil {
 			return err
 		}
 
 		// prepare the wallet for use and open it
 		err := (func() error {
-			err := wallet.prepare(mw.rootDir, mw.chainParams, mw.walletConfigSetFn(wallet.ID), mw.walletConfigReadFn(wallet.ID))
+			err := wallet.Prepare(mw.rootDir, mw.chainParams, mw.walletConfigSetFn(wallet.ID), mw.walletConfigReadFn(wallet.ID))
 			if err != nil {
 				return err
 			}
 
 			if originalPubPass == "" || originalPubPass == w.InsecurePubPassphrase {
-				return wallet.openWallet()
+				return wallet.OpenWallet()
 			}
 
-			err = mw.loadWalletTemporarily(ctx, wallet.dataDir, originalPubPass, func(tempWallet *w.Wallet) error {
+			err = mw.loadWalletTemporarily(ctx, wallet.DataDir, originalPubPass, func(tempWallet *w.Wallet) error {
 				return tempWallet.ChangePublicPassphrase(ctx, []byte(originalPubPass), []byte(w.InsecurePubPassphrase))
 			})
 			if err != nil {
 				return err
 			}
 
-			return wallet.openWallet()
+			return wallet.OpenWallet()
 		})()
 
 		// restore db files to their original location if there was an error
@@ -441,7 +420,7 @@ func (mw *MultiWallet) LinkExistingWallet(walletName, walletDataDir, originalPub
 //
 // IFF all the above operations succeed, the wallet info will be persisted to db
 // and the wallet will be added to `mw.wallets`.
-func (mw *MultiWallet) saveNewWallet(wallet *Wallet, setupWallet func() error) (*Wallet, error) {
+func (mw *MultiWallet) saveNewWallet(wallet *dcr.Wallet, setupWallet func() error) (*dcr.Wallet, error) {
 	exists, err := mw.WalletNameExists(wallet.Name)
 	if err != nil {
 		return nil, err
@@ -449,10 +428,10 @@ func (mw *MultiWallet) saveNewWallet(wallet *Wallet, setupWallet func() error) (
 		return nil, errors.New(ErrExist)
 	}
 
-	if mw.IsConnectedToDecredNetwork() {
-		mw.CancelSync()
-		defer mw.SpvSync()
-	}
+	// if mw.IsConnectedToDecredNetwork() {
+	// 	mw.CancelSync()
+	// 	defer mw.SpvSync()
+	// }
 	// Perform database save operations in batch transaction
 	// for automatic rollback if error occurs at any point.
 	err = mw.batchDbTransaction(func(db storm.Node) error {
@@ -481,7 +460,7 @@ func (mw *MultiWallet) saveNewWallet(wallet *Wallet, setupWallet func() error) (
 		if wallet.Name == "" {
 			wallet.Name = "wallet-" + strconv.Itoa(wallet.ID) // wallet-#
 		}
-		wallet.dataDir = walletDataDir
+		wallet.DataDir = walletDataDir
 		wallet.DbDriver = mw.dbDriver
 
 		err = db.Save(wallet) // update database with complete wallet information
@@ -528,16 +507,16 @@ func (mw *MultiWallet) DeleteWallet(walletID int, privPass []byte) error {
 		return errors.New(ErrNotExist)
 	}
 
-	if mw.IsConnectedToDecredNetwork() {
-		mw.CancelSync()
-		defer func() {
-			if mw.OpenedWalletsCount() > 0 {
-				mw.SpvSync()
-			}
-		}()
-	}
+	// if mw.IsConnectedToDecredNetwork() {
+	// 	mw.CancelSync()
+	// 	defer func() {
+	// 		if mw.OpenedWalletsCount() > 0 {
+	// 			mw.SpvSync()
+	// 		}
+	// 	}()
+	// }
 
-	err := wallet.deleteWallet(privPass)
+	err := wallet.DeleteWallet(privPass)
 	if err != nil {
 		return translateError(err)
 	}
@@ -552,7 +531,7 @@ func (mw *MultiWallet) DeleteWallet(walletID int, privPass []byte) error {
 	return nil
 }
 
-func (mw *MultiWallet) BadWallets() map[int]*Wallet {
+func (mw *MultiWallet) BadWallets() map[int]*dcr.Wallet {
 	return mw.badWallets
 }
 
@@ -569,13 +548,13 @@ func (mw *MultiWallet) DeleteBadWallet(walletID int) error {
 		return translateError(err)
 	}
 
-	os.RemoveAll(wallet.dataDir)
+	os.RemoveAll(wallet.DataDir)
 	delete(mw.badWallets, walletID)
 
 	return nil
 }
 
-func (mw *MultiWallet) WalletWithID(walletID int) *Wallet {
+func (mw *MultiWallet) WalletWithID(walletID int) *dcr.Wallet {
 	if wallet, ok := mw.wallets[walletID]; ok {
 		return wallet
 	}
@@ -640,7 +619,7 @@ func (mw *MultiWallet) OpenedWalletsCount() int32 {
 func (mw *MultiWallet) SyncedWalletsCount() int32 {
 	var syncedWallets int32
 	for _, wallet := range mw.wallets {
-		if wallet.WalletOpened() && wallet.synced {
+		if wallet.WalletOpened() && wallet.Synced {
 			syncedWallets++
 		}
 	}
@@ -653,7 +632,7 @@ func (mw *MultiWallet) WalletNameExists(walletName string) (bool, error) {
 		return false, errors.E(ErrReservedWalletName)
 	}
 
-	err := mw.db.One("Name", walletName, &Wallet{})
+	err := mw.db.One("Name", walletName, &dcr.Wallet{})
 	if err == nil {
 		return true, nil
 	} else if err != storm.ErrNotFound {
@@ -696,7 +675,7 @@ func (mw *MultiWallet) ChangePrivatePassphraseForWallet(walletID int, oldPrivate
 		}
 	}
 
-	err := wallet.changePrivatePassphrase(oldPrivatePassphrase, newPrivatePassphrase)
+	err := wallet.ChangePrivatePassphrase(oldPrivatePassphrase, newPrivatePassphrase)
 	if err != nil {
 		return translateError(err)
 	}
@@ -707,7 +686,7 @@ func (mw *MultiWallet) ChangePrivatePassphraseForWallet(walletID int, oldPrivate
 	if err != nil {
 		log.Errorf("error saving wallet-[%d] to database after passphrase change: %v", wallet.ID, err)
 
-		err2 := wallet.changePrivatePassphrase(newPrivatePassphrase, oldPrivatePassphrase)
+		err2 := wallet.ChangePrivatePassphrase(newPrivatePassphrase, oldPrivatePassphrase)
 		if err2 != nil {
 			log.Errorf("error undoing wallet passphrase change: %v", err2)
 			log.Errorf("error wallet passphrase was changed but passphrase type and newly encrypted seed could not be saved: %v", err)

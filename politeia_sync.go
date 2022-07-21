@@ -12,6 +12,9 @@ import (
 	"github.com/asdine/storm"
 	tkv1 "github.com/decred/politeia/politeiawww/api/ticketvote/v1"
 	www "github.com/decred/politeia/politeiawww/api/www/v1"
+
+	"github.com/planetdecred/dcrlibwallet/wallets/dcr"
+
 )
 
 const (
@@ -411,7 +414,7 @@ func (p *Politeia) ProposalVoteDetailsRaw(walletID int, token string) (*Proposal
 		return nil, err
 	}
 
-	ticketHashes, addresses, err := wal.Internal().CommittedTickets(wal.shutdownContext(), hashes)
+	ticketHashes, addresses, err := wal.Internal().CommittedTickets(wal.ShutdownContext(), hashes)
 	if err != nil {
 		return nil, err
 	}
@@ -437,7 +440,7 @@ func (p *Politeia) ProposalVoteDetailsRaw(walletID int, token string) (*Proposal
 		}
 
 		// filter out tickets controlled by imported accounts
-		if ainfo.AccountNumber == ImportedAccountNumber {
+		if ainfo.AccountNumber == dcr.ImportedAccountNumber {
 			continue
 		}
 
@@ -522,7 +525,7 @@ func (p *Politeia) CastVotes(walletID int, eligibleTickets []*ProposalVote, toke
 
 		msg := token + ticket.Hash + voteBitHex
 
-		signature, err := wal.signMessage(ticket.Address, msg)
+		signature, err := wal.SignMessageDirect(ticket.Address, msg)
 		if err != nil {
 			return err
 		}

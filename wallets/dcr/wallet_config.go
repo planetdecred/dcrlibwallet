@@ -1,4 +1,4 @@
-package dcrlibwallet
+package dcr
 
 import (
 	"decred.org/dcrwallet/v2/errors"
