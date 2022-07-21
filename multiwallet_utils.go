@@ -16,6 +16,9 @@ import (
 	"github.com/kevinburke/nacl"
 	"github.com/kevinburke/nacl/secretbox"
 	"golang.org/x/crypto/scrypt"
+
+	"github.com/planetdecred/dcrlibwallet/wallets/dcr"
+	
 )
 
 const (
@@ -143,7 +146,7 @@ func (mw *MultiWallet) WalletWithXPub(xpub string) (int, error) {
 			return -1, err
 		}
 		for _, account := range accounts.Accounts {
-			if account.AccountNumber == ImportedAccountNumber {
+			if account.AccountNumber == dcr.ImportedAccountNumber {
 				continue
 			}
 			acctXPub, err := w.Internal().AccountXpub(ctx, account.AccountNumber)
@@ -166,7 +169,7 @@ func (mw *MultiWallet) WalletWithSeed(seedMnemonic string) (int, error) {
 		return -1, errors.New(ErrEmptySeed)
 	}
 
-	newSeedLegacyXPUb, newSeedSLIP0044XPUb, err := deriveBIP44AccountXPubs(seedMnemonic, DefaultAccountNum, mw.chainParams)
+	newSeedLegacyXPUb, newSeedSLIP0044XPUb, err := deriveBIP44AccountXPubs(seedMnemonic, dcr.DefaultAccountNum, mw.chainParams)
 	if err != nil {
 		return -1, err
 	}
@@ -180,7 +183,7 @@ func (mw *MultiWallet) WalletWithSeed(seedMnemonic string) (int, error) {
 		// incorrect result from the check below. But this would return true
 		// if the watch-only wallet was created using the xpub of the default
 		// account of the provided seed.
-		usesSameSeed, err := wallet.AccountXPubMatches(DefaultAccountNum, newSeedLegacyXPUb, newSeedSLIP0044XPUb)
+		usesSameSeed, err := wallet.AccountXPubMatches(dcr.DefaultAccountNum, newSeedLegacyXPUb, newSeedSLIP0044XPUb)
 		if err != nil {
 			return -1, err
 		}

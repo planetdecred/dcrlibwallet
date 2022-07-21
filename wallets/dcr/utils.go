@@ -1,4 +1,4 @@
-package dcrlibwallet
+package dcr
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"decred.org/dcrwallet/v2/errors"
+	// "decred.org/dcrwallet/v2/errors"
 	"decred.org/dcrwallet/v2/wallet"
 	"decred.org/dcrwallet/v2/wallet/txrules"
 	"decred.org/dcrwallet/v2/walletseed"
@@ -26,7 +26,6 @@ import (
 	"github.com/decred/dcrd/hdkeychain/v3"
 	"github.com/decred/dcrd/wire"
 	"github.com/planetdecred/dcrlibwallet/internal/loader"
-
 )
 
 const (
@@ -56,44 +55,64 @@ const (
 	ShortestAbbreviationFormat = "shortest"
 )
 
-func (mw *MultiWallet) RequiredConfirmations() int32 {
-	spendUnconfirmed := mw.ReadBoolConfigValueForKey(SpendUnconfirmedConfigKey, false)
+// func (mw *MultiWallet) RequiredConfirmations() int32 {
+// 	spendUnconfirmed := mw.ReadBoolConfigValueForKey(SpendUnconfirmedConfigKey, false)
+// 	if spendUnconfirmed {
+// 		return 0
+// 	}
+// 	return DefaultRequiredConfirmations
+// }
+
+func (wallet *Wallet) RequiredConfirmations() int32 {
+	var spendUnconfirmed bool
+	wallet.readUserConfigValue(true, SpendUnconfirmedConfigKey, &spendUnconfirmed)
 	if spendUnconfirmed {
 		return 0
 	}
 	return DefaultRequiredConfirmations
 }
 
-func (mw *MultiWallet) listenForShutdown() {
+// func (mw *MultiWallet) listenForShutdown() {
 
-	mw.cancelFuncs = make([]context.CancelFunc, 0)
-	mw.shuttingDown = make(chan bool)
-	go func() {
-		<-mw.shuttingDown
-		for _, cancel := range mw.cancelFuncs {
-			cancel()
-		}
-	}()
-}
+// 	mw.cancelFuncs = make([]context.CancelFunc, 0)
+// 	mw.shuttingDown = make(chan bool)
+// 	go func() {
+// 		<-mw.shuttingDown
+// 		for _, cancel := range mw.cancelFuncs {
+// 			cancel()
+// 		}
+// 	}()
+// }
 
-func (mw *MultiWallet) contextWithShutdownCancel() (context.Context, context.CancelFunc) {
+func (wallet *Wallet) ShutdownContextWithCancel() (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(context.Background())
-	mw.cancelFuncs = append(mw.cancelFuncs, cancel)
+	wallet.cancelFuncs = append(wallet.cancelFuncs, cancel)
 	return ctx, cancel
 }
 
-func (mw *MultiWallet) ValidateExtPubKey(extendedPubKey string) error {
-	_, err := hdkeychain.NewKeyFromString(extendedPubKey, mw.chainParams)
-	if err != nil {
-		if err == hdkeychain.ErrInvalidChild {
-			return errors.New(ErrUnusableSeed)
-		}
-
-		return errors.New(ErrInvalid)
-	}
-
-	return nil
+func (wallet *Wallet) ShutdownContext() (ctx context.Context) {
+	ctx, _ = wallet.ShutdownContextWithCancel()
+	return
 }
+
+func (wallet *Wallet) contextWithShutdownCancel() (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(context.Background())
+	wallet.cancelFuncs = append(wallet.cancelFuncs, cancel)
+	return ctx, cancel
+}
+
+// func (mw *MultiWallet) ValidateExtPubKey(extendedPubKey string) error {
+// 	_, err := hdkeychain.NewKeyFromString(extendedPubKey, mw.chainParams)
+// 	if err != nil {
+// 		if err == hdkeychain.ErrInvalidChild {
+// 			return errors.New(ErrUnusableSeed)
+// 		}
+
+// 		return errors.New(ErrInvalid)
+// 	}
+
+// 	return nil
+// }
 
 func NormalizeAddress(addr string, defaultPort string) (string, error) {
 	// If the first SplitHostPort errors because of a missing port and not
@@ -186,18 +205,18 @@ func ShannonEntropy(text string) (entropy float64) {
 	return entropy
 }
 
-func TransactionDirectionName(direction int32) string {
-	switch direction {
-	// case TxDirectionSent:
-	// 	return "Sent"
-	// case TxDirectionReceived:
-	// 	return "Received"
-	// case TxDirectionTransferred:
-	// 	return "Yourself"
-	default:
-		return "invalid"
-	}
-}
+// func TransactionDirectionName(direction int32) string {
+// 	switch direction {
+// 	case TxDirectionSent:
+// 		return "Sent"
+// 	case TxDirectionReceived:
+// 		return "Received"
+// 	case TxDirectionTransferred:
+// 		return "Yourself"
+// 	default:
+// 		return "invalid"
+// 	}
+// }
 
 func CalculateTotalTimeRemaining(timeRemainingInSeconds int64) string {
 	minutes := timeRemainingInSeconds / 60

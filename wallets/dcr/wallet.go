@@ -1,4 +1,4 @@
-package dcrlibwallet
+package dcr
 
 import (
 	"context"
@@ -12,34 +12,38 @@ import (
 	"decred.org/dcrwallet/v2/errors"
 	w "decred.org/dcrwallet/v2/wallet"
 	"decred.org/dcrwallet/v2/walletseed"
+	"github.com/asdine/storm"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/planetdecred/dcrlibwallet/internal/loader"
 	"github.com/planetdecred/dcrlibwallet/internal/vsp"
-	"github.com/planetdecred/dcrlibwallet/walletdata"
+	"github.com/planetdecred/dcrlibwallet/wallets/dcr/walletdata"
 )
 
 type Wallet struct {
-	ID                    int       `storm:"id,increment"`
-	Name                  string    `storm:"unique"`
-	CreatedAt             time.Time `storm:"index"`
-	DbDriver              string
+	ID        int       `storm:"id,increment"`
+	Name      string    `storm:"unique"`
+	CreatedAt time.Time `storm:"index"`
+	DbDriver  string
+	rootDir   string
+	db        *storm.DB
+
 	EncryptedSeed         []byte
 	IsRestored            bool
 	HasDiscoveredAccounts bool
 	PrivatePassphraseType int32
 
 	chainParams  *chaincfg.Params
-	dataDir      string
+	DataDir      string
 	loader       *loader.Loader
-	walletDataDB *walletdata.DB
+	WalletDataDB *walletdata.DB
 
-	synced            bool
-	syncing           bool
-	waitingForHeaders bool
+	Synced            bool
+	Syncing           bool
+	WaitingForHeaders bool
 
 	shuttingDown       chan bool
 	cancelFuncs        []context.CancelFunc
-	cancelAccountMixer context.CancelFunc
+	CancelAccountMixer context.CancelFunc
 
 	cancelAutoTicketBuyerMu sync.Mutex
 	cancelAutoTicketBuyer   context.CancelFunc
@@ -57,34 +61,38 @@ type Wallet struct {
 	// This function is ideally assigned when the `wallet.prepare` method is
 	// called from a MultiWallet instance.
 	readUserConfigValue configReadFn
+
+	notificationListenersMu          sync.RWMutex
+	syncData                         *SyncData
+	accountMixerNotificationListener map[string]AccountMixerNotificationListener
 }
 
 // prepare gets a wallet ready for use by opening the transactions index database
 // and initializing the wallet loader which can be used subsequently to create,
 // load and unload the wallet.
-func (wallet *Wallet) prepare(rootDir string, chainParams *chaincfg.Params,
+func (wallet *Wallet) Prepare(rootDir string, chainParams *chaincfg.Params,
 	setUserConfigValueFn configSaveFn, readUserConfigValueFn configReadFn) (err error) {
 
 	wallet.chainParams = chainParams
-	wallet.dataDir = filepath.Join(rootDir, strconv.Itoa(wallet.ID))
+	wallet.DataDir = filepath.Join(rootDir, strconv.Itoa(wallet.ID))
 	wallet.vspClients = make(map[string]*vsp.Client)
 	wallet.setUserConfigValue = setUserConfigValueFn
 	wallet.readUserConfigValue = readUserConfigValueFn
 
 	// open database for indexing transactions for faster loading
-	walletDataDBPath := filepath.Join(wallet.dataDir, walletdata.DbName)
-	oldTxDBPath := filepath.Join(wallet.dataDir, walletdata.OldDbName)
+	walletDataDBPath := filepath.Join(wallet.DataDir, walletdata.DbName)
+	oldTxDBPath := filepath.Join(wallet.DataDir, walletdata.OldDbName)
 	if exists, _ := fileExists(oldTxDBPath); exists {
 		moveFile(oldTxDBPath, walletDataDBPath)
 	}
-	wallet.walletDataDB, err = walletdata.Initialize(walletDataDBPath, chainParams, &Transaction{})
+	wallet.WalletDataDB, err = walletdata.Initialize(walletDataDBPath, chainParams, &Transaction{})
 	if err != nil {
 		log.Error(err.Error())
 		return err
 	}
 
 	// init loader
-	wallet.loader = initWalletLoader(wallet.chainParams, wallet.dataDir, wallet.DbDriver)
+	wallet.loader = initWalletLoader(wallet.chainParams, wallet.DataDir, wallet.DbDriver)
 
 	// init cancelFuncs slice to hold cancel functions for long running
 	// operations and start go routine to listen for shutdown signal
@@ -102,7 +110,7 @@ func (wallet *Wallet) prepare(rootDir string, chainParams *chaincfg.Params,
 
 func (wallet *Wallet) Shutdown() {
 	// Trigger shuttingDown signal to cancel all contexts created with
-	// `wallet.shutdownContext()` or `wallet.shutdownContextWithCancel()`.
+	// `wallet.ShutdownContext()` or `wallet.shutdownContextWithCancel()`.
 	wallet.shuttingDown <- true
 
 	if _, loaded := wallet.loader.LoadedWallet(); loaded {
@@ -114,8 +122,8 @@ func (wallet *Wallet) Shutdown() {
 		}
 	}
 
-	if wallet.walletDataDB != nil {
-		err := wallet.walletDataDB.Close()
+	if wallet.WalletDataDB != nil {
+		err := wallet.WalletDataDB.Close()
 		if err != nil {
 			log.Errorf("tx db closed with error: %v", err)
 		} else {
@@ -147,7 +155,7 @@ func (wallet *Wallet) WalletExists() (bool, error) {
 	return wallet.loader.WalletExists()
 }
 
-func (wallet *Wallet) createWallet(privatePassphrase, seedMnemonic string) error {
+func (wallet *Wallet) CreateWallet(privatePassphrase, seedMnemonic string) error {
 	log.Info("Creating Wallet")
 	if len(seedMnemonic) == 0 {
 		return errors.New(ErrEmptySeed)
@@ -161,7 +169,7 @@ func (wallet *Wallet) createWallet(privatePassphrase, seedMnemonic string) error
 		return err
 	}
 
-	_, err = wallet.loader.CreateNewWallet(wallet.shutdownContext(), pubPass, privPass, seed)
+	_, err = wallet.loader.CreateNewWallet(wallet.ShutdownContext(), pubPass, privPass, seed)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -171,10 +179,10 @@ func (wallet *Wallet) createWallet(privatePassphrase, seedMnemonic string) error
 	return nil
 }
 
-func (wallet *Wallet) createWatchingOnlyWallet(extendedPublicKey string) error {
+func (wallet *Wallet) CreateWatchingOnlyWallet(extendedPublicKey string) error {
 	pubPass := []byte(w.InsecurePubPassphrase)
 
-	_, err := wallet.loader.CreateWatchingOnlyWallet(wallet.shutdownContext(), extendedPublicKey, pubPass)
+	_, err := wallet.loader.CreateWatchingOnlyWallet(wallet.ShutdownContext(), extendedPublicKey, pubPass)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -192,10 +200,10 @@ func (wallet *Wallet) IsWatchingOnlyWallet() bool {
 	return false
 }
 
-func (wallet *Wallet) openWallet() error {
+func (wallet *Wallet) OpenWallet() error {
 	pubPass := []byte(w.InsecurePubPassphrase)
 
-	_, err := wallet.loader.OpenExistingWallet(wallet.shutdownContext(), pubPass)
+	_, err := wallet.loader.OpenExistingWallet(wallet.ShutdownContext(), pubPass)
 	if err != nil {
 		log.Error(err)
 		return translateError(err)
@@ -214,7 +222,7 @@ func (wallet *Wallet) UnlockWallet(privPass []byte) error {
 		return fmt.Errorf("wallet has not been loaded")
 	}
 
-	ctx, _ := wallet.shutdownContextWithCancel()
+	ctx, _ := wallet.ShutdownContextWithCancel()
 	err := loadedWallet.Unlock(ctx, privPass, nil)
 	if err != nil {
 		return translateError(err)
@@ -238,7 +246,7 @@ func (wallet *Wallet) IsLocked() bool {
 	return wallet.Internal().Locked()
 }
 
-func (wallet *Wallet) changePrivatePassphrase(oldPass []byte, newPass []byte) error {
+func (wallet *Wallet) ChangePrivatePassphrase(oldPass []byte, newPass []byte) error {
 	defer func() {
 		for i := range oldPass {
 			oldPass[i] = 0
@@ -249,14 +257,14 @@ func (wallet *Wallet) changePrivatePassphrase(oldPass []byte, newPass []byte) er
 		}
 	}()
 
-	err := wallet.Internal().ChangePrivatePassphrase(wallet.shutdownContext(), oldPass, newPass)
+	err := wallet.Internal().ChangePrivatePassphrase(wallet.ShutdownContext(), oldPass, newPass)
 	if err != nil {
 		return translateError(err)
 	}
 	return nil
 }
 
-func (wallet *Wallet) deleteWallet(privatePassphrase []byte) error {
+func (wallet *Wallet) DeleteWallet(privatePassphrase []byte) error {
 	defer func() {
 		for i := range privatePassphrase {
 			privatePassphrase[i] = 0
@@ -268,7 +276,7 @@ func (wallet *Wallet) deleteWallet(privatePassphrase []byte) error {
 	}
 
 	if !wallet.IsWatchingOnlyWallet() {
-		err := wallet.Internal().Unlock(wallet.shutdownContext(), privatePassphrase, nil)
+		err := wallet.Internal().Unlock(wallet.ShutdownContext(), privatePassphrase, nil)
 		if err != nil {
 			return translateError(err)
 		}
@@ -278,24 +286,24 @@ func (wallet *Wallet) deleteWallet(privatePassphrase []byte) error {
 	wallet.Shutdown()
 
 	log.Info("Deleting Wallet")
-	return os.RemoveAll(wallet.dataDir)
+	return os.RemoveAll(wallet.DataDir)
 }
 
 // DecryptSeed decrypts wallet.EncryptedSeed using privatePassphrase
-func (wallet *Wallet) DecryptSeed(privatePassphrase []byte) (string, error) {
-	if wallet.EncryptedSeed == nil {
-		return "", errors.New(ErrInvalid)
-	}
+// func (wallet *Wallet) DecryptSeed(privatePassphrase []byte) (string, error) {
+// 	if wallet.EncryptedSeed == nil {
+// 		return "", errors.New(ErrInvalid)
+// 	}
 
-	return decryptWalletSeed(privatePassphrase, wallet.EncryptedSeed)
-}
+// 	return decryptWalletSeed(privatePassphrase, wallet.EncryptedSeed)
+// }
 
 // AccountXPubMatches checks if the xpub of the provided account matches the
 // provided legacy or SLIP0044 xpub. While both the legacy and SLIP0044 xpubs
 // will be checked for watch-only wallets, other wallets will only check the
 // xpub that matches the coin type key used by the wallet.
 func (wallet *Wallet) AccountXPubMatches(account uint32, legacyXPub, slip044XPub string) (bool, error) {
-	ctx := wallet.shutdownContext()
+	ctx := wallet.ShutdownContext()
 
 	acctXPubKey, err := wallet.Internal().AccountXpub(ctx, account)
 	if err != nil {

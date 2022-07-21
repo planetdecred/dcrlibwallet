@@ -1,4 +1,4 @@
-package dcrlibwallet
+package dcr
 
 import (
 	"context"
@@ -36,10 +36,10 @@ type CSPPConfig struct {
 	ChangeAccount      uint32
 }
 
-// type WalletsIterator struct {
-// 	currentIndex int
-// 	wallets      []*Wallet
-// }
+type WalletsIterator struct {
+	currentIndex int
+	wallets      []*Wallet
+}
 
 type BlockInfo struct {
 	Height    int32
