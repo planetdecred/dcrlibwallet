@@ -273,6 +273,10 @@ func (s *Service) GetAddress(address string) (addressState *AddressState, err er
 	}
 
 	r, err := s.client.Do("GET", "api/v2/address/"+address, "")
+	if err != nil {
+		return
+	}
+
 	err = json.Unmarshal(r, &addressState)
 	if err != nil {
 		return
