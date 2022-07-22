@@ -27,10 +27,15 @@ const (
 )
 
 const (
-	mainnetBaseUrl   = "https://mainnet.dcrdata.org/"
-	testnetBaseUrl   = "https://testnet.dcrdata.org/"
-	blockbookMainnet = "https://blockbook.decred.org:9161/"
-	blockbookTestnet = "https://blockbook.decred.org:19161/"
+	mainnetBaseUrl        = "https://mainnet.dcrdata.org/"
+	testnetBaseUrl        = "https://testnet.dcrdata.org/"
+	blockbookMainnet      = "https://blockbook.decred.org:9161/"
+	blockbookTestnet      = "https://blockbook.decred.org:19161/"
+	binanceBaseUrl        = "https://api.binance.com"
+	binanceTestnetBaseUrl = "https://testnet.binance.vision"
+	bittrexBaseUrl        = "https://api.bittrex.com/v3"
+	kucoinBaseUrl         = "https://api.kucoin.com"
+	KuCoinTestnetBaseUrl  = "https://openapi-sandbox.kucoin.com"
 )
 
 var (
@@ -294,14 +299,14 @@ func (s *Service) GetXpub(xPub string) (xPubBalAndTxs *XpubBalAndTxs, err error)
 	return
 }
 
-// GetTicker
+// GetTicker returns market ticker data for the supported exchanges.
 func (s *Service) GetTicker(exchange Exchange, market string) (ticker *Ticker, err error) {
 	switch exchange {
 	case Binance:
 		if s.chainParams.Name == chaincfg.MainNetParams().Name {
-			s.client.BaseUrl = "https://api.binance.com"
+			s.client.BaseUrl = binanceBaseUrl
 		} else {
-			s.client.BaseUrl = "https://testnet.binance.vision"
+			s.client.BaseUrl = binanceTestnetBaseUrl
 		}
 
 		symbArr := strings.Split(market, "-")
@@ -310,74 +315,90 @@ func (s *Service) GetTicker(exchange Exchange, market string) (ticker *Ticker, e
 		}
 
 		symb := strings.Join(symbArr[:], "")
-		r, err := s.client.Do("GET", "/api/v3/ticker/24hr?symbol="+strings.ToUpper(symb), "")
-		if err != nil {
-			return ticker, err
-		}
-
-		var tempTicker BinanceTicker
-		err = json.Unmarshal(r, &tempTicker)
-		if err != nil {
-			return ticker, err
-		}
-
-		t := &Ticker{
-			Exchange:       supportedExchanges[exchange],
-			Symbol:         tempTicker.Symbol,
-			AskPrice:       tempTicker.AskPrice,
-			BidPrice:       tempTicker.BidPrice,
-			LastTradePrice: tempTicker.LastPrice,
-		}
-		return t, err
+		return s.getBinanceTicker(symb)
 	case Bittrex:
 		if s.chainParams.Name == chaincfg.TestNet3Params().Name {
 			return ticker, errors.New("Bittrex doesn't support testnet")
 		}
 
-		s.client.BaseUrl = "https://api.bittrex.com/v3"
-		r, err := s.client.Do("GET", "/markets/"+strings.ToUpper(market)+"/ticker", "")
-		if err != nil {
-			return ticker, err
-		}
-
-		var bTicker BittrexTicker
-		err = json.Unmarshal(r, &bTicker)
-		if err != nil {
-			return ticker, err
-		}
-		t := &Ticker{
-			Exchange:       supportedExchanges[exchange],
-			Symbol:         bTicker.Symbol,
-			AskPrice:       bTicker.Ask,
-			BidPrice:       bTicker.Bid,
-			LastTradePrice: bTicker.LastTradeRate,
-		}
-		return t, err
+		return s.getBittrexTicker(market)
 	case KuCoin:
 		if s.chainParams.Name == chaincfg.MainNetParams().Name {
-			s.client.BaseUrl = "https://api.kucoin.com"
+			s.client.BaseUrl = kucoinBaseUrl
 		} else {
-			s.client.BaseUrl = "https://openapi-sandbox.kucoin.com"
+			s.client.BaseUrl = KuCoinTestnetBaseUrl
 		}
 
-		r, err := s.client.Do("GET", "/api/v1/market/orderbook/level1?symbol="+strings.ToUpper(market), "")
-		if err != nil {
-			return ticker, err
-		}
-
-		var kTicker KuCoinTicker
-		err = json.Unmarshal(r, &kTicker)
-		if err != nil {
-			return ticker, err
-		}
-		t := &Ticker{
-			Exchange:       supportedExchanges[exchange],
-			Symbol:         strings.ToUpper(market),
-			AskPrice:       kTicker.Data.BestAsk,
-			BidPrice:       kTicker.Data.BestBid,
-			LastTradePrice: kTicker.Data.Price,
-		}
-		return t, err
+		return s.getKucoinTicker(market)
 	}
+
+	return nil, errors.New("Unknown exchange")
+}
+
+func (s *Service) getBinanceTicker(market string) (ticker *Ticker, err error) {
+	r, err := s.client.Do("GET", "/api/v3/ticker/24hr?symbol="+strings.ToUpper(market), "")
+	if err != nil {
+		return ticker, err
+	}
+
+	var tempTicker BinanceTicker
+	err = json.Unmarshal(r, &tempTicker)
+	if err != nil {
+		return ticker, err
+	}
+
+	ticker = &Ticker{
+		Exchange:       supportedExchanges[Binance],
+		Symbol:         tempTicker.Symbol,
+		AskPrice:       tempTicker.AskPrice,
+		BidPrice:       tempTicker.BidPrice,
+		LastTradePrice: tempTicker.LastPrice,
+	}
+
+	return
+}
+
+func (s *Service) getBittrexTicker(market string) (ticker *Ticker, err error) {
+	s.client.BaseUrl = bittrexBaseUrl
+	r, err := s.client.Do("GET", "/markets/"+strings.ToUpper(market)+"/ticker", "")
+	if err != nil {
+		return ticker, err
+	}
+
+	var bTicker BittrexTicker
+	err = json.Unmarshal(r, &bTicker)
+	if err != nil {
+		return ticker, err
+	}
+	ticker = &Ticker{
+		Exchange:       supportedExchanges[Bittrex],
+		Symbol:         bTicker.Symbol,
+		AskPrice:       bTicker.Ask,
+		BidPrice:       bTicker.Bid,
+		LastTradePrice: bTicker.LastTradeRate,
+	}
+
+	return
+}
+
+func (s *Service) getKucoinTicker(market string) (ticker *Ticker, err error) {
+	r, err := s.client.Do("GET", "/api/v1/market/orderbook/level1?symbol="+strings.ToUpper(market), "")
+	if err != nil {
+		return ticker, err
+	}
+
+	var kTicker KuCoinTicker
+	err = json.Unmarshal(r, &kTicker)
+	if err != nil {
+		return ticker, err
+	}
+	ticker = &Ticker{
+		Exchange:       supportedExchanges[KuCoin],
+		Symbol:         strings.ToUpper(market),
+		AskPrice:       kTicker.Data.BestAsk,
+		BidPrice:       kTicker.Data.BestBid,
+		LastTradePrice: kTicker.Data.Price,
+	}
+
 	return
 }
