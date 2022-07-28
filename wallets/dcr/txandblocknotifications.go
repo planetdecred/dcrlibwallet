@@ -1,8 +1,9 @@
 package dcr
 
 import (
-	"decred.org/dcrwallet/v2/errors"
 	"encoding/json"
+
+	"decred.org/dcrwallet/v2/errors"
 )
 
 func (wallet *Wallet) listenForTransactions() {
