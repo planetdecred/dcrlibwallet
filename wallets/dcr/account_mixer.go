@@ -254,7 +254,7 @@ func (wallet *Wallet) readCSPPConfig() *CSPPConfig {
 }
 
 // StopAccountMixer stops the active account mixer
-func (wallet *Wallet) StopAccountMixer(walletID int) error {
+func (wallet *Wallet) StopAccountMixer() error {
 	if wallet == nil {
 		return errors.New(ErrNotExist)
 	}

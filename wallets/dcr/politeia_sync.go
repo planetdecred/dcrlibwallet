@@ -1,20 +1,20 @@
-package dcrlibwallet
+package dcr
 
 import (
+	"decred.org/dcrwallet/v2/errors"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
+	// "errors"
 	"fmt"
 	"reflect"
 	"strconv"
 	"time"
 
 	"github.com/asdine/storm"
+	"github.com/asdine/storm/q"
+
 	tkv1 "github.com/decred/politeia/politeiawww/api/ticketvote/v1"
 	www "github.com/decred/politeia/politeiawww/api/www/v1"
-
-	"github.com/planetdecred/dcrlibwallet/wallets/dcr"
-
 )
 
 const (
@@ -38,7 +38,7 @@ func (p *Politeia) Sync() error {
 
 	log.Info("Politeia sync: started")
 
-	p.ctx, p.cancelSync = p.mwRef.contextWithShutdownCancel()
+	p.ctx, p.cancelSync = p.WalletRef.contextWithShutdownCancel()
 	defer p.resetSyncData()
 
 	p.mu.Unlock()
@@ -99,7 +99,7 @@ func (p *Politeia) StopSync() {
 func (p *Politeia) checkForUpdates() error {
 	offset := 0
 	p.mu.RLock()
-	limit := int32(p.client.policy.ProposalListPageSize)
+	limit := int32(p.Client.policy.ProposalListPageSize)
 	p.mu.RUnlock()
 
 	for {
@@ -141,7 +141,7 @@ func (p *Politeia) handleNewProposals(proposals []Proposal) error {
 	}
 
 	p.mu.RLock()
-	tokenInventory, err := p.client.tokenInventory()
+	tokenInventory, err := p.Client.tokenInventory()
 	p.mu.RUnlock()
 	if err != nil {
 		return err
@@ -159,12 +159,12 @@ func (p *Politeia) handleProposalsUpdate(proposals []Proposal) error {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	batchProposals, err := p.client.batchProposals(tokens)
+	batchProposals, err := p.Client.batchProposals(tokens)
 	if err != nil {
 		return err
 	}
 
-	batchVotesSummaries, err := p.client.batchVoteSummary(tokens)
+	batchVotesSummaries, err := p.Client.batchVoteSummary(tokens)
 	if err != nil {
 		return err
 	}
@@ -223,7 +223,7 @@ func (p *Politeia) updateProposalDetails(oldProposal, updatedProposal Proposal) 
 		}
 	}
 
-	err := p.mwRef.db.Update(&updatedProposal)
+	err := p.WalletRef.db.Update(&updatedProposal)
 	if err != nil {
 		return fmt.Errorf("error saving updated proposal: %s", err.Error())
 	}
@@ -290,7 +290,7 @@ func (p *Politeia) fetchBatchProposals(category int32, tokens []string, broadcas
 			return errors.New(ErrContextCanceled)
 		}
 
-		limit := int(p.client.policy.ProposalListPageSize)
+		limit := int(p.Client.policy.ProposalListPageSize)
 		if len(tokens) <= limit {
 			limit = len(tokens)
 		}
@@ -300,7 +300,7 @@ func (p *Politeia) fetchBatchProposals(category int32, tokens []string, broadcas
 		var tokenBatch []string
 		tokenBatch, tokens = tokens[:limit], tokens[limit:]
 
-		proposals, err := p.client.batchProposals(tokenBatch)
+		proposals, err := p.Client.batchProposals(tokenBatch)
 		if err != nil {
 			return err
 		}
@@ -309,7 +309,7 @@ func (p *Politeia) fetchBatchProposals(category int32, tokens []string, broadcas
 			return errors.New(ErrContextCanceled)
 		}
 
-		votesSummaries, err := p.client.batchVoteSummary(tokenBatch)
+		votesSummaries, err := p.Client.batchVoteSummary(tokenBatch)
 		if err != nil {
 			return err
 		}
@@ -354,12 +354,12 @@ func (p *Politeia) FetchProposalDescription(token string) (string, error) {
 		return "", err
 	}
 
-	client, err := p.getClient()
+	Client, err := p.getClient()
 	if err != nil {
 		return "", err
 	}
 
-	proposalDetailsReply, err := client.proposalDetails(token)
+	proposalDetailsReply, err := Client.proposalDetails(token)
 	if err != nil {
 		return "", err
 	}
@@ -389,22 +389,22 @@ func (p *Politeia) FetchProposalDescription(token string) (string, error) {
 }
 
 func (p *Politeia) ProposalVoteDetailsRaw(walletID int, token string) (*ProposalVoteDetails, error) {
-	wal := p.mwRef.WalletWithID(walletID)
+	wal := p.WalletRef
 	if wal == nil {
 		return nil, fmt.Errorf(ErrWalletNotFound)
 	}
 
-	client, err := p.getClient()
+	Client, err := p.getClient()
 	if err != nil {
 		return nil, err
 	}
 
-	detailsReply, err := client.voteDetails(token)
+	detailsReply, err := Client.voteDetails(token)
 	if err != nil {
 		return nil, err
 	}
 
-	votesResults, err := client.voteResults(token)
+	votesResults, err := Client.voteResults(token)
 	if err != nil {
 		return nil, err
 	}
@@ -440,7 +440,7 @@ func (p *Politeia) ProposalVoteDetailsRaw(walletID int, token string) (*Proposal
 		}
 
 		// filter out tickets controlled by imported accounts
-		if ainfo.AccountNumber == dcr.ImportedAccountNumber {
+		if ainfo.AccountNumber == ImportedAccountNumber {
 			continue
 		}
 
@@ -485,17 +485,17 @@ func (p *Politeia) ProposalVoteDetails(walletID int, token string) (string, erro
 }
 
 func (p *Politeia) CastVotes(walletID int, eligibleTickets []*ProposalVote, token, passphrase string) error {
-	wal := p.mwRef.WalletWithID(walletID)
+	wal := p.WalletRef
 	if wal == nil {
 		return fmt.Errorf(ErrWalletNotFound)
 	}
 
-	client, err := p.getClient()
+	Client, err := p.getClient()
 	if err != nil {
 		return err
 	}
 
-	detailsReply, err := client.voteDetails(token)
+	detailsReply, err := Client.voteDetails(token)
 	if err != nil {
 		return err
 	}
@@ -541,18 +541,18 @@ func (p *Politeia) CastVotes(walletID int, eligibleTickets []*ProposalVote, toke
 		votes = append(votes, singleVote)
 	}
 
-	return client.sendVotes(votes)
+	return Client.sendVotes(votes)
 }
 
 func (p *Politeia) AddNotificationListener(notificationListener ProposalNotificationListener, uniqueIdentifier string) error {
 	p.notificationListenersMu.Lock()
 	defer p.notificationListenersMu.Unlock()
 
-	if _, ok := p.notificationListeners[uniqueIdentifier]; ok {
+	if _, ok := p.NotificationListeners[uniqueIdentifier]; ok {
 		return errors.New(ErrListenerAlreadyExist)
 	}
 
-	p.notificationListeners[uniqueIdentifier] = notificationListener
+	p.NotificationListeners[uniqueIdentifier] = notificationListener
 	return nil
 }
 
@@ -560,14 +560,14 @@ func (p *Politeia) RemoveNotificationListener(uniqueIdentifier string) {
 	p.notificationListenersMu.Lock()
 	defer p.notificationListenersMu.Unlock()
 
-	delete(p.notificationListeners, uniqueIdentifier)
+	delete(p.NotificationListeners, uniqueIdentifier)
 }
 
 func (p *Politeia) publishSynced() {
 	p.notificationListenersMu.Lock()
 	defer p.notificationListenersMu.Unlock()
 
-	for _, notificationListener := range p.notificationListeners {
+	for _, notificationListener := range p.NotificationListeners {
 		notificationListener.OnProposalsSynced()
 	}
 }
@@ -576,7 +576,7 @@ func (p *Politeia) publishNewProposal(proposal *Proposal) {
 	p.notificationListenersMu.Lock()
 	defer p.notificationListenersMu.Unlock()
 
-	for _, notificationListener := range p.notificationListeners {
+	for _, notificationListener := range p.NotificationListeners {
 		notificationListener.OnNewProposal(proposal)
 	}
 }
@@ -585,7 +585,7 @@ func (p *Politeia) publishVoteStarted(proposal *Proposal) {
 	p.notificationListenersMu.Lock()
 	defer p.notificationListenersMu.Unlock()
 
-	for _, notificationListener := range p.notificationListeners {
+	for _, notificationListener := range p.NotificationListeners {
 		notificationListener.OnProposalVoteStarted(proposal)
 	}
 }
@@ -594,7 +594,7 @@ func (p *Politeia) publishVoteFinished(proposal *Proposal) {
 	p.notificationListenersMu.Lock()
 	defer p.notificationListenersMu.Unlock()
 
-	for _, notificationListener := range p.notificationListeners {
+	for _, notificationListener := range p.NotificationListeners {
 		notificationListener.OnProposalVoteFinished(proposal)
 	}
 }
@@ -633,4 +633,192 @@ func getUniqueTokens(tokenInventory, savedTokens []string) ([]string, []string) 
 	}
 
 	return diff, savedTokens
+}
+
+func (p *Politeia) saveLastSyncedTimestamp(lastSyncedTimestamp int64) {
+	p.WalletRef.SetLongConfigValueForKey(PoliteiaLastSyncedTimestampConfigKey, lastSyncedTimestamp)
+}
+
+func (p *Politeia) getLastSyncedTimestamp() int64 {
+	return p.WalletRef.ReadLongConfigValueForKey(PoliteiaLastSyncedTimestampConfigKey, 0)
+}
+
+func (p *Politeia) saveOrOverwiteProposal(proposal *Proposal) error {
+	var oldProposal Proposal
+	err := p.WalletRef.db.One("Token", proposal.Token, &oldProposal)
+	if err != nil && err != storm.ErrNotFound {
+		return errors.Errorf("error checking if proposal was already indexed: %s", err.Error())
+	}
+
+	if oldProposal.Token != "" {
+		// delete old record before saving new (if it exists)
+		p.WalletRef.db.DeleteStruct(oldProposal)
+	}
+
+	return p.WalletRef.db.Save(proposal)
+}
+
+// GetProposalsRaw fetches and returns a proposals from the db
+func (p *Politeia) GetProposalsRaw(category int32, offset, limit int32, newestFirst bool) ([]Proposal, error) {
+	return p.getProposalsRaw(category, offset, limit, newestFirst, false)
+}
+
+func (p *Politeia) getProposalsRaw(category int32, offset, limit int32, newestFirst bool, skipAbandoned bool) ([]Proposal, error) {
+
+	var query storm.Query
+	switch category {
+	case ProposalCategoryAll:
+
+		if skipAbandoned {
+			query = p.WalletRef.db.Select(
+				q.Not(q.Eq("Category", ProposalCategoryAbandoned)),
+			)
+		} else {
+			query = p.WalletRef.db.Select(
+				q.True(),
+			)
+		}
+	default:
+		query = p.WalletRef.db.Select(
+			q.Eq("Category", category),
+		)
+	}
+
+	if offset > 0 {
+		query = query.Skip(int(offset))
+	}
+
+	if limit > 0 {
+		query = query.Limit(int(limit))
+	}
+
+	if newestFirst {
+		query = query.OrderBy("PublishedAt").Reverse()
+	} else {
+		query = query.OrderBy("PublishedAt")
+	}
+
+	var proposals []Proposal
+	err := query.Find(&proposals)
+	if err != nil && err != storm.ErrNotFound {
+		return nil, fmt.Errorf("error fetching proposals: %s", err.Error())
+	}
+
+	return proposals, nil
+}
+
+// GetProposals returns the result of GetProposalsRaw as a JSON string
+func (p *Politeia) GetProposals(category int32, offset, limit int32, newestFirst bool) (string, error) {
+
+	result, err := p.GetProposalsRaw(category, offset, limit, newestFirst)
+	if err != nil {
+		return "", err
+	}
+
+	if len(result) == 0 {
+		return "[]", nil
+	}
+
+	response, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("error marshalling result: %s", err.Error())
+	}
+
+	return string(response), nil
+}
+
+// GetProposalRaw fetches and returns a single proposal specified by it's censorship record token
+func (p *Politeia) GetProposalRaw(censorshipToken string) (*Proposal, error) {
+	var proposal Proposal
+	err := p.WalletRef.db.One("Token", censorshipToken, &proposal)
+	if err != nil {
+		return nil, err
+	}
+
+	return &proposal, nil
+}
+
+// GetProposal returns the result of GetProposalRaw as a JSON string
+func (p *Politeia) GetProposal(censorshipToken string) (string, error) {
+	return marshalResult(p.GetProposalRaw(censorshipToken))
+}
+
+// GetProposalByIDRaw fetches and returns a single proposal specified by it's ID
+func (p *Politeia) GetProposalByIDRaw(proposalID int) (*Proposal, error) {
+	var proposal Proposal
+	err := p.WalletRef.db.One("ID", proposalID, &proposal)
+	if err != nil {
+		return nil, err
+	}
+
+	return &proposal, nil
+}
+
+// GetProposalByID returns the result of GetProposalByIDRaw as a JSON string
+func (p *Politeia) GetProposalByID(proposalID int) (string, error) {
+	return marshalResult(p.GetProposalByIDRaw(proposalID))
+}
+
+// Count returns the number of proposals of a specified category
+func (p *Politeia) Count(category int32) (int32, error) {
+	var matcher q.Matcher
+
+	if category == ProposalCategoryAll {
+		matcher = q.True()
+	} else {
+		matcher = q.Eq("Category", category)
+	}
+
+	count, err := p.WalletRef.db.Select(matcher).Count(&Proposal{})
+	if err != nil {
+		return 0, err
+	}
+
+	return int32(count), nil
+}
+
+func (p *Politeia) Overview() (*ProposalOverview, error) {
+
+	pre, err := p.Count(ProposalCategoryPre)
+	if err != nil {
+		return nil, err
+	}
+
+	active, err := p.Count(ProposalCategoryActive)
+	if err != nil {
+		return nil, err
+	}
+
+	approved, err := p.Count(ProposalCategoryApproved)
+	if err != nil {
+		return nil, err
+	}
+
+	rejected, err := p.Count(ProposalCategoryRejected)
+	if err != nil {
+		return nil, err
+	}
+
+	abandoned, err := p.Count(ProposalCategoryApproved)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ProposalOverview{
+		All:        pre + active + approved + rejected + abandoned,
+		Discussion: pre,
+		Voting:     active,
+		Approved:   approved,
+		Rejected:   rejected,
+		Abandoned:  abandoned,
+	}, nil
+}
+
+func (p *Politeia) ClearSavedProposals() error {
+	err := p.WalletRef.db.Drop(&Proposal{})
+	if err != nil {
+		return translateError(err)
+	}
+
+	return p.WalletRef.db.Init(&Proposal{})
 }

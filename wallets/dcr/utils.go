@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	// "decred.org/dcrwallet/v2/errors"
+	"decred.org/dcrwallet/v2/errors"
 	"decred.org/dcrwallet/v2/wallet"
 	"decred.org/dcrwallet/v2/wallet/txrules"
 	"decred.org/dcrwallet/v2/walletseed"
@@ -101,18 +101,18 @@ func (wallet *Wallet) contextWithShutdownCancel() (context.Context, context.Canc
 	return ctx, cancel
 }
 
-// func (mw *MultiWallet) ValidateExtPubKey(extendedPubKey string) error {
-// 	_, err := hdkeychain.NewKeyFromString(extendedPubKey, mw.chainParams)
-// 	if err != nil {
-// 		if err == hdkeychain.ErrInvalidChild {
-// 			return errors.New(ErrUnusableSeed)
-// 		}
+func (wallet *Wallet) ValidateExtPubKey(extendedPubKey string) error {
+	_, err := hdkeychain.NewKeyFromString(extendedPubKey, wallet.chainParams)
+	if err != nil {
+		if err == hdkeychain.ErrInvalidChild {
+			return errors.New(ErrUnusableSeed)
+		}
 
-// 		return errors.New(ErrInvalid)
-// 	}
+		return errors.New(ErrInvalid)
+	}
 
-// 	return nil
-// }
+	return nil
+}
 
 func NormalizeAddress(addr string, defaultPort string) (string, error) {
 	// If the first SplitHostPort errors because of a missing port and not
@@ -205,18 +205,18 @@ func ShannonEntropy(text string) (entropy float64) {
 	return entropy
 }
 
-// func TransactionDirectionName(direction int32) string {
-// 	switch direction {
-// 	case TxDirectionSent:
-// 		return "Sent"
-// 	case TxDirectionReceived:
-// 		return "Received"
-// 	case TxDirectionTransferred:
-// 		return "Yourself"
-// 	default:
-// 		return "invalid"
-// 	}
-// }
+func TransactionDirectionName(direction int32) string {
+	switch direction {
+	case TxDirectionSent:
+		return "Sent"
+	case TxDirectionReceived:
+		return "Received"
+	case TxDirectionTransferred:
+		return "Yourself"
+	default:
+		return "invalid"
+	}
+}
 
 func CalculateTotalTimeRemaining(timeRemainingInSeconds int64) string {
 	minutes := timeRemainingInSeconds / 60
@@ -500,3 +500,19 @@ func HttpGet(url string, respObj interface{}) (*http.Response, []byte, error) {
 	err = json.Unmarshal(respBytes, respObj)
 	return resp, respBytes, err
 }
+
+
+func marshalResult(result interface{}, err error) (string, error) {
+
+	if err != nil {
+		return "", translateError(err)
+	}
+
+	response, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("error marshalling result: %s", err.Error())
+	}
+
+	return string(response), nil
+}
+

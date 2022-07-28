@@ -288,7 +288,7 @@ func (wallet *Wallet) CancelSync() {
 		// Stop running cspp mixers
 		if wallet.IsAccountMixerActive() {
 			log.Infof("[%d] Stopping cspp mixer", wallet.ID)
-			err := wallet.StopAccountMixer(wallet.ID)
+			err := wallet.StopAccountMixer()
 			if err != nil {
 				log.Errorf("[%d] Error stopping cspp mixer: %v", wallet.ID, err)
 			}
@@ -435,9 +435,9 @@ func (wallet *Wallet) GetLowestBlock() *BlockInfo {
 	var lowestBlock int32 = -1
 	var blockInfo *BlockInfo
 	// for _, wallet := range wallet.wallets {
-		// if !wallet.WalletOpened() {
-		// 	continue
-		// }
+		if !wallet.WalletOpened() {
+			return nil
+		}
 		walletBestBLock := wallet.GetBestBlock()
 		if walletBestBLock < lowestBlock || lowestBlock == -1 {
 			lowestBlock = walletBestBLock
