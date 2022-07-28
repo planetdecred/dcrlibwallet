@@ -1,7 +1,7 @@
 package dcr
 
 import (
-	// "context"
+	"context"
 	"crypto/ed25519"
 	"encoding/base64"
 	"fmt"
@@ -36,120 +36,120 @@ func (wallet *Wallet) VSPClient(host string, pubKey []byte) (*vsp.Client, error)
 
 // KnownVSPs returns a list of known VSPs. This list may be updated by calling
 // ReloadVSPList. This method is safe for concurrent access.
-// func (mw *MultiWallet) KnownVSPs() []*VSP {
-// 	mw.vspMu.RLock()
-// 	defer mw.vspMu.RUnlock()
-// 	return mw.vsps // TODO: Return a copy.
-// }
+func (wallet *Wallet) KnownVSPs() []*VSP {
+	wallet.vspMu.RLock()
+	defer wallet.vspMu.RUnlock()
+	return wallet.vsps // TODO: Return a copy.
+}
 
 // SaveVSP marks a VSP as known and will be susbequently included as part of
 // known VSPs.
-// func (mw *MultiWallet) SaveVSP(host string) (err error) {
-// 	// check if host already exists
-// 	vspDbData := mw.getVSPDBData()
-// 	for _, savedHost := range vspDbData.SavedHosts {
-// 		if savedHost == host {
-// 			return fmt.Errorf("duplicate host %s", host)
-// 		}
-// 	}
+func (wallet *Wallet) SaveVSP(host string) (err error) {
+	// check if host already exists
+	vspDbData := wallet.getVSPDBData()
+	for _, savedHost := range vspDbData.SavedHosts {
+		if savedHost == host {
+			return fmt.Errorf("duplicate host %s", host)
+		}
+	}
 
-// 	// validate host network
-// 	info, err := vspInfo(host)
-// 	if err != nil {
-// 		return err
-// 	}
+	// validate host network
+	info, err := vspInfo(host)
+	if err != nil {
+		return err
+	}
 
-// 	// TODO: defaultVSPs() uses strings.Contains(network, vspInfo.Network).
-// 	if info.Network != mw.NetType() {
-// 		return fmt.Errorf("invalid net %s", info.Network)
-// 	}
+	// TODO: defaultVSPs() uses strings.Contains(network, vspInfo.Network).
+	if info.Network != wallet.NetType() {
+		return fmt.Errorf("invalid net %s", info.Network)
+	}
 
-// 	vspDbData.SavedHosts = append(vspDbData.SavedHosts, host)
-// 	mw.updateVSPDBData(vspDbData)
+	vspDbData.SavedHosts = append(vspDbData.SavedHosts, host)
+	wallet.updateVSPDBData(vspDbData)
 
-// 	mw.vspMu.Lock()
-// 	mw.vsps = append(mw.vsps, &VSP{Host: host, VspInfoResponse: info})
-// 	mw.vspMu.Unlock()
+	wallet.vspMu.Lock()
+	wallet.vsps = append(wallet.vsps, &VSP{Host: host, VspInfoResponse: info})
+	wallet.vspMu.Unlock()
 
-// 	return
-// }
+	return
+}
 
 // LastUsedVSP returns the host of the last used VSP, as saved by the
 // SaveLastUsedVSP() method.
-// func (mw *MultiWallet) LastUsedVSP() string {
-// 	return mw.getVSPDBData().LastUsedVSP
-// }
+func (wallet *Wallet) LastUsedVSP() string {
+	return wallet.getVSPDBData().LastUsedVSP
+}
 
 // SaveLastUsedVSP saves the host of the last used VSP.
-// func (mw *MultiWallet) SaveLastUsedVSP(host string) {
-// 	vspDbData := mw.getVSPDBData()
-// 	vspDbData.LastUsedVSP = host
-// 	mw.updateVSPDBData(vspDbData)
-// }
+func (wallet *Wallet) SaveLastUsedVSP(host string) {
+	vspDbData := wallet.getVSPDBData()
+	vspDbData.LastUsedVSP = host
+	wallet.updateVSPDBData(vspDbData)
+}
 
 type vspDbData struct {
 	SavedHosts  []string
 	LastUsedVSP string
 }
 
-// func (mw *MultiWallet) getVSPDBData() *vspDbData {
-// 	vspDbData := new(vspDbData)
-// 	mw.ReadUserConfigValue(KnownVSPsConfigKey, vspDbData)
-// 	return vspDbData
-// }
+func (wallet *Wallet) getVSPDBData() *vspDbData {
+	vspDbData := new(vspDbData)
+	wallet.ReadUserConfigValue(KnownVSPsConfigKey, vspDbData)
+	return vspDbData
+}
 
-// func (mw *MultiWallet) updateVSPDBData(data *vspDbData) {
-// 	mw.SaveUserConfigValue(KnownVSPsConfigKey, data)
-// }
+func (wallet *Wallet) updateVSPDBData(data *vspDbData) {
+	wallet.SaveUserConfigValue(KnownVSPsConfigKey, data)
+}
 
 // ReloadVSPList reloads the list of known VSPs.
 // This method makes multiple network calls; should be called in a goroutine
 // to prevent blocking the UI thread.
-// func (mw *MultiWallet) ReloadVSPList(ctx context.Context) {
-// 	log.Debugf("Reloading list of known VSPs")
-// 	defer log.Debugf("Reloaded list of known VSPs")
+func (wallet *Wallet) ReloadVSPList(ctx context.Context) {
+	log.Debugf("Reloading list of known VSPs")
+	defer log.Debugf("Reloaded list of known VSPs")
 
-// 	vspDbData := mw.getVSPDBData()
-// 	vspList := make(map[string]*VspInfoResponse)
-// 	for _, host := range vspDbData.SavedHosts {
-// 		vspInfo, err := vspInfo(host)
-// 		if err != nil {
-// 			// User saved this VSP. Log an error message.
-// 			log.Errorf("get vsp info error for %s: %v", host, err)
-// 		} else {
-// 			vspList[host] = vspInfo
-// 		}
-// 		if ctx.Err() != nil {
-// 			return // context canceled, abort
-// 		}
-// 	}
+	vspDbData := wallet.getVSPDBData()
+	vspList := make(map[string]*VspInfoResponse)
+	for _, host := range vspDbData.SavedHosts {
+		vspInfo, err := vspInfo(host)
+		if err != nil {
+			// User saved this VSP. Log an error message.
+			log.Errorf("get vsp info error for %s: %v", host, err)
+		} else {
+			vspList[host] = vspInfo
+		}
+		if ctx.Err() != nil {
+			return // context canceled, abort
+		}
+	}
 
-// 	otherVSPHosts, err := defaultVSPs(mw.NetType())
-// 	if err != nil {
-// 		log.Debugf("get default vsp list error: %v", err)
-// 	}
-// 	for _, host := range otherVSPHosts {
-// 		if _, wasAdded := vspList[host]; wasAdded {
-// 			continue
-// 		}
-// 		vspInfo, err := vspInfo(host)
-// 		if err != nil {
-// 			log.Debugf("vsp info error for %s: %v\n", host, err) // debug only, user didn't request this VSP
-// 		} else {
-// 			vspList[host] = vspInfo
-// 		}
-// 		if ctx.Err() != nil {
-// 			return // context canceled, abort
-// 		}
-// 	}
+	otherVSPHosts, err := defaultVSPs(wallet.NetType())
+	if err != nil {
+		log.Debugf("get default vsp list error: %v", err)
+	}
+	for _, host := range otherVSPHosts {
+		if _, wasAdded := vspList[host]; wasAdded {
+			continue
+		}
+		vspInfo, err := vspInfo(host)
+		if err != nil {
+			log.Debugf("vsp info error for %s: %v\n", host, err) // debug only, user didn't request this VSP
+		} else {
+			vspList[host] = vspInfo
+		}
+		if ctx.Err() != nil {
+			return // context canceled, abort
+		}
+	}
 
-// 	mw.vspMu.Lock()
-// 	mw.vsps = make([]*VSP, 0, len(vspList))
-// 	for host, info := range vspList {
-// 		mw.vsps = append(mw.vsps, &VSP{Host: host, VspInfoResponse: info})
-// 	}
-// 	mw.vspMu.Unlock()
-// }
+	wallet.vspMu.Lock()
+	wallet.vsps = make([]*VSP, 0, len(vspList))
+	for host, info := range vspList {
+		wallet.vsps = append(wallet.vsps, &VSP{Host: host, VspInfoResponse: info})
+	}
+	wallet.vspMu.Unlock()
+}
 
 func vspInfo(vspHost string) (*VspInfoResponse, error) {
 	vspInfoResponse := new(VspInfoResponse)
