@@ -20,7 +20,7 @@ const (
 
 func (wallet *Wallet) NewPoliteia(host string) (*Politeia, error) {
 	p := &Politeia{
-		WalletRef:             wallet, // Holds a refrence to the wallet initializing Politeia.
+		WalletRef:             wallet, // Holds a reference to the wallet initializing Politeia.
 		Host:                  host,
 		Client:                nil,
 		NotificationListeners: make(map[string]ProposalNotificationListener),

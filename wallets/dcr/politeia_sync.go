@@ -1,7 +1,6 @@
 package dcr
 
 import (
-	"decred.org/dcrwallet/v2/errors"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -9,8 +8,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/asdine/storm"
+	"decred.org/dcrwallet/v2/errors"
 
+	"github.com/asdine/storm"
 	tkv1 "github.com/decred/politeia/politeiawww/api/ticketvote/v1"
 	www "github.com/decred/politeia/politeiawww/api/www/v1"
 )

@@ -349,7 +349,6 @@ func (wallet *Wallet) saveNewWallet(setupWallet func() error) (*Wallet, error) {
 			wallet.Name = "wallet-" + strconv.Itoa(wallet.ID) // wallet-#
 		}
 		wallet.DataDir = walletDataDir
-		wallet.dbDriver = wallet.dbDriver
 
 		err = db.Save(wallet) // update database with complete wallet information
 		if err != nil {

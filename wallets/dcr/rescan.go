@@ -32,8 +32,7 @@ func (wallet *Wallet) RescanBlocksFromHeight(walletID int, startHeight int32) er
 			wallet.syncData.mu.Unlock()
 		}()
 
-		ctx, _ := wallet.ShutdownContextWithCancel()
-		ctx, cancel := wallet.ShutdownContextWithCancel() //undo this lateer
+		ctx, cancel := wallet.ShutdownContextWithCancel()
 
 		wallet.syncData.mu.Lock()
 		wallet.syncData.rescanning = true

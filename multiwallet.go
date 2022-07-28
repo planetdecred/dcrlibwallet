@@ -6,18 +6,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	// "strconv"
 	"strings"
-	// "sync"
-	// "time"
 
 	"decred.org/dcrwallet/v2/errors"
-	// w "decred.org/dcrwallet/v2/wallet"
 	"github.com/asdine/storm"
 	"github.com/asdine/storm/q"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/planetdecred/dcrlibwallet/utils"
-	// "github.com/planetdecred/dcrlibwallet/wallets/dcr/walletdata"
 
 	"github.com/planetdecred/dcrlibwallet/wallets/dcr"
 
@@ -32,14 +27,6 @@ type MultiWallet struct {
 	chainParams *chaincfg.Params
 	wallets     map[int]*dcr.Wallet
 	badWallets  map[int]*dcr.Wallet
-
-	// syncData *dcr.SyncData
-
-	// notificationListenersMu         sync.RWMutex
-	// txAndBlockNotificationListeners map[string]TxAndBlockNotificationListener
-
-	// blocksRescanProgressListener BlocksRescanProgressListener
-	// accountMixerNotificationListener map[string]AccountMixerNotificationListener
 
 	shuttingDown chan bool
 	cancelFuncs  []context.CancelFunc
