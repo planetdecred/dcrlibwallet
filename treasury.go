@@ -22,20 +22,10 @@ func (wallet *Wallet) SetTreasuryPolicy(PiKey, newVotingPolicy, tixHash string, 
 	if tixHash != "" {
 		tixHash, err := chainhash.NewHashFromStr(tixHash)
 		if err != nil {
-			return fmt.Errorf("inavlid hash: %w", err)
+			return fmt.Errorf("invalid ticket hash: %w", err)
 		}
 		ticketHash = tixHash
 	}
-
-	// The wallet will need to be unlocked to sign the API
-	// request(s) for setting this voting policy with the VSP.
-	err := wallet.UnlockWallet(passphrase)
-	if err != nil {
-		return translateError(err)
-	}
-	defer wallet.LockWallet()
-
-	ctx := wallet.shutdownContext()
 
 	pikey, err := hex.DecodeString(PiKey)
 	if err != nil {
@@ -44,8 +34,6 @@ func (wallet *Wallet) SetTreasuryPolicy(PiKey, newVotingPolicy, tixHash string, 
 	if len(pikey) != secp256k1.PubKeyBytesLenCompressed {
 		return fmt.Errorf("treasury pikey must be %d bytes", secp256k1.PubKeyBytesLenCompressed)
 	}
-
-	currentVotingPolicy := wallet.Internal().TreasuryKeyPolicy(pikey, ticketHash)
 
 	var policy stake.TreasuryVoteT
 	switch newVotingPolicy {
@@ -59,20 +47,27 @@ func (wallet *Wallet) SetTreasuryPolicy(PiKey, newVotingPolicy, tixHash string, 
 		return fmt.Errorf("invalid policy: unknown policy %q", newVotingPolicy)
 	}
 
+	// The wallet will need to be unlocked to sign the API
+	// request(s) for setting this voting policy with the VSP.
+	err = wallet.UnlockWallet(passphrase)
+	if err != nil {
+		return translateError(err)
+	}
+	defer wallet.LockWallet()
+
+	currentVotingPolicy := wallet.Internal().TreasuryKeyPolicy(pikey, ticketHash)
+
+	ctx := wallet.shutdownContext()
+
 	err = wallet.Internal().SetTreasuryKeyPolicy(ctx, pikey, policy, ticketHash)
 	if err != nil {
 		return err
 	}
 
-	// Update voting preferences on VSPs if required.
-	policyMap := map[string]string{
-		PiKey: newVotingPolicy,
-	}
-
 	var vspPreferenceUpdateSuccess bool
 	defer func() {
 		if !vspPreferenceUpdateSuccess {
-			// Updating the treaury spend voting preference with the vsp failed,
+			// Updating the treasury spend voting preference with the vsp failed,
 			// revert the locally saved voting preference for the treasury spend.
 			revertError := wallet.Internal().SetTreasuryKeyPolicy(ctx, pikey, currentVotingPolicy, ticketHash)
 			if revertError != nil {
@@ -100,6 +95,10 @@ func (wallet *Wallet) SetTreasuryPolicy(PiKey, newVotingPolicy, tixHash string, 
 	// Never return errors from this for loop, so all tickets are tried.
 	// The first error will be returned to the caller.
 	var firstErr error
+	// Update voting preferences on VSPs if required.
+	policyMap := map[string]string{
+		PiKey: newVotingPolicy,
+	}
 	for _, tHash := range ticketHashes {
 		vspTicketInfo, err := wallet.Internal().VSPTicketInfo(ctx, tHash)
 		if err != nil {
@@ -146,7 +145,7 @@ func (wallet *Wallet) TreasuryPolicies(PiKey, tixHash string) ([]*TreasuryKeyPol
 	if PiKey != "" {
 		pikey, err := hex.DecodeString(PiKey)
 		if err != nil {
-			return nil, fmt.Errorf("parameter contains invalid hexadecimal: %w", err)
+			return nil, fmt.Errorf("invalid pikey: %w", err)
 		}
 		var policy string
 		switch wallet.Internal().TreasuryKeyPolicy(pikey, ticketHash) {
@@ -192,10 +191,4 @@ func (wallet *Wallet) TreasuryPolicies(PiKey, tixHash string) ([]*TreasuryKeyPol
 // PiKeys returns the sanctioned Politeia keys for the current network.
 func (mw *MultiWallet) PiKeys() [][]byte {
 	return mw.chainParams.PiKeys
-}
-
-// PiKey returns a single politiea key (converted to string) from the
-// available politiea keys specified by the provided index.
-func (mw *MultiWallet) PiKey(index int) string {
-	return hex.EncodeToString(mw.chainParams.PiKeys[index])
 }
