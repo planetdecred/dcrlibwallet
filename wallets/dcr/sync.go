@@ -325,17 +325,17 @@ func (wallet *Wallet) IsConnectedToDecredNetwork() bool {
 	return wallet.syncData.syncing || wallet.syncData.synced
 }
 
-// func (wallet *Wallet) IsSynced() bool {
-// 	wallet.syncData.mu.RLock()
-// 	defer wallet.syncData.mu.RUnlock()
-// 	return wallet.syncData.synced
-// }
+func (wallet *Wallet) isSynced() bool {
+	wallet.syncData.mu.RLock()
+	defer wallet.syncData.mu.RUnlock()
+	return wallet.syncData.synced
+}
 
-// func (wallet *Wallet) IsSyncing() bool {
-// 	wallet.syncData.mu.RLock()
-// 	defer wallet.syncData.mu.RUnlock()
-// 	return wallet.syncData.syncing
-// }
+func (wallet *Wallet) isSyncing() bool {
+	wallet.syncData.mu.RLock()
+	defer wallet.syncData.mu.RUnlock()
+	return wallet.syncData.syncing
+}
 
 func (wallet *Wallet) CurrentSyncStage() int32 {
 	wallet.syncData.mu.RLock()
@@ -413,42 +413,38 @@ func (wallet *Wallet) PeerInfo() (string, error) {
 	return string(result), nil
 }
 
-// func (wallet *Wallet) GetBestBlock() *BlockInfo {
-// 	var bestBlock int32 = -1
-// 	var blockInfo *BlockInfo
-// 	for _, wallet := range wallet.wallets {
-// 		if !wallet.WalletOpened() {
-// 			continue
-// 		}
-
-// 		walletBestBLock := wallet.GetBestBlock()
-// 		if walletBestBLock > bestBlock || bestBlock == -1 {
-// 			bestBlock = walletBestBLock
-// 			blockInfo = &BlockInfo{Height: bestBlock, Timestamp: wallet.GetBestBlockTimeStamp()}
-// 		}
-// 	}
-
-// 	return blockInfo
-// }
-
-func (wallet *Wallet) GetLowestBlock() *BlockInfo {
-	var lowestBlock int32 = -1
+func (wallet *Wallet) GetBestBlock() *BlockInfo {
+	var bestBlock int32 = -1
 	var blockInfo *BlockInfo
-	// for _, wallet := range wallet.wallets {
 	if !wallet.WalletOpened() {
 		return nil
 	}
-	walletBestBLock := wallet.GetBestBlock()
-	if walletBestBLock < lowestBlock || lowestBlock == -1 {
-		lowestBlock = walletBestBLock
-		blockInfo = &BlockInfo{Height: lowestBlock, Timestamp: wallet.GetBestBlockTimeStamp()}
+
+	walletBestBLock := wallet.getBestBlock()
+	if walletBestBLock > bestBlock || bestBlock == -1 {
+		bestBlock = walletBestBLock
+		blockInfo = &BlockInfo{Height: bestBlock, Timestamp: wallet.GetBestBlockTimeStamp()}
 	}
-	// }
 
 	return blockInfo
 }
 
-func (wallet *Wallet) GetBestBlock() int32 {
+func (wallet *Wallet) GetLowestBlock() *BlockInfo {
+	var lowestBlock int32 = -1
+	var blockInfo *BlockInfo
+	if !wallet.WalletOpened() {
+		return nil
+	}
+	walletBestBLock := wallet.getBestBlock()
+	if walletBestBLock < lowestBlock || lowestBlock == -1 {
+		lowestBlock = walletBestBLock
+		blockInfo = &BlockInfo{Height: lowestBlock, Timestamp: wallet.GetBestBlockTimeStamp()}
+	}
+
+	return blockInfo
+}
+
+func (wallet *Wallet) getBestBlock() int32 {
 	if wallet.Internal() == nil {
 		// This method is sometimes called after a wallet is deleted and causes crash.
 		log.Error("Attempting to read best block height without a loaded wallet.")
@@ -477,13 +473,12 @@ func (wallet *Wallet) GetBestBlockTimeStamp() int64 {
 	return info.Timestamp
 }
 
-// func (wallet *Wallet) GetLowestBlockTimestamp() int64 {
-// 	var timestamp int64 = -1
-// 	for _, wallet := range wallet.wallets {
-// 		bestBlockTimestamp := wallet.GetBestBlockTimeStamp()
-// 		if bestBlockTimestamp < timestamp || timestamp == -1 {
-// 			timestamp = bestBlockTimestamp
-// 		}
-// 	}
-// 	return timestamp
-// }
+func (wallet *Wallet) GetLowestBlockTimestamp() int64 {
+	var timestamp int64 = -1
+	bestBlockTimestamp := wallet.GetBestBlockTimeStamp()
+	if bestBlockTimestamp < timestamp || timestamp == -1 {
+		timestamp = bestBlockTimestamp
+	}
+
+	return timestamp
+}
