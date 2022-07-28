@@ -1,14 +1,17 @@
-package dcrlibwallet
+package dcr
 
 import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
+	"sync"
 
 	"decred.org/dcrwallet/v2/wallet/udb"
 
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/dcrutil/v4"
+	www "github.com/decred/politeia/politeiawww/api/www/v1"
 	"github.com/planetdecred/dcrlibwallet/internal/vsp"
 )
 
@@ -401,6 +404,26 @@ type VSPTicketInfo struct {
 /** end ticket-related types */
 
 /** begin politeia types */
+type Politeia struct {
+	WalletRef               *Wallet
+	Host                    string
+	mu                      sync.RWMutex
+	ctx                     context.Context
+	cancelSync              context.CancelFunc
+	Client                  *politeiaClient
+	notificationListenersMu sync.RWMutex
+	NotificationListeners   map[string]ProposalNotificationListener
+}
+
+type politeiaClient struct {
+	host       string
+	httpClient *http.Client
+
+	version *www.VersionReply
+	policy  *www.PolicyReply
+	cookies []*http.Cookie
+}
+
 type Proposal struct {
 	ID               int    `storm:"id,increment"`
 	Token            string `json:"token" storm:"unique"`

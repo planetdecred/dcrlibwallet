@@ -1,26 +1,13 @@
-package dcrlibwallet
+package dcr
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"sync"
 
 	"decred.org/dcrwallet/v2/errors"
 	"github.com/asdine/storm"
 	"github.com/asdine/storm/q"
 )
-
-type Politeia struct {
-	mwRef                   *MultiWallet
-	host                    string
-	mu                      sync.RWMutex
-	ctx                     context.Context
-	cancelSync              context.CancelFunc
-	client                  *politeiaClient
-	notificationListenersMu sync.RWMutex
-	notificationListeners   map[string]ProposalNotificationListener
-}
 
 const (
 	ProposalCategoryAll int32 = iota + 1
@@ -31,38 +18,38 @@ const (
 	ProposalCategoryAbandoned
 )
 
-func newPoliteia(mwRef *MultiWallet, host string) (*Politeia, error) {
+func (wallet *Wallet) NewPoliteia(host string) (*Politeia, error) {
 	p := &Politeia{
-		mwRef:                 mwRef,
-		host:                  host,
-		client:                nil,
-		notificationListeners: make(map[string]ProposalNotificationListener),
+		WalletRef:             wallet, // Holds a reference to the wallet initializing Politeia.
+		Host:                  host,
+		Client:                nil,
+		NotificationListeners: make(map[string]ProposalNotificationListener),
 	}
 
 	return p, nil
 }
 
 func (p *Politeia) saveLastSyncedTimestamp(lastSyncedTimestamp int64) {
-	p.mwRef.SetLongConfigValueForKey(PoliteiaLastSyncedTimestampConfigKey, lastSyncedTimestamp)
+	p.WalletRef.SetLongConfigValueForKey(PoliteiaLastSyncedTimestampConfigKey, lastSyncedTimestamp)
 }
 
 func (p *Politeia) getLastSyncedTimestamp() int64 {
-	return p.mwRef.ReadLongConfigValueForKey(PoliteiaLastSyncedTimestampConfigKey, 0)
+	return p.WalletRef.ReadLongConfigValueForKey(PoliteiaLastSyncedTimestampConfigKey, 0)
 }
 
 func (p *Politeia) saveOrOverwiteProposal(proposal *Proposal) error {
 	var oldProposal Proposal
-	err := p.mwRef.db.One("Token", proposal.Token, &oldProposal)
+	err := p.WalletRef.db.One("Token", proposal.Token, &oldProposal)
 	if err != nil && err != storm.ErrNotFound {
 		return errors.Errorf("error checking if proposal was already indexed: %s", err.Error())
 	}
 
 	if oldProposal.Token != "" {
 		// delete old record before saving new (if it exists)
-		p.mwRef.db.DeleteStruct(oldProposal)
+		p.WalletRef.db.DeleteStruct(oldProposal)
 	}
 
-	return p.mwRef.db.Save(proposal)
+	return p.WalletRef.db.Save(proposal)
 }
 
 // GetProposalsRaw fetches and returns a proposals from the db
@@ -77,16 +64,16 @@ func (p *Politeia) getProposalsRaw(category int32, offset, limit int32, newestFi
 	case ProposalCategoryAll:
 
 		if skipAbandoned {
-			query = p.mwRef.db.Select(
+			query = p.WalletRef.db.Select(
 				q.Not(q.Eq("Category", ProposalCategoryAbandoned)),
 			)
 		} else {
-			query = p.mwRef.db.Select(
+			query = p.WalletRef.db.Select(
 				q.True(),
 			)
 		}
 	default:
-		query = p.mwRef.db.Select(
+		query = p.WalletRef.db.Select(
 			q.Eq("Category", category),
 		)
 	}
@@ -137,7 +124,7 @@ func (p *Politeia) GetProposals(category int32, offset, limit int32, newestFirst
 // GetProposalRaw fetches and returns a single proposal specified by it's censorship record token
 func (p *Politeia) GetProposalRaw(censorshipToken string) (*Proposal, error) {
 	var proposal Proposal
-	err := p.mwRef.db.One("Token", censorshipToken, &proposal)
+	err := p.WalletRef.db.One("Token", censorshipToken, &proposal)
 	if err != nil {
 		return nil, err
 	}
@@ -147,13 +134,13 @@ func (p *Politeia) GetProposalRaw(censorshipToken string) (*Proposal, error) {
 
 // GetProposal returns the result of GetProposalRaw as a JSON string
 func (p *Politeia) GetProposal(censorshipToken string) (string, error) {
-	return p.marshalResult(p.GetProposalRaw(censorshipToken))
+	return marshalResult(p.GetProposalRaw(censorshipToken))
 }
 
 // GetProposalByIDRaw fetches and returns a single proposal specified by it's ID
 func (p *Politeia) GetProposalByIDRaw(proposalID int) (*Proposal, error) {
 	var proposal Proposal
-	err := p.mwRef.db.One("ID", proposalID, &proposal)
+	err := p.WalletRef.db.One("ID", proposalID, &proposal)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +150,7 @@ func (p *Politeia) GetProposalByIDRaw(proposalID int) (*Proposal, error) {
 
 // GetProposalByID returns the result of GetProposalByIDRaw as a JSON string
 func (p *Politeia) GetProposalByID(proposalID int) (string, error) {
-	return p.marshalResult(p.GetProposalByIDRaw(proposalID))
+	return marshalResult(p.GetProposalByIDRaw(proposalID))
 }
 
 // Count returns the number of proposals of a specified category
@@ -176,7 +163,7 @@ func (p *Politeia) Count(category int32) (int32, error) {
 		matcher = q.Eq("Category", category)
 	}
 
-	count, err := p.mwRef.db.Select(matcher).Count(&Proposal{})
+	count, err := p.WalletRef.db.Select(matcher).Count(&Proposal{})
 	if err != nil {
 		return 0, err
 	}
@@ -222,24 +209,10 @@ func (p *Politeia) Overview() (*ProposalOverview, error) {
 }
 
 func (p *Politeia) ClearSavedProposals() error {
-	err := p.mwRef.db.Drop(&Proposal{})
+	err := p.WalletRef.db.Drop(&Proposal{})
 	if err != nil {
 		return translateError(err)
 	}
 
-	return p.mwRef.db.Init(&Proposal{})
-}
-
-func (p *Politeia) marshalResult(result interface{}, err error) (string, error) {
-
-	if err != nil {
-		return "", translateError(err)
-	}
-
-	response, err := json.Marshal(result)
-	if err != nil {
-		return "", fmt.Errorf("error marshalling result: %s", err.Error())
-	}
-
-	return string(response), nil
+	return p.WalletRef.db.Init(&Proposal{})
 }
