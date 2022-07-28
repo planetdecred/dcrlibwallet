@@ -285,7 +285,7 @@ func (wallet *Wallet) DeleteWallet(privPass []byte) error {
 		wallet.CancelSync()
 		defer func() {
 			// if wallet.OpenedWalletsCount() > 0 {
-				wallet.SpvSync()
+			wallet.SpvSync()
 			// }
 		}()
 	}
