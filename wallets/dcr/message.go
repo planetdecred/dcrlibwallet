@@ -3,9 +3,8 @@ package dcr
 import (
 	"decred.org/dcrwallet/v2/errors"
 	w "decred.org/dcrwallet/v2/wallet"
-	"github.com/decred/dcrd/txscript/v4/stdaddr"
 	"github.com/decred/dcrd/chaincfg/v3"
-
+	"github.com/decred/dcrd/txscript/v4/stdaddr"
 )
 
 func (wallet *Wallet) SignMessage(passphrase []byte, address string, message string) ([]byte, error) {

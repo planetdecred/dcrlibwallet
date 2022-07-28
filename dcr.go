@@ -18,7 +18,7 @@ import (
 
 func initializeDCRWallet(rootDir, dbDriver, netType string) (*storm.DB, string, error) {
 	var mwDB *storm.DB
-	
+
 	rootDir = filepath.Join(rootDir, netType, "dcr")
 	err := os.MkdirAll(rootDir, os.ModePerm)
 	if err != nil {

@@ -18,7 +18,6 @@ import (
 	"golang.org/x/crypto/scrypt"
 
 	"github.com/planetdecred/dcrlibwallet/wallets/dcr"
-	
 )
 
 const (

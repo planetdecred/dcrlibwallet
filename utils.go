@@ -26,7 +26,7 @@ import (
 	"github.com/decred/dcrd/hdkeychain/v3"
 	"github.com/decred/dcrd/wire"
 	"github.com/planetdecred/dcrlibwallet/internal/loader"
-
+	"github.com/planetdecred/dcrlibwallet/wallets/dcr"
 )
 
 const (
@@ -296,7 +296,7 @@ func backupFile(fileName string, suffix int) (newName string, err error) {
 
 func initWalletLoader(chainParams *chaincfg.Params, walletDataDir, walletDbDriver string) *loader.Loader {
 	// TODO: Allow users provide values to override these defaults.
-	cfg := &WalletConfig{
+	cfg := &dcr.WalletConfig{
 		GapLimit:                20,
 		AllowHighFees:           false,
 		RelayFee:                txrules.DefaultRelayFeePerKb,

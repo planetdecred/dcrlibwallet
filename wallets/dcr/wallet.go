@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,7 +24,7 @@ type Wallet struct {
 	ID        int       `storm:"id,increment"`
 	Name      string    `storm:"unique"`
 	CreatedAt time.Time `storm:"index"`
-	DbDriver  string
+	dbDriver  string
 	rootDir   string
 	db        *storm.DB
 
@@ -67,7 +68,6 @@ type Wallet struct {
 	accountMixerNotificationListener map[string]AccountMixerNotificationListener
 	txAndBlockNotificationListeners  map[string]TxAndBlockNotificationListener
 	blocksRescanProgressListener     BlocksRescanProgressListener
-
 }
 
 // prepare gets a wallet ready for use by opening the transactions index database
@@ -94,8 +94,12 @@ func (wallet *Wallet) Prepare(rootDir string, chainParams *chaincfg.Params,
 		return err
 	}
 
+	wallet.syncData = &SyncData{
+		SyncProgressListeners: make(map[string]SyncProgressListener),
+	}
+
 	// init loader
-	wallet.loader = initWalletLoader(wallet.chainParams, wallet.DataDir, wallet.DbDriver)
+	wallet.loader = initWalletLoader(wallet.chainParams, wallet.DataDir, wallet.dbDriver)
 
 	// init cancelFuncs slice to hold cancel functions for long running
 	// operations and start go routine to listen for shutdown signal
@@ -158,6 +162,35 @@ func (wallet *Wallet) WalletExists() (bool, error) {
 	return wallet.loader.WalletExists()
 }
 
+func (wallet *Wallet) CreateNewWallet(walletName, privatePassphrase string, privatePassphraseType int32) (*Wallet, error) {
+	seed, err := GenerateSeed()
+	if err != nil {
+		return nil, err
+	}
+
+	encryptedSeed, err := encryptWalletSeed([]byte(privatePassphrase), seed)
+	if err != nil {
+		return nil, err
+	}
+
+	wal := &Wallet{
+		Name:                  walletName,
+		CreatedAt:             time.Now(),
+		EncryptedSeed:         encryptedSeed,
+		PrivatePassphraseType: privatePassphraseType,
+		HasDiscoveredAccounts: true,
+	}
+
+	return wallet.saveNewWallet(func() error {
+		err := wallet.Prepare(wallet.rootDir, wallet.chainParams, wallet.walletConfigSetFn(wal.ID), wallet.walletConfigReadFn(wal.ID))
+		if err != nil {
+			return err
+		}
+
+		return wallet.CreateWallet(privatePassphrase, seed)
+	})
+}
+
 func (wallet *Wallet) CreateWallet(privatePassphrase, seedMnemonic string) error {
 	log.Info("Creating Wallet")
 	if len(seedMnemonic) == 0 {
@@ -182,7 +215,24 @@ func (wallet *Wallet) CreateWallet(privatePassphrase, seedMnemonic string) error
 	return nil
 }
 
-func (wallet *Wallet) CreateWatchingOnlyWallet(extendedPublicKey string) error {
+func (wallet *Wallet) CreateWatchOnlyWallet(walletName, extendedPublicKey string) (*Wallet, error) {
+	wal := &Wallet{
+		Name:                  walletName,
+		IsRestored:            true,
+		HasDiscoveredAccounts: true,
+	}
+
+	return wallet.saveNewWallet(func() error {
+		err := wallet.Prepare(wallet.rootDir, wallet.chainParams, wallet.walletConfigSetFn(wal.ID), wallet.walletConfigReadFn(wal.ID))
+		if err != nil {
+			return err
+		}
+
+		return wallet.createWatchingOnlyWallet(extendedPublicKey)
+	})
+}
+
+func (wallet *Wallet) createWatchingOnlyWallet(extendedPublicKey string) error {
 	pubPass := []byte(w.InsecurePubPassphrase)
 
 	_, err := wallet.loader.CreateWatchingOnlyWallet(wallet.ShutdownContext(), extendedPublicKey, pubPass)
@@ -193,6 +243,192 @@ func (wallet *Wallet) CreateWatchingOnlyWallet(extendedPublicKey string) error {
 
 	log.Info("Created Watching Only Wallet")
 	return nil
+}
+
+func (wallet *Wallet) RenameWallet(newName string) error {
+	if strings.HasPrefix(newName, "wallet-") {
+		return errors.E(ErrReservedWalletName)
+	}
+
+	if exists, err := wallet.WalletNameExists(newName); err != nil {
+		return translateError(err)
+	} else if exists {
+		return errors.New(ErrExist)
+	}
+
+	wallet.Name = newName
+	return wallet.db.Save(wallet) // update WalletName field
+}
+
+func (wallet *Wallet) RestoreWallet(walletName, seedMnemonic, privatePassphrase string, privatePassphraseType int32) (*Wallet, error) {
+
+	wal := &Wallet{
+		Name:                  walletName,
+		PrivatePassphraseType: privatePassphraseType,
+		IsRestored:            true,
+		HasDiscoveredAccounts: false,
+	}
+
+	return wallet.saveNewWallet(func() error {
+		err := wallet.Prepare(wallet.rootDir, wallet.chainParams, wallet.walletConfigSetFn(wal.ID), wallet.walletConfigReadFn(wal.ID))
+		if err != nil {
+			return err
+		}
+
+		return wallet.CreateWallet(privatePassphrase, seedMnemonic)
+	})
+}
+
+func (wallet *Wallet) DeleteWallet(privPass []byte) error {
+
+	if wallet.IsConnectedToDecredNetwork() {
+		wallet.CancelSync()
+		defer func() {
+			// if wallet.OpenedWalletsCount() > 0 {
+				wallet.SpvSync()
+			// }
+		}()
+	}
+
+	err := wallet.deleteWallet(privPass)
+	if err != nil {
+		return translateError(err)
+	}
+
+	err = wallet.db.DeleteStruct(wallet)
+	if err != nil {
+		return translateError(err)
+	}
+
+	// delete(wallet.ID)
+
+	return nil
+}
+
+func (wallet *Wallet) saveNewWallet(setupWallet func() error) (*Wallet, error) {
+	exists, err := wallet.WalletNameExists(wallet.Name)
+	if err != nil {
+		return nil, err
+	} else if exists {
+		return nil, errors.New(ErrExist)
+	}
+
+	if wallet.IsConnectedToDecredNetwork() {
+		wallet.CancelSync()
+		defer wallet.SpvSync()
+	}
+	// Perform database save operations in batch transaction
+	// for automatic rollback if error occurs at any point.
+	err = wallet.batchDbTransaction(func(db storm.Node) error {
+		// saving struct to update ID property with an auto-generated value
+		err := db.Save(wallet)
+		if err != nil {
+			return err
+		}
+
+		walletDataDir := filepath.Join(wallet.rootDir, strconv.Itoa(wallet.ID))
+
+		dirExists, err := fileExists(walletDataDir)
+		if err != nil {
+			return err
+		} else if dirExists {
+			newDirName, err := backupFile(walletDataDir, 1)
+			if err != nil {
+				return err
+			}
+
+			log.Infof("Undocumented file at %s moved to %s", walletDataDir, newDirName)
+		}
+
+		os.MkdirAll(walletDataDir, os.ModePerm) // create wallet dir
+
+		if wallet.Name == "" {
+			wallet.Name = "wallet-" + strconv.Itoa(wallet.ID) // wallet-#
+		}
+		wallet.DataDir = walletDataDir
+		wallet.dbDriver = wallet.dbDriver
+
+		err = db.Save(wallet) // update database with complete wallet information
+		if err != nil {
+			return err
+		}
+
+		return setupWallet()
+	})
+
+	if err != nil {
+		return nil, translateError(err)
+	}
+
+	// wallet.wallets[wallet.ID] = wallet
+
+	return wallet, nil
+}
+
+func (wallet *Wallet) LinkExistingWallet(walletName, walletDataDir, originalPubPass string, privatePassphraseType int32) (*Wallet, error) {
+	// check if `walletDataDir` contains wallet.db
+	if !WalletExistsAt(walletDataDir) {
+		return nil, errors.New(ErrNotExist)
+	}
+
+	ctx, _ := wallet.contextWithShutdownCancel()
+
+	// verify the public passphrase for the wallet being linked before proceeding
+	if err := wallet.loadWalletTemporarily(ctx, walletDataDir, originalPubPass, nil); err != nil {
+		return nil, err
+	}
+
+	wal := &Wallet{
+		Name:                  walletName,
+		PrivatePassphraseType: privatePassphraseType,
+		IsRestored:            true,
+		HasDiscoveredAccounts: false, // assume that account discovery hasn't been done
+	}
+
+	return wallet.saveNewWallet(func() error {
+		// move wallet.db and tx.db files to newly created dir for the wallet
+		currentWalletDbFilePath := filepath.Join(walletDataDir, walletDbName)
+		newWalletDbFilePath := filepath.Join(wal.DataDir, walletDbName)
+		if err := moveFile(currentWalletDbFilePath, newWalletDbFilePath); err != nil {
+			return err
+		}
+
+		currentTxDbFilePath := filepath.Join(walletDataDir, walletdata.OldDbName)
+		newTxDbFilePath := filepath.Join(wallet.DataDir, walletdata.DbName)
+		if err := moveFile(currentTxDbFilePath, newTxDbFilePath); err != nil {
+			return err
+		}
+
+		// prepare the wallet for use and open it
+		err := (func() error {
+			err := wallet.Prepare(wallet.rootDir, wallet.chainParams, wallet.walletConfigSetFn(wallet.ID), wallet.walletConfigReadFn(wallet.ID))
+			if err != nil {
+				return err
+			}
+
+			if originalPubPass == "" || originalPubPass == w.InsecurePubPassphrase {
+				return wallet.OpenWallet()
+			}
+
+			err = wallet.loadWalletTemporarily(ctx, wallet.DataDir, originalPubPass, func(tempWallet *w.Wallet) error {
+				return tempWallet.ChangePublicPassphrase(ctx, []byte(originalPubPass), []byte(w.InsecurePubPassphrase))
+			})
+			if err != nil {
+				return err
+			}
+
+			return wallet.OpenWallet()
+		})()
+
+		// restore db files to their original location if there was an error
+		// in the wallet setup process above
+		if err != nil {
+			moveFile(newWalletDbFilePath, currentWalletDbFilePath)
+			moveFile(newTxDbFilePath, currentTxDbFilePath)
+		}
+
+		return err
+	})
 }
 
 func (wallet *Wallet) IsWatchingOnlyWallet() bool {
@@ -220,6 +456,10 @@ func (wallet *Wallet) WalletOpened() bool {
 }
 
 func (wallet *Wallet) UnlockWallet(privPass []byte) error {
+	return wallet.unlockWallet(privPass)
+}
+
+func (wallet *Wallet) unlockWallet(privPass []byte) error {
 	loadedWallet, ok := wallet.loader.LoadedWallet()
 	if !ok {
 		return fmt.Errorf("wallet has not been loaded")
@@ -249,7 +489,49 @@ func (wallet *Wallet) IsLocked() bool {
 	return wallet.Internal().Locked()
 }
 
-func (wallet *Wallet) ChangePrivatePassphrase(oldPass []byte, newPass []byte) error {
+// ChangePrivatePassphraseForWallet attempts to change the wallet's passphrase and re-encrypts the seed with the new passphrase.
+func (wallet *Wallet) ChangePrivatePassphraseForWallet(oldPrivatePassphrase, newPrivatePassphrase []byte, privatePassphraseType int32) error {
+	if privatePassphraseType != PassphraseTypePin && privatePassphraseType != PassphraseTypePass {
+		return errors.New(ErrInvalid)
+	}
+	encryptedSeed := wallet.EncryptedSeed
+	if encryptedSeed != nil {
+		decryptedSeed, err := decryptWalletSeed(oldPrivatePassphrase, encryptedSeed)
+		if err != nil {
+			return err
+		}
+
+		encryptedSeed, err = encryptWalletSeed(newPrivatePassphrase, decryptedSeed)
+		if err != nil {
+			return err
+		}
+	}
+
+	err := wallet.changePrivatePassphrase(oldPrivatePassphrase, newPrivatePassphrase)
+	if err != nil {
+		return translateError(err)
+	}
+
+	wallet.EncryptedSeed = encryptedSeed
+	wallet.PrivatePassphraseType = privatePassphraseType
+	err = wallet.db.Save(wallet)
+	if err != nil {
+		log.Errorf("error saving wallet-[%d] to database after passphrase change: %v", wallet.ID, err)
+
+		err2 := wallet.changePrivatePassphrase(newPrivatePassphrase, oldPrivatePassphrase)
+		if err2 != nil {
+			log.Errorf("error undoing wallet passphrase change: %v", err2)
+			log.Errorf("error wallet passphrase was changed but passphrase type and newly encrypted seed could not be saved: %v", err)
+			return errors.New(ErrSavingWallet)
+		}
+
+		return errors.New(ErrChangingPassphrase)
+	}
+
+	return nil
+}
+
+func (wallet *Wallet) changePrivatePassphrase(oldPass []byte, newPass []byte) error {
 	defer func() {
 		for i := range oldPass {
 			oldPass[i] = 0
@@ -267,7 +549,7 @@ func (wallet *Wallet) ChangePrivatePassphrase(oldPass []byte, newPass []byte) er
 	return nil
 }
 
-func (wallet *Wallet) DeleteWallet(privatePassphrase []byte) error {
+func (wallet *Wallet) deleteWallet(privatePassphrase []byte) error {
 	defer func() {
 		for i := range privatePassphrase {
 			privatePassphrase[i] = 0
@@ -330,4 +612,19 @@ func (wallet *Wallet) AccountXPubMatches(account uint32, legacyXPub, slip044XPub
 	} else {
 		return acctXPub == slip044XPub, nil
 	}
+}
+
+// VerifySeedForWallet compares seedMnemonic with the decrypted wallet.EncryptedSeed and clears wallet.EncryptedSeed if they match.
+func (wallet *Wallet) VerifySeedForWallet(seedMnemonic string, privpass []byte) (bool, error) {
+	decryptedSeed, err := decryptWalletSeed(privpass, wallet.EncryptedSeed)
+	if err != nil {
+		return false, err
+	}
+
+	if decryptedSeed == seedMnemonic {
+		wallet.EncryptedSeed = nil
+		return true, translateError(wallet.db.Save(wallet))
+	}
+
+	return false, errors.New(ErrInvalid)
 }

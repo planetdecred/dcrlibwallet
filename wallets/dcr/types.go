@@ -15,15 +15,6 @@ import (
 	"github.com/planetdecred/dcrlibwallet/internal/vsp"
 )
 
-const (
-	ProposalCategoryAll int32 = iota + 1
-	ProposalCategoryPre
-	ProposalCategoryActive
-	ProposalCategoryApproved
-	ProposalCategoryRejected
-	ProposalCategoryAbandoned
-)
-
 // WalletConfig defines options for configuring wallet behaviour.
 // This is a subset of the config used by dcrwallet.
 type WalletConfig struct {

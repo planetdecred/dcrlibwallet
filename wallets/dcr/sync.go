@@ -435,14 +435,14 @@ func (wallet *Wallet) GetLowestBlock() *BlockInfo {
 	var lowestBlock int32 = -1
 	var blockInfo *BlockInfo
 	// for _, wallet := range wallet.wallets {
-		if !wallet.WalletOpened() {
-			return nil
-		}
-		walletBestBLock := wallet.GetBestBlock()
-		if walletBestBLock < lowestBlock || lowestBlock == -1 {
-			lowestBlock = walletBestBLock
-			blockInfo = &BlockInfo{Height: lowestBlock, Timestamp: wallet.GetBestBlockTimeStamp()}
-		}
+	if !wallet.WalletOpened() {
+		return nil
+	}
+	walletBestBLock := wallet.GetBestBlock()
+	if walletBestBLock < lowestBlock || lowestBlock == -1 {
+		lowestBlock = walletBestBLock
+		blockInfo = &BlockInfo{Height: lowestBlock, Timestamp: wallet.GetBestBlockTimeStamp()}
+	}
 	// }
 
 	return blockInfo
