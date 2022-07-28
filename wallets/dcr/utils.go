@@ -55,14 +55,6 @@ const (
 	ShortestAbbreviationFormat = "shortest"
 )
 
-// func (mw *MultiWallet) RequiredConfirmations() int32 {
-// 	spendUnconfirmed := mw.ReadBoolConfigValueForKey(SpendUnconfirmedConfigKey, false)
-// 	if spendUnconfirmed {
-// 		return 0
-// 	}
-// 	return DefaultRequiredConfirmations
-// }
-
 func (wallet *Wallet) RequiredConfirmations() int32 {
 	var spendUnconfirmed bool
 	wallet.readUserConfigValue(true, SpendUnconfirmedConfigKey, &spendUnconfirmed)
@@ -72,17 +64,17 @@ func (wallet *Wallet) RequiredConfirmations() int32 {
 	return DefaultRequiredConfirmations
 }
 
-// func (mw *MultiWallet) listenForShutdown() {
+func (wallet *Wallet) listenForShutdown() {
 
-// 	mw.cancelFuncs = make([]context.CancelFunc, 0)
-// 	mw.shuttingDown = make(chan bool)
-// 	go func() {
-// 		<-mw.shuttingDown
-// 		for _, cancel := range mw.cancelFuncs {
-// 			cancel()
-// 		}
-// 	}()
-// }
+	wallet.cancelFuncs = make([]context.CancelFunc, 0)
+	wallet.shuttingDown = make(chan bool)
+	go func() {
+		<-wallet.shuttingDown
+		for _, cancel := range wallet.cancelFuncs {
+			cancel()
+		}
+	}()
+}
 
 func (wallet *Wallet) ShutdownContextWithCancel() (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(context.Background())

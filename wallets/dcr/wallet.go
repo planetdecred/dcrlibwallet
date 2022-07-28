@@ -68,6 +68,9 @@ type Wallet struct {
 	accountMixerNotificationListener map[string]AccountMixerNotificationListener
 	txAndBlockNotificationListeners  map[string]TxAndBlockNotificationListener
 	blocksRescanProgressListener     BlocksRescanProgressListener
+
+	vspMu sync.RWMutex
+	vsps  []*VSP
 }
 
 // prepare gets a wallet ready for use by opening the transactions index database
