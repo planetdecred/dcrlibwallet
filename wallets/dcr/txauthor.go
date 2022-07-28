@@ -32,24 +32,24 @@ type TxAuthor struct {
 	needsConstruct bool
 }
 
-// func (mw *MultiWallet) NewUnsignedTx(walletID int, sourceAccountNumber int32) (*TxAuthor, error) {
-// 	sourceWallet := mw.WalletWithID(walletID)
-// 	if sourceWallet == nil {
-// 		return nil, fmt.Errorf(ErrWalletNotFound)
-// 	}
+func (wallet *Wallet) NewUnsignedTx(walletID int, sourceAccountNumber int32) (*TxAuthor, error) {
+	sourceWallet := wallet
+	if sourceWallet == nil {
+		return nil, fmt.Errorf(ErrWalletNotFound)
+	}
 
-// 	_, err := sourceWallet.GetAccount(sourceAccountNumber)
-// 	if err != nil {
-// 		return nil, err
-// 	}
+	_, err := sourceWallet.GetAccount(sourceAccountNumber)
+	if err != nil {
+		return nil, err
+	}
 
-// 	return &TxAuthor{
-// 		sourceWallet:        sourceWallet,
-// 		sourceAccountNumber: uint32(sourceAccountNumber),
-// 		destinations:        make([]TransactionDestination, 0),
-// 		needsConstruct:      true,
-// 	}, nil
-// }
+	return &TxAuthor{
+		sourceWallet:        sourceWallet,
+		sourceAccountNumber: uint32(sourceAccountNumber),
+		destinations:        make([]TransactionDestination, 0),
+		needsConstruct:      true,
+	}, nil
+}
 
 func (tx *TxAuthor) AddSendDestination(address string, atomAmount int64, sendMax bool) error {
 	_, err := stdaddr.DecodeAddress(address, tx.sourceWallet.chainParams)
