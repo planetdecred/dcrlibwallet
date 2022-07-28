@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"runtime/trace"
 	"sync"
-	// "time"
+	"time"
 
 	"decred.org/dcrwallet/v2/errors"
 	w "decred.org/dcrwallet/v2/wallet"
@@ -13,7 +13,7 @@ import (
 	"github.com/decred/dcrd/dcrutil/v4"
 	"github.com/decred/dcrd/wire"
 	"github.com/planetdecred/dcrlibwallet/internal/vsp"
-	// "github.com/planetdecred/dcrlibwallet/utils"
+	"github.com/planetdecred/dcrlibwallet/utils"
 )
 
 func (wallet *Wallet) TotalStakingRewards() (int64, error) {
@@ -30,27 +30,13 @@ func (wallet *Wallet) TotalStakingRewards() (int64, error) {
 	return totalRewards, nil
 }
 
-// func (mw *MultiWallet) TotalStakingRewards() (int64, error) {
-// 	var totalRewards int64
-// 	for _, wal := range mw.wallets {
-// 		walletTotalRewards, err := wal.TotalStakingRewards()
-// 		if err != nil {
-// 			return 0, err
-// 		}
+func (wallet *Wallet) TicketMaturity() int32 {
+	return int32(wallet.chainParams.TicketMaturity)
+}
 
-// 		totalRewards += walletTotalRewards
-// 	}
-
-// 	return totalRewards, nil
-// }
-
-// func (mw *MultiWallet) TicketMaturity() int32 {
-// 	return int32(mw.chainParams.TicketMaturity)
-// }
-
-// func (mw *MultiWallet) TicketExpiry() int32 {
-// 	return int32(mw.chainParams.TicketExpiry)
-// }
+func (wallet *Wallet) TicketExpiry() int32 {
+	return int32(wallet.chainParams.TicketExpiry)
+}
 
 func (wallet *Wallet) StakingOverview() (stOverview *StakingOverview, err error) {
 	stOverview = &StakingOverview{}
@@ -91,29 +77,6 @@ func (wallet *Wallet) StakingOverview() (stOverview *StakingOverview, err error)
 	return stOverview, nil
 }
 
-// func (mw *MultiWallet) StakingOverview() (stOverview *StakingOverview, err error) {
-// 	stOverview = &StakingOverview{}
-
-// 	for _, wallet := range mw.wallets {
-// 		st, err := wallet.StakingOverview()
-// 		if err != nil {
-// 			return nil, err
-// 		}
-
-// 		stOverview.Unmined += st.Unmined
-// 		stOverview.Immature += st.Immature
-// 		stOverview.Live += st.Live
-// 		stOverview.Voted += st.Voted
-// 		stOverview.Revoked += st.Revoked
-// 		stOverview.Expired += st.Expired
-// 	}
-
-// 	stOverview.All = stOverview.Unmined + stOverview.Immature + stOverview.Live + stOverview.Voted +
-// 		stOverview.Revoked + stOverview.Expired
-
-// 	return stOverview, nil
-// }
-
 // TicketPrice returns the price of a ticket for the next block, also known as
 // the stake difficulty. May be incorrect if blockchain sync is ongoing or if
 // blockchain is not up-to-date.
@@ -131,22 +94,6 @@ func (wallet *Wallet) TicketPrice() (*TicketPriceResponse, error) {
 	}
 	return resp, nil
 }
-
-// func (mw *MultiWallet) TicketPrice() (*TicketPriceResponse, error) {
-// 	bestBlock := mw.GetBestBlock()
-// 	for _, wal := range mw.wallets {
-// 		resp, err := wal.TicketPrice()
-// 		if err != nil {
-// 			return nil, err
-// 		}
-
-// 		if resp.Height == bestBlock.Height {
-// 			return resp, nil
-// 		}
-// 	}
-
-// 	return nil, errors.New(ErrWalletNotFound)
-// }
 
 // PurchaseTickets purchases tickets from the wallet.
 // Returns a slice of hashes for tickets purchased.
@@ -205,77 +152,73 @@ func (wallet *Wallet) PurchaseTickets(account, numTickets int32, vspHost string,
 
 // VSPTicketInfo returns vsp-related info for a given ticket. Returns an error
 // if the ticket is not yet assigned to a VSP.
-// func (mw *MultiWallet) VSPTicketInfo(walletID int, hash string) (*VSPTicketInfo, error) {
-// 	wallet := mw.WalletWithID(walletID)
-// 	if wallet == nil {
-// 		return nil, fmt.Errorf("no wallet with ID %d", walletID)
-// 	}
+func (wallet *Wallet) VSPTicketInfo(walletID int, hash string) (*VSPTicketInfo, error) {
 
-// 	ticketHash, err := chainhash.NewHashFromStr(hash)
-// 	if err != nil {
-// 		return nil, err
-// 	}
+	ticketHash, err := chainhash.NewHashFromStr(hash)
+	if err != nil {
+		return nil, err
+	}
 
-// 	// Read the VSP info for this ticket from the wallet db.
-// 	ctx := wallet.shutdownContext()
-// 	walletTicketInfo, err := wallet.Internal().VSPTicketInfo(ctx, ticketHash)
-// 	if err != nil {
-// 		return nil, err
-// 	}
+	// Read the VSP info for this ticket from the wallet db.
+	ctx := wallet.ShutdownContext()
+	walletTicketInfo, err := wallet.Internal().VSPTicketInfo(ctx, ticketHash)
+	if err != nil {
+		return nil, err
+	}
 
-// 	ticketInfo := &VSPTicketInfo{
-// 		VSP:         walletTicketInfo.Host,
-// 		FeeTxHash:   walletTicketInfo.FeeHash.String(),
-// 		FeeTxStatus: VSPFeeStatus(walletTicketInfo.FeeTxStatus),
-// 	}
+	ticketInfo := &VSPTicketInfo{
+		VSP:         walletTicketInfo.Host,
+		FeeTxHash:   walletTicketInfo.FeeHash.String(),
+		FeeTxStatus: VSPFeeStatus(walletTicketInfo.FeeTxStatus),
+	}
 
-// 	// Cannot submit a ticketstatus api request to the VSP if
-// 	// the wallet is locked. Return just the wallet info.
-// 	if wallet.IsLocked() {
-// 		return ticketInfo, nil
-// 	}
+	// Cannot submit a ticketstatus api request to the VSP if
+	// the wallet is locked. Return just the wallet info.
+	if wallet.IsLocked() {
+		return ticketInfo, nil
+	}
 
-// 	vspClient, err := wallet.VSPClient(walletTicketInfo.Host, walletTicketInfo.PubKey)
-// 	if err != nil {
-// 		log.Warnf("unable to get vsp ticket info for %s: %v", hash, err)
-// 		return ticketInfo, nil
-// 	}
-// 	vspTicketStatus, err := vspClient.TicketStatus(ctx, ticketHash)
-// 	if err != nil {
-// 		log.Warnf("unable to get vsp ticket info for %s: %v", hash, err)
-// 		return ticketInfo, nil
-// 	}
+	vspClient, err := wallet.VSPClient(walletTicketInfo.Host, walletTicketInfo.PubKey)
+	if err != nil {
+		log.Warnf("unable to get vsp ticket info for %s: %v", hash, err)
+		return ticketInfo, nil
+	}
+	vspTicketStatus, err := vspClient.TicketStatus(ctx, ticketHash)
+	if err != nil {
+		log.Warnf("unable to get vsp ticket info for %s: %v", hash, err)
+		return ticketInfo, nil
+	}
 
-// 	// Parse the fee status returned by the vsp.
-// 	var vspFeeStatus VSPFeeStatus
-// 	switch vspTicketStatus.FeeTxStatus {
-// 	case "received": // received but not broadcast
-// 		vspFeeStatus = VSPFeeProcessStarted
-// 	case "broadcast": // broadcast but not confirmed
-// 		vspFeeStatus = VSPFeeProcessPaid
-// 	case "confirmed": // broadcast and confirmed
-// 		vspFeeStatus = VSPFeeProcessConfirmed
-// 	case "error":
-// 		vspFeeStatus = VSPFeeProcessErrored
-// 	default:
-// 		vspFeeStatus = VSPFeeProcessErrored
-// 		log.Warnf("VSP responded with %v for %v", vspTicketStatus.FeeTxStatus, ticketHash)
-// 	}
+	// Parse the fee status returned by the vsp.
+	var vspFeeStatus VSPFeeStatus
+	switch vspTicketStatus.FeeTxStatus {
+	case "received": // received but not broadcast
+		vspFeeStatus = VSPFeeProcessStarted
+	case "broadcast": // broadcast but not confirmed
+		vspFeeStatus = VSPFeeProcessPaid
+	case "confirmed": // broadcast and confirmed
+		vspFeeStatus = VSPFeeProcessConfirmed
+	case "error":
+		vspFeeStatus = VSPFeeProcessErrored
+	default:
+		vspFeeStatus = VSPFeeProcessErrored
+		log.Warnf("VSP responded with %v for %v", vspTicketStatus.FeeTxStatus, ticketHash)
+	}
 
-// 	// Sanity check and log any observed discrepancies.
-// 	if ticketInfo.FeeTxHash != vspTicketStatus.FeeTxHash {
-// 		log.Warnf("wallet fee tx hash %s differs from vsp fee tx hash %s for ticket %s",
-// 			ticketInfo.FeeTxHash, vspTicketStatus.FeeTxHash, ticketHash)
-// 		ticketInfo.FeeTxHash = vspTicketStatus.FeeTxHash
-// 	}
-// 	if ticketInfo.FeeTxStatus != vspFeeStatus {
-// 		log.Warnf("wallet fee status %q differs from vsp fee status %q for ticket %s",
-// 			ticketInfo.FeeTxStatus, vspFeeStatus, ticketHash)
-// 		ticketInfo.FeeTxStatus = vspFeeStatus
-// 	}
+	// Sanity check and log any observed discrepancies.
+	if ticketInfo.FeeTxHash != vspTicketStatus.FeeTxHash {
+		log.Warnf("wallet fee tx hash %s differs from vsp fee tx hash %s for ticket %s",
+			ticketInfo.FeeTxHash, vspTicketStatus.FeeTxHash, ticketHash)
+		ticketInfo.FeeTxHash = vspTicketStatus.FeeTxHash
+	}
+	if ticketInfo.FeeTxStatus != vspFeeStatus {
+		log.Warnf("wallet fee status %q differs from vsp fee status %q for ticket %s",
+			ticketInfo.FeeTxStatus, vspFeeStatus, ticketHash)
+		ticketInfo.FeeTxStatus = vspFeeStatus
+	}
 
-// 	return ticketInfo, nil
-// }
+	return ticketInfo, nil
+}
 
 // StartTicketBuyer starts the automatic ticket buyer. The wallet
 // should already be configured with the required parameters using
@@ -545,23 +488,19 @@ func (wallet *Wallet) IsAutoTicketsPurchaseActive() bool {
 }
 
 // StopAutoTicketsPurchase stops the automatic ticket buyer.
-// func (mw *MultiWallet) StopAutoTicketsPurchase(walletID int) error {
-// 	wallet := mw.WalletWithID(walletID)
-// 	if wallet == nil {
-// 		return errors.New(ErrNotExist)
-// 	}
+func (wallet *Wallet) StopAutoTicketsPurchase(walletID int) error {
 
-// 	wallet.cancelAutoTicketBuyerMu.Lock()
-// 	defer wallet.cancelAutoTicketBuyerMu.Unlock()
+	wallet.cancelAutoTicketBuyerMu.Lock()
+	defer wallet.cancelAutoTicketBuyerMu.Unlock()
 
-// 	if wallet.cancelAutoTicketBuyer == nil {
-// 		return errors.New(ErrInvalid)
-// 	}
+	if wallet.cancelAutoTicketBuyer == nil {
+		return errors.New(ErrInvalid)
+	}
 
-// 	wallet.cancelAutoTicketBuyer()
-// 	wallet.cancelAutoTicketBuyer = nil
-// 	return nil
-// }
+	wallet.cancelAutoTicketBuyer()
+	wallet.cancelAutoTicketBuyer = nil
+	return nil
+}
 
 // SetAutoTicketsBuyerConfig sets ticket buyer config for the wallet.
 func (wallet *Wallet) SetAutoTicketsBuyerConfig(vspHost string, purchaseAccount int32, amountToMaintain int64) {
@@ -590,39 +529,35 @@ func (wallet *Wallet) TicketBuyerConfigIsSet() bool {
 }
 
 // ClearTicketBuyerConfig clears the wallet's ticket buyer config.
-// func (mw *MultiWallet) ClearTicketBuyerConfig(walletID int) error {
-// 	wallet := mw.WalletWithID(walletID)
-// 	if wallet == nil {
-// 		return errors.New(ErrNotExist)
-// 	}
+func (wallet *Wallet) ClearTicketBuyerConfig(walletID int) error {
 
-// 	mw.SetLongConfigValueForKey(TicketBuyerATMConfigKey, -1)
-// 	mw.SetInt32ConfigValueForKey(TicketBuyerAccountConfigKey, -1)
-// 	mw.SetStringConfigValueForKey(TicketBuyerVSPHostConfigKey, "")
+	wallet.SetLongConfigValueForKey(TicketBuyerATMConfigKey, -1)
+	wallet.SetInt32ConfigValueForKey(TicketBuyerAccountConfigKey, -1)
+	wallet.SetStringConfigValueForKey(TicketBuyerVSPHostConfigKey, "")
 
-// 	return nil
-// }
+	return nil
+}
 
 // NextTicketPriceRemaining returns the remaning time in seconds of a ticket for the next block,
 // if secs equal 0 is imminent
-// func (mw *MultiWallet) NextTicketPriceRemaining() (secs int64, err error) {
-// 	params, er := utils.ChainParams(mw.chainParams.Name)
-// 	if er != nil {
-// 		secs, err = -1, er
-// 		return
-// 	}
-// 	bestBestBlock := mw.GetBestBlock()
-// 	idxBlockInWindow := int(int64(bestBestBlock.Height)%params.StakeDiffWindowSize) + 1
-// 	blockTime := params.TargetTimePerBlock.Nanoseconds()
-// 	windowSize := params.StakeDiffWindowSize
-// 	x := (windowSize - int64(idxBlockInWindow)) * blockTime
-// 	if x == 0 {
-// 		secs, err = 0, nil
-// 		return
-// 	}
-// 	secs, err = int64(time.Duration(x).Seconds()), nil
-// 	return
-// }
+func (wallet *Wallet) NextTicketPriceRemaining() (secs int64, err error) {
+	params, er := utils.ChainParams(wallet.chainParams.Name)
+	if er != nil {
+		secs, err = -1, er
+		return
+	}
+	bestBestBlock := wallet.GetBestBlock()
+	idxBlockInWindow := int(int64(bestBestBlock.Height)%params.StakeDiffWindowSize) + 1
+	blockTime := params.TargetTimePerBlock.Nanoseconds()
+	windowSize := params.StakeDiffWindowSize
+	x := (windowSize - int64(idxBlockInWindow)) * blockTime
+	if x == 0 {
+		secs, err = 0, nil
+		return
+	}
+	secs, err = int64(time.Duration(x).Seconds()), nil
+	return
+}
 
 // UnspentUnexpiredTickets returns all Unmined, Immature and Live tickets.
 func (wallet *Wallet) UnspentUnexpiredTickets() ([]Transaction, error) {
