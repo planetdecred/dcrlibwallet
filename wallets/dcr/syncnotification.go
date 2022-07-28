@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/planetdecred/dcrlibwallet/spv"
-	// "golang.org/x/sync/errgroup"
+	"golang.org/x/sync/errgroup"
 )
 
 func (w *Wallet) spvSyncNotificationCallbacks() *spv.Notifications {
@@ -199,9 +199,9 @@ func (w *Wallet) fetchHeadersProgress(lastFetchedHeaderHeight int32, lastFetched
 	}
 
 	// for _, wallet := range w.wallets {
-		if w.WaitingForHeaders {
-			w.WaitingForHeaders = w.GetBestBlock() > lastFetchedHeaderHeight
-		}
+	if w.WaitingForHeaders {
+		w.WaitingForHeaders = w.GetBestBlock() > lastFetchedHeaderHeight
+	}
 	// }
 
 	// lock the mutex before reading and writing to w.syncData.*
@@ -618,10 +618,8 @@ func (w *Wallet) resetSyncData() {
 	w.syncData.activeSyncData = nil
 	w.syncData.mu.Unlock()
 
-	for _, wallet := range w.wallets {
-		wallet.WaitingForHeaders = true
-		wallet.LockWallet() // lock wallet if previously unlocked to perform account discovery.
-	}
+	w.WaitingForHeaders = true
+	w.LockWallet() // lock wallet if previously unlocked to perform account discovery.
 }
 
 func (w *Wallet) synced(walletID int, synced bool) {
@@ -630,9 +628,7 @@ func (w *Wallet) synced(walletID int, synced bool) {
 		// begin indexing transactions after sync is completed,
 		// syncProgressListeners.OnSynced() will be invoked after transactions are indexed
 		var txIndexing errgroup.Group
-		for _, wallet := range w.wallets {
-			txIndexing.Go(wallet.IndexTransactions)
-		}
+		txIndexing.Go(w.IndexTransactions)
 
 		go func() {
 			err := txIndexing.Wait()
@@ -661,22 +657,22 @@ func (w *Wallet) synced(walletID int, synced bool) {
 
 	w.Synced = synced
 	w.Syncing = false
-	w.listenForTransactions(wallet.ID)
+	w.listenForTransactions()
 
 	if !w.Internal().Locked() {
 		w.LockWallet() // lock wallet if previously unlocked to perform account discovery.
-		err := w.markWalletAsDiscoveredAccounts(walletID)
+		err := w.markWalletAsDiscoveredAccounts()
 		if err != nil {
 			log.Error(err)
 		}
 	}
 
-	if w.OpenedWalletsCount() == w.SyncedWalletsCount() {
-		w.syncData.mu.Lock()
-		w.syncData.syncing = false
-		w.syncData.synced = true
-		w.syncData.mu.Unlock()
+	// if w.OpenedWalletsCount() == w.SyncedWalletsCount() {
+	w.syncData.mu.Lock()
+	w.syncData.syncing = false
+	w.syncData.synced = true
+	w.syncData.mu.Unlock()
 
-		indexTransactions()
-	}
+	indexTransactions()
+	// }
 }

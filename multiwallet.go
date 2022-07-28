@@ -38,13 +38,13 @@ type MultiWallet struct {
 	// notificationListenersMu         sync.RWMutex
 	txAndBlockNotificationListeners map[string]TxAndBlockNotificationListener
 
-	blocksRescanProgressListener     BlocksRescanProgressListener
+	blocksRescanProgressListener BlocksRescanProgressListener
 	// accountMixerNotificationListener map[string]AccountMixerNotificationListener
 
 	shuttingDown chan bool
 	cancelFuncs  []context.CancelFunc
 
-	Politeia  *Politeia
+	Politeia  *dcr.Politeia
 	dexClient *DexClient
 
 	vspMu sync.RWMutex
@@ -75,14 +75,14 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 		// syncData: &dcr.SyncData{
 		// 	SyncProgressListeners: make(map[string]dcr.SyncProgressListener),
 		// },
-		txAndBlockNotificationListeners:  make(map[string]TxAndBlockNotificationListener),
+		txAndBlockNotificationListeners: make(map[string]TxAndBlockNotificationListener),
 	}
 
-		// 	syncData: &dcr.SyncData{
-		// 	SyncProgressListeners: make(map[string]dcr.SyncProgressListener),
-		// },
+	// 	syncData: &dcr.SyncData{
+	// 	SyncProgressListeners: make(map[string]dcr.SyncProgressListener),
+	// },
 
-	mw.Politeia, err = newPoliteia(mw, politeiaHost)
+	mw.Politeia, err = newPoliteia(mw.wallets[0], politeiaHost)
 	if err != nil {
 		return nil, err
 	}
@@ -129,9 +129,12 @@ func (mw *MultiWallet) Shutdown() {
 	// Trigger shuttingDown signal to cancel all contexts created with `shutdownContextWithCancel`.
 	mw.shuttingDown <- true
 
-	mw.CancelRescan()
 	for _, wallet := range mw.wallets {
-		wallet.CancelSync(mw.wallets)
+		wallet.CancelRescan()
+	}
+
+	for _, wallet := range mw.wallets {
+		wallet.CancelSync()
 	}
 
 	for _, wallet := range mw.wallets {
