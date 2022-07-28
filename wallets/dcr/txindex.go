@@ -61,7 +61,7 @@ func (wallet *Wallet) IndexTransactions() error {
 		return err
 	}
 
-	endHeight := wallet.GetBestBlock()
+	endHeight := wallet.getBestBlock()
 
 	startBlock := w.NewBlockIdentifierFromHeight(beginHeight)
 	endBlock := w.NewBlockIdentifierFromHeight(endHeight)

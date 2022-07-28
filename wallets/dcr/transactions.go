@@ -104,7 +104,7 @@ func (wallet *Wallet) GetTransactions(offset, limit, txFilter int32, newestFirst
 }
 
 func (wallet *Wallet) GetTransactionsRaw(offset, limit, txFilter int32, newestFirst bool) (transactions []Transaction, err error) {
-	err = wallet.WalletDataDB.Read(offset, limit, txFilter, newestFirst, wallet.RequiredConfirmations(), wallet.GetBestBlock(), &transactions)
+	err = wallet.WalletDataDB.Read(offset, limit, txFilter, newestFirst, wallet.RequiredConfirmations(), wallet.getBestBlock(), &transactions)
 	return
 }
 
@@ -150,7 +150,7 @@ func (wallet *Wallet) GetTransactionsRaw(offset, limit, txFilter int32, newestFi
 // }
 
 func (wallet *Wallet) CountTransactions(txFilter int32) (int, error) {
-	return wallet.WalletDataDB.Count(txFilter, wallet.RequiredConfirmations(), wallet.GetBestBlock(), &Transaction{})
+	return wallet.WalletDataDB.Count(txFilter, wallet.RequiredConfirmations(), wallet.getBestBlock(), &Transaction{})
 }
 
 func (wallet *Wallet) TicketHasVotedOrRevoked(ticketHash string) (bool, error) {
@@ -219,7 +219,7 @@ func (wallet *Wallet) TransactionOverview() (txOverview *TransactionOverview, er
 }
 
 func (wallet *Wallet) TxMatchesFilter(tx *Transaction, txFilter int32) bool {
-	bestBlock := wallet.GetBestBlock()
+	bestBlock := wallet.getBestBlock()
 
 	// tickets with block height less than this are matured.
 	maturityBlock := bestBlock - int32(wallet.chainParams.TicketMaturity)
