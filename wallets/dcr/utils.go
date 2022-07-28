@@ -501,7 +501,6 @@ func HttpGet(url string, respObj interface{}) (*http.Response, []byte, error) {
 	return resp, respBytes, err
 }
 
-
 func marshalResult(result interface{}, err error) (string, error) {
 
 	if err != nil {
@@ -515,4 +514,3 @@ func marshalResult(result interface{}, err error) (string, error) {
 
 	return string(response), nil
 }
-
