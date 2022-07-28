@@ -2,7 +2,6 @@ package dcr
 
 import (
 	"encoding/json"
-	// "sort"
 
 	"github.com/asdine/storm"
 	"github.com/decred/dcrd/chaincfg/chainhash"
@@ -107,47 +106,6 @@ func (wallet *Wallet) GetTransactionsRaw(offset, limit, txFilter int32, newestFi
 	err = wallet.WalletDataDB.Read(offset, limit, txFilter, newestFirst, wallet.RequiredConfirmations(), wallet.getBestBlock(), &transactions)
 	return
 }
-
-// func (mw *MultiWallet) GetTransactions(offset, limit, txFilter int32, newestFirst bool) (string, error) {
-
-// 	transactions, err := mw.GetTransactionsRaw(offset, limit, txFilter, newestFirst)
-// 	if err != nil {
-// 		return "", err
-// 	}
-
-// 	jsonEncodedTransactions, err := json.Marshal(&transactions)
-// 	if err != nil {
-// 		return "", err
-// 	}
-
-// 	return string(jsonEncodedTransactions), nil
-// }
-
-// func (mw *MultiWallet) GetTransactionsRaw(offset, limit, txFilter int32, newestFirst bool) ([]Transaction, error) {
-// 	transactions := make([]Transaction, 0)
-// 	for _, wallet := range mw.wallets {
-// 		walletTransactions, err := wallet.GetTransactionsRaw(offset, limit, txFilter, newestFirst)
-// 		if err != nil {
-// 			return nil, err
-// 		}
-
-// 		transactions = append(transactions, walletTransactions...)
-// 	}
-
-// 	// sort transaction by timestamp in descending order
-// 	sort.Slice(transactions[:], func(i, j int) bool {
-// 		if newestFirst {
-// 			return transactions[i].Timestamp > transactions[j].Timestamp
-// 		}
-// 		return transactions[i].Timestamp < transactions[j].Timestamp
-// 	})
-
-// 	if len(transactions) > int(limit) && limit > 0 {
-// 		transactions = transactions[:limit]
-// 	}
-
-// 	return transactions, nil
-// }
 
 func (wallet *Wallet) CountTransactions(txFilter int32) (int, error) {
 	return wallet.WalletDataDB.Count(txFilter, wallet.RequiredConfirmations(), wallet.getBestBlock(), &Transaction{})
