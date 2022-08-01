@@ -266,12 +266,12 @@ func (s *Service) GetNHighestTicketDetails(nHighest int) (ticketDetails *apiType
 // GetAddress returns the balances and transactions of an address.
 // The returned transactions are sorted by block height, newest blocks first.
 func (s *Service) GetAddress(address string) (addressState *AddressState, err error) {
-	err = s.client.setBlockbookURL(s.chainParams.Name)
-	if err != nil {
-		return
+	blockBookBaseUrl := blockbookMainnet
+	if s.chainParams.Name == chaincfg.TestNet3Params().Name {
+		blockBookBaseUrl = blockbookTestnet
 	}
 
-	r, err := s.client.Do("GET", "api/v2/address/"+address, "")
+	r, err := s.client.Do("GET", blockBookBaseUrl+"api/v2/address/"+address, "")
 	if err != nil {
 		return
 	}
@@ -285,12 +285,12 @@ func (s *Service) GetAddress(address string) (addressState *AddressState, err er
 
 // GetXpub Returns balances and transactions of an xpub.
 func (s *Service) GetXpub(xPub string) (xPubBalAndTxs *XpubBalAndTxs, err error) {
-	err = s.client.setBlockbookURL(s.chainParams.Name)
-	if err != nil {
-		return
+	blockBookBaseUrl := blockbookMainnet
+	if s.chainParams.Name == chaincfg.TestNet3Params().Name {
+		blockBookBaseUrl = blockbookTestnet
 	}
 
-	r, err := s.client.Do("GET", "api/v2/xpub/"+xPub, "")
+	r, err := s.client.Do("GET", blockBookBaseUrl+"api/v2/xpub/"+xPub, "")
 	if err != nil {
 		return
 	}
@@ -306,32 +306,15 @@ func (s *Service) GetXpub(xPub string) (xPubBalAndTxs *XpubBalAndTxs, err error)
 func (s *Service) GetTicker(exchange Exchange, market string) (ticker *Ticker, err error) {
 	switch exchange {
 	case Binance:
-		if s.chainParams.Name == chaincfg.MainNetParams().Name {
-			s.client.BaseUrl = binanceBaseUrl
-		} else {
-			s.client.BaseUrl = binanceTestnetBaseUrl
-		}
-
 		symbArr := strings.Split(market, "-")
 		if len(symbArr) != 2 {
 			return ticker, errors.New("Invalid symbol format")
 		}
-
 		symb := strings.Join(symbArr[:], "")
 		return s.getBinanceTicker(symb)
 	case Bittrex:
-		if s.chainParams.Name == chaincfg.TestNet3Params().Name {
-			return ticker, errors.New("Bittrex doesn't support testnet")
-		}
-
 		return s.getBittrexTicker(market)
 	case KuCoin:
-		if s.chainParams.Name == chaincfg.MainNetParams().Name {
-			s.client.BaseUrl = kucoinBaseUrl
-		} else {
-			s.client.BaseUrl = KuCoinTestnetBaseUrl
-		}
-
 		return s.getKucoinTicker(market)
 	}
 
@@ -339,7 +322,12 @@ func (s *Service) GetTicker(exchange Exchange, market string) (ticker *Ticker, e
 }
 
 func (s *Service) getBinanceTicker(market string) (ticker *Ticker, err error) {
-	r, err := s.client.Do("GET", "/api/v3/ticker/24hr?symbol="+strings.ToUpper(market), "")
+	baseUrl := binanceBaseUrl
+	if s.chainParams.Name == chaincfg.TestNet3Params().Name {
+		baseUrl = binanceTestnetBaseUrl
+	}
+
+	r, err := s.client.Do("GET", baseUrl+"/api/v3/ticker/24hr?symbol="+strings.ToUpper(market), "")
 	if err != nil {
 		return ticker, err
 	}
@@ -362,8 +350,11 @@ func (s *Service) getBinanceTicker(market string) (ticker *Ticker, err error) {
 }
 
 func (s *Service) getBittrexTicker(market string) (ticker *Ticker, err error) {
-	s.client.BaseUrl = bittrexBaseUrl
-	r, err := s.client.Do("GET", "/markets/"+strings.ToUpper(market)+"/ticker", "")
+	if s.chainParams.Name == chaincfg.TestNet3Params().Name {
+		return ticker, errors.New("Bittrex doesn't support testnet")
+	}
+
+	r, err := s.client.Do("GET", bittrexBaseUrl+"/markets/"+strings.ToUpper(market)+"/ticker", "")
 	if err != nil {
 		return ticker, err
 	}
@@ -385,7 +376,12 @@ func (s *Service) getBittrexTicker(market string) (ticker *Ticker, err error) {
 }
 
 func (s *Service) getKucoinTicker(market string) (ticker *Ticker, err error) {
-	r, err := s.client.Do("GET", "/api/v1/market/orderbook/level1?symbol="+strings.ToUpper(market), "")
+	baseUrl := kucoinBaseUrl
+	if s.chainParams.Name == chaincfg.TestNet3Params().Name {
+		baseUrl = KuCoinTestnetBaseUrl
+	}
+
+	r, err := s.client.Do("GET", baseUrl+"/api/v1/market/orderbook/level1?symbol="+strings.ToUpper(market), "")
 	if err != nil {
 		return ticker, err
 	}

@@ -9,8 +9,6 @@ import (
 	"net/http/httputil"
 	"strings"
 	"time"
-
-	"github.com/decred/dcrd/chaincfg/v3"
 )
 
 const (
@@ -139,16 +137,4 @@ func (c *Client) dumpResponse(r *http.Response) {
 	} else {
 		log.Debug("dumpResponse ok:", string(dump))
 	}
-}
-
-// setBlockbookURL sets the client base url to the blockbook base path.
-func (c *Client) setBlockbookURL(net string) error {
-	if net == chaincfg.MainNetParams().Name {
-		c.BaseUrl = blockbookMainnet
-	} else if net == chaincfg.TestNet3Params().Name {
-		c.BaseUrl = blockbookTestnet
-	} else {
-		return errors.New("Unknown or unsupported network")
-	}
-	return nil
 }
