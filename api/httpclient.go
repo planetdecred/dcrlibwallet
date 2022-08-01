@@ -15,10 +15,10 @@ import (
 
 const (
 	// Default http client timeout in secs.
-	defaultHttpClientTimeout = 30 * time.Second
+	defaultHttpClientTimeout = 10 * time.Second
 )
 
-// Client is the base for http calls
+// Client is the base for http/https calls
 type (
 	Client struct {
 		httpClient *http.Client
@@ -64,41 +64,14 @@ func NewClient(conf *ClientConf) (c *Client) {
 	}
 }
 
-// doTimeoutRequest sends a HTTP request with a timeout
-func (c *Client) doTimeoutRequest(timer *time.Timer, req *http.Request) (*http.Response, error) {
-	// Send the request in the background
-	type result struct {
-		resp *http.Response
-		err  error
-	}
-	done := make(chan result, 1)
-	go func() {
-		c.dumpRequest(req)
-		resp, err := c.httpClient.Do(req)
-		c.dumpResponse(resp)
-		done <- result{resp, err}
-	}()
-	// Wait for the read or timeout
-	select {
-	case r := <-done:
-		return r.resp, r.err
-	case <-timer.C:
-		errTimeout := errors.New("timeout reading from API")
-		return nil, errTimeout
-	}
-}
-
-//Do prepare and process HTTP request to API
+// Do prepare and process HTTP request to API
 func (c *Client) Do(method, resource string, payload interface{}) (response []byte, err error) {
-	connectTimer := time.NewTimer(defaultHttpClientTimeout)
-	var rawurl string
+	var rawurl = fmt.Sprintf("%s%s", c.BaseUrl, resource)
 	if strings.HasPrefix(resource, "http") {
 		rawurl = resource
-	} else {
-		rawurl = fmt.Sprintf("%s%s", c.BaseUrl, resource)
 	}
-	var req *http.Request
 
+	var req *http.Request
 	reqInfo := RequestInfo{
 		client:  c,
 		Method:  method,
@@ -107,28 +80,26 @@ func (c *Client) Do(method, resource string, payload interface{}) (response []by
 	}
 
 	if c.ReqFilter == nil {
-		err = errors.New("Request Filter was not set")
-		return
+		return nil, errors.New("Request Filter was not set")
 	}
 
 	req, err = c.ReqFilter(reqInfo)
-
 	if err != nil {
 		return nil, err
 	}
+
 	if req == nil {
-		err = errors.New("error: nil request")
-		return nil, err
+		return nil, errors.New("error: nil request")
 	}
 
-	resp, err := c.doTimeoutRequest(connectTimer, req)
+	c.dumpRequest(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return
+		return response, err
 	}
+	c.dumpResponse(resp)
 
-	defer resp.Body.Close()
 	response, err = ioutil.ReadAll(resp.Body)
-
 	if err != nil {
 		return response, err
 	}

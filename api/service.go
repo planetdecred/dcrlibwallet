@@ -54,7 +54,6 @@ func NewService(chainParams *chaincfg.Params) *Service {
 
 	client := NewClient(conf)
 	client.ReqFilter = func(info RequestInfo) (req *http.Request, err error) {
-
 		req, err = http.NewRequest(info.Method, info.Url, bytes.NewBuffer([]byte(info.Payload.(string))))
 		if err != nil {
 			log.Error(err)
@@ -284,7 +283,7 @@ func (s *Service) GetAddress(address string) (addressState *AddressState, err er
 	return
 }
 
-//GetXpub Returns balances and transactions of an xpub
+// GetXpub Returns balances and transactions of an xpub.
 func (s *Service) GetXpub(xPub string) (xPubBalAndTxs *XpubBalAndTxs, err error) {
 	err = s.client.setBlockbookURL(s.chainParams.Name)
 	if err != nil {
