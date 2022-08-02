@@ -77,6 +77,7 @@ func NewService(chainParams *chaincfg.Params) *Service {
 func (s *Service) GetBestBlock() int32 {
 	r, err := s.client.Do("GET", "api/block/best/height", "")
 	if err != nil {
+		log.Error(err)
 		return -1
 	}
 
@@ -88,6 +89,7 @@ func (s *Service) GetBestBlock() int32 {
 func (s *Service) GetBestBlockTimeStamp() int64 {
 	r, err := s.client.Do("GET", "api/block/best?txtotals=false", "")
 	if err != nil {
+		log.Error(err)
 		return -1
 	}
 	var blockDataBasic *BlockDataBasic
@@ -126,7 +128,7 @@ func (s *Service) GetAgendas() (agendas []apiTypes.AgendasInfo, err error) {
 }
 
 // GetAgendaDetails returns the details for agenda with agendaId
-func (s *Service) GetAgendaDetails(agendaId string) (agendaDetails *apiTypes.AgendaAPIResponse, err error) {
+func (s *Service) GetAgendaDetails(agendaId string) (agendaDetails *AgendaAPIResponse, err error) {
 	r, err := s.client.Do("GET", "api/agenda/"+agendaId, "")
 	if err != nil {
 		return
@@ -140,7 +142,6 @@ func (s *Service) GetAgendaDetails(agendaId string) (agendaDetails *apiTypes.Age
 
 // GetTreasuryBalance returns the current treasury balance as int64.
 func (s *Service) GetTreasuryBalance() (bal int64, err error) {
-	bal = -1
 	r, err := s.client.Do("GET", "api/treasury/balance", "")
 	if err != nil {
 		return

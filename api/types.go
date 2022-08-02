@@ -1,6 +1,8 @@
 package api
 
 import (
+	"time"
+
 	"github.com/decred/dcrdata/v7/api/types"
 )
 
@@ -68,7 +70,7 @@ type (
 
 	// AddressState models the adddress balances and transactions.
 	AddressState struct {
-		Address            string   `json:"adddress"`
+		Address            string   `json:"address"`
 		Balance            int64    `json:"balance,string"`
 		TotalReceived      int64    `json:"totalReceived,string"`
 		TotalSent          int64    `json:"totalSent,string"`
@@ -90,7 +92,7 @@ type (
 
 	// XpubBalAndTxs models xpub transactions and balance.
 	XpubBalAndTxs struct {
-		Xpub               string        `json:"adddress"`
+		Xpub               string        `json:"address"`
 		Balance            int64         `json:"balance,string"`
 		TotalReceived      int64         `json:"totalReceived,string"`
 		TotalSent          int64         `json:"totalSent,string"`
@@ -153,5 +155,24 @@ type (
 			BestAsk     float64 `json:"bestAsk,string"`
 			BestAskSize float64 `json:"bestAskSize,string"`
 		} `json:"data"`
+	}
+
+	// AgendaAPIResponse holds two sets of AgendaVoteChoices charts data.
+	AgendaAPIResponse struct {
+		ByHeight *AgendaVoteChoices `json:"by_height"`
+		ByTime   *AgendaVoteChoices `json:"by_time"`
+	}
+
+	// AgendaVoteChoices contains the vote counts on multiple intervals of time. The
+	// interval length may be either a single block, in which case Height contains
+	// the block heights, or a day, in which case Time contains the time stamps of
+	// each interval. Total is always the sum of Yes, No, and Abstain.
+	AgendaVoteChoices struct {
+		Abstain []uint64    `json:"abstain"`
+		Yes     []uint64    `json:"yes"`
+		No      []uint64    `json:"no"`
+		Total   []uint64    `json:"total"`
+		Height  []uint64    `json:"height,omitempty"`
+		Time    []time.Time `json:"time,omitempty"`
 	}
 )

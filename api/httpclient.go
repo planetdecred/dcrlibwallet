@@ -97,6 +97,7 @@ func (c *Client) Do(method, resource string, payload interface{}) (response []by
 	}
 	c.dumpResponse(resp)
 
+	defer resp.Body.Close()
 	response, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return response, err
@@ -120,9 +121,9 @@ func (c *Client) dumpRequest(r *http.Request) {
 	}
 	dump, err := httputil.DumpRequest(r, true)
 	if err != nil {
-		log.Debug("dumpReq err:", err)
+		log.Debug("dumpReq err: %v", err)
 	} else {
-		log.Debug("dumpReq ok:", string(dump))
+		log.Debug("dumpReq ok: %v", string(dump))
 	}
 }
 
@@ -133,8 +134,8 @@ func (c *Client) dumpResponse(r *http.Response) {
 	}
 	dump, err := httputil.DumpResponse(r, true)
 	if err != nil {
-		log.Debug("dumpResponse err:", err)
+		log.Debug("dumpResponse err: %v", err)
 	} else {
-		log.Debug("dumpResponse ok:", string(dump))
+		log.Debug("dumpResponse ok: %v", string(dump))
 	}
 }
