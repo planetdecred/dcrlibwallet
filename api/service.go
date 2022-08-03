@@ -53,7 +53,7 @@ func NewService(chainParams *chaincfg.Params) *Service {
 	}
 
 	client := NewClient(conf)
-	client.ReqFilter = func(info RequestInfo) (req *http.Request, err error) {
+	client.RequestFilter = func(info RequestInfo) (req *http.Request, err error) {
 		req, err = http.NewRequest(info.Method, info.Url, bytes.NewBuffer([]byte(info.Payload.(string))))
 		if err != nil {
 			log.Error(err)
@@ -81,7 +81,12 @@ func (s *Service) GetBestBlock() int32 {
 		return -1
 	}
 
-	h, _ := strconv.ParseInt(string(r), 10, 32)
+	h, err := strconv.ParseInt(string(r), 10, 32)
+	if err != nil {
+		log.Error(err)
+		return -1
+	}
+
 	return int32(h)
 }
 

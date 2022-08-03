@@ -16,15 +16,14 @@ const (
 	defaultHttpClientTimeout = 10 * time.Second
 )
 
-// Client is the base for http/https calls
 type (
+	// Client is the base for http/https calls
 	Client struct {
-		httpClient *http.Client
-		Debug      bool
-		BaseUrl    string
-		ReqFilter  RequestFilter
+		httpClient    *http.Client
+		Debug         bool
+		BaseUrl       string
+		RequestFilter func(info RequestInfo) (req *http.Request, err error)
 	}
-	RequestFilter func(info RequestInfo) (req *http.Request, err error)
 
 	// ClientConf Models http client configurations
 	ClientConf struct {
@@ -55,10 +54,10 @@ func NewClient(conf *ClientConf) (c *Client) {
 	}
 
 	return &Client{
-		httpClient: client,
-		Debug:      conf.Debug,
-		BaseUrl:    conf.BaseUrl,
-		ReqFilter:  nil,
+		httpClient:    client,
+		Debug:         conf.Debug,
+		BaseUrl:       conf.BaseUrl,
+		RequestFilter: nil,
 	}
 }
 
@@ -77,11 +76,11 @@ func (c *Client) Do(method, resource string, payload interface{}) (response []by
 		Url:     rawurl,
 	}
 
-	if c.ReqFilter == nil {
+	if c.RequestFilter == nil {
 		return nil, errors.New("Request Filter was not set")
 	}
 
-	req, err = c.ReqFilter(reqInfo)
+	req, err = c.RequestFilter(reqInfo)
 	if err != nil {
 		return nil, err
 	}
