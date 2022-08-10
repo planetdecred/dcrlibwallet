@@ -454,7 +454,6 @@ func (s *Service) setBackend(backend Backend) {
 	if url, ok := s.backendUrl[s.chainParams.Name][backend]; ok {
 		s.client.BaseUrl = url
 	}
-	return
 }
 
 func (s *Service) setBackendMainnet(backend Backend) {
@@ -464,5 +463,4 @@ func (s *Service) setBackendMainnet(backend Backend) {
 	if url, ok := s.backendUrl[chaincfg.MainNetParams().Name][backend]; ok {
 		s.client.BaseUrl = url
 	}
-	return
 }
