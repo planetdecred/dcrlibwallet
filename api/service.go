@@ -178,7 +178,8 @@ func (s *Service) GetTreasuryDetails() (treasuryDetails *TreasuryDetails, err er
 
 // GetExchangeRate fetches exchange rate data summary
 func (s *Service) GetExchangeRate() (rates *ExchangeRates, err error) {
-	r, err := s.client.Do("GET", "api/exchangerate", "")
+	// Use mainnet base url for exchange rates
+	r, err := s.client.Do("GET", mainnetBaseUrl+"api/exchangerate", "")
 	if err != nil {
 		return
 	}
@@ -192,7 +193,8 @@ func (s *Service) GetExchangeRate() (rates *ExchangeRates, err error) {
 
 // GetExchanges fetches the current known state of all exchanges
 func (s *Service) GetExchanges() (state *ExchangeState, err error) {
-	r, err := s.client.Do("GET", "api/exchanges", "")
+	// Use mainnet base url for exchanges
+	r, err := s.client.Do("GET", mainnetBaseUrl+"api/exchanges", "")
 	if err != nil {
 		return
 	}
@@ -309,6 +311,7 @@ func (s *Service) GetXpub(xPub string) (xPubBalAndTxs *XpubBalAndTxs, err error)
 }
 
 // GetTicker returns market ticker data for the supported exchanges.
+// Current supported exchanges: bittrex, binance and kucoin.
 func (s *Service) GetTicker(exchange Exchange, market string) (ticker *Ticker, err error) {
 	switch exchange {
 	case Binance:
@@ -328,12 +331,7 @@ func (s *Service) GetTicker(exchange Exchange, market string) (ticker *Ticker, e
 }
 
 func (s *Service) getBinanceTicker(market string) (ticker *Ticker, err error) {
-	baseUrl := binanceBaseUrl
-	if s.chainParams.Name == chaincfg.TestNet3Params().Name {
-		baseUrl = binanceTestnetBaseUrl
-	}
-
-	r, err := s.client.Do("GET", baseUrl+"/api/v3/ticker/24hr?symbol="+strings.ToUpper(market), "")
+	r, err := s.client.Do("GET", binanceBaseUrl+"/api/v3/ticker/24hr?symbol="+strings.ToUpper(market), "")
 	if err != nil {
 		return ticker, err
 	}
@@ -356,10 +354,6 @@ func (s *Service) getBinanceTicker(market string) (ticker *Ticker, err error) {
 }
 
 func (s *Service) getBittrexTicker(market string) (ticker *Ticker, err error) {
-	if s.chainParams.Name == chaincfg.TestNet3Params().Name {
-		return ticker, errors.New("Bittrex doesn't support testnet")
-	}
-
 	r, err := s.client.Do("GET", bittrexBaseUrl+"/markets/"+strings.ToUpper(market)+"/ticker", "")
 	if err != nil {
 		return ticker, err
@@ -382,12 +376,7 @@ func (s *Service) getBittrexTicker(market string) (ticker *Ticker, err error) {
 }
 
 func (s *Service) getKucoinTicker(market string) (ticker *Ticker, err error) {
-	baseUrl := kucoinBaseUrl
-	if s.chainParams.Name == chaincfg.TestNet3Params().Name {
-		baseUrl = KuCoinTestnetBaseUrl
-	}
-
-	r, err := s.client.Do("GET", baseUrl+"/api/v1/market/orderbook/level1?symbol="+strings.ToUpper(market), "")
+	r, err := s.client.Do("GET", kucoinBaseUrl+"/api/v1/market/orderbook/level1?symbol="+strings.ToUpper(market), "")
 	if err != nil {
 		return ticker, err
 	}
