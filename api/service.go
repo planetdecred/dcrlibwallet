@@ -27,15 +27,19 @@ const (
 )
 
 const (
-	mainnetBaseUrl        = "https://mainnet.dcrdata.org/"
-	testnetBaseUrl        = "https://testnet.dcrdata.org/"
-	blockbookMainnet      = "https://blockbook.decred.org:9161/"
-	blockbookTestnet      = "https://blockbook.decred.org:19161/"
-	binanceBaseUrl        = "https://api.binance.com"
-	binanceTestnetBaseUrl = "https://testnet.binance.vision"
-	bittrexBaseUrl        = "https://api.bittrex.com/v3"
-	kucoinBaseUrl         = "https://api.kucoin.com"
-	KuCoinTestnetBaseUrl  = "https://openapi-sandbox.kucoin.com"
+	mainnetBaseUrl           = "https://mainnet.dcrdata.org/"
+	testnetBaseUrl           = "https://testnet.dcrdata.org/"
+	blockbookMainnet         = "https://blockbook.decred.org:9161/"
+	blockbookTestnet         = "https://blockbook.decred.org:19161/"
+	binanceBaseUrl           = "https://api.binance.com"
+	binanceTestnetBaseUrl    = "https://testnet.binance.vision"
+	bittrexBaseUrl           = "https://api.bittrex.com/v3"
+	kucoinBaseUrl            = "https://api.kucoin.com"
+	KuCoinTestnetBaseUrl     = "https://openapi-sandbox.kucoin.com"
+	testnetAddressIndetifier = "T"
+	mainnetAddressIdentifier = "D"
+	mainnetXpubIdentifier    = "d"
+	testnetXpubIdentifier    = "t"
 )
 
 var (
@@ -274,12 +278,28 @@ func (s *Service) GetNHighestTicketDetails(nHighest int) (ticketDetails *apiType
 // GetAddress returns the balances and transactions of an address.
 // The returned transactions are sorted by block height, newest blocks first.
 func (s *Service) GetAddress(address string) (addressState *AddressState, err error) {
-	blockBookBaseUrl := blockbookMainnet
-	if s.chainParams.Name == chaincfg.TestNet3Params().Name {
-		blockBookBaseUrl = blockbookTestnet
+	if address == "" {
+		err = errors.New("address can't be empty")
+		return
 	}
 
-	r, err := s.client.Do("GET", blockBookBaseUrl+"api/v2/address/"+address, "")
+	baseUrl := blockbookMainnet
+	if s.chainParams.Name == chaincfg.TestNet3Params().Name {
+		// Confirm address prefix match testnet address identifier
+		if address[:1] != testnetAddressIndetifier {
+			err = errors.New("Net is testnet3 but address is not in testnet format")
+			return
+		}
+		baseUrl = blockbookTestnet
+	}
+
+	// Confirm address prefix match mainnet address identifier
+	if baseUrl == blockbookMainnet && address[:1] != mainnetAddressIdentifier {
+		err = errors.New("Net is mainnet but address is not in mainnet format")
+		return
+	}
+
+	r, err := s.client.Do("GET", baseUrl+"api/v2/address/"+address, "")
 	if err != nil {
 		return
 	}
@@ -293,12 +313,28 @@ func (s *Service) GetAddress(address string) (addressState *AddressState, err er
 
 // GetXpub Returns balances and transactions of an xpub.
 func (s *Service) GetXpub(xPub string) (xPubBalAndTxs *XpubBalAndTxs, err error) {
-	blockBookBaseUrl := blockbookMainnet
-	if s.chainParams.Name == chaincfg.TestNet3Params().Name {
-		blockBookBaseUrl = blockbookTestnet
+	if xPub == "" {
+		err = errors.New("empty xpub string")
+		return
 	}
 
-	r, err := s.client.Do("GET", blockBookBaseUrl+"api/v2/xpub/"+xPub, "")
+	baseUrl := blockbookMainnet
+	if s.chainParams.Name == chaincfg.TestNet3Params().Name {
+		// Check testnet xpub identifier
+		if xPub[:1] != testnetXpubIdentifier {
+			err = errors.New("Net is testnet3 but xpub is not in testnet format")
+			return
+		}
+		baseUrl = blockbookTestnet
+	}
+
+	// Check mainnet xpub identifier
+	if baseUrl == blockbookMainnet && xPub[:1] != mainnetXpubIdentifier {
+		err = errors.New("Net is mainnet but xpub is not in mainnet format")
+		return
+	}
+
+	r, err := s.client.Do("GET", baseUrl+"api/v2/xpub/"+xPub, "")
 	if err != nil {
 		return
 	}
