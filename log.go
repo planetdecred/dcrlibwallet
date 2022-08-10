@@ -63,7 +63,7 @@ var (
 	amgrLog      = backendLog.Logger("AMGR")
 	vspcLog      = backendLog.Logger("VSPC")
 	politeiaLog  = backendLog.Logger("POLT")
-	apiLog       = backendLog.Logger("API")
+	apiLog       = backendLog.Logger("EXT")
 )
 
 // Initialize package-global logger variables.
@@ -94,7 +94,7 @@ var subsystemLoggers = map[string]slog.Logger{
 	"AMGR": amgrLog,
 	"VSPC": vspcLog,
 	"POLT": politeiaLog,
-	"API":  apiLog,
+	"EXT":  apiLog,
 }
 
 // initLogRotator initializes the logging rotater to write logs to logFile and

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -44,10 +43,6 @@ type (
 // NewClient return a new HTTP client
 func NewClient(conf *ClientConf) (c *Client) {
 	t := http.DefaultTransport.(*http.Transport).Clone()
-	t.TLSClientConfig = &tls.Config{
-		InsecureSkipVerify: true,
-	}
-
 	client := &http.Client{
 		Timeout:   defaultHttpClientTimeout,
 		Transport: t,

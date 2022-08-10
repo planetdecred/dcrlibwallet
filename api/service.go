@@ -4,38 +4,34 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/decred/dcrd/chaincfg/v3"
 	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v3"
 	apiTypes "github.com/decred/dcrdata/v7/api/types"
 )
 
+type Backend int
 type Service struct {
 	client      *Client
 	chainParams *chaincfg.Params
+	backendUrl  map[string]map[Backend]string
+	urlMu       sync.Mutex
 }
 
-type Exchange int
-
 const (
-	Bittrex Exchange = iota
+	Bittrex Backend = iota
 	Binance
+	BlockBook
+	DcrData
 	KuCoin
 )
 
 const (
-	mainnetBaseUrl           = "https://mainnet.dcrdata.org/"
-	testnetBaseUrl           = "https://testnet.dcrdata.org/"
-	blockbookMainnet         = "https://blockbook.decred.org:9161/"
-	blockbookTestnet         = "https://blockbook.decred.org:19161/"
-	binanceBaseUrl           = "https://api.binance.com"
-	binanceTestnetBaseUrl    = "https://testnet.binance.vision"
-	bittrexBaseUrl           = "https://api.bittrex.com/v3"
-	kucoinBaseUrl            = "https://api.kucoin.com"
-	KuCoinTestnetBaseUrl     = "https://openapi-sandbox.kucoin.com"
 	testnetAddressIndetifier = "T"
 	mainnetAddressIdentifier = "D"
 	mainnetXpubIdentifier    = "d"
@@ -43,19 +39,28 @@ const (
 )
 
 var (
-	supportedExchanges = []string{"Bittrex", "Binance", "KuCoin"}
+	mainnetUrl = map[Backend]string{
+		Bittrex:   "https://api.bittrex.com/v3",
+		Binance:   "https://api.binance.com",
+		BlockBook: "https://blockbook.decred.org:9161/",
+		DcrData:   "https://mainnet.dcrdata.org/",
+		KuCoin:    "https://api.kucoin.com",
+	}
+
+	testnetUrl = map[Backend]string{
+		Binance:   "https://testnet.binance.vision",
+		BlockBook: "https://blockbook.decred.org:19161/",
+		DcrData:   "https://testnet.dcrdata.org/",
+		KuCoin:    "https://openapi-sandbox.kucoin.com",
+	}
+
+	supportedBackends = []string{"Bittrex", "Binance", "BlockBook", "DcrData", "KuCoin"}
 )
 
 func NewService(chainParams *chaincfg.Params) *Service {
 	conf := &ClientConf{
 		Debug: true,
 	}
-	if chainParams.Name == chaincfg.TestNet3Params().Name {
-		conf.BaseUrl = testnetBaseUrl
-	} else {
-		conf.BaseUrl = mainnetBaseUrl
-	}
-
 	client := NewClient(conf)
 	client.RequestFilter = func(info RequestInfo) (req *http.Request, err error) {
 		req, err = http.NewRequest(info.Method, info.Url, bytes.NewBuffer([]byte(info.Payload.(string))))
@@ -74,11 +79,16 @@ func NewService(chainParams *chaincfg.Params) *Service {
 	return &Service{
 		client:      client,
 		chainParams: chainParams,
+		backendUrl: map[string]map[Backend]string{
+			chaincfg.MainNetParams().Name:  mainnetUrl,
+			chaincfg.TestNet3Params().Name: testnetUrl,
+		},
 	}
 }
 
 // GetBestBlock returns the best block height as int32.
 func (s *Service) GetBestBlock() int32 {
+	s.setBackend(DcrData)
 	r, err := s.client.Do("GET", "api/block/best/height", "")
 	if err != nil {
 		log.Error(err)
@@ -96,6 +106,7 @@ func (s *Service) GetBestBlock() int32 {
 
 // GetBestBlockTimeStamp returns best block time, as unix timestamp.
 func (s *Service) GetBestBlockTimeStamp() int64 {
+	s.setBackend(DcrData)
 	r, err := s.client.Do("GET", "api/block/best?txtotals=false", "")
 	if err != nil {
 		log.Error(err)
@@ -112,6 +123,7 @@ func (s *Service) GetBestBlockTimeStamp() int64 {
 
 // GetCurrentAgendaStatus returns the current agenda and its status.
 func (s *Service) GetCurrentAgendaStatus() (agenda *chainjson.GetVoteInfoResult, err error) {
+	s.setBackend(DcrData)
 	r, err := s.client.Do("GET", "api/stake/vote/info", "")
 	if err != nil {
 		return
@@ -125,6 +137,7 @@ func (s *Service) GetCurrentAgendaStatus() (agenda *chainjson.GetVoteInfoResult,
 
 // GetAgendas returns all agendas high level details
 func (s *Service) GetAgendas() (agendas []apiTypes.AgendasInfo, err error) {
+	s.setBackend(DcrData)
 	r, err := s.client.Do("GET", "api/agendas", "")
 	if err != nil {
 		return
@@ -138,6 +151,7 @@ func (s *Service) GetAgendas() (agendas []apiTypes.AgendasInfo, err error) {
 
 // GetAgendaDetails returns the details for agenda with agendaId
 func (s *Service) GetAgendaDetails(agendaId string) (agendaDetails *AgendaAPIResponse, err error) {
+	s.setBackend(DcrData)
 	r, err := s.client.Do("GET", "api/agenda/"+agendaId, "")
 	if err != nil {
 		return
@@ -151,6 +165,7 @@ func (s *Service) GetAgendaDetails(agendaId string) (agendaDetails *AgendaAPIRes
 
 // GetTreasuryBalance returns the current treasury balance as int64.
 func (s *Service) GetTreasuryBalance() (bal int64, err error) {
+	s.setBackend(DcrData)
 	r, err := s.client.Do("GET", "api/treasury/balance", "")
 	if err != nil {
 		return
@@ -168,6 +183,7 @@ func (s *Service) GetTreasuryBalance() (bal int64, err error) {
 // GetTreasuryDetails the current tresury balance, spent amount, added amount, and tx count for the
 // treasury.
 func (s *Service) GetTreasuryDetails() (treasuryDetails *TreasuryDetails, err error) {
+	s.setBackend(DcrData)
 	r, err := s.client.Do("GET", "api/treasury/balance", "")
 	if err != nil {
 		return
@@ -182,8 +198,9 @@ func (s *Service) GetTreasuryDetails() (treasuryDetails *TreasuryDetails, err er
 
 // GetExchangeRate fetches exchange rate data summary
 func (s *Service) GetExchangeRate() (rates *ExchangeRates, err error) {
-	// Use mainnet base url for exchange rates
-	r, err := s.client.Do("GET", mainnetBaseUrl+"api/exchangerate", "")
+	s.setBackendMainnet(DcrData)
+	// Use mainnet base url for exchange rate endpoint
+	r, err := s.client.Do("GET", "api/exchangerate", "")
 	if err != nil {
 		return
 	}
@@ -197,8 +214,9 @@ func (s *Service) GetExchangeRate() (rates *ExchangeRates, err error) {
 
 // GetExchanges fetches the current known state of all exchanges
 func (s *Service) GetExchanges() (state *ExchangeState, err error) {
-	// Use mainnet base url for exchanges
-	r, err := s.client.Do("GET", mainnetBaseUrl+"api/exchanges", "")
+	s.setBackendMainnet(DcrData)
+	// Use mainnet base url for exchanges endpoint
+	r, err := s.client.Do("GET", "api/exchanges", "")
 	if err != nil {
 		return
 	}
@@ -211,6 +229,7 @@ func (s *Service) GetExchanges() (state *ExchangeState, err error) {
 }
 
 func (s *Service) GetTicketFeeRateSummary() (ticketInfo *apiTypes.MempoolTicketFeeInfo, err error) {
+	s.setBackend(DcrData)
 	r, err := s.client.Do("GET", "api/mempool/sstx", "")
 	if err != nil {
 		return
@@ -224,6 +243,7 @@ func (s *Service) GetTicketFeeRateSummary() (ticketInfo *apiTypes.MempoolTicketF
 }
 
 func (s *Service) GetTicketFeeRate() (ticketFeeRate *apiTypes.MempoolTicketFees, err error) {
+	s.setBackend(DcrData)
 	r, err := s.client.Do("GET", "api/mempool/sstx/fees", "")
 	if err != nil {
 		return
@@ -237,6 +257,7 @@ func (s *Service) GetTicketFeeRate() (ticketFeeRate *apiTypes.MempoolTicketFees,
 }
 
 func (s *Service) GetNHighestTicketFeeRate(nHighest int) (ticketFeeRate *apiTypes.MempoolTicketFees, err error) {
+	s.setBackend(DcrData)
 	r, err := s.client.Do("GET", "api/mempool/sstx/fees/"+strconv.Itoa(nHighest), "")
 	if err != nil {
 		return
@@ -250,6 +271,7 @@ func (s *Service) GetNHighestTicketFeeRate(nHighest int) (ticketFeeRate *apiType
 }
 
 func (s *Service) GetTicketDetails() (ticketDetails *apiTypes.MempoolTicketDetails, err error) {
+	s.setBackend(DcrData)
 	r, err := s.client.Do("GET", "api/mempool/sstx/details", "")
 	if err != nil {
 		return
@@ -263,6 +285,7 @@ func (s *Service) GetTicketDetails() (ticketDetails *apiTypes.MempoolTicketDetai
 }
 
 func (s *Service) GetNHighestTicketDetails(nHighest int) (ticketDetails *apiTypes.MempoolTicketDetails, err error) {
+	s.setBackend(DcrData)
 	r, err := s.client.Do("GET", "api/mempool/sstx/details/"+strconv.Itoa(nHighest), "")
 	if err != nil {
 		return
@@ -278,28 +301,23 @@ func (s *Service) GetNHighestTicketDetails(nHighest int) (ticketDetails *apiType
 // GetAddress returns the balances and transactions of an address.
 // The returned transactions are sorted by block height, newest blocks first.
 func (s *Service) GetAddress(address string) (addressState *AddressState, err error) {
+	s.setBackend(BlockBook)
 	if address == "" {
 		err = errors.New("address can't be empty")
 		return
 	}
 
-	baseUrl := blockbookMainnet
-	if s.chainParams.Name == chaincfg.TestNet3Params().Name {
-		// Confirm address prefix match testnet address identifier
-		if address[:1] != testnetAddressIndetifier {
-			err = errors.New("Net is testnet3 but address is not in testnet format")
-			return
-		}
-		baseUrl = blockbookTestnet
+	// on testnet, address prefix - first byte - should match testnet identifier
+	if s.chainParams.Name == chaincfg.TestNet3Params().Name && address[:1] != testnetAddressIndetifier {
+		return nil, errors.New("Net is testnet3 and xpub is not in testnet format")
 	}
 
-	// Confirm address prefix match mainnet address identifier
-	if baseUrl == blockbookMainnet && address[:1] != mainnetAddressIdentifier {
-		err = errors.New("Net is mainnet but address is not in mainnet format")
-		return
+	// on mainnet, address prefix - first byte - should match mainnet identifier
+	if s.chainParams.Name == chaincfg.MainNetParams().Name && address[:1] != mainnetAddressIdentifier {
+		return nil, errors.New("Net is mainnet and xpub is not in mainnet format")
 	}
 
-	r, err := s.client.Do("GET", baseUrl+"api/v2/address/"+address, "")
+	r, err := s.client.Do("GET", "api/v2/address/"+address, "")
 	if err != nil {
 		return
 	}
@@ -313,28 +331,22 @@ func (s *Service) GetAddress(address string) (addressState *AddressState, err er
 
 // GetXpub Returns balances and transactions of an xpub.
 func (s *Service) GetXpub(xPub string) (xPubBalAndTxs *XpubBalAndTxs, err error) {
+	s.setBackend(BlockBook)
 	if xPub == "" {
-		err = errors.New("empty xpub string")
-		return
+		return nil, errors.New("empty xpub string")
 	}
 
-	baseUrl := blockbookMainnet
-	if s.chainParams.Name == chaincfg.TestNet3Params().Name {
-		// Check testnet xpub identifier
-		if xPub[:1] != testnetXpubIdentifier {
-			err = errors.New("Net is testnet3 but xpub is not in testnet format")
-			return
-		}
-		baseUrl = blockbookTestnet
+	// on testnet Xpub prefix - first byte - should match testnet identifier
+	if s.chainParams.Name == chaincfg.TestNet3Params().Name && xPub[:1] != testnetXpubIdentifier {
+		return nil, errors.New("Net is testnet3 and xpub is not in testnet format")
 	}
 
-	// Check mainnet xpub identifier
-	if baseUrl == blockbookMainnet && xPub[:1] != mainnetXpubIdentifier {
-		err = errors.New("Net is mainnet but xpub is not in mainnet format")
-		return
+	// on mainnet xpup prefix - first byte - should match mainnet identifier
+	if s.chainParams.Name == chaincfg.MainNetParams().Name && xPub[:1] != mainnetXpubIdentifier {
+		return nil, errors.New("Net is mainnet and xpub is not in mainnet format")
 	}
 
-	r, err := s.client.Do("GET", baseUrl+"api/v2/xpub/"+xPub, "")
+	r, err := s.client.Do("GET", "api/v2/xpub/"+xPub, "")
 	if err != nil {
 		return
 	}
@@ -348,7 +360,7 @@ func (s *Service) GetXpub(xPub string) (xPubBalAndTxs *XpubBalAndTxs, err error)
 
 // GetTicker returns market ticker data for the supported exchanges.
 // Current supported exchanges: bittrex, binance and kucoin.
-func (s *Service) GetTicker(exchange Exchange, market string) (ticker *Ticker, err error) {
+func (s *Service) GetTicker(exchange Backend, market string) (ticker *Ticker, err error) {
 	switch exchange {
 	case Binance:
 		symbArr := strings.Split(market, "-")
@@ -367,7 +379,8 @@ func (s *Service) GetTicker(exchange Exchange, market string) (ticker *Ticker, e
 }
 
 func (s *Service) getBinanceTicker(market string) (ticker *Ticker, err error) {
-	r, err := s.client.Do("GET", binanceBaseUrl+"/api/v3/ticker/24hr?symbol="+strings.ToUpper(market), "")
+	s.setBackendMainnet(Binance)
+	r, err := s.client.Do("GET", "/api/v3/ticker/24hr?symbol="+strings.ToUpper(market), "")
 	if err != nil {
 		return ticker, err
 	}
@@ -379,7 +392,7 @@ func (s *Service) getBinanceTicker(market string) (ticker *Ticker, err error) {
 	}
 
 	ticker = &Ticker{
-		Exchange:       supportedExchanges[Binance],
+		Exchange:       supportedBackends[Binance],
 		Symbol:         tempTicker.Symbol,
 		AskPrice:       tempTicker.AskPrice,
 		BidPrice:       tempTicker.BidPrice,
@@ -390,7 +403,8 @@ func (s *Service) getBinanceTicker(market string) (ticker *Ticker, err error) {
 }
 
 func (s *Service) getBittrexTicker(market string) (ticker *Ticker, err error) {
-	r, err := s.client.Do("GET", bittrexBaseUrl+"/markets/"+strings.ToUpper(market)+"/ticker", "")
+	s.setBackendMainnet(Bittrex)
+	r, err := s.client.Do("GET", "/markets/"+strings.ToUpper(market)+"/ticker", "")
 	if err != nil {
 		return ticker, err
 	}
@@ -401,7 +415,7 @@ func (s *Service) getBittrexTicker(market string) (ticker *Ticker, err error) {
 		return ticker, err
 	}
 	ticker = &Ticker{
-		Exchange:       supportedExchanges[Bittrex],
+		Exchange:       supportedBackends[Bittrex],
 		Symbol:         bTicker.Symbol,
 		AskPrice:       bTicker.Ask,
 		BidPrice:       bTicker.Bid,
@@ -412,7 +426,8 @@ func (s *Service) getBittrexTicker(market string) (ticker *Ticker, err error) {
 }
 
 func (s *Service) getKucoinTicker(market string) (ticker *Ticker, err error) {
-	r, err := s.client.Do("GET", kucoinBaseUrl+"/api/v1/market/orderbook/level1?symbol="+strings.ToUpper(market), "")
+	s.setBackendMainnet(KuCoin)
+	r, err := s.client.Do("GET", "/api/v1/market/orderbook/level1?symbol="+strings.ToUpper(market), "")
 	if err != nil {
 		return ticker, err
 	}
@@ -423,12 +438,32 @@ func (s *Service) getKucoinTicker(market string) (ticker *Ticker, err error) {
 		return ticker, err
 	}
 	ticker = &Ticker{
-		Exchange:       supportedExchanges[KuCoin],
+		Exchange:       supportedBackends[KuCoin],
 		Symbol:         strings.ToUpper(market),
 		AskPrice:       kTicker.Data.BestAsk,
 		BidPrice:       kTicker.Data.BestBid,
 		LastTradePrice: kTicker.Data.Price,
 	}
 
+	return
+}
+
+func (s *Service) setBackend(backend Backend) {
+	s.urlMu.Lock()
+	defer s.urlMu.Unlock()
+
+	if url, ok := s.backendUrl[s.chainParams.Name][backend]; ok {
+		s.client.BaseUrl = url
+	}
+	return
+}
+
+func (s *Service) setBackendMainnet(backend Backend) {
+	s.urlMu.Lock()
+	defer s.urlMu.Unlock()
+
+	if url, ok := s.backendUrl[chaincfg.MainNetParams().Name][backend]; ok {
+		s.client.BaseUrl = url
+	}
 	return
 }
