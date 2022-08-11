@@ -20,11 +20,11 @@ import (
 )
 
 type MultiWallet struct {
-	dbDriver string
-	rootDir  string
-	db       *storm.DB
+	DbDriver string
+	RootDir  string
+	DB       *storm.DB
 
-	chainParams *chaincfg.Params
+	ChainParams *chaincfg.Params
 	wallets     map[int]*dcr.Wallet
 	badWallets  map[int]*dcr.Wallet
 
@@ -49,16 +49,16 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 	}
 
 	mw := &MultiWallet{
-		dbDriver:    dbDriver,
-		rootDir:     dcrRootDir,
-		db:          dcrDB,
-		chainParams: chainParams,
+		DbDriver:    dbDriver,
+		RootDir:     dcrRootDir,
+		DB:          dcrDB,
+		ChainParams: chainParams,
 		wallets:     make(map[int]*dcr.Wallet),
 		badWallets:  make(map[int]*dcr.Wallet),
 	}
 
 	// read saved wallets info from db and initialize wallets
-	query := mw.db.Select(q.True()).OrderBy("ID")
+	query := mw.DB.Select(q.True()).OrderBy("ID")
 	var wallets []*dcr.Wallet
 	err = query.Find(&wallets)
 	if err != nil && err != storm.ErrNotFound {
@@ -67,7 +67,7 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 
 	// prepare the wallets loaded from db for use
 	for _, wallet := range wallets {
-		err = wallet.Prepare(rootDir, chainParams, mw.walletConfigSetFn(wallet.ID), mw.walletConfigReadFn(wallet.ID))
+		err = wallet.Prepare(mw.RootDir, mw.ChainParams, mw.walletConfigSetFn(wallet.ID), mw.walletConfigReadFn(wallet.ID))
 		if err == nil && !WalletExistsAt(wallet.DataDir) {
 			err = fmt.Errorf("missing wallet database file")
 		}
@@ -77,6 +77,9 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 		} else {
 			mw.wallets[wallet.ID] = wallet
 		}
+
+		logLevel := wallet.ReadStringConfigValueForKey(LogLevelConfigKey, "")
+		SetLogLevels(logLevel)
 
 		// initialize Politeia.
 		wallet.NewPoliteia(politeiaHost)
@@ -114,8 +117,8 @@ func (mw *MultiWallet) Shutdown() {
 		wallet.Shutdown()
 	}
 
-	if mw.db != nil {
-		if err := mw.db.Close(); err != nil {
+	if mw.DB != nil {
+		if err := mw.DB.Close(); err != nil {
 			log.Errorf("db closed with error: %v", err)
 		} else {
 			log.Info("db closed successfully")
@@ -130,15 +133,15 @@ func (mw *MultiWallet) Shutdown() {
 }
 
 func (mw *MultiWallet) NetType() string {
-	return mw.chainParams.Name
+	return mw.ChainParams.Name
 }
 
 func (mw *MultiWallet) LogDir() string {
-	return filepath.Join(mw.rootDir, logFileName)
+	return filepath.Join(mw.RootDir, logFileName)
 }
 
 func (mw *MultiWallet) TargetTimePerBlockMinutes() float64 {
-	return mw.chainParams.TargetTimePerBlock.Minutes()
+	return mw.ChainParams.TargetTimePerBlock.Minutes()
 }
 
 func (mw *MultiWallet) SetStartupPassphrase(passphrase []byte, passphraseType int32) error {
@@ -147,7 +150,7 @@ func (mw *MultiWallet) SetStartupPassphrase(passphrase []byte, passphraseType in
 
 func (mw *MultiWallet) VerifyStartupPassphrase(startupPassphrase []byte) error {
 	var startupPassphraseHash []byte
-	err := mw.db.Get(walletsMetadataBucketName, walletstartupPassphraseField, &startupPassphraseHash)
+	err := mw.DB.Get(walletsMetadataBucketName, walletstartupPassphraseField, &startupPassphraseHash)
 	if err != nil && err != storm.ErrNotFound {
 		return err
 	}
@@ -184,7 +187,7 @@ func (mw *MultiWallet) ChangeStartupPassphrase(oldPassphrase, newPassphrase []by
 		return err
 	}
 
-	err = mw.db.Set(walletsMetadataBucketName, walletstartupPassphraseField, startupPassphraseHash)
+	err = mw.DB.Set(walletsMetadataBucketName, walletstartupPassphraseField, startupPassphraseHash)
 	if err != nil {
 		return err
 	}
@@ -201,7 +204,7 @@ func (mw *MultiWallet) RemoveStartupPassphrase(oldPassphrase []byte) error {
 		return err
 	}
 
-	err = mw.db.Delete(walletsMetadataBucketName, walletstartupPassphraseField)
+	err = mw.DB.Delete(walletsMetadataBucketName, walletstartupPassphraseField)
 	if err != nil {
 		return err
 	}
@@ -266,7 +269,7 @@ func (mw *MultiWallet) DeleteBadWallet(walletID int) error {
 
 	log.Info("Deleting bad wallet")
 
-	err := mw.db.DeleteStruct(wallet)
+	err := mw.DB.DeleteStruct(wallet)
 	if err != nil {
 		return translateError(err)
 	}
@@ -335,7 +338,7 @@ func (mw *MultiWallet) WalletNameExists(walletName string) (bool, error) {
 		return false, errors.E(ErrReservedWalletName)
 	}
 
-	err := mw.db.One("Name", walletName, &dcr.Wallet{})
+	err := mw.DB.One("Name", walletName, &dcr.Wallet{})
 	if err == nil {
 		return true, nil
 	} else if err != storm.ErrNotFound {

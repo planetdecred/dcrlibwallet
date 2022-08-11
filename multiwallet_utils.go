@@ -22,7 +22,7 @@ import (
 
 const (
 	logFileName   = "dcrlibwallet.log"
-	walletsDbName = "wallets.db"
+	walletsDbName = "wallets.DB"
 
 	walletsMetadataBucketName    = "metadata"
 	walletstartupPassphraseField = "startup-passphrase"
@@ -34,7 +34,7 @@ var (
 )
 
 func (mw *MultiWallet) batchDbTransaction(dbOp func(node storm.Node) error) (err error) {
-	dbTx, err := mw.db.Begin(true)
+	dbTx, err := mw.DB.Begin(true)
 	if err != nil {
 		return err
 	}
@@ -64,7 +64,7 @@ func (mw *MultiWallet) loadWalletTemporarily(ctx context.Context, walletDataDir,
 	}
 
 	// initialize the wallet loader
-	walletLoader := initWalletLoader(mw.chainParams, walletDataDir, mw.dbDriver)
+	walletLoader := initWalletLoader(mw.ChainParams, walletDataDir, mw.DbDriver)
 
 	// open the wallet to get ready for temporary use
 	wallet, err := walletLoader.OpenExistingWallet(ctx, []byte(walletPublicPass))
@@ -90,7 +90,7 @@ func (mw *MultiWallet) markWalletAsDiscoveredAccounts(walletID int) error {
 
 	log.Infof("Set discovered accounts = true for wallet %d", wallet.ID)
 	wallet.HasDiscoveredAccounts = true
-	err := mw.db.Save(wallet)
+	err := mw.DB.Save(wallet)
 	if err != nil {
 		return err
 	}
@@ -102,7 +102,7 @@ func (mw *MultiWallet) markWalletAsDiscoveredAccounts(walletID int) error {
 // multiwallet's root directory in bytes.
 func (mw *MultiWallet) RootDirFileSizeInBytes() (int64, error) {
 	var size int64
-	err := filepath.Walk(mw.rootDir, func(_ string, info os.FileInfo, err error) error {
+	err := filepath.Walk(mw.RootDir, func(_ string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -119,7 +119,7 @@ func (mw *MultiWallet) RootDirFileSizeInBytes() (int64, error) {
 // changes to the stake difficulty algorithm.
 func (mw *MultiWallet) DCP0001ActivationBlockHeight() int32 {
 	var activationHeight int32 = -1
-	switch strings.ToLower(mw.chainParams.Name) {
+	switch strings.ToLower(mw.ChainParams.Name) {
 	case strings.ToLower(Mainnet):
 		activationHeight = deployments.DCP0001.MainNetActivationHeight
 	case strings.ToLower(Testnet3):
@@ -168,7 +168,7 @@ func (mw *MultiWallet) WalletWithSeed(seedMnemonic string) (int, error) {
 		return -1, errors.New(ErrEmptySeed)
 	}
 
-	newSeedLegacyXPUb, newSeedSLIP0044XPUb, err := deriveBIP44AccountXPubs(seedMnemonic, dcr.DefaultAccountNum, mw.chainParams)
+	newSeedLegacyXPUb, newSeedSLIP0044XPUb, err := deriveBIP44AccountXPubs(seedMnemonic, dcr.DefaultAccountNum, mw.ChainParams)
 	if err != nil {
 		return -1, err
 	}

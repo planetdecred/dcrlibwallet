@@ -1,15 +1,12 @@
 package dcrlibwallet
 
 import (
-	// "context"
-	// "fmt"
 	"os"
 	"path/filepath"
 
 	"decred.org/dcrwallet/v2/errors"
 
 	"github.com/asdine/storm"
-	// "github.com/asdine/storm/q"
 
 	bolt "go.etcd.io/bbolt"
 

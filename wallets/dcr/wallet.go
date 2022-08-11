@@ -44,10 +44,11 @@ type Wallet struct {
 
 	shuttingDown       chan bool
 	cancelFuncs        []context.CancelFunc
-	CancelAccountMixer context.CancelFunc
+	cancel             context.CancelFunc
+	CancelAccountMixer context.CancelFunc `json:"-"`
 
 	cancelAutoTicketBuyerMu sync.Mutex
-	cancelAutoTicketBuyer   context.CancelFunc
+	cancelAutoTicketBuyer   context.CancelFunc `json:"-"`
 
 	vspClientsMu sync.Mutex
 	vspClients   map[string]*vsp.Client
@@ -97,9 +98,9 @@ func (wallet *Wallet) Prepare(rootDir string, chainParams *chaincfg.Params,
 		return err
 	}
 
-	wallet.syncData = &SyncData{
-		SyncProgressListeners: make(map[string]SyncProgressListener),
-	}
+	// wallet.syncData = &SyncData{
+	// 	SyncProgressListeners: make(map[string]SyncProgressListener),
+	// }
 
 	// init loader
 	wallet.loader = initWalletLoader(wallet.chainParams, wallet.DataDir, wallet.dbDriver)
@@ -165,7 +166,7 @@ func (wallet *Wallet) WalletExists() (bool, error) {
 	return wallet.loader.WalletExists()
 }
 
-func (wallet *Wallet) CreateNewWallet(walletName, privatePassphrase string, privatePassphraseType int32) (*Wallet, error) {
+func CreateNewWallet(walletName, privatePassphrase string, privatePassphraseType int32, db *storm.DB, rootDir, dbDriver string, chainParams *chaincfg.Params) (*Wallet, error) {
 	seed, err := GenerateSeed()
 	if err != nil {
 		return nil, err
@@ -176,26 +177,37 @@ func (wallet *Wallet) CreateNewWallet(walletName, privatePassphrase string, priv
 		return nil, err
 	}
 
-	wal := &Wallet{
-		Name:                  walletName,
-		CreatedAt:             time.Now(),
-		EncryptedSeed:         encryptedSeed,
-		PrivatePassphraseType: privatePassphraseType,
-		HasDiscoveredAccounts: true,
+	wallet := &Wallet{
+		Name:        walletName,
+		db:          db,
+		dbDriver:    dbDriver,
+		rootDir:     rootDir,
+		chainParams: chainParams,
+		syncData: &SyncData{
+			SyncProgressListeners: make(map[string]SyncProgressListener),
+		},
+		txAndBlockNotificationListeners:  make(map[string]TxAndBlockNotificationListener),
+		accountMixerNotificationListener: make(map[string]AccountMixerNotificationListener),
+		cancelFuncs:                      make([]context.CancelFunc, 0),
+		CreatedAt:                        time.Now(),
+		EncryptedSeed:                    encryptedSeed,
+		PrivatePassphraseType:            privatePassphraseType,
+		HasDiscoveredAccounts:            true,
 	}
 
+	wallet.cancelFuncs = make([]context.CancelFunc, 0)
+
 	return wallet.saveNewWallet(func() error {
-		err := wallet.Prepare(wallet.rootDir, wallet.chainParams, wallet.walletConfigSetFn(wal.ID), wallet.walletConfigReadFn(wal.ID))
+		err := wallet.Prepare(wallet.rootDir, wallet.chainParams, wallet.walletConfigSetFn(wallet.ID), wallet.walletConfigReadFn(wallet.ID))
 		if err != nil {
 			return err
 		}
-
 		return wallet.CreateWallet(privatePassphrase, seed)
 	})
 }
 
 func (wallet *Wallet) CreateWallet(privatePassphrase, seedMnemonic string) error {
-	log.Info("Creating Wallet")
+	// log.Info("Creating Wallet")
 	if len(seedMnemonic) == 0 {
 		return errors.New(ErrEmptySeed)
 	}
@@ -214,7 +226,7 @@ func (wallet *Wallet) CreateWallet(privatePassphrase, seedMnemonic string) error
 		return err
 	}
 
-	log.Info("Created Wallet")
+	// log.Info("Created Wallet")
 	return nil
 }
 
@@ -287,9 +299,7 @@ func (wallet *Wallet) DeleteWallet(privPass []byte) error {
 	if wallet.IsConnectedToDecredNetwork() {
 		wallet.CancelSync()
 		defer func() {
-			// if wallet.OpenedWalletsCount() > 0 {
 			wallet.SpvSync()
-			// }
 		}()
 	}
 
@@ -361,8 +371,6 @@ func (wallet *Wallet) saveNewWallet(setupWallet func() error) (*Wallet, error) {
 	if err != nil {
 		return nil, translateError(err)
 	}
-
-	// wallet.wallets[wallet.ID] = wallet
 
 	return wallet, nil
 }
@@ -577,13 +585,13 @@ func (wallet *Wallet) deleteWallet(privatePassphrase []byte) error {
 }
 
 // DecryptSeed decrypts wallet.EncryptedSeed using privatePassphrase
-// func (wallet *Wallet) DecryptSeed(privatePassphrase []byte) (string, error) {
-// 	if wallet.EncryptedSeed == nil {
-// 		return "", errors.New(ErrInvalid)
-// 	}
+func (wallet *Wallet) DecryptSeed(privatePassphrase []byte) (string, error) {
+	if wallet.EncryptedSeed == nil {
+		return "", errors.New(ErrInvalid)
+	}
 
-// 	return decryptWalletSeed(privatePassphrase, wallet.EncryptedSeed)
-// }
+	return decryptWalletSeed(privatePassphrase, wallet.EncryptedSeed)
+}
 
 // AccountXPubMatches checks if the xpub of the provided account matches the
 // provided legacy or SLIP0044 xpub. While both the legacy and SLIP0044 xpubs

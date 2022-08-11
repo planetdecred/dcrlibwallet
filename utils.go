@@ -83,7 +83,7 @@ func (mw *MultiWallet) contextWithShutdownCancel() (context.Context, context.Can
 }
 
 func (mw *MultiWallet) ValidateExtPubKey(extendedPubKey string) error {
-	_, err := hdkeychain.NewKeyFromString(extendedPubKey, mw.chainParams)
+	_, err := hdkeychain.NewKeyFromString(extendedPubKey, mw.ChainParams)
 	if err != nil {
 		if err == hdkeychain.ErrInvalidChild {
 			return errors.New(ErrUnusableSeed)

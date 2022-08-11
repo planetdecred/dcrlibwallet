@@ -218,7 +218,7 @@ func (wallet *Wallet) SpvSync() error {
 	wallet.initActiveSyncData()
 
 	wallets := make(map[int]*w.Wallet)
-	wallets[wallet.ID] = wallet.Internal()
+	wallets[0] = wallet.Internal()
 	wallet.WaitingForHeaders = true
 	wallet.Syncing = true
 
