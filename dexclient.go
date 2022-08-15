@@ -89,7 +89,7 @@ func (mw *MultiWallet) prepareDexSupportForDcrWalletLibrary() error {
 			return nil, fmt.Errorf("invalid wallet ID %q in settings", walletIDStr)
 		}
 
-		wallet := mw.WalletWithID(walletID)
+		wallet, _ := mw.WalletWithID(walletID, "DCR")
 		if wallet == nil {
 			return nil, fmt.Errorf("no wallet exists with ID %q", walletIDStr)
 		}

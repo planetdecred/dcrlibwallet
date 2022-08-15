@@ -52,12 +52,12 @@ func (wallet *Wallet) batchDbTransaction(dbOp func(node storm.Node) error) (err 
 	return err
 }
 
-func (wallet *Wallet) WalletNameExists(walletName string) (bool, error) {
+func WalletNameExists(walletName string, walledDbRef *storm.DB) (bool, error) {
 	if strings.HasPrefix(walletName, "wallet-") {
 		return false, errors.E(ErrReservedWalletName)
 	}
 
-	err := wallet.db.One("Name", walletName, &Wallet{})
+	err := walledDbRef.One("Name", walletName, &Wallet{})
 	if err == nil {
 		return true, nil
 	} else if err != storm.ErrNotFound {

@@ -21,7 +21,7 @@ import (
 	"github.com/btcsuite/btcutil/gcs"
 	"github.com/btcsuite/btcwallet/chain"
 	// "github.com/btcsuite/btcwallet/wallet"
-	// "github.com/btcsuite/btcd/btcutil/hdkeychain"
+	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	w "github.com/btcsuite/btcwallet/wallet"
 	"github.com/btcsuite/btcwallet/walletdb"
 	// "github.com/planetdecred/dcrlibwallet"
@@ -52,6 +52,9 @@ type Wallet struct {
 
 	dataDir     string
 	cancelFuncs []context.CancelFunc
+
+	Synced            bool
+
 
 	chainParams *chaincfg.Params
 	loader      *w.Loader
@@ -167,10 +170,11 @@ func (wallet *Wallet) RawRequest(method string, params []json.RawMessage) (json.
 }
 
 func CreateNewWallet(walletName, privatePassphrase string, privatePassphraseType int32, db *storm.DB, rootDir, dbDriver string, chainParams *chaincfg.Params) (*Wallet, error) {
-	seed := "witch collapse practice feed shame open despair"
-	encryptedSeed := []byte(seed)
-
-	chainParams, err := parseChainParams("testnet3")
+	// seed := "witch collapse practice feed shame open despair"
+	// encryptedSeed := []byte(seed)
+	encryptedSeed, err := hdkeychain.GenerateSeed(
+		hdkeychain.RecommendedSeedLen,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -196,30 +200,83 @@ func CreateNewWallet(walletName, privatePassphrase string, privatePassphraseType
 	})
 }
 
-func (wallet *Wallet) RenameWallet(newName string) error {
+func (wallet *Wallet) RenameWallet(newName string, walledDbRef *storm.DB) error {
 	if strings.HasPrefix(newName, "wallet-") {
 		return errors.E(ErrReservedWalletName)
 	}
 
-	if exists, err := wallet.WalletNameExists(newName); err != nil {
+	if exists, err := WalletNameExists(newName, walledDbRef); err != nil {
 		return translateError(err)
 	} else if exists {
 		return errors.New(ErrExist)
 	}
 
 	wallet.Name = newName
-	return wallet.db.Save(wallet) // update WalletName field
+	return walledDbRef.Save(wallet) // update WalletName field
 }
 
-func (wallet *Wallet) WalletWithID(walletName string) (*Wallet, error) {
-	var w *Wallet
 
-	err := wallet.db.One("ID", wallet.ID, &w)
-	if err == nil && err != storm.ErrNotFound {
-		return nil, err
+func (wallet *Wallet) OpenWallet() error {
+	pubPass := []byte(w.InsecurePubPassphrase)
+
+	_, err := wallet.loader.OpenExistingWallet(pubPass, false)
+	if err != nil {
+		// log.Error(err)
+		return translateError(err)
 	}
 
-	return w, nil
+	return nil
+}
+
+func (wallet *Wallet) WalletExists() (bool, error) {
+	return wallet.loader.WalletExists()
+}
+
+func (wallet *Wallet) IsWatchingOnlyWallet() bool {
+	if _, ok := wallet.loader.LoadedWallet(); ok {
+		// return w.WatchingOnly()
+		return false
+	}
+
+	return false
+}
+
+func (wallet *Wallet) WalletOpened() bool {
+	return wallet.Internal() != nil
+}
+
+func (wallet *Wallet) Internal() *w.Wallet {
+	lw, _ := wallet.loader.LoadedWallet()
+	return lw
+}
+
+func CreateNewWatchOnlyWallet(walletName string, chainParams *chaincfg.Params) (*Wallet, error) {
+	wallet := &Wallet{
+		Name:          walletName,
+		chainParams:   chainParams,
+	}
+
+	return wallet.saveNewWallet(func() error {
+		err := wallet.Prepare(wallet.rootDir, "testnet3", wallet.log)
+		if err != nil {
+			return err
+		}
+
+		return wallet.createWatchingOnlyWallet()
+	})
+}
+
+func (wallet *Wallet) createWatchingOnlyWallet() error {
+	pubPass := []byte(w.InsecurePubPassphrase)
+
+	_, err := wallet.loader.CreateNewWatchingOnlyWallet(pubPass, time.Now())
+	if err != nil {
+		// log.Error(err)
+		return err
+	}
+
+	// log.Info("Created Watching Only Wallet")
+	return nil
 }
 
 func (wallet *Wallet) DataDir() string {
@@ -504,7 +561,7 @@ func (wallet *Wallet) createWallet(privatePassphrase string, seedMnemonic []byte
 // IFF all the above operations succeed, the wallet info will be persisted to db
 // and the wallet will be added to `btcWallet.wallets`.
 func (wallet *Wallet) saveNewWallet(setupWallet func() error) (*Wallet, error) {
-	exists, err := wallet.WalletNameExists(wallet.Name)
+	exists, err := WalletNameExists(wallet.Name, wallet.db)
 	if err != nil {
 		return nil, err
 	} else if exists {
