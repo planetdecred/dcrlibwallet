@@ -11,13 +11,37 @@ import (
 	"decred.org/dcrwallet/v2/errors"
 	"github.com/asdine/storm"
 	"github.com/asdine/storm/q"
+	btccfg "github.com/btcsuite/btcd/chaincfg"
 	"github.com/decred/dcrd/chaincfg/v3"
+
 	"github.com/planetdecred/dcrlibwallet/utils"
 
+	"github.com/planetdecred/dcrlibwallet/wallets/btc"
 	"github.com/planetdecred/dcrlibwallet/wallets/dcr"
 
 	"golang.org/x/crypto/bcrypt"
 )
+
+// type AllWallets struct {
+// 	DCR *dcr.Wallet
+// 	BTC *btc.Wallet
+// }
+type AllWallets struct {
+	DCR map[int]*dcr.Wallet
+	BTC map[int]*btc.Wallet
+}
+
+type Assets struct {
+	DCR map[int]*dcr.Wallet
+	BTC struct {
+		Wallets     map[int]*btc.Wallet
+		BadWallets  map[int]*btc.Wallet
+		DBDriver    string
+		RootDir     string
+		DB          *storm.DB
+		ChainParams *btccfg.Params
+	}
+}
 
 type MultiWallet struct {
 	dbDriver string
@@ -25,6 +49,8 @@ type MultiWallet struct {
 	db       *storm.DB
 
 	chainParams *chaincfg.Params
+	AllWallets  *AllWallets
+	Assets      *Assets
 	wallets     map[int]*dcr.Wallet
 	badWallets  map[int]*dcr.Wallet
 
@@ -32,8 +58,6 @@ type MultiWallet struct {
 	cancelFuncs  []context.CancelFunc
 
 	dexClient *DexClient
-
-	btcWallet *btcWallet
 }
 
 func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWallet, error) {
@@ -50,25 +74,48 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 		return nil, errors.Errorf("error initializing DCRWallet: %s", err.Error())
 	}
 
+	btcDB, btcRootDir, err := initializeBTCWallet(rootDir, dbDriver, netType)
+	if err != nil {
+		log.Errorf("error initializing BTCWallet: %s", err.Error())
+		return nil, errors.Errorf("error initializing BTCWallet: %s", err.Error())
+	}
+
 	mw := &MultiWallet{
 		dbDriver:    dbDriver,
 		rootDir:     dcrRootDir,
 		db:          dcrDB,
 		chainParams: chainParams,
-		wallets:     make(map[int]*dcr.Wallet),
-		badWallets:  make(map[int]*dcr.Wallet),
+		Assets: &Assets{
+			BTC: struct {
+				Wallets     map[int]*btc.Wallet
+				BadWallets  map[int]*btc.Wallet
+				DBDriver    string
+				RootDir     string
+				DB          *storm.DB
+				ChainParams *btccfg.Params
+			}{
+				Wallets:     make(map[int]*btc.Wallet),
+				BadWallets:  make(map[int]*btc.Wallet),
+				DBDriver:    dbDriver,
+				RootDir:     btcRootDir,
+				DB:          btcDB,
+				ChainParams: &btccfg.TestNet3Params,
+			},
+		},
+		wallets:    make(map[int]*dcr.Wallet),
+		badWallets: make(map[int]*dcr.Wallet),
 	}
 
 	// read saved wallets info from db and initialize wallets
 	query := mw.db.Select(q.True()).OrderBy("ID")
-	var wallets []*dcr.Wallet
-	err = query.Find(&wallets)
+	var dcrWallets []*dcr.Wallet
+	err = query.Find(&dcrWallets)
 	if err != nil && err != storm.ErrNotFound {
 		return nil, err
 	}
 
 	// prepare the wallets loaded from db for use
-	for _, wallet := range wallets {
+	for _, wallet := range dcrWallets {
 		err = wallet.Prepare(rootDir, chainParams, mw.walletConfigSetFn(wallet.ID), mw.walletConfigReadFn(wallet.ID))
 		if err == nil && !WalletExistsAt(wallet.DataDir) {
 			err = fmt.Errorf("missing wallet database file")
@@ -77,11 +124,34 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 			mw.badWallets[wallet.ID] = wallet
 			log.Warnf("Ignored wallet load error for wallet %d (%s)", wallet.ID, wallet.Name)
 		} else {
-			mw.wallets[wallet.ID] = wallet
+			mw.AllWallets.DCR[wallet.ID] = wallet
 		}
 
 		// initialize Politeia.
 		wallet.NewPoliteia(politeiaHost)
+	}
+
+	// read saved wallets info from db and initialize wallets
+	query = btcDB.Select(q.True()).OrderBy("ID")
+	var btcWallets []*btc.Wallet
+	err = query.Find(&btcWallets)
+	if err != nil && err != storm.ErrNotFound {
+		return nil, err
+	}
+
+	// prepare the wallets loaded from db for use
+	for _, wallet := range btcWallets {
+		err = wallet.Prepare(btcRootDir, mw.NetType(), log)
+		if err == nil && !WalletExistsAt(wallet.DataDir()) {
+			err = fmt.Errorf("missing wallet database file")
+		}
+		if err != nil {
+			mw.Assets.BTC.BadWallets[wallet.ID] = wallet
+
+			log.Warnf("Ignored wallet load error for wallet %d (%s)", wallet.ID, wallet.Name)
+		} else {
+			mw.Assets.BTC.Wallets[wallet.ID] = wallet
+		}
 	}
 
 	mw.listenForShutdown()
@@ -95,11 +165,63 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 		log.Errorf("DEX client set up error: %v", err)
 	}
 
-	if err = mw.initBtcWallet(); err != nil {
-		log.Errorf("BTC wallet set up error: %v", err)
-	}
+	// if err = mw.initBtcWallet(); err != nil {
+	// 	log.Errorf("BTC wallet set up error: %v", err)
+	// }
 
 	return mw, nil
+}
+
+func (mw *MultiWallet) prepareWallets() error {
+	// read saved wallets info from db and initialize wallets
+	query := mw.db.Select(q.True()).OrderBy("ID")
+	var dcrWallets []*dcr.Wallet
+	err := query.Find(&dcrWallets)
+	if err != nil && err != storm.ErrNotFound {
+		return err
+	}
+
+	// prepare the wallets loaded from db for use
+	for _, wallet := range dcrWallets {
+		err = wallet.Prepare(mw.rootDir, mw.chainParams, mw.walletConfigSetFn(wallet.ID), mw.walletConfigReadFn(wallet.ID))
+		if err == nil && !WalletExistsAt(wallet.DataDir) {
+			err = fmt.Errorf("missing wallet database file")
+		}
+		if err != nil {
+			mw.badWallets[wallet.ID] = wallet
+			log.Warnf("Ignored wallet load error for wallet %d (%s)", wallet.ID, wallet.Name)
+		} else {
+			mw.AllWallets.DCR[wallet.ID] = wallet
+		}
+
+		// initialize Politeia.
+		wallet.NewPoliteia("")
+	}
+
+	// read saved wallets info from db and initialize wallets
+	query = mw.Assets.BTC.DB.Select(q.True()).OrderBy("ID")
+	var btcWallets []*btc.Wallet
+	err = query.Find(&btcWallets)
+	if err != nil && err != storm.ErrNotFound {
+		return err
+	}
+
+	// prepare the wallets loaded from db for use
+	for _, wallet := range btcWallets {
+		err = wallet.Prepare(mw.Assets.BTC.RootDir, mw.NetType(), log)
+		if err == nil && !WalletExistsAt(wallet.DataDir()) {
+			err = fmt.Errorf("missing wallet database file")
+		}
+		if err != nil {
+			mw.Assets.BTC.BadWallets[wallet.ID] = wallet
+
+			log.Warnf("Ignored wallet load error for wallet %d (%s)", wallet.ID, wallet.Name)
+		} else {
+			mw.Assets.BTC.Wallets[wallet.ID] = wallet
+		}
+	}
+
+	return nil
 }
 
 func (mw *MultiWallet) Shutdown() {

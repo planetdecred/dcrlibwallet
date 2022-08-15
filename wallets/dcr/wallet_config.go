@@ -51,7 +51,7 @@ type configReadFn = func(multiwallet bool, key string, valueOut interface{}) err
 func (wallet *Wallet) walletConfigSetFn(walletID int) configSaveFn {
 	return func(key string, value interface{}) error {
 		walletUniqueKey := WalletUniqueConfigKey(walletID, key)
-		return wallet.db.Set(userConfigBucketName, walletUniqueKey, value)
+		return wallet.DB.Set(userConfigBucketName, walletUniqueKey, value)
 	}
 }
 
@@ -60,7 +60,7 @@ func (wallet *Wallet) walletConfigReadFn(walletID int) configReadFn {
 		if !multiwallet {
 			key = WalletUniqueConfigKey(walletID, key)
 		}
-		return wallet.db.Get(userConfigBucketName, key, valueOut)
+		return wallet.DB.Get(userConfigBucketName, key, valueOut)
 	}
 }
 

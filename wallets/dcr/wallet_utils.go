@@ -21,7 +21,7 @@ func (wallet *Wallet) markWalletAsDiscoveredAccounts() error {
 
 	log.Infof("Set discovered accounts = true for wallet %d", wallet.ID)
 	wallet.HasDiscoveredAccounts = true
-	err := wallet.db.Save(wallet)
+	err := wallet.DB.Save(wallet)
 	if err != nil {
 		return err
 	}
@@ -30,7 +30,7 @@ func (wallet *Wallet) markWalletAsDiscoveredAccounts() error {
 }
 
 func (wallet *Wallet) batchDbTransaction(dbOp func(node storm.Node) error) (err error) {
-	dbTx, err := wallet.db.Begin(true)
+	dbTx, err := wallet.DB.Begin(true)
 	if err != nil {
 		return err
 	}
@@ -57,7 +57,7 @@ func (wallet *Wallet) WalletNameExists(walletName string) (bool, error) {
 		return false, errors.E(ErrReservedWalletName)
 	}
 
-	err := wallet.db.One("Name", walletName, &Wallet{})
+	err := wallet.DB.One("Name", walletName, &Wallet{})
 	if err == nil {
 		return true, nil
 	} else if err != storm.ErrNotFound {

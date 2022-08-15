@@ -26,7 +26,7 @@ type Wallet struct {
 	CreatedAt time.Time `storm:"index"`
 	dbDriver  string
 	rootDir   string
-	db        *storm.DB
+	DB        *storm.DB
 
 	EncryptedSeed         []byte
 	IsRestored            bool
@@ -184,13 +184,13 @@ func (wallet *Wallet) CreateNewWallet(walletName, privatePassphrase string, priv
 		HasDiscoveredAccounts: true,
 	}
 
-	return wallet.saveNewWallet(func() error {
-		err := wallet.Prepare(wallet.rootDir, wallet.chainParams, wallet.walletConfigSetFn(wal.ID), wallet.walletConfigReadFn(wal.ID))
+	return wal.saveNewWallet(func() error {
+		err := wal.Prepare(wal.rootDir, wal.chainParams, wal.walletConfigSetFn(wal.ID), wal.walletConfigReadFn(wal.ID))
 		if err != nil {
 			return err
 		}
 
-		return wallet.CreateWallet(privatePassphrase, seed)
+		return wal.CreateWallet(privatePassphrase, seed)
 	})
 }
 
@@ -260,7 +260,7 @@ func (wallet *Wallet) RenameWallet(newName string) error {
 	}
 
 	wallet.Name = newName
-	return wallet.db.Save(wallet) // update WalletName field
+	return wallet.DB.Save(wallet) // update WalletName field
 }
 
 func (wallet *Wallet) RestoreWallet(walletName, seedMnemonic, privatePassphrase string, privatePassphraseType int32) (*Wallet, error) {
@@ -298,7 +298,7 @@ func (wallet *Wallet) DeleteWallet(privPass []byte) error {
 		return translateError(err)
 	}
 
-	err = wallet.db.DeleteStruct(wallet)
+	err = wallet.DB.DeleteStruct(wallet)
 	if err != nil {
 		return translateError(err)
 	}
@@ -368,7 +368,7 @@ func (wallet *Wallet) saveNewWallet(setupWallet func() error) (*Wallet, error) {
 }
 
 func (wallet *Wallet) LinkExistingWallet(walletName, walletDataDir, originalPubPass string, privatePassphraseType int32) (*Wallet, error) {
-	// check if `walletDataDir` contains wallet.db
+	// check if `walletDataDir` contains wallet.DB
 	if !WalletExistsAt(walletDataDir) {
 		return nil, errors.New(ErrNotExist)
 	}
@@ -388,7 +388,7 @@ func (wallet *Wallet) LinkExistingWallet(walletName, walletDataDir, originalPubP
 	}
 
 	return wallet.saveNewWallet(func() error {
-		// move wallet.db and tx.db files to newly created dir for the wallet
+		// move wallet.DB and tx.DB files to newly created dir for the wallet
 		currentWalletDbFilePath := filepath.Join(walletDataDir, walletDbName)
 		newWalletDbFilePath := filepath.Join(wal.DataDir, walletDbName)
 		if err := moveFile(currentWalletDbFilePath, newWalletDbFilePath); err != nil {
@@ -516,7 +516,7 @@ func (wallet *Wallet) ChangePrivatePassphraseForWallet(oldPrivatePassphrase, new
 
 	wallet.EncryptedSeed = encryptedSeed
 	wallet.PrivatePassphraseType = privatePassphraseType
-	err = wallet.db.Save(wallet)
+	err = wallet.DB.Save(wallet)
 	if err != nil {
 		log.Errorf("error saving wallet-[%d] to database after passphrase change: %v", wallet.ID, err)
 
@@ -625,7 +625,7 @@ func (wallet *Wallet) VerifySeedForWallet(seedMnemonic string, privpass []byte) 
 
 	if decryptedSeed == seedMnemonic {
 		wallet.EncryptedSeed = nil
-		return true, translateError(wallet.db.Save(wallet))
+		return true, translateError(wallet.DB.Save(wallet))
 	}
 
 	return false, errors.New(ErrInvalid)

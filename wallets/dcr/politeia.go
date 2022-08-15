@@ -39,17 +39,17 @@ func (p *Politeia) getLastSyncedTimestamp() int64 {
 
 func (p *Politeia) saveOrOverwiteProposal(proposal *Proposal) error {
 	var oldProposal Proposal
-	err := p.WalletRef.db.One("Token", proposal.Token, &oldProposal)
+	err := p.WalletRef.DB.One("Token", proposal.Token, &oldProposal)
 	if err != nil && err != storm.ErrNotFound {
 		return errors.Errorf("error checking if proposal was already indexed: %s", err.Error())
 	}
 
 	if oldProposal.Token != "" {
 		// delete old record before saving new (if it exists)
-		p.WalletRef.db.DeleteStruct(oldProposal)
+		p.WalletRef.DB.DeleteStruct(oldProposal)
 	}
 
-	return p.WalletRef.db.Save(proposal)
+	return p.WalletRef.DB.Save(proposal)
 }
 
 // GetProposalsRaw fetches and returns a proposals from the db
@@ -64,16 +64,16 @@ func (p *Politeia) getProposalsRaw(category int32, offset, limit int32, newestFi
 	case ProposalCategoryAll:
 
 		if skipAbandoned {
-			query = p.WalletRef.db.Select(
+			query = p.WalletRef.DB.Select(
 				q.Not(q.Eq("Category", ProposalCategoryAbandoned)),
 			)
 		} else {
-			query = p.WalletRef.db.Select(
+			query = p.WalletRef.DB.Select(
 				q.True(),
 			)
 		}
 	default:
-		query = p.WalletRef.db.Select(
+		query = p.WalletRef.DB.Select(
 			q.Eq("Category", category),
 		)
 	}
@@ -124,7 +124,7 @@ func (p *Politeia) GetProposals(category int32, offset, limit int32, newestFirst
 // GetProposalRaw fetches and returns a single proposal specified by it's censorship record token
 func (p *Politeia) GetProposalRaw(censorshipToken string) (*Proposal, error) {
 	var proposal Proposal
-	err := p.WalletRef.db.One("Token", censorshipToken, &proposal)
+	err := p.WalletRef.DB.One("Token", censorshipToken, &proposal)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +140,7 @@ func (p *Politeia) GetProposal(censorshipToken string) (string, error) {
 // GetProposalByIDRaw fetches and returns a single proposal specified by it's ID
 func (p *Politeia) GetProposalByIDRaw(proposalID int) (*Proposal, error) {
 	var proposal Proposal
-	err := p.WalletRef.db.One("ID", proposalID, &proposal)
+	err := p.WalletRef.DB.One("ID", proposalID, &proposal)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +163,7 @@ func (p *Politeia) Count(category int32) (int32, error) {
 		matcher = q.Eq("Category", category)
 	}
 
-	count, err := p.WalletRef.db.Select(matcher).Count(&Proposal{})
+	count, err := p.WalletRef.DB.Select(matcher).Count(&Proposal{})
 	if err != nil {
 		return 0, err
 	}
@@ -209,10 +209,10 @@ func (p *Politeia) Overview() (*ProposalOverview, error) {
 }
 
 func (p *Politeia) ClearSavedProposals() error {
-	err := p.WalletRef.db.Drop(&Proposal{})
+	err := p.WalletRef.DB.Drop(&Proposal{})
 	if err != nil {
 		return translateError(err)
 	}
 
-	return p.WalletRef.db.Init(&Proposal{})
+	return p.WalletRef.DB.Init(&Proposal{})
 }

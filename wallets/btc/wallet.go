@@ -8,9 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
-	"strings"
 	"time"
 
 	"github.com/btcsuite/btcd/chaincfg"
@@ -21,26 +21,29 @@ import (
 	"github.com/btcsuite/btcutil/gcs"
 	"github.com/btcsuite/btcwallet/chain"
 	// "github.com/btcsuite/btcwallet/wallet"
-	"github.com/btcsuite/btcd/btcutil/hdkeychain"
+	// "github.com/btcsuite/btcd/btcutil/hdkeychain"
 	w "github.com/btcsuite/btcwallet/wallet"
 	"github.com/btcsuite/btcwallet/walletdb"
 	// "github.com/planetdecred/dcrlibwallet"
+	"decred.org/dcrwallet/v2/errors"
 	_ "github.com/btcsuite/btcwallet/walletdb/bdb" // bdb init() registers a driver
 	"github.com/btcsuite/btcwallet/wtxmgr"
 	"github.com/decred/slog"
 	"github.com/jrick/logrotate/rotator"
 	"github.com/lightninglabs/neutrino"
 	"github.com/lightninglabs/neutrino/headerfs"
-	"decred.org/dcrwallet/v2/errors"
 
 	"github.com/asdine/storm"
-	"github.com/asdine/storm/q"
+	// "github.com/asdine/storm/q"
 )
 
 type Wallet struct {
 	ID            int       `storm:"id,increment"`
 	Name          string    `storm:"unique"`
 	CreatedAt     time.Time `storm:"index"`
+	dbDriver      string
+	rootDir       string
+	db            *storm.DB
 	EncryptedSeed []byte
 
 	cl          neutrinoService
@@ -48,8 +51,7 @@ type Wallet struct {
 	chainClient *chain.NeutrinoClient
 
 	dataDir     string
-	db       *storm.DB
-	cancelFuncs        []context.CancelFunc
+	cancelFuncs []context.CancelFunc
 
 	chainParams *chaincfg.Params
 	loader      *w.Loader
@@ -83,7 +85,7 @@ const (
 	logFileName    = "neutrino.log"
 )
 
-func NewSpvWallet(walletName string, encryptedSeed []byte, net string, log slog.Logger) (*Wallet, error) {
+func NewSpvWallet(walletName string, encryptedSeed []byte, net string) (*Wallet, error) {
 	chainParams, err := parseChainParams(net)
 	if err != nil {
 		return nil, err
@@ -94,7 +96,6 @@ func NewSpvWallet(walletName string, encryptedSeed []byte, net string, log slog.
 		chainParams:   chainParams,
 		CreatedAt:     time.Now(),
 		EncryptedSeed: encryptedSeed,
-		log:           log,
 	}, nil
 }
 
@@ -165,52 +166,61 @@ func (wallet *Wallet) RawRequest(method string, params []json.RawMessage) (json.
 	return nil, errors.New("RawRequest not available on spv")
 }
 
-// createSPVWallet creates a new SPV wallet.
-// func (wallet *Wallet) CreateWallet(privPass []byte, seed []byte, dbDir string) error {
-// 	net := wallet.chainParams
-// 	wallet.dataDir = filepath.Join(dbDir, strconv.Itoa(wallet.ID))
+func CreateNewWallet(walletName, privatePassphrase string, privatePassphraseType int32, db *storm.DB, rootDir, dbDriver string, chainParams *chaincfg.Params) (*Wallet, error) {
+	seed := "witch collapse practice feed shame open despair"
+	encryptedSeed := []byte(seed)
 
-// 	if err := logNeutrino(wallet.dataDir); err != nil {
-// 		return fmt.Errorf("error initializing btcwallet+neutrino logging: %v", err)
-// 	}
+	chainParams, err := parseChainParams("testnet3")
+	if err != nil {
+		return nil, err
+	}
 
-// 	logDir := filepath.Join(wallet.dataDir, logDirName)
-// 	err := os.MkdirAll(logDir, 0744)
-// 	if err != nil {
-// 		return fmt.Errorf("error creating wallet directories: %v", err)
-// 	}
+	wallet := &Wallet{
+		Name:          walletName,
+		db:            db,
+		dbDriver:      dbDriver,
+		rootDir:       rootDir,
+		chainParams:   chainParams,
+		CreatedAt:     time.Now(),
+		EncryptedSeed: encryptedSeed,
+		// log:           log,
+	}
 
-// 	loader := w.NewLoader(net, wallet.dataDir, true, 60*time.Second, 250)
-// 	pubPass := []byte(w.InsecurePubPassphrase)
+	return wallet.saveNewWallet(func() error {
+		err := wallet.Prepare(wallet.rootDir, "testnet3", wallet.log)
+		if err != nil {
+			return err
+		}
 
-// 	_, err = loader.CreateNewWallet(pubPass, privPass, seed, walletBirthday)
-// 	if err != nil {
-// 		return fmt.Errorf("CreateNewWallet error: %w", err)
-// 	}
+		return wallet.createWallet(privatePassphrase, encryptedSeed)
+	})
+}
 
-// 	bailOnWallet := func() {
-// 		if err := loader.UnloadWallet(); err != nil {
-// 			wallet.log.Errorf("Error unloading wallet after createSPVWallet error: %v", err)
-// 		}
-// 	}
+func (wallet *Wallet) RenameWallet(newName string) error {
+	if strings.HasPrefix(newName, "wallet-") {
+		return errors.E(ErrReservedWalletName)
+	}
 
-// 	neutrinoDBPath := filepath.Join(wallet.dataDir, neutrinoDBName)
-// 	db, err := walletdb.Create("bdb", neutrinoDBPath, true, 5*time.Second)
-// 	if err != nil {
-// 		bailOnWallet()
-// 		return fmt.Errorf("unable to create wallet db at %q: %v", neutrinoDBPath, err)
-// 	}
-// 	if err = db.Close(); err != nil {
-// 		bailOnWallet()
-// 		return fmt.Errorf("error closing newly created wallet database: %w", err)
-// 	}
+	if exists, err := wallet.WalletNameExists(newName); err != nil {
+		return translateError(err)
+	} else if exists {
+		return errors.New(ErrExist)
+	}
 
-// 	if err := loader.UnloadWallet(); err != nil {
-// 		return fmt.Errorf("error unloading wallet: %w", err)
-// 	}
+	wallet.Name = newName
+	return wallet.db.Save(wallet) // update WalletName field
+}
 
-// 	return nil
-// }
+func (wallet *Wallet) WalletWithID(walletName string) (*Wallet, error) {
+	var w *Wallet
+
+	err := wallet.db.One("ID", wallet.ID, &w)
+	if err == nil && err != storm.ErrNotFound {
+		return nil, err
+	}
+
+	return w, nil
+}
 
 func (wallet *Wallet) DataDir() string {
 	return wallet.dataDir
@@ -436,60 +446,6 @@ func (wallet *Wallet) NetType() string {
 	return wallet.chainParams.Name
 }
 
-func (wallet *Wallet) initBtcWallet(rootDir string) error {
-	// if btcWallet.BtcWallet != nil {
-	// 	return nil
-	// }
-
-	btcDataDir := filepath.Join(rootDir, "btc")
-
-	err := os.MkdirAll(btcDataDir, os.ModePerm)
-	if err != nil {
-		return err
-	}
-
-	walletsDB, err := storm.Open(filepath.Join(btcDataDir, "wallets.db"))
-	if err != nil {
-		return err
-	}
-
-	// init database for saving/reading wallet objects
-	err = walletsDB.Init(&Wallet{})
-	if err != nil {
-		// log.Errorf("Error initializing wallets database BTC: %s", err.Error())
-		return err
-	}
-
-	wallet = &Wallet{
-		dataDir: filepath.Join(rootDir, "btc"),
-		db:         walletsDB,
-		// wallets:    make(map[int]*Wallet),
-	}
-
-	// read saved wallets info from db and initialize wallets
-	query := walletsDB.Select(q.True()).OrderBy("ID")
-	var wallets []*Wallet
-	err = query.Find(&wallets)
-	if err != nil && err != storm.ErrNotFound {
-		return err
-	}
-
-	// prepare the wallets loaded from db for use
-	// for _, wallet := range wallets {
-	// 	// err = wallet.Prepare(btcWallet.btcDataDir, btcWallet.NetType(), log)
-	// 	// if err == nil && !WalletExistsAt(wallet.DataDir()) {
-	// 	// 	err = fmt.Errorf("missing wallet database file")
-	// 	// }
-	// 	if err != nil {
-	// 		// log.Warnf("Ignored wallet load error for wallet %d (%s)", wallet.ID, wallet.Name)
-	// 	} else {
-	// 		btcWallet.wallets[wallet.ID] = wallet
-	// 	}
-	// }
-
-	return nil
-}
-
 func (wallet *Wallet) createWallet(privatePassphrase string, seedMnemonic []byte) error {
 	// log.Info("Creating Wallet")
 	if len(seedMnemonic) == 0 {
@@ -509,7 +465,7 @@ func (wallet *Wallet) createWallet(privatePassphrase string, seedMnemonic []byte
 		// log.Error(err)
 		return err
 	}
-	
+
 	bailOnWallet := func() {
 		if err := wallet.loader.UnloadWallet(); err != nil {
 			fmt.Errorf("Error unloading wallet after createSPVWallet error: %v", err)
@@ -535,33 +491,6 @@ func (wallet *Wallet) createWallet(privatePassphrase string, seedMnemonic []byte
 	return nil
 }
 
-func (wallet *Wallet) CreateNewWallet(rootDir, walletName, privatePassphrase string) (*Wallet, error) {
-	seed, err := hdkeychain.GenerateSeed(hdkeychain.RecommendedSeedLen)
-	if err != nil {
-		return nil, err
-	}
-
-	// encryptedSeed, err := encryptWalletSeed([]byte(privatePassphrase), seed)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	btcWallet := &Wallet{
-		Name:          walletName,
-		CreatedAt:     time.Now(),
-		EncryptedSeed: seed,
-	}
-
-	return btcWallet.saveNewWallet( func() error {
-		err := wallet.Prepare(rootDir, "testnet3", nil)
-		if err != nil {
-			return err
-		}
-
-		return wallet.createWallet(privatePassphrase, seed)
-	})
-}
-
 // saveNewWallet performs the following tasks using a db batch operation to ensure
 // that db changes are rolled back if any of the steps below return an error.
 //
@@ -575,7 +504,7 @@ func (wallet *Wallet) CreateNewWallet(rootDir, walletName, privatePassphrase str
 // IFF all the above operations succeed, the wallet info will be persisted to db
 // and the wallet will be added to `btcWallet.wallets`.
 func (wallet *Wallet) saveNewWallet(setupWallet func() error) (*Wallet, error) {
-	exists, err := wallet.WalletNameExists()
+	exists, err := wallet.WalletNameExists(wallet.Name)
 	if err != nil {
 		return nil, err
 	} else if exists {
@@ -610,32 +539,9 @@ func (wallet *Wallet) saveNewWallet(setupWallet func() error) (*Wallet, error) {
 	// 	return nil, errors.New(ErrExist)
 	// }
 
-	batchDbTransaction := func(dbOp func(node storm.Node) error) (err error) {
-		dbTx, err := wallet.db.Begin(true)
-		if err != nil {
-			return err
-		}
-
-		// Commit or rollback the transaction after f returns or panics.  Do not
-		// recover from the panic to keep the original stack trace intact.
-		panicked := true
-		defer func() {
-			if panicked || err != nil {
-				dbTx.Rollback()
-				return
-			}
-
-			err = dbTx.Commit()
-		}()
-
-		err = dbOp(dbTx)
-		panicked = false
-		return err
-	}
-
 	// Perform database save operations in batch transaction
 	// for automatic rollback if error occurs at any point.
-	err = batchDbTransaction(func(db storm.Node) error {
+	err = wallet.batchDbTransaction(func(db storm.Node) error {
 		// saving struct to update ID property with an auto-generated value
 		err := db.Save(wallet)
 		if err != nil {
@@ -666,12 +572,7 @@ func (wallet *Wallet) saveNewWallet(setupWallet func() error) (*Wallet, error) {
 		}
 
 		return setupWallet()
-		// err = wallet.createWallet([]byte(password), encryptedSeed, wallet.dataDir)
-		// if err != nil {
-		// 	return fmt.Errorf("Create BTC wallet error: %v", err)
-		// }
-// 
-		// return nil
+
 	})
 
 	if err != nil {
@@ -679,21 +580,6 @@ func (wallet *Wallet) saveNewWallet(setupWallet func() error) (*Wallet, error) {
 	}
 
 	return wallet, nil
-}
-
-func (wallet *Wallet) WalletNameExists() (bool, error) {
-	if strings.HasPrefix(wallet.Name, "wallet-") {
-		return false, errors.E(ErrReservedWalletName)
-	}
-
-	err := wallet.db.One("Name", wallet.Name, &Wallet{})
-	if err == nil {
-		return true, nil
-	} else if err != storm.ErrNotFound {
-		return false, err
-	}
-
-	return false, nil
 }
 
 func fileExists(filePath string) (bool, error) {

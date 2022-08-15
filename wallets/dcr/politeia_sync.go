@@ -221,7 +221,7 @@ func (p *Politeia) updateProposalDetails(oldProposal, updatedProposal Proposal) 
 		}
 	}
 
-	err := p.WalletRef.db.Update(&updatedProposal)
+	err := p.WalletRef.DB.Update(&updatedProposal)
 	if err != nil {
 		return fmt.Errorf("error saving updated proposal: %s", err.Error())
 	}
