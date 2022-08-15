@@ -53,8 +53,7 @@ type Wallet struct {
 	dataDir     string
 	cancelFuncs []context.CancelFunc
 
-	Synced            bool
-
+	Synced bool
 
 	chainParams *chaincfg.Params
 	loader      *w.Loader
@@ -215,7 +214,6 @@ func (wallet *Wallet) RenameWallet(newName string, walledDbRef *storm.DB) error 
 	return walledDbRef.Save(wallet) // update WalletName field
 }
 
-
 func (wallet *Wallet) OpenWallet() error {
 	pubPass := []byte(w.InsecurePubPassphrase)
 
@@ -252,8 +250,8 @@ func (wallet *Wallet) Internal() *w.Wallet {
 
 func CreateNewWatchOnlyWallet(walletName string, chainParams *chaincfg.Params) (*Wallet, error) {
 	wallet := &Wallet{
-		Name:          walletName,
-		chainParams:   chainParams,
+		Name:        walletName,
+		chainParams: chainParams,
 	}
 
 	return wallet.saveNewWallet(func() error {
@@ -277,6 +275,56 @@ func (wallet *Wallet) createWatchingOnlyWallet() error {
 
 	// log.Info("Created Watching Only Wallet")
 	return nil
+}
+
+// func (wallet *Wallet) DeleteWallet(privPass []byte, walledDbRef *storm.DB) error {
+// 	// if wallet.IsConnectedToDecredNetwork() {
+// 	// 	wallet.CancelSync()
+// 	// 	defer func() {
+// 	// 		// if mw.OpenedWalletsCount() > 0 {
+// 	// 		wallet.SpvSync()
+// 	// 		// }
+// 	// 	}()
+// 	// }
+
+// 	err := wallet.deleteWallet(privPass)
+// 	if err != nil {
+// 		return translateError(err)
+// 	}
+
+// 	err = walledDbRef.DeleteStruct(wallet)
+// 	if err != nil {
+// 		return translateError(err)
+// 	}
+
+// 	// delete(mw.wallets, walletID)
+
+// 	return nil
+// }
+
+func (wallet *Wallet) DeleteWallet(privatePassphrase []byte) error {
+	defer func() {
+		for i := range privatePassphrase {
+			privatePassphrase[i] = 0
+		}
+	}()
+
+	if _, loaded := wallet.loader.LoadedWallet(); !loaded {
+		return errors.New(ErrWalletNotLoaded)
+	}
+
+	if !wallet.IsWatchingOnlyWallet() {
+		err := wallet.Internal().Unlock(privatePassphrase, nil)
+		if err != nil {
+			return translateError(err)
+		}
+		wallet.Internal().Lock()
+	}
+
+	// wallet.Shutdown()
+
+	// log.Info("Deleting Wallet")
+	return os.RemoveAll(wallet.dataDir)
 }
 
 func (wallet *Wallet) DataDir() string {

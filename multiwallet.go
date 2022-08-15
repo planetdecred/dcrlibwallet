@@ -395,6 +395,70 @@ func (mw *MultiWallet) DeleteBadWallet(walletID int) error {
 	return nil
 }
 
+func (mw *MultiWallet) DeleteWallet(walletID int, privPass []byte, Asset string) error {
+	switch Asset {
+	case "DCR", "dcr":
+		wallet, _ := mw.WalletWithID(walletID, "dcr")
+		if wallet == nil {
+			return errors.New(ErrNotExist)
+		}
+
+		if wallet.IsConnectedToDecredNetwork() {
+			wallet.CancelSync()
+			defer func() {
+				if mw.OpenedWalletsCount() > 0 {
+					wallet.SpvSync()
+				}
+			}()
+		}
+
+		// err := wallet.deleteWallet(privPass)
+		// if err != nil {
+		// 	return translateError(err)
+		// }
+
+		err := mw.Assets.DCR.DB.DeleteStruct(wallet)
+		if err != nil {
+			return translateError(err)
+		}
+
+		delete(mw.wallets, walletID)
+
+		return nil
+	case "BTC", "btc":
+		_, wallet := mw.WalletWithID(walletID, "btc")
+		if wallet == nil {
+			return errors.New(ErrNotExist)
+		}
+
+		// if wallet.IsConnectedToDecredNetwork() {
+		// 	wallet.CancelSync()
+		// 	defer func() {
+		// 		if mw.OpenedWalletsCount() > 0 {
+		// 			wallet.SpvSync()
+		// 		}
+		// 	}()
+		// }
+
+		err := wallet.DeleteWallet(privPass)
+		if err != nil {
+			return translateError(err)
+		}
+
+		err = mw.Assets.BTC.DB.DeleteStruct(wallet)
+		if err != nil {
+			return translateError(err)
+		}
+
+		delete(mw.Assets.BTC.Wallets, walletID)
+
+		return nil
+	default:
+		return nil
+	}
+
+}
+
 func (mw *MultiWallet) WalletWithID(walletID int, Asset string) (*dcr.Wallet, *btc.Wallet) {
 	switch Asset {
 	case "DCR", "dcr":
