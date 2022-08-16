@@ -14,7 +14,7 @@ import (
 	apiTypes "github.com/decred/dcrdata/v7/api/types"
 )
 
-type Backend int
+type Backend string
 type Service struct {
 	client      *Client
 	chainParams *chaincfg.Params
@@ -23,11 +23,11 @@ type Service struct {
 }
 
 const (
-	Bittrex Backend = iota
-	Binance
-	BlockBook
-	DcrData
-	KuCoin
+	Bittrex   Backend = "bittrex"
+	Binance   Backend = "binance"
+	BlockBook Backend = "blockbook"
+	DcrData   Backend = "dcrdata"
+	KuCoin    Backend = "kucoin"
 )
 
 const (
@@ -391,7 +391,7 @@ func (s *Service) getBinanceTicker(market string) (ticker *Ticker, err error) {
 	}
 
 	ticker = &Ticker{
-		Exchange:       supportedBackends[Binance],
+		Exchange:       string(Binance),
 		Symbol:         tempTicker.Symbol,
 		AskPrice:       tempTicker.AskPrice,
 		BidPrice:       tempTicker.BidPrice,
@@ -414,7 +414,7 @@ func (s *Service) getBittrexTicker(market string) (ticker *Ticker, err error) {
 		return ticker, err
 	}
 	ticker = &Ticker{
-		Exchange:       supportedBackends[Bittrex],
+		Exchange:       string(Bittrex),
 		Symbol:         bTicker.Symbol,
 		AskPrice:       bTicker.Ask,
 		BidPrice:       bTicker.Bid,
@@ -437,7 +437,7 @@ func (s *Service) getKucoinTicker(market string) (ticker *Ticker, err error) {
 		return ticker, err
 	}
 	ticker = &Ticker{
-		Exchange:       supportedBackends[KuCoin],
+		Exchange:       string(KuCoin),
 		Symbol:         strings.ToUpper(market),
 		AskPrice:       kTicker.Data.BestAsk,
 		BidPrice:       kTicker.Data.BestBid,
