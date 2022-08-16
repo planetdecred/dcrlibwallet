@@ -90,7 +90,7 @@ func (c *Client) Do(method, resource string, payload []byte) (response []byte, e
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return response, errors.New(fmt.Sprintf("Error: status: %v resp: %s", resp.Status, response))
+		return response, fmt.Errorf("Error: status: %v resp: %s", resp.Status, response)
 	}
 	return response, err
 }
