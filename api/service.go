@@ -52,15 +52,10 @@ var (
 		DcrData:   "https://testnet.dcrdata.org/",
 		KuCoin:    "https://openapi-sandbox.kucoin.com",
 	}
-
-	supportedBackends = []string{"Bittrex", "Binance", "BlockBook", "DcrData", "KuCoin"}
 )
 
 func NewService(chainParams *chaincfg.Params) *Service {
-	conf := &ClientConf{
-		Debug: true,
-	}
-	client := NewClient(conf)
+	client := NewClient()
 	client.RequestFilter = func(info RequestInfo) (req *http.Request, err error) {
 		req, err = http.NewRequest(info.Method, info.Url, bytes.NewBuffer([]byte(info.Payload.(string))))
 		if err != nil {

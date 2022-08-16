@@ -24,12 +24,6 @@ type (
 		RequestFilter func(info RequestInfo) (req *http.Request, err error)
 	}
 
-	// ClientConf Models http client configurations
-	ClientConf struct {
-		Debug   bool
-		BaseUrl string
-	}
-
 	// RequestInfo models the http request data.
 	RequestInfo struct {
 		client  *Client
@@ -41,7 +35,7 @@ type (
 )
 
 // NewClient return a new HTTP client
-func NewClient(conf *ClientConf) (c *Client) {
+func NewClient() (c *Client) {
 	t := http.DefaultTransport.(*http.Transport).Clone()
 	client := &http.Client{
 		Timeout:   defaultHttpClientTimeout,
@@ -50,8 +44,6 @@ func NewClient(conf *ClientConf) (c *Client) {
 
 	return &Client{
 		httpClient:    client,
-		Debug:         conf.Debug,
-		BaseUrl:       conf.BaseUrl,
 		RequestFilter: nil,
 	}
 }
@@ -97,13 +89,8 @@ func (c *Client) Do(method, resource string, payload interface{}) (response []by
 		return response, err
 	}
 
-	if resp.StatusCode != 200 {
-		var errStr string
-		responseStr := string(response)
-
-		res := "'" + responseStr + "'"
-		errStr = "\nerror:" + resp.Status + ":" + res
-		err = errors.New(errStr)
+	if resp.StatusCode != http.StatusOK {
+		return response, errors.New(fmt.Sprintf("Error: status: %v resp: %s", resp.Status, response))
 	}
 	return response, err
 }
