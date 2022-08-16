@@ -28,7 +28,7 @@ type (
 	RequestInfo struct {
 		client  *Client
 		request *http.Request
-		Payload interface{}
+		Payload []byte
 		Method  string
 		Url     string
 	}
@@ -49,7 +49,7 @@ func NewClient() (c *Client) {
 }
 
 // Do prepare and process HTTP request to API
-func (c *Client) Do(method, resource string, payload interface{}) (response []byte, err error) {
+func (c *Client) Do(method, resource string, payload []byte) (response []byte, err error) {
 	var rawurl = fmt.Sprintf("%s%s", c.BaseUrl, resource)
 	if strings.HasPrefix(resource, "http") {
 		rawurl = resource
@@ -64,16 +64,16 @@ func (c *Client) Do(method, resource string, payload interface{}) (response []by
 	}
 
 	if c.RequestFilter == nil {
-		return nil, errors.New("Request Filter was not set")
+		return response, errors.New("Request Filter was not set")
 	}
 
 	req, err = c.RequestFilter(reqInfo)
 	if err != nil {
-		return nil, err
+		return response, err
 	}
 
 	if req == nil {
-		return nil, errors.New("error: nil request")
+		return response, errors.New("error: nil request")
 	}
 
 	c.dumpRequest(req)

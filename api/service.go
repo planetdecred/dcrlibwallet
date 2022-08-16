@@ -57,7 +57,7 @@ var (
 func NewService(chainParams *chaincfg.Params) *Service {
 	client := NewClient()
 	client.RequestFilter = func(info RequestInfo) (req *http.Request, err error) {
-		req, err = http.NewRequest(info.Method, info.Url, bytes.NewBuffer([]byte(info.Payload.(string))))
+		req, err = http.NewRequest(info.Method, info.Url, bytes.NewBuffer(info.Payload))
 		if err != nil {
 			log.Error(err)
 			return
@@ -83,7 +83,7 @@ func NewService(chainParams *chaincfg.Params) *Service {
 // GetBestBlock returns the best block height as int32.
 func (s *Service) GetBestBlock() int32 {
 	s.setBackend(DcrData)
-	r, err := s.client.Do("GET", "api/block/best/height", "")
+	r, err := s.client.Do(http.MethodGet, "api/block/best/height", nil)
 	if err != nil {
 		log.Error(err)
 		return -1
@@ -101,7 +101,7 @@ func (s *Service) GetBestBlock() int32 {
 // GetBestBlockTimeStamp returns best block time, as unix timestamp.
 func (s *Service) GetBestBlockTimeStamp() int64 {
 	s.setBackend(DcrData)
-	r, err := s.client.Do("GET", "api/block/best?txtotals=false", "")
+	r, err := s.client.Do(http.MethodGet, "api/block/best?txtotals=false", nil)
 	if err != nil {
 		log.Error(err)
 		return -1
@@ -118,7 +118,7 @@ func (s *Service) GetBestBlockTimeStamp() int64 {
 // GetCurrentAgendaStatus returns the current agenda and its status.
 func (s *Service) GetCurrentAgendaStatus() (agenda *chainjson.GetVoteInfoResult, err error) {
 	s.setBackend(DcrData)
-	r, err := s.client.Do("GET", "api/stake/vote/info", "")
+	r, err := s.client.Do(http.MethodGet, "api/stake/vote/info", nil)
 	if err != nil {
 		return
 	}
@@ -132,7 +132,7 @@ func (s *Service) GetCurrentAgendaStatus() (agenda *chainjson.GetVoteInfoResult,
 // GetAgendas returns all agendas high level details
 func (s *Service) GetAgendas() (agendas []apiTypes.AgendasInfo, err error) {
 	s.setBackend(DcrData)
-	r, err := s.client.Do("GET", "api/agendas", "")
+	r, err := s.client.Do(http.MethodGet, "api/agendas", nil)
 	if err != nil {
 		return
 	}
@@ -146,7 +146,7 @@ func (s *Service) GetAgendas() (agendas []apiTypes.AgendasInfo, err error) {
 // GetAgendaDetails returns the details for agenda with agendaId
 func (s *Service) GetAgendaDetails(agendaId string) (agendaDetails *AgendaAPIResponse, err error) {
 	s.setBackend(DcrData)
-	r, err := s.client.Do("GET", "api/agenda/"+agendaId, "")
+	r, err := s.client.Do(http.MethodGet, "api/agenda/"+agendaId, nil)
 	if err != nil {
 		return
 	}
@@ -160,7 +160,7 @@ func (s *Service) GetAgendaDetails(agendaId string) (agendaDetails *AgendaAPIRes
 // GetTreasuryBalance returns the current treasury balance as int64.
 func (s *Service) GetTreasuryBalance() (bal int64, err error) {
 	s.setBackend(DcrData)
-	r, err := s.client.Do("GET", "api/treasury/balance", "")
+	r, err := s.client.Do(http.MethodGet, "api/treasury/balance", nil)
 	if err != nil {
 		return
 	}
@@ -178,7 +178,7 @@ func (s *Service) GetTreasuryBalance() (bal int64, err error) {
 // treasury.
 func (s *Service) GetTreasuryDetails() (treasuryDetails *TreasuryDetails, err error) {
 	s.setBackend(DcrData)
-	r, err := s.client.Do("GET", "api/treasury/balance", "")
+	r, err := s.client.Do(http.MethodGet, "api/treasury/balance", nil)
 	if err != nil {
 		return
 	}
@@ -194,7 +194,7 @@ func (s *Service) GetTreasuryDetails() (treasuryDetails *TreasuryDetails, err er
 func (s *Service) GetExchangeRate() (rates *ExchangeRates, err error) {
 	s.setBackendMainnet(DcrData)
 	// Use mainnet base url for exchange rate endpoint
-	r, err := s.client.Do("GET", "api/exchangerate", "")
+	r, err := s.client.Do(http.MethodGet, "api/exchangerate", nil)
 	if err != nil {
 		return
 	}
@@ -208,9 +208,9 @@ func (s *Service) GetExchangeRate() (rates *ExchangeRates, err error) {
 
 // GetExchanges fetches the current known state of all exchanges
 func (s *Service) GetExchanges() (state *ExchangeState, err error) {
-	s.setBackendMainnet(DcrData)
 	// Use mainnet base url for exchanges endpoint
-	r, err := s.client.Do("GET", "api/exchanges", "")
+	s.setBackendMainnet(DcrData)
+	r, err := s.client.Do(http.MethodGet, "api/exchanges", nil)
 	if err != nil {
 		return
 	}
@@ -224,7 +224,7 @@ func (s *Service) GetExchanges() (state *ExchangeState, err error) {
 
 func (s *Service) GetTicketFeeRateSummary() (ticketInfo *apiTypes.MempoolTicketFeeInfo, err error) {
 	s.setBackend(DcrData)
-	r, err := s.client.Do("GET", "api/mempool/sstx", "")
+	r, err := s.client.Do(http.MethodGet, "api/mempool/sstx", nil)
 	if err != nil {
 		return
 	}
@@ -238,7 +238,7 @@ func (s *Service) GetTicketFeeRateSummary() (ticketInfo *apiTypes.MempoolTicketF
 
 func (s *Service) GetTicketFeeRate() (ticketFeeRate *apiTypes.MempoolTicketFees, err error) {
 	s.setBackend(DcrData)
-	r, err := s.client.Do("GET", "api/mempool/sstx/fees", "")
+	r, err := s.client.Do(http.MethodGet, "api/mempool/sstx/fees", nil)
 	if err != nil {
 		return
 	}
@@ -252,7 +252,7 @@ func (s *Service) GetTicketFeeRate() (ticketFeeRate *apiTypes.MempoolTicketFees,
 
 func (s *Service) GetNHighestTicketFeeRate(nHighest int) (ticketFeeRate *apiTypes.MempoolTicketFees, err error) {
 	s.setBackend(DcrData)
-	r, err := s.client.Do("GET", "api/mempool/sstx/fees/"+strconv.Itoa(nHighest), "")
+	r, err := s.client.Do(http.MethodGet, "api/mempool/sstx/fees/"+strconv.Itoa(nHighest), nil)
 	if err != nil {
 		return
 	}
@@ -266,7 +266,7 @@ func (s *Service) GetNHighestTicketFeeRate(nHighest int) (ticketFeeRate *apiType
 
 func (s *Service) GetTicketDetails() (ticketDetails *apiTypes.MempoolTicketDetails, err error) {
 	s.setBackend(DcrData)
-	r, err := s.client.Do("GET", "api/mempool/sstx/details", "")
+	r, err := s.client.Do(http.MethodGet, "api/mempool/sstx/details", nil)
 	if err != nil {
 		return
 	}
@@ -280,7 +280,7 @@ func (s *Service) GetTicketDetails() (ticketDetails *apiTypes.MempoolTicketDetai
 
 func (s *Service) GetNHighestTicketDetails(nHighest int) (ticketDetails *apiTypes.MempoolTicketDetails, err error) {
 	s.setBackend(DcrData)
-	r, err := s.client.Do("GET", "api/mempool/sstx/details/"+strconv.Itoa(nHighest), "")
+	r, err := s.client.Do(http.MethodGet, "api/mempool/sstx/details/"+strconv.Itoa(nHighest), nil)
 	if err != nil {
 		return
 	}
@@ -311,7 +311,7 @@ func (s *Service) GetAddress(address string) (addressState *AddressState, err er
 		return nil, errors.New("Net is mainnet and xpub is not in mainnet format")
 	}
 
-	r, err := s.client.Do("GET", "api/v2/address/"+address, "")
+	r, err := s.client.Do(http.MethodGet, "api/v2/address/"+address, nil)
 	if err != nil {
 		return
 	}
@@ -340,7 +340,7 @@ func (s *Service) GetXpub(xPub string) (xPubBalAndTxs *XpubBalAndTxs, err error)
 		return nil, errors.New("Net is mainnet and xpub is not in mainnet format")
 	}
 
-	r, err := s.client.Do("GET", "api/v2/xpub/"+xPub, "")
+	r, err := s.client.Do(http.MethodGet, "api/v2/xpub/"+xPub, nil)
 	if err != nil {
 		return
 	}
@@ -374,7 +374,7 @@ func (s *Service) GetTicker(exchange Backend, market string) (ticker *Ticker, er
 
 func (s *Service) getBinanceTicker(market string) (ticker *Ticker, err error) {
 	s.setBackendMainnet(Binance)
-	r, err := s.client.Do("GET", "/api/v3/ticker/24hr?symbol="+strings.ToUpper(market), "")
+	r, err := s.client.Do(http.MethodGet, "/api/v3/ticker/24hr?symbol="+strings.ToUpper(market), nil)
 	if err != nil {
 		return ticker, err
 	}
@@ -398,7 +398,7 @@ func (s *Service) getBinanceTicker(market string) (ticker *Ticker, err error) {
 
 func (s *Service) getBittrexTicker(market string) (ticker *Ticker, err error) {
 	s.setBackendMainnet(Bittrex)
-	r, err := s.client.Do("GET", "/markets/"+strings.ToUpper(market)+"/ticker", "")
+	r, err := s.client.Do(http.MethodGet, "/markets/"+strings.ToUpper(market)+"/ticker", nil)
 	if err != nil {
 		return ticker, err
 	}
@@ -421,7 +421,7 @@ func (s *Service) getBittrexTicker(market string) (ticker *Ticker, err error) {
 
 func (s *Service) getKucoinTicker(market string) (ticker *Ticker, err error) {
 	s.setBackendMainnet(KuCoin)
-	r, err := s.client.Do("GET", "/api/v1/market/orderbook/level1?symbol="+strings.ToUpper(market), "")
+	r, err := s.client.Do(http.MethodGet, "/api/v1/market/orderbook/level1?symbol="+strings.ToUpper(market), nil)
 	if err != nil {
 		return ticker, err
 	}
