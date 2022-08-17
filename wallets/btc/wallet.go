@@ -45,6 +45,7 @@ type Wallet struct {
 	rootDir       string
 	db            *storm.DB
 	EncryptedSeed []byte
+	IsRestored    bool
 
 	cl          neutrinoService
 	neutrinoDB  walletdb.DB
@@ -86,20 +87,6 @@ const (
 	logDirName     = "logs"
 	logFileName    = "neutrino.log"
 )
-
-func NewSpvWallet(walletName string, encryptedSeed []byte, net string) (*Wallet, error) {
-	chainParams, err := parseChainParams(net)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Wallet{
-		Name:          walletName,
-		chainParams:   chainParams,
-		CreatedAt:     time.Now(),
-		EncryptedSeed: encryptedSeed,
-	}, nil
-}
 
 func parseChainParams(net string) (*chaincfg.Params, error) {
 	switch net {
@@ -168,6 +155,69 @@ func (wallet *Wallet) RawRequest(method string, params []json.RawMessage) (json.
 	return nil, errors.New("RawRequest not available on spv")
 }
 
+// prepare gets a wallet ready for use by opening the transactions index database
+// and initializing the wallet loader which can be used subsequently to create,
+// load and unload the wallet.
+func (wallet *Wallet) Prepare(rootDir string, net string, log slog.Logger) (err error) {
+	chainParams, err := parseChainParams(net)
+	if err != nil {
+		return err
+	}
+
+	wallet.chainParams = chainParams
+	wallet.dataDir = filepath.Join(rootDir, strconv.Itoa(wallet.ID))
+	wallet.log = log
+	wallet.loader = w.NewLoader(wallet.chainParams, wallet.dataDir, true, 60*time.Second, 250)
+	return nil
+}
+
+func (wallet *Wallet) Shutdown(walletDBRef *storm.DB) {
+	// Trigger shuttingDown signal to cancel all contexts created with
+	// `wallet.shutdownContext()` or `wallet.shutdownContextWithCancel()`.
+	// wallet.shuttingDown <- true
+
+	if _, loaded := wallet.loader.LoadedWallet(); loaded {
+		err := wallet.loader.UnloadWallet()
+		if err != nil {
+			// log.Errorf("Failed to close wallet: %v", err)
+		} else {
+			// log.Info("Closed wallet")
+		}
+	}
+
+	if walletDBRef != nil {
+		err := walletDBRef.Close()
+		if err != nil {
+			// log.Errorf("tx db closed with error: %v", err)
+		} else {
+			// log.Info("tx db closed successfully")
+		}
+	}
+}
+
+// WalletCreationTimeInMillis returns the wallet creation time for new
+// wallets. Restored wallets would return an error.
+func (wallet *Wallet) WalletCreationTimeInMillis() (int64, error) {
+	if wallet.IsRestored {
+		return 0, errors.New(ErrWalletIsRestored)
+	}
+
+	return wallet.CreatedAt.UnixNano() / int64(time.Millisecond), nil
+}
+
+func (wallet *Wallet) NetType() string {
+	return wallet.chainParams.Name
+}
+
+func (wallet *Wallet) Internal() *w.Wallet {
+	lw, _ := wallet.loader.LoadedWallet()
+	return lw
+}
+
+func (wallet *Wallet) WalletExists() (bool, error) {
+	return wallet.loader.WalletExists()
+}
+
 func CreateNewWallet(walletName, privatePassphrase string, privatePassphraseType int32, db *storm.DB, rootDir, dbDriver string, chainParams *chaincfg.Params) (*Wallet, error) {
 	// seed := "witch collapse practice feed shame open despair"
 	// encryptedSeed := []byte(seed)
@@ -199,6 +249,89 @@ func CreateNewWallet(walletName, privatePassphrase string, privatePassphraseType
 	})
 }
 
+func (wallet *Wallet) createWallet(privatePassphrase string, seedMnemonic []byte) error {
+	// log.Info("Creating Wallet")
+	if len(seedMnemonic) == 0 {
+		return errors.New("ErrEmptySeed")
+	}
+
+	pubPass := []byte(w.InsecurePubPassphrase)
+	privPass := []byte(privatePassphrase)
+	// seed, err := walletseed.DecodeUserInput(seedMnemonic)
+	// if err != nil {
+	// 	// log.Error(err)
+	// 	return err
+	// }
+
+	_, err := wallet.loader.CreateNewWallet(pubPass, privPass, seedMnemonic, wallet.CreatedAt)
+	if err != nil {
+		// log.Error(err)
+		return err
+	}
+
+	bailOnWallet := func() {
+		if err := wallet.loader.UnloadWallet(); err != nil {
+			fmt.Errorf("Error unloading wallet after createSPVWallet error: %v", err)
+		}
+	}
+
+	neutrinoDBPath := filepath.Join(wallet.dataDir, neutrinoDBName)
+	db, err := walletdb.Create("bdb", neutrinoDBPath, true, 5*time.Second)
+	if err != nil {
+		bailOnWallet()
+		return fmt.Errorf("unable to create wallet db at %q: %v", neutrinoDBPath, err)
+	}
+	if err = db.Close(); err != nil {
+		bailOnWallet()
+		return fmt.Errorf("error closing newly created wallet database: %w", err)
+	}
+
+	if err := wallet.loader.UnloadWallet(); err != nil {
+		return fmt.Errorf("error unloading wallet: %w", err)
+	}
+
+	// log.Info("Created Wallet")
+	return nil
+}
+
+func CreateNewWatchOnlyWallet(walletName string, chainParams *chaincfg.Params) (*Wallet, error) {
+	wallet := &Wallet{
+		Name:       walletName,
+		IsRestored: true,
+	}
+
+	return wallet.saveNewWallet(func() error {
+		err := wallet.Prepare(wallet.rootDir, "testnet3", wallet.log)
+		if err != nil {
+			return err
+		}
+
+		return wallet.createWatchingOnlyWallet()
+	})
+}
+
+func (wallet *Wallet) createWatchingOnlyWallet() error {
+	pubPass := []byte(w.InsecurePubPassphrase)
+
+	_, err := wallet.loader.CreateNewWatchingOnlyWallet(pubPass, time.Now())
+	if err != nil {
+		// log.Error(err)
+		return err
+	}
+
+	// log.Info("Created Watching Only Wallet")
+	return nil
+}
+
+func (wallet *Wallet) IsWatchingOnlyWallet() bool {
+	if _, ok := wallet.loader.LoadedWallet(); ok {
+		// return w.WatchingOnly()
+		return false
+	}
+
+	return false
+}
+
 func (wallet *Wallet) RenameWallet(newName string, walledDbRef *storm.DB) error {
 	if strings.HasPrefix(newName, "wallet-") {
 		return errors.E(ErrReservedWalletName)
@@ -226,81 +359,51 @@ func (wallet *Wallet) OpenWallet() error {
 	return nil
 }
 
-func (wallet *Wallet) WalletExists() (bool, error) {
-	return wallet.loader.WalletExists()
-}
-
-func (wallet *Wallet) IsWatchingOnlyWallet() bool {
-	if _, ok := wallet.loader.LoadedWallet(); ok {
-		// return w.WatchingOnly()
-		return false
-	}
-
-	return false
-}
-
 func (wallet *Wallet) WalletOpened() bool {
 	return wallet.Internal() != nil
 }
 
-func (wallet *Wallet) Internal() *w.Wallet {
-	lw, _ := wallet.loader.LoadedWallet()
-	return lw
-}
-
-func CreateNewWatchOnlyWallet(walletName string, chainParams *chaincfg.Params) (*Wallet, error) {
-	wallet := &Wallet{
-		Name:        walletName,
-		chainParams: chainParams,
+func (wallet *Wallet) UnlockWallet(privPass []byte) error {
+	loadedWallet, ok := wallet.loader.LoadedWallet()
+	if !ok {
+		return fmt.Errorf("wallet has not been loaded")
 	}
 
-	return wallet.saveNewWallet(func() error {
-		err := wallet.Prepare(wallet.rootDir, "testnet3", wallet.log)
-		if err != nil {
-			return err
-		}
-
-		return wallet.createWatchingOnlyWallet()
-	})
-}
-
-func (wallet *Wallet) createWatchingOnlyWallet() error {
-	pubPass := []byte(w.InsecurePubPassphrase)
-
-	_, err := wallet.loader.CreateNewWatchingOnlyWallet(pubPass, time.Now())
+	err := loadedWallet.Unlock(privPass, nil)
 	if err != nil {
-		// log.Error(err)
-		return err
+		return translateError(err)
 	}
 
-	// log.Info("Created Watching Only Wallet")
 	return nil
 }
 
-// func (wallet *Wallet) DeleteWallet(privPass []byte, walledDbRef *storm.DB) error {
-// 	// if wallet.IsConnectedToDecredNetwork() {
-// 	// 	wallet.CancelSync()
-// 	// 	defer func() {
-// 	// 		// if mw.OpenedWalletsCount() > 0 {
-// 	// 		wallet.SpvSync()
-// 	// 		// }
-// 	// 	}()
-// 	// }
+func (wallet *Wallet) LockWallet() {
+	if !wallet.Internal().Locked() {
+		wallet.Internal().Lock()
+	}
+}
 
-// 	err := wallet.deleteWallet(privPass)
-// 	if err != nil {
-// 		return translateError(err)
-// 	}
+func (wallet *Wallet) IsLocked() bool {
+	return wallet.Internal().Locked()
+}
 
-// 	err = walledDbRef.DeleteStruct(wallet)
-// 	if err != nil {
-// 		return translateError(err)
-// 	}
+func (wallet *Wallet) ChangePrivatePassphrase(oldPass []byte, newPass []byte) error {
+	defer func() {
+		for i := range oldPass {
+			oldPass[i] = 0
+		}
 
-// 	// delete(mw.wallets, walletID)
+		for i := range newPass {
+			newPass[i] = 0
+		}
+	}()
 
-// 	return nil
-// }
+	err := wallet.Internal().ChangePrivatePassphrase(oldPass, newPass)
+	if err != nil {
+		return translateError(err)
+	}
+	return nil
+}
 
 func (wallet *Wallet) DeleteWallet(privatePassphrase []byte) error {
 	defer func() {
@@ -325,10 +428,6 @@ func (wallet *Wallet) DeleteWallet(privatePassphrase []byte) error {
 
 	// log.Info("Deleting Wallet")
 	return os.RemoveAll(wallet.dataDir)
-}
-
-func (wallet *Wallet) DataDir() string {
-	return wallet.dataDir
 }
 
 func (wallet *Wallet) ConnectSPVWallet(ctx context.Context, wg *sync.WaitGroup) (err error) {
@@ -531,71 +630,6 @@ func (wallet *Wallet) startWallet() error {
 	return nil
 }
 
-// prepare gets a wallet ready for use by opening the transactions index database
-// and initializing the wallet loader which can be used subsequently to create,
-// load and unload the wallet.
-func (wallet *Wallet) Prepare(rootDir string, net string, log slog.Logger) (err error) {
-	chainParams, err := parseChainParams(net)
-	if err != nil {
-		return err
-	}
-
-	wallet.chainParams = chainParams
-	wallet.dataDir = filepath.Join(rootDir, strconv.Itoa(wallet.ID))
-	wallet.log = log
-	wallet.loader = w.NewLoader(wallet.chainParams, wallet.dataDir, true, 60*time.Second, 250)
-	return nil
-}
-
-func (wallet *Wallet) NetType() string {
-	return wallet.chainParams.Name
-}
-
-func (wallet *Wallet) createWallet(privatePassphrase string, seedMnemonic []byte) error {
-	// log.Info("Creating Wallet")
-	if len(seedMnemonic) == 0 {
-		return errors.New("ErrEmptySeed")
-	}
-
-	pubPass := []byte(w.InsecurePubPassphrase)
-	privPass := []byte(privatePassphrase)
-	// seed, err := walletseed.DecodeUserInput(seedMnemonic)
-	// if err != nil {
-	// 	// log.Error(err)
-	// 	return err
-	// }
-
-	_, err := wallet.loader.CreateNewWallet(pubPass, privPass, seedMnemonic, wallet.CreatedAt)
-	if err != nil {
-		// log.Error(err)
-		return err
-	}
-
-	bailOnWallet := func() {
-		if err := wallet.loader.UnloadWallet(); err != nil {
-			fmt.Errorf("Error unloading wallet after createSPVWallet error: %v", err)
-		}
-	}
-
-	neutrinoDBPath := filepath.Join(wallet.dataDir, neutrinoDBName)
-	db, err := walletdb.Create("bdb", neutrinoDBPath, true, 5*time.Second)
-	if err != nil {
-		bailOnWallet()
-		return fmt.Errorf("unable to create wallet db at %q: %v", neutrinoDBPath, err)
-	}
-	if err = db.Close(); err != nil {
-		bailOnWallet()
-		return fmt.Errorf("error closing newly created wallet database: %w", err)
-	}
-
-	if err := wallet.loader.UnloadWallet(); err != nil {
-		return fmt.Errorf("error unloading wallet: %w", err)
-	}
-
-	// log.Info("Created Wallet")
-	return nil
-}
-
 // saveNewWallet performs the following tasks using a db batch operation to ensure
 // that db changes are rolled back if any of the steps below return an error.
 //
@@ -620,29 +654,6 @@ func (wallet *Wallet) saveNewWallet(setupWallet func() error) (*Wallet, error) {
 	// 	btcWallet.CancelSync()
 	// 	defer btcWallet.SpvSync()
 	// }
-	// Perform database save operations in batch transaction
-	// for automatic rollback if error occurs at any point.
-	// walletNameExists := func(walletName string) (bool, error) {
-	// 	if strings.HasPrefix(walletName, "wallet-") {
-	// 		return false, errors.E(ErrReservedWalletName)
-	// 	}
-
-	// 	err := wallet.db.One("Name", walletName, &Wallet{})
-	// 	if err == nil {
-	// 		return true, nil
-	// 	} else if err != storm.ErrNotFound {
-	// 		return false, err
-	// 	}
-
-	// 	return false, nil
-	// }
-
-	// exists, err := walletNameExists(wallet.Name)
-	// if err != nil {
-	// 	return nil, err
-	// } else if exists {
-	// 	return nil, errors.New(ErrExist)
-	// }
 
 	// Perform database save operations in batch transaction
 	// for automatic rollback if error occurs at any point.
@@ -652,6 +663,7 @@ func (wallet *Wallet) saveNewWallet(setupWallet func() error) (*Wallet, error) {
 		if err != nil {
 			return err
 		}
+
 		walletDataDir := filepath.Join(wallet.dataDir, strconv.Itoa(wallet.ID))
 
 		dirExists, err := fileExists(walletDataDir)
@@ -671,6 +683,9 @@ func (wallet *Wallet) saveNewWallet(setupWallet func() error) (*Wallet, error) {
 		if wallet.Name == "" {
 			wallet.Name = "wallet-" + strconv.Itoa(wallet.ID) // wallet-#
 		}
+
+		wallet.dataDir = walletDataDir
+
 		err = db.Save(wallet) // update database with complete wallet information
 		if err != nil {
 			return err
@@ -681,54 +696,12 @@ func (wallet *Wallet) saveNewWallet(setupWallet func() error) (*Wallet, error) {
 	})
 
 	if err != nil {
-		return nil, err
+		return nil, translateError(err)
 	}
 
 	return wallet, nil
 }
 
-func fileExists(filePath string) (bool, error) {
-	_, err := os.Stat(filePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, nil
-}
-
-func backupFile(fileName string, suffix int) (newName string, err error) {
-	newName = fileName + ".bak" + strconv.Itoa(suffix)
-	exists, err := fileExists(newName)
-	if err != nil {
-		return "", err
-	} else if exists {
-		return backupFile(fileName, suffix+1)
-	}
-
-	err = moveFile(fileName, newName)
-	if err != nil {
-		return "", err
-	}
-
-	return newName, nil
-}
-
-func moveFile(sourcePath, destinationPath string) error {
-	if exists, _ := fileExists(sourcePath); exists {
-		return os.Rename(sourcePath, destinationPath)
-	}
-	return nil
-}
-
-func (wallet *Wallet) shutdownContextWithCancel() (context.Context, context.CancelFunc) {
-	ctx, cancel := context.WithCancel(context.Background())
-	wallet.cancelFuncs = append(wallet.cancelFuncs, cancel)
-	return ctx, cancel
-}
-
-func (wallet *Wallet) shutdownContext() (ctx context.Context) {
-	ctx, _ = wallet.shutdownContextWithCancel()
-	return
+func (wallet *Wallet) DataDir() string {
+	return wallet.dataDir
 }

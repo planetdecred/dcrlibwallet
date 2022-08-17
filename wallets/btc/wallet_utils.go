@@ -2,6 +2,8 @@ package btc
 
 import (
 	// "context"
+	"os"
+	"strconv"
 
 	"decred.org/dcrwallet/v2/errors"
 	"github.com/asdine/storm"
@@ -127,4 +129,50 @@ func WalletNameExists(walletName string, walledDbRef *storm.DB) (bool, error) {
 // 	}
 
 // 	return nil
+// }
+
+func fileExists(filePath string) (bool, error) {
+	_, err := os.Stat(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+func backupFile(fileName string, suffix int) (newName string, err error) {
+	newName = fileName + ".bak" + strconv.Itoa(suffix)
+	exists, err := fileExists(newName)
+	if err != nil {
+		return "", err
+	} else if exists {
+		return backupFile(fileName, suffix+1)
+	}
+
+	err = moveFile(fileName, newName)
+	if err != nil {
+		return "", err
+	}
+
+	return newName, nil
+}
+
+func moveFile(sourcePath, destinationPath string) error {
+	if exists, _ := fileExists(sourcePath); exists {
+		return os.Rename(sourcePath, destinationPath)
+	}
+	return nil
+}
+
+// func (wallet *Wallet) shutdownContextWithCancel() (context.Context, context.CancelFunc) {
+// 	ctx, cancel := context.WithCancel(context.Background())
+// 	wallet.cancelFuncs = append(wallet.cancelFuncs, cancel)
+// 	return ctx, cancel
+// }
+
+// func (wallet *Wallet) shutdownContext() (ctx context.Context) {
+// 	ctx, _ = wallet.shutdownContextWithCancel()
+// 	return
 // }
