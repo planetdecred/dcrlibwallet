@@ -1,4 +1,4 @@
-package dcrlibwallet
+package dcr
 
 import (
 	"bytes"
@@ -15,15 +15,6 @@ import (
 	www "github.com/decred/politeia/politeiawww/api/www/v1"
 	"github.com/decred/politeia/politeiawww/client"
 )
-
-type politeiaClient struct {
-	host       string
-	httpClient *http.Client
-
-	version *www.VersionReply
-	policy  *www.PolicyReply
-	cookies []*http.Cookie
-}
 
 const (
 	PoliteiaMainnetHost = "https://proposals.decred.org/api"
@@ -58,9 +49,9 @@ func newPoliteiaClient(host string) *politeiaClient {
 func (p *Politeia) getClient() (*politeiaClient, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	client := p.client
+	client := p.Client
 	if client == nil {
-		client = newPoliteiaClient(p.host)
+		client = newPoliteiaClient(p.Host)
 		version, err := client.serverVersion()
 		if err != nil {
 			return nil, err
@@ -72,7 +63,7 @@ func (p *Politeia) getClient() (*politeiaClient, error) {
 			return nil, err
 		}
 
-		p.client = client
+		p.Client = client
 	}
 
 	return client, nil

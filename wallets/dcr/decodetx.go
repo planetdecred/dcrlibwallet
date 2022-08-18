@@ -1,4 +1,4 @@
-package dcrlibwallet
+package dcr
 
 import (
 	"fmt"

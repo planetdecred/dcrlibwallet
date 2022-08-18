@@ -1,13 +1,14 @@
-package dcrlibwallet
+package dcr
 
 import (
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
 	"time"
+
+	"decred.org/dcrwallet/v2/errors"
 
 	"github.com/asdine/storm"
 	tkv1 "github.com/decred/politeia/politeiawww/api/ticketvote/v1"
@@ -35,7 +36,7 @@ func (p *Politeia) Sync() error {
 
 	log.Info("Politeia sync: started")
 
-	p.ctx, p.cancelSync = p.mwRef.contextWithShutdownCancel()
+	p.ctx, p.cancelSync = p.WalletRef.contextWithShutdownCancel()
 	defer p.resetSyncData()
 
 	p.mu.Unlock()
@@ -96,7 +97,7 @@ func (p *Politeia) StopSync() {
 func (p *Politeia) checkForUpdates() error {
 	offset := 0
 	p.mu.RLock()
-	limit := int32(p.client.policy.ProposalListPageSize)
+	limit := int32(p.Client.policy.ProposalListPageSize)
 	p.mu.RUnlock()
 
 	for {
@@ -138,7 +139,7 @@ func (p *Politeia) handleNewProposals(proposals []Proposal) error {
 	}
 
 	p.mu.RLock()
-	tokenInventory, err := p.client.tokenInventory()
+	tokenInventory, err := p.Client.tokenInventory()
 	p.mu.RUnlock()
 	if err != nil {
 		return err
@@ -156,12 +157,12 @@ func (p *Politeia) handleProposalsUpdate(proposals []Proposal) error {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	batchProposals, err := p.client.batchProposals(tokens)
+	batchProposals, err := p.Client.batchProposals(tokens)
 	if err != nil {
 		return err
 	}
 
-	batchVotesSummaries, err := p.client.batchVoteSummary(tokens)
+	batchVotesSummaries, err := p.Client.batchVoteSummary(tokens)
 	if err != nil {
 		return err
 	}
@@ -220,7 +221,7 @@ func (p *Politeia) updateProposalDetails(oldProposal, updatedProposal Proposal) 
 		}
 	}
 
-	err := p.mwRef.db.Update(&updatedProposal)
+	err := p.WalletRef.DB.Update(&updatedProposal)
 	if err != nil {
 		return fmt.Errorf("error saving updated proposal: %s", err.Error())
 	}
@@ -287,7 +288,7 @@ func (p *Politeia) fetchBatchProposals(category int32, tokens []string, broadcas
 			return errors.New(ErrContextCanceled)
 		}
 
-		limit := int(p.client.policy.ProposalListPageSize)
+		limit := int(p.Client.policy.ProposalListPageSize)
 		if len(tokens) <= limit {
 			limit = len(tokens)
 		}
@@ -297,7 +298,7 @@ func (p *Politeia) fetchBatchProposals(category int32, tokens []string, broadcas
 		var tokenBatch []string
 		tokenBatch, tokens = tokens[:limit], tokens[limit:]
 
-		proposals, err := p.client.batchProposals(tokenBatch)
+		proposals, err := p.Client.batchProposals(tokenBatch)
 		if err != nil {
 			return err
 		}
@@ -306,7 +307,7 @@ func (p *Politeia) fetchBatchProposals(category int32, tokens []string, broadcas
 			return errors.New(ErrContextCanceled)
 		}
 
-		votesSummaries, err := p.client.batchVoteSummary(tokenBatch)
+		votesSummaries, err := p.Client.batchVoteSummary(tokenBatch)
 		if err != nil {
 			return err
 		}
@@ -351,12 +352,12 @@ func (p *Politeia) FetchProposalDescription(token string) (string, error) {
 		return "", err
 	}
 
-	client, err := p.getClient()
+	Client, err := p.getClient()
 	if err != nil {
 		return "", err
 	}
 
-	proposalDetailsReply, err := client.proposalDetails(token)
+	proposalDetailsReply, err := Client.proposalDetails(token)
 	if err != nil {
 		return "", err
 	}
@@ -386,22 +387,22 @@ func (p *Politeia) FetchProposalDescription(token string) (string, error) {
 }
 
 func (p *Politeia) ProposalVoteDetailsRaw(walletID int, token string) (*ProposalVoteDetails, error) {
-	wal := p.mwRef.WalletWithID(walletID)
+	wal := p.WalletRef
 	if wal == nil {
 		return nil, fmt.Errorf(ErrWalletNotFound)
 	}
 
-	client, err := p.getClient()
+	Client, err := p.getClient()
 	if err != nil {
 		return nil, err
 	}
 
-	detailsReply, err := client.voteDetails(token)
+	detailsReply, err := Client.voteDetails(token)
 	if err != nil {
 		return nil, err
 	}
 
-	votesResults, err := client.voteResults(token)
+	votesResults, err := Client.voteResults(token)
 	if err != nil {
 		return nil, err
 	}
@@ -411,7 +412,7 @@ func (p *Politeia) ProposalVoteDetailsRaw(walletID int, token string) (*Proposal
 		return nil, err
 	}
 
-	ticketHashes, addresses, err := wal.Internal().CommittedTickets(wal.shutdownContext(), hashes)
+	ticketHashes, addresses, err := wal.Internal().CommittedTickets(wal.ShutdownContext(), hashes)
 	if err != nil {
 		return nil, err
 	}
@@ -482,17 +483,17 @@ func (p *Politeia) ProposalVoteDetails(walletID int, token string) (string, erro
 }
 
 func (p *Politeia) CastVotes(walletID int, eligibleTickets []*ProposalVote, token, passphrase string) error {
-	wal := p.mwRef.WalletWithID(walletID)
+	wal := p.WalletRef
 	if wal == nil {
 		return fmt.Errorf(ErrWalletNotFound)
 	}
 
-	client, err := p.getClient()
+	Client, err := p.getClient()
 	if err != nil {
 		return err
 	}
 
-	detailsReply, err := client.voteDetails(token)
+	detailsReply, err := Client.voteDetails(token)
 	if err != nil {
 		return err
 	}
@@ -522,7 +523,7 @@ func (p *Politeia) CastVotes(walletID int, eligibleTickets []*ProposalVote, toke
 
 		msg := token + ticket.Hash + voteBitHex
 
-		signature, err := wal.signMessage(ticket.Address, msg)
+		signature, err := wal.SignMessageDirect(ticket.Address, msg)
 		if err != nil {
 			return err
 		}
@@ -538,18 +539,18 @@ func (p *Politeia) CastVotes(walletID int, eligibleTickets []*ProposalVote, toke
 		votes = append(votes, singleVote)
 	}
 
-	return client.sendVotes(votes)
+	return Client.sendVotes(votes)
 }
 
 func (p *Politeia) AddNotificationListener(notificationListener ProposalNotificationListener, uniqueIdentifier string) error {
 	p.notificationListenersMu.Lock()
 	defer p.notificationListenersMu.Unlock()
 
-	if _, ok := p.notificationListeners[uniqueIdentifier]; ok {
+	if _, ok := p.NotificationListeners[uniqueIdentifier]; ok {
 		return errors.New(ErrListenerAlreadyExist)
 	}
 
-	p.notificationListeners[uniqueIdentifier] = notificationListener
+	p.NotificationListeners[uniqueIdentifier] = notificationListener
 	return nil
 }
 
@@ -557,14 +558,14 @@ func (p *Politeia) RemoveNotificationListener(uniqueIdentifier string) {
 	p.notificationListenersMu.Lock()
 	defer p.notificationListenersMu.Unlock()
 
-	delete(p.notificationListeners, uniqueIdentifier)
+	delete(p.NotificationListeners, uniqueIdentifier)
 }
 
 func (p *Politeia) publishSynced() {
 	p.notificationListenersMu.Lock()
 	defer p.notificationListenersMu.Unlock()
 
-	for _, notificationListener := range p.notificationListeners {
+	for _, notificationListener := range p.NotificationListeners {
 		notificationListener.OnProposalsSynced()
 	}
 }
@@ -573,7 +574,7 @@ func (p *Politeia) publishNewProposal(proposal *Proposal) {
 	p.notificationListenersMu.Lock()
 	defer p.notificationListenersMu.Unlock()
 
-	for _, notificationListener := range p.notificationListeners {
+	for _, notificationListener := range p.NotificationListeners {
 		notificationListener.OnNewProposal(proposal)
 	}
 }
@@ -582,7 +583,7 @@ func (p *Politeia) publishVoteStarted(proposal *Proposal) {
 	p.notificationListenersMu.Lock()
 	defer p.notificationListenersMu.Unlock()
 
-	for _, notificationListener := range p.notificationListeners {
+	for _, notificationListener := range p.NotificationListeners {
 		notificationListener.OnProposalVoteStarted(proposal)
 	}
 }
@@ -591,7 +592,7 @@ func (p *Politeia) publishVoteFinished(proposal *Proposal) {
 	p.notificationListenersMu.Lock()
 	defer p.notificationListenersMu.Unlock()
 
-	for _, notificationListener := range p.notificationListeners {
+	for _, notificationListener := range p.NotificationListeners {
 		notificationListener.OnProposalVoteFinished(proposal)
 	}
 }
