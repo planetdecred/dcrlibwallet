@@ -136,7 +136,7 @@ func (mw *MultiWallet) WalletWithXPub(xpub string) (int, error) {
 	ctx, cancel := mw.contextWithShutdownCancel()
 	defer cancel()
 
-	for _, w := range mw.wallets {
+	for _, w := range mw.Assets.DCR.Wallets {
 		if !w.WalletOpened() {
 			return -1, errors.Errorf("wallet %d is not open and cannot be checked", w.ID)
 		}
@@ -173,7 +173,7 @@ func (mw *MultiWallet) WalletWithSeed(seedMnemonic string) (int, error) {
 		return -1, err
 	}
 
-	for _, wallet := range mw.wallets {
+	for _, wallet := range mw.Assets.DCR.Wallets {
 		if !wallet.WalletOpened() {
 			return -1, errors.Errorf("cannot check if seed matches unloaded wallet %d", wallet.ID)
 		}

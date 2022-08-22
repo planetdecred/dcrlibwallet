@@ -19,14 +19,24 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+type Assets struct {
+	DCR struct {
+		Wallets     map[int]*dcr.Wallet
+		BadWallets  map[int]*dcr.Wallet
+		DBDriver    string
+		RootDir     string
+		DB          *storm.DB
+		ChainParams *chaincfg.Params
+	}
+}
+
 type MultiWallet struct {
 	DbDriver string
 	RootDir  string
 	DB       *storm.DB
 
 	ChainParams *chaincfg.Params
-	wallets     map[int]*dcr.Wallet
-	badWallets  map[int]*dcr.Wallet
+	Assets      *Assets
 
 	shuttingDown chan bool
 	cancelFuncs  []context.CancelFunc
@@ -53,8 +63,23 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 		RootDir:     dcrRootDir,
 		DB:          dcrDB,
 		ChainParams: chainParams,
-		wallets:     make(map[int]*dcr.Wallet),
-		badWallets:  make(map[int]*dcr.Wallet),
+		Assets: &Assets{
+			DCR: struct {
+				Wallets     map[int]*dcr.Wallet
+				BadWallets  map[int]*dcr.Wallet
+				DBDriver    string
+				RootDir     string
+				DB          *storm.DB
+				ChainParams *chaincfg.Params
+			}{
+				Wallets:     make(map[int]*dcr.Wallet),
+				BadWallets:  make(map[int]*dcr.Wallet),
+				DBDriver:    dbDriver,
+				RootDir:     dcrRootDir,
+				DB:          dcrDB,
+				ChainParams: chainParams,
+			},
+		},
 	}
 
 	// read saved wallets info from db and initialize wallets
@@ -72,10 +97,10 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 			err = fmt.Errorf("missing wallet database file")
 		}
 		if err != nil {
-			mw.badWallets[wallet.ID] = wallet
+			mw.Assets.DCR.BadWallets[wallet.ID] = wallet
 			log.Warnf("Ignored wallet load error for wallet %d (%s)", wallet.ID, wallet.Name)
 		} else {
-			mw.wallets[wallet.ID] = wallet
+			mw.Assets.DCR.Wallets[wallet.ID] = wallet
 		}
 
 		logLevel := wallet.ReadStringConfigValueForKey(LogLevelConfigKey, "")
@@ -105,15 +130,15 @@ func (mw *MultiWallet) Shutdown() {
 	// Trigger shuttingDown signal to cancel all contexts created with `shutdownContextWithCancel`.
 	mw.shuttingDown <- true
 
-	for _, wallet := range mw.wallets {
+	for _, wallet := range mw.Assets.DCR.Wallets {
 		wallet.CancelRescan()
 	}
 
-	for _, wallet := range mw.wallets {
+	for _, wallet := range mw.Assets.DCR.Wallets {
 		wallet.CancelSync()
 	}
 
-	for _, wallet := range mw.wallets {
+	for _, wallet := range mw.Assets.DCR.Wallets {
 		wallet.Shutdown()
 	}
 
@@ -233,7 +258,7 @@ func (mw *MultiWallet) OpenWallets(startupPassphrase []byte) error {
 		return err
 	}
 
-	for _, wallet := range mw.wallets {
+	for _, wallet := range mw.Assets.DCR.Wallets {
 		err = wallet.OpenWallet()
 		if err != nil {
 			return err
@@ -244,11 +269,11 @@ func (mw *MultiWallet) OpenWallets(startupPassphrase []byte) error {
 }
 
 func (mw *MultiWallet) AllWalletsAreWatchOnly() (bool, error) {
-	if len(mw.wallets) == 0 {
+	if len(mw.Assets.DCR.Wallets) == 0 {
 		return false, errors.New(ErrInvalid)
 	}
 
-	for _, w := range mw.wallets {
+	for _, w := range mw.Assets.DCR.Wallets {
 		if !w.IsWatchingOnlyWallet() {
 			return false, nil
 		}
@@ -258,11 +283,11 @@ func (mw *MultiWallet) AllWalletsAreWatchOnly() (bool, error) {
 }
 
 func (mw *MultiWallet) BadWallets() map[int]*dcr.Wallet {
-	return mw.badWallets
+	return mw.Assets.DCR.BadWallets
 }
 
 func (mw *MultiWallet) DeleteBadWallet(walletID int) error {
-	wallet := mw.badWallets[walletID]
+	wallet := mw.Assets.DCR.BadWallets[walletID]
 	if wallet == nil {
 		return errors.New(ErrNotExist)
 	}
@@ -275,13 +300,13 @@ func (mw *MultiWallet) DeleteBadWallet(walletID int) error {
 	}
 
 	os.RemoveAll(wallet.DataDir)
-	delete(mw.badWallets, walletID)
+	delete(mw.Assets.DCR.BadWallets, walletID)
 
 	return nil
 }
 
 func (mw *MultiWallet) WalletWithID(walletID int) *dcr.Wallet {
-	if wallet, ok := mw.wallets[walletID]; ok {
+	if wallet, ok := mw.Assets.DCR.Wallets[walletID]; ok {
 		return wallet
 	}
 	return nil
@@ -290,7 +315,7 @@ func (mw *MultiWallet) WalletWithID(walletID int) *dcr.Wallet {
 // NumWalletsNeedingSeedBackup returns the number of opened wallets whose seed haven't been verified.
 func (mw *MultiWallet) NumWalletsNeedingSeedBackup() int32 {
 	var backupsNeeded int32
-	for _, wallet := range mw.wallets {
+	for _, wallet := range mw.Assets.DCR.Wallets {
 		if wallet.WalletOpened() && wallet.EncryptedSeed != nil {
 			backupsNeeded++
 		}
@@ -299,12 +324,12 @@ func (mw *MultiWallet) NumWalletsNeedingSeedBackup() int32 {
 }
 
 func (mw *MultiWallet) LoadedWalletsCount() int32 {
-	return int32(len(mw.wallets))
+	return int32(len(mw.Assets.DCR.Wallets))
 }
 
 func (mw *MultiWallet) OpenedWalletIDsRaw() []int {
 	walletIDs := make([]int, 0)
-	for _, wallet := range mw.wallets {
+	for _, wallet := range mw.Assets.DCR.Wallets {
 		if wallet.WalletOpened() {
 			walletIDs = append(walletIDs, wallet.ID)
 		}
@@ -324,7 +349,7 @@ func (mw *MultiWallet) OpenedWalletsCount() int32 {
 
 func (mw *MultiWallet) SyncedWalletsCount() int32 {
 	var syncedWallets int32
-	for _, wallet := range mw.wallets {
+	for _, wallet := range mw.Assets.DCR.Wallets {
 		if wallet.WalletOpened() && wallet.Synced {
 			syncedWallets++
 		}
