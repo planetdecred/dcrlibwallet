@@ -1,4 +1,4 @@
-package dcrlibwallet
+package politeia
 
 import (
 	"bytes"
@@ -26,13 +26,8 @@ type politeiaClient struct {
 }
 
 const (
-	PoliteiaMainnetHost = "https://proposals.decred.org/api"
-	PoliteiaTestnetHost = "https://test-proposals.decred.org/api"
-
 	ticketVoteApi       = tkv1.APIRoute
 	proposalDetailsPath = "/proposals/"
-
-	PoliteiaLastSyncedTimestampConfigKey = "politeia_last_synced_timestamp"
 )
 
 var apiPath = www.PoliteiaWWWAPIRoute

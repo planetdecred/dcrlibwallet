@@ -1,6 +1,8 @@
-package dcrlibwallet
+package politeia
 
 import (
+	"context"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -9,7 +11,11 @@ import (
 	"strconv"
 	"time"
 
+	"decred.org/dcrwallet/v2/wallet"
+	"decred.org/dcrwallet/v2/wallet/udb"
 	"github.com/asdine/storm"
+	"github.com/decred/dcrd/chaincfg/chainhash"
+	"github.com/decred/dcrd/txscript/v4/stdaddr"
 	tkv1 "github.com/decred/politeia/politeiawww/api/ticketvote/v1"
 	www "github.com/decred/politeia/politeiawww/api/www/v1"
 )
@@ -24,21 +30,20 @@ const (
 )
 
 // Sync fetches all proposals from the server and
-func (p *Politeia) Sync() error {
-
+func (p *Politeia) Sync(ctx context.Context) error {
 	p.mu.Lock()
-
 	if p.cancelSync != nil {
 		p.mu.Unlock()
 		return errors.New(ErrSyncAlreadyInProgress)
 	}
 
-	log.Info("Politeia sync: started")
-
-	p.ctx, p.cancelSync = p.mwRef.contextWithShutdownCancel()
-	defer p.resetSyncData()
-
+	p.ctx, p.cancelSync = context.WithCancel(ctx)
+	defer func() {
+		p.cancelSync = nil
+	}()
 	p.mu.Unlock()
+
+	log.Info("Politeia sync: started")
 
 	for {
 		_, err := p.getClient()
@@ -48,8 +53,8 @@ func (p *Politeia) Sync() error {
 			continue
 		}
 
-		if done(p.ctx) {
-			return errors.New(ErrContextCanceled)
+		if p.ctx.Err() != nil {
+			return p.ctx.Err()
 		}
 
 		log.Info("Politeia sync: checking for updates")
@@ -78,16 +83,11 @@ func (p *Politeia) IsSyncing() bool {
 	return p.cancelSync != nil
 }
 
-// this function requres p.mu unlocked.
-func (p *Politeia) resetSyncData() {
-	p.cancelSync = nil
-}
-
 func (p *Politeia) StopSync() {
 	p.mu.Lock()
 	if p.cancelSync != nil {
 		p.cancelSync()
-		p.resetSyncData()
+		p.cancelSync = nil
 	}
 	p.mu.Unlock()
 	log.Info("Politeia sync: stopped")
@@ -220,7 +220,7 @@ func (p *Politeia) updateProposalDetails(oldProposal, updatedProposal Proposal) 
 		}
 	}
 
-	err := p.mwRef.db.Update(&updatedProposal)
+	err := p.db.Update(&updatedProposal)
 	if err != nil {
 		return fmt.Errorf("error saving updated proposal: %s", err.Error())
 	}
@@ -262,8 +262,8 @@ func (p *Politeia) fetchAllUnfetchedProposals(tokenInventory *www.TokenInventory
 		return nil
 	}
 
-	if done(p.ctx) {
-		return errors.New(ErrContextCanceled)
+	if p.ctx.Err() != nil {
+		return p.ctx.Err()
 	}
 
 	for category, tokens := range inventoryMap {
@@ -283,8 +283,8 @@ func (p *Politeia) fetchBatchProposals(category int32, tokens []string, broadcas
 		}
 
 		p.mu.RLock()
-		if done(p.ctx) {
-			return errors.New(ErrContextCanceled)
+		if p.ctx.Err() != nil {
+			return p.ctx.Err()
 		}
 
 		limit := int(p.client.policy.ProposalListPageSize)
@@ -302,8 +302,8 @@ func (p *Politeia) fetchBatchProposals(category int32, tokens []string, broadcas
 			return err
 		}
 
-		if done(p.ctx) {
-			return errors.New(ErrContextCanceled)
+		if p.ctx.Err() != nil {
+			return p.ctx.Err()
 		}
 
 		votesSummaries, err := p.client.batchVoteSummary(tokenBatch)
@@ -311,8 +311,8 @@ func (p *Politeia) fetchBatchProposals(category int32, tokens []string, broadcas
 			return err
 		}
 
-		if done(p.ctx) {
-			return errors.New(ErrContextCanceled)
+		if p.ctx.Err() != nil {
+			return p.ctx.Err()
 		}
 
 		for i := range proposals {
@@ -363,7 +363,7 @@ func (p *Politeia) FetchProposalDescription(token string) (string, error) {
 
 	for _, file := range proposalDetailsReply.Proposal.Files {
 		if file.Name == "index.md" {
-			b, err := DecodeBase64(file.Payload)
+			b, err := base64.StdEncoding.DecodeString(file.Payload)
 			if err != nil {
 				return "", err
 			}
@@ -385,12 +385,7 @@ func (p *Politeia) FetchProposalDescription(token string) (string, error) {
 	return "", errors.New(ErrNotExist)
 }
 
-func (p *Politeia) ProposalVoteDetailsRaw(walletID int, token string) (*ProposalVoteDetails, error) {
-	wal := p.mwRef.WalletWithID(walletID)
-	if wal == nil {
-		return nil, fmt.Errorf(ErrWalletNotFound)
-	}
-
+func (p *Politeia) ProposalVoteDetailsRaw(ctx context.Context, wallet *wallet.Wallet, token string) (*ProposalVoteDetails, error) {
 	client, err := p.getClient()
 	if err != nil {
 		return nil, err
@@ -406,12 +401,21 @@ func (p *Politeia) ProposalVoteDetailsRaw(walletID int, token string) (*Proposal
 		return nil, err
 	}
 
-	hashes, err := StringsToHashes(detailsReply.Vote.EligibleTickets)
+	eligibleTickets := detailsReply.Vote.EligibleTickets
+	hashes := make([]*chainhash.Hash, 0, len(eligibleTickets))
+	for _, v := range eligibleTickets {
+		hash, err := chainhash.NewHashFromStr(v)
+		if err != nil {
+			return nil, err
+		}
+		hashes = append(hashes, hash)
+	}
+
 	if err != nil {
 		return nil, err
 	}
 
-	ticketHashes, addresses, err := wal.Internal().CommittedTickets(wal.shutdownContext(), hashes)
+	ticketHashes, addresses, err := wallet.CommittedTickets(ctx, hashes)
 	if err != nil {
 		return nil, err
 	}
@@ -431,13 +435,13 @@ func (p *Politeia) ProposalVoteDetailsRaw(walletID int, token string) (*Proposal
 			Address: addresses[i].String(),
 		}
 
-		ainfo, err := wal.AddressInfo(eligibleticket.Address)
+		isMine, accountNumber, err := walletAddressAccount(ctx, wallet, eligibleticket.Address)
 		if err != nil {
 			return nil, err
 		}
 
-		// filter out tickets controlled by imported accounts
-		if ainfo.AccountNumber == ImportedAccountNumber {
+		// filter out tickets controlled by imported accounts or not owned by this wallet
+		if !isMine || accountNumber == udb.ImportedAddrAccount {
 			continue
 		}
 
@@ -471,8 +475,8 @@ func (p *Politeia) ProposalVoteDetailsRaw(walletID int, token string) (*Proposal
 	}, nil
 }
 
-func (p *Politeia) ProposalVoteDetails(walletID int, token string) (string, error) {
-	voteDetails, err := p.ProposalVoteDetailsRaw(walletID, token)
+func (p *Politeia) ProposalVoteDetails(ctx context.Context, wallet *wallet.Wallet, token string) (string, error) {
+	voteDetails, err := p.ProposalVoteDetailsRaw(ctx, wallet, token)
 	if err != nil {
 		return "", err
 	}
@@ -481,12 +485,7 @@ func (p *Politeia) ProposalVoteDetails(walletID int, token string) (string, erro
 	return string(result), nil
 }
 
-func (p *Politeia) CastVotes(walletID int, eligibleTickets []*ProposalVote, token, passphrase string) error {
-	wal := p.mwRef.WalletWithID(walletID)
-	if wal == nil {
-		return fmt.Errorf(ErrWalletNotFound)
-	}
-
+func (p *Politeia) CastVotes(ctx context.Context, wallet *wallet.Wallet, eligibleTickets []*ProposalVote, token, passphrase string) error {
 	client, err := p.getClient()
 	if err != nil {
 		return err
@@ -497,11 +496,11 @@ func (p *Politeia) CastVotes(walletID int, eligibleTickets []*ProposalVote, toke
 		return err
 	}
 
-	err = wal.UnlockWallet([]byte(passphrase))
+	err = wallet.Unlock(ctx, []byte(passphrase), nil)
 	if err != nil {
 		return translateError(err)
 	}
-	defer wal.LockWallet()
+	defer wallet.Lock()
 
 	votes := make([]tkv1.CastVote, 0)
 	for _, eligibleTicket := range eligibleTickets {
@@ -522,7 +521,7 @@ func (p *Politeia) CastVotes(walletID int, eligibleTickets []*ProposalVote, toke
 
 		msg := token + ticket.Hash + voteBitHex
 
-		signature, err := wal.signMessage(ticket.Address, msg)
+		signature, err := walletSignMessage(ctx, wallet, ticket.Address, msg)
 		if err != nil {
 			return err
 		}
@@ -630,4 +629,48 @@ func getUniqueTokens(tokenInventory, savedTokens []string) ([]string, []string) 
 	}
 
 	return diff, savedTokens
+}
+
+// TODO: When dcr wallets move to a different package, use dcr.Wallet from the
+// new package rather than wallet.Wallet. Then do dcr.Wallet.AddressInfo instead
+// of using this function.
+func walletAddressAccount(ctx context.Context, wallet *wallet.Wallet, address string) (bool, uint32, error) {
+	addr, err := stdaddr.DecodeAddress(address, wallet.ChainParams())
+	if err != nil {
+		return false, 0, err
+	}
+
+	known, _ := wallet.KnownAddress(ctx, addr)
+	if known != nil {
+		accountNumber, err := wallet.AccountNumber(ctx, known.AccountName())
+		return true, accountNumber, err
+	}
+
+	return false, 0, nil
+}
+
+// TODO: When dcr wallets move to a different package, use dcr.Wallet from the
+// new package rather than wallet.Wallet. Then do dcr.Wallet.signMessage instead
+// of using this function.
+func walletSignMessage(ctx context.Context, wallet *wallet.Wallet, address string, message string) ([]byte, error) {
+	addr, err := stdaddr.DecodeAddress(address, wallet.ChainParams())
+	if err != nil {
+		return nil, translateError(err)
+	}
+
+	// Addresses must have an associated secp256k1 private key and therefore
+	// must be P2PK or P2PKH (P2SH is not allowed).
+	switch addr.(type) {
+	case *stdaddr.AddressPubKeyEcdsaSecp256k1V0:
+	case *stdaddr.AddressPubKeyHashEcdsaSecp256k1V0:
+	default:
+		return nil, errors.New(ErrInvalidAddress)
+	}
+
+	sig, err := wallet.SignMessage(ctx, message, addr)
+	if err != nil {
+		return nil, translateError(err)
+	}
+
+	return sig, nil
 }

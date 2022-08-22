@@ -20,7 +20,6 @@ import (
 	"decred.org/dcrwallet/v2/wallet"
 	"decred.org/dcrwallet/v2/wallet/txrules"
 	"decred.org/dcrwallet/v2/walletseed"
-	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/dcrutil/v4"
 	"github.com/decred/dcrd/hdkeychain/v3"
@@ -184,12 +183,7 @@ func EncodeBase64(text []byte) string {
 }
 
 func DecodeBase64(base64Text string) ([]byte, error) {
-	b, err := base64.StdEncoding.DecodeString(base64Text)
-	if err != nil {
-		return nil, err
-	}
-
-	return b, nil
+	return base64.StdEncoding.DecodeString(base64Text)
 }
 
 func ShannonEntropy(text string) (entropy float64) {
@@ -236,18 +230,6 @@ func CalculateDaysBehind(lastHeaderTime int64) string {
 	} else {
 		return fmt.Sprintf("%d days", daysBehind)
 	}
-}
-
-func StringsToHashes(h []string) ([]*chainhash.Hash, error) {
-	hashes := make([]*chainhash.Hash, 0, len(h))
-	for _, v := range h {
-		hash, err := chainhash.NewHashFromStr(v)
-		if err != nil {
-			return nil, err
-		}
-		hashes = append(hashes, hash)
-	}
-	return hashes, nil
 }
 
 func roundUp(n float64) int32 {

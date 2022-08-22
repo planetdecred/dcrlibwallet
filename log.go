@@ -18,6 +18,7 @@ import (
 	"github.com/decred/slog"
 	"github.com/jrick/logrotate/rotator"
 	"github.com/planetdecred/dcrlibwallet/internal/loader"
+	"github.com/planetdecred/dcrlibwallet/internal/politeia"
 	"github.com/planetdecred/dcrlibwallet/internal/vsp"
 	"github.com/planetdecred/dcrlibwallet/spv"
 )
@@ -60,6 +61,7 @@ var (
 	cmgrLog      = backendLog.Logger("CMGR")
 	amgrLog      = backendLog.Logger("AMGR")
 	vspcLog      = backendLog.Logger("VSPC")
+	politeiaLog  = backendLog.Logger("POLT")
 )
 
 // Initialize package-global logger variables.
@@ -73,6 +75,7 @@ func init() {
 	connmgr.UseLogger(cmgrLog)
 	addrmgr.UseLogger(amgrLog)
 	vsp.UseLogger(vspcLog)
+	politeia.UseLogger(politeiaLog)
 }
 
 // subsystemLoggers maps each subsystem identifier to its associated logger.
@@ -87,6 +90,7 @@ var subsystemLoggers = map[string]slog.Logger{
 	"CMGR": cmgrLog,
 	"AMGR": amgrLog,
 	"VSPC": vspcLog,
+	"POLT": politeiaLog,
 }
 
 // initLogRotator initializes the logging rotater to write logs to logFile and
@@ -100,25 +104,6 @@ func initLogRotator(logFile string) error {
 
 	logRotator = r
 	return nil
-}
-
-// UseLoggers sets the subsystem logs to use the provided loggers.
-func UseLoggers(main, loaderLog, walletLog, tkbyLog,
-	syncLog, cmgrLog, amgrLog slog.Logger) {
-	log = main
-	loader.UseLogger(loaderLog)
-	wallet.UseLogger(walletLog)
-	udb.UseLogger(walletLog)
-	ticketbuyer.UseLogger(tkbyLog)
-	spv.UseLogger(syncLog)
-	p2p.UseLogger(syncLog)
-	connmgr.UseLogger(cmgrLog)
-	addrmgr.UseLogger(amgrLog)
-}
-
-// UseLogger sets the subsystem logs to use the provided logger.
-func UseLogger(logger slog.Logger) {
-	UseLoggers(logger, logger, logger, logger, logger, logger, logger)
 }
 
 // RegisterLogger should be called before logRotator is initialized.
