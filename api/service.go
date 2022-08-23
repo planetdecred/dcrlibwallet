@@ -129,8 +129,8 @@ func (s *Service) GetCurrentAgendaStatus() (agenda *chainjson.GetVoteInfoResult,
 		method: http.MethodGet,
 		url:    "api/stake/vote/info",
 	}
-	aStatus := &chainjson.GetVoteInfoResult{}
-	return aStatus, s.client.Do(DcrData, s.chainParams.Name, reqConf, aStatus)
+	agenda = &chainjson.GetVoteInfoResult{}
+	return agenda, s.client.Do(DcrData, s.chainParams.Name, reqConf, agenda)
 }
 
 // GetAgendas returns all agendas high level details
@@ -139,8 +139,8 @@ func (s *Service) GetAgendas() (agendas *[]apiTypes.AgendasInfo, err error) {
 		method: http.MethodGet,
 		url:    "api/agendas",
 	}
-	aList := &[]apiTypes.AgendasInfo{}
-	return aList, s.client.Do(DcrData, s.chainParams.Name, reqConf, aList)
+	agendas = &[]apiTypes.AgendasInfo{}
+	return agendas, s.client.Do(DcrData, s.chainParams.Name, reqConf, agendas)
 }
 
 // GetAgendaDetails returns the details for agenda with agendaId
@@ -149,8 +149,8 @@ func (s *Service) GetAgendaDetails(agendaId string) (agendaDetails *AgendaAPIRes
 		method: http.MethodGet,
 		url:    "api/agenda/" + agendaId,
 	}
-	aDetails := &AgendaAPIResponse{}
-	return aDetails, s.client.Do(DcrData, s.chainParams.Name, reqConf, aDetails)
+	agendaDetails = &AgendaAPIResponse{}
+	return agendaDetails, s.client.Do(DcrData, s.chainParams.Name, reqConf, agendaDetails)
 }
 
 // GetTreasuryBalance returns the current treasury balance as int64.
@@ -169,8 +169,8 @@ func (s *Service) GetTreasuryDetails() (treasuryDetails *TreasuryDetails, err er
 		method: http.MethodGet,
 		url:    "api/treasury/balance",
 	}
-	tDetails := &TreasuryDetails{}
-	return tDetails, s.client.Do(DcrData, s.chainParams.Name, reqConf, tDetails)
+	treasuryDetails = &TreasuryDetails{}
+	return treasuryDetails, s.client.Do(DcrData, s.chainParams.Name, reqConf, treasuryDetails)
 }
 
 // GetExchangeRate fetches exchange rate data summary
@@ -179,9 +179,9 @@ func (s *Service) GetExchangeRate() (rates *ExchangeRates, err error) {
 		method: http.MethodGet,
 		url:    "api/exchangerate",
 	}
-	exRates := &ExchangeRates{}
+	rates = &ExchangeRates{}
 	// Use mainnet base url for exchange rate endpoint
-	return exRates, s.client.Do(DcrData, chaincfg.MainNetParams().Name, reqConf, exRates)
+	return rates, s.client.Do(DcrData, chaincfg.MainNetParams().Name, reqConf, rates)
 }
 
 // GetExchanges fetches the current known state of all exchanges
@@ -190,9 +190,9 @@ func (s *Service) GetExchanges() (state *ExchangeState, err error) {
 		method: http.MethodGet,
 		url:    "api/exchanges",
 	}
-	exState := &ExchangeState{}
+	state = &ExchangeState{}
 	// Use mainnet base url for exchanges endpoint
-	return exState, s.client.Do(DcrData, chaincfg.MainNetParams().Name, reqConf, exState)
+	return state, s.client.Do(DcrData, chaincfg.MainNetParams().Name, reqConf, state)
 }
 
 // GetTicketFeeRateSummary returns the current ticket fee rate summary. See dcrdata's MempoolTicketFeeInfo for the specific
@@ -202,8 +202,8 @@ func (s *Service) GetTicketFeeRateSummary() (ticketInfo *apiTypes.MempoolTicketF
 		method: http.MethodGet,
 		url:    "api/mempool/sstx",
 	}
-	tFeeSum := &apiTypes.MempoolTicketFeeInfo{}
-	return tFeeSum, s.client.Do(DcrData, s.chainParams.Name, reqConf, tFeeSum)
+	ticketInfo = &apiTypes.MempoolTicketFeeInfo{}
+	return ticketInfo, s.client.Do(DcrData, s.chainParams.Name, reqConf, ticketInfo)
 }
 
 // GetTicketFeeRate returns top 25 ticket fees. Note: in cases where n < 25 and n == number of all ticket fees,
@@ -213,8 +213,8 @@ func (s *Service) GetTicketFeeRate() (ticketFeeRate *apiTypes.MempoolTicketFees,
 		method: http.MethodGet,
 		url:    "api/mempool/sstx/fees",
 	}
-	tFeeRate := &apiTypes.MempoolTicketFees{}
-	return tFeeRate, s.client.Do(DcrData, s.chainParams.Name, reqConf, tFeeRate)
+	ticketFeeRate = &apiTypes.MempoolTicketFees{}
+	return ticketFeeRate, s.client.Do(DcrData, s.chainParams.Name, reqConf, ticketFeeRate)
 }
 
 // GetNHighestTicketFeeRate returns the {nHighest} ticket fees. For cases where total number of ticker is less than
@@ -224,8 +224,8 @@ func (s *Service) GetNHighestTicketFeeRate(nHighest int) (ticketFeeRate *apiType
 		method: http.MethodGet,
 		url:    "api/mempool/sstx/fees/" + strconv.Itoa(nHighest),
 	}
-	nTFeeRate := &apiTypes.MempoolTicketFees{}
-	return nTFeeRate, s.client.Do(DcrData, s.chainParams.Name, reqConf, nTFeeRate)
+	ticketFeeRate = &apiTypes.MempoolTicketFees{}
+	return ticketFeeRate, s.client.Do(DcrData, s.chainParams.Name, reqConf, ticketFeeRate)
 }
 
 // GetTicketDetails returns all ticket details see drcdata's MempoolTicketDetails for the spcific information
@@ -235,8 +235,8 @@ func (s *Service) GetTicketDetails() (ticketDetails *apiTypes.MempoolTicketDetai
 		method: http.MethodGet,
 		url:    "api/mempool/sstx/details",
 	}
-	tDetails := &apiTypes.MempoolTicketDetails{}
-	return tDetails, s.client.Do(DcrData, s.chainParams.Name, reqConf, tDetails)
+	ticketDetails = &apiTypes.MempoolTicketDetails{}
+	return ticketDetails, s.client.Do(DcrData, s.chainParams.Name, reqConf, ticketDetails)
 }
 
 // GetNHighestTicketDetails returns the {nHighest} ticket details.
@@ -245,8 +245,8 @@ func (s *Service) GetNHighestTicketDetails(nHighest int) (ticketDetails *apiType
 		method: http.MethodGet,
 		url:    "api/mempool/sstx/details/" + strconv.Itoa(nHighest),
 	}
-	nTDetails := &apiTypes.MempoolTicketDetails{}
-	return nTDetails, s.client.Do(DcrData, s.chainParams.Name, reqConf, nTDetails)
+	ticketDetails = &apiTypes.MempoolTicketDetails{}
+	return ticketDetails, s.client.Do(DcrData, s.chainParams.Name, reqConf, ticketDetails)
 }
 
 // GetAddress returns the balances and transactions of an address.
@@ -271,8 +271,8 @@ func (s *Service) GetAddress(address string) (addressState *AddressState, err er
 		method: http.MethodGet,
 		url:    "api/v2/address/" + address,
 	}
-	addrState := &AddressState{}
-	return addrState, s.client.Do(BlockBook, s.chainParams.Name, reqConf, addrState)
+	addressState = &AddressState{}
+	return addressState, s.client.Do(BlockBook, s.chainParams.Name, reqConf, addressState)
 }
 
 // GetXpub Returns balances and transactions of an xpub.
@@ -295,8 +295,8 @@ func (s *Service) GetXpub(xPub string) (xPubBalAndTxs *XpubBalAndTxs, err error)
 		method: http.MethodGet,
 		url:    "api/v2/xpub/" + xPub,
 	}
-	xPubTxs := &XpubBalAndTxs{}
-	return xPubTxs, s.client.Do(BlockBook, s.chainParams.Name, reqConf, xPubTxs)
+	xPubBalAndTxs = &XpubBalAndTxs{}
+	return xPubBalAndTxs, s.client.Do(BlockBook, s.chainParams.Name, reqConf, xPubBalAndTxs)
 }
 
 // GetTicker returns market ticker data for the supported exchanges.
