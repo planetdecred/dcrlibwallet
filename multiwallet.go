@@ -16,6 +16,7 @@ import (
 	"github.com/asdine/storm"
 	"github.com/asdine/storm/q"
 	"github.com/decred/dcrd/chaincfg/v3"
+	"github.com/planetdecred/dcrlibwallet/internal/politeia"
 	"github.com/planetdecred/dcrlibwallet/utils"
 	"github.com/planetdecred/dcrlibwallet/walletdata"
 	bolt "go.etcd.io/bbolt"
@@ -41,7 +42,7 @@ type MultiWallet struct {
 	shuttingDown chan bool
 	cancelFuncs  []context.CancelFunc
 
-	Politeia  *Politeia
+	Politeia  *politeia.Politeia
 	dexClient *DexClient
 
 	vspMu sync.RWMutex
@@ -84,10 +85,8 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 		return nil, err
 	}
 
-	// init database for saving/reading proposal objects
-	err = mwDB.Init(&Proposal{})
+	politeia, err := politeia.New(politeiaHost, mwDB)
 	if err != nil {
-		log.Errorf("Error initializing wallets database: %s", err.Error())
 		return nil, err
 	}
 
@@ -96,6 +95,7 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 		rootDir:     rootDir,
 		db:          mwDB,
 		chainParams: chainParams,
+		Politeia:    politeia,
 		wallets:     make(map[int]*Wallet),
 		badWallets:  make(map[int]*Wallet),
 		syncData: &syncData{
@@ -103,11 +103,6 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 		},
 		txAndBlockNotificationListeners:  make(map[string]TxAndBlockNotificationListener),
 		accountMixerNotificationListener: make(map[string]AccountMixerNotificationListener),
-	}
-
-	mw.Politeia, err = newPoliteia(mw, politeiaHost)
-	if err != nil {
-		return nil, err
 	}
 
 	// read saved wallets info from db and initialize wallets

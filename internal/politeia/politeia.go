@@ -1,4 +1,4 @@
-package dcrlibwallet
+package politeia
 
 import (
 	"context"
@@ -11,13 +11,24 @@ import (
 	"github.com/asdine/storm/q"
 )
 
+const (
+	PoliteiaMainnetHost = "https://proposals.decred.org/api"
+	PoliteiaTestnetHost = "https://test-proposals.decred.org/api"
+
+	configDBBkt                  = "politeia_config"
+	LastSyncedTimestampConfigKey = "politeia_last_synced_timestamp"
+)
+
 type Politeia struct {
-	mwRef                   *MultiWallet
-	host                    string
-	mu                      sync.RWMutex
-	ctx                     context.Context
-	cancelSync              context.CancelFunc
-	client                  *politeiaClient
+	host string
+	db   *storm.DB
+
+	// TODO: Check usages of mu, seems not to always be unlocked.
+	mu         sync.RWMutex
+	ctx        context.Context
+	cancelSync context.CancelFunc
+	client     *politeiaClient
+
 	notificationListenersMu sync.RWMutex
 	notificationListeners   map[string]ProposalNotificationListener
 }
@@ -31,38 +42,47 @@ const (
 	ProposalCategoryAbandoned
 )
 
-func newPoliteia(mwRef *MultiWallet, host string) (*Politeia, error) {
-	p := &Politeia{
-		mwRef:                 mwRef,
-		host:                  host,
-		client:                nil,
-		notificationListeners: make(map[string]ProposalNotificationListener),
+func New(host string, db *storm.DB) (*Politeia, error) {
+	if err := db.Init(&Proposal{}); err != nil {
+		log.Errorf("Error initializing politeia database: %s", err.Error())
+		return nil, err
 	}
 
-	return p, nil
+	return &Politeia{
+		host:                  host,
+		db:                    db,
+		notificationListeners: make(map[string]ProposalNotificationListener),
+	}, nil
 }
 
 func (p *Politeia) saveLastSyncedTimestamp(lastSyncedTimestamp int64) {
-	p.mwRef.SetLongConfigValueForKey(PoliteiaLastSyncedTimestampConfigKey, lastSyncedTimestamp)
+	err := p.db.Set(configDBBkt, LastSyncedTimestampConfigKey, lastSyncedTimestamp)
+	if err != nil {
+		log.Errorf("error setting config value for key: %s, error: %v", LastSyncedTimestampConfigKey, err)
+	}
 }
 
-func (p *Politeia) getLastSyncedTimestamp() int64 {
-	return p.mwRef.ReadLongConfigValueForKey(PoliteiaLastSyncedTimestampConfigKey, 0)
+func (p *Politeia) getLastSyncedTimestamp() (lastSyncedTimestamp int64) {
+	err := p.db.Get(configDBBkt, LastSyncedTimestampConfigKey, lastSyncedTimestamp)
+	if err != nil && err != storm.ErrNotFound {
+		log.Errorf("error reading config value for key: %s, error: %v", LastSyncedTimestampConfigKey, err)
+	}
+	return lastSyncedTimestamp
 }
 
 func (p *Politeia) saveOrOverwiteProposal(proposal *Proposal) error {
 	var oldProposal Proposal
-	err := p.mwRef.db.One("Token", proposal.Token, &oldProposal)
+	err := p.db.One("Token", proposal.Token, &oldProposal)
 	if err != nil && err != storm.ErrNotFound {
 		return errors.Errorf("error checking if proposal was already indexed: %s", err.Error())
 	}
 
 	if oldProposal.Token != "" {
 		// delete old record before saving new (if it exists)
-		p.mwRef.db.DeleteStruct(oldProposal)
+		p.db.DeleteStruct(oldProposal)
 	}
 
-	return p.mwRef.db.Save(proposal)
+	return p.db.Save(proposal)
 }
 
 // GetProposalsRaw fetches and returns a proposals from the db
@@ -77,16 +97,16 @@ func (p *Politeia) getProposalsRaw(category int32, offset, limit int32, newestFi
 	case ProposalCategoryAll:
 
 		if skipAbandoned {
-			query = p.mwRef.db.Select(
+			query = p.db.Select(
 				q.Not(q.Eq("Category", ProposalCategoryAbandoned)),
 			)
 		} else {
-			query = p.mwRef.db.Select(
+			query = p.db.Select(
 				q.True(),
 			)
 		}
 	default:
-		query = p.mwRef.db.Select(
+		query = p.db.Select(
 			q.Eq("Category", category),
 		)
 	}
@@ -137,7 +157,7 @@ func (p *Politeia) GetProposals(category int32, offset, limit int32, newestFirst
 // GetProposalRaw fetches and returns a single proposal specified by it's censorship record token
 func (p *Politeia) GetProposalRaw(censorshipToken string) (*Proposal, error) {
 	var proposal Proposal
-	err := p.mwRef.db.One("Token", censorshipToken, &proposal)
+	err := p.db.One("Token", censorshipToken, &proposal)
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +173,7 @@ func (p *Politeia) GetProposal(censorshipToken string) (string, error) {
 // GetProposalByIDRaw fetches and returns a single proposal specified by it's ID
 func (p *Politeia) GetProposalByIDRaw(proposalID int) (*Proposal, error) {
 	var proposal Proposal
-	err := p.mwRef.db.One("ID", proposalID, &proposal)
+	err := p.db.One("ID", proposalID, &proposal)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +196,7 @@ func (p *Politeia) Count(category int32) (int32, error) {
 		matcher = q.Eq("Category", category)
 	}
 
-	count, err := p.mwRef.db.Select(matcher).Count(&Proposal{})
+	count, err := p.db.Select(matcher).Count(&Proposal{})
 	if err != nil {
 		return 0, err
 	}
@@ -222,12 +242,12 @@ func (p *Politeia) Overview() (*ProposalOverview, error) {
 }
 
 func (p *Politeia) ClearSavedProposals() error {
-	err := p.mwRef.db.Drop(&Proposal{})
+	err := p.db.Drop(&Proposal{})
 	if err != nil {
 		return translateError(err)
 	}
 
-	return p.mwRef.db.Init(&Proposal{})
+	return p.db.Init(&Proposal{})
 }
 
 func (p *Politeia) marshalResult(result interface{}, err error) (string, error) {
