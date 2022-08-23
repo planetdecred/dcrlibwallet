@@ -58,7 +58,7 @@ type (
 		BtcPrice  float64              `json:"btcPrice"`
 		Exchanges map[string]BaseState `json:"exchanges"`
 	}
-
+	// ExchangeState models the dcrdata supported exchanges state.
 	ExchangeState struct {
 		BtcIndex    string                    `json:"btc_index"`
 		BtcPrice    float64                   `json:"btc_fiat_price"`
@@ -80,6 +80,7 @@ type (
 		TxIds              []string `json:"txids"`
 	}
 
+	// XpubAddress models data about a specific xpub token.
 	XpubAddress struct {
 		Address       string `json:"name"`
 		Path          string `json:"path"`
@@ -103,7 +104,8 @@ type (
 		UsedTokens         int32         `json:"usedTokens"`
 		XpubAddress        []XpubAddress `json:"tokens"`
 	}
-
+	// Ticker is the generic ticker information that is returned
+	// to a caller of GetTiker function.
 	Ticker struct {
 		Exchange       string
 		Symbol         string
@@ -111,14 +113,14 @@ type (
 		BidPrice       float64
 		AskPrice       float64
 	}
-
+	// BittrexTicker models bittrex specific ticker information.
 	BittrexTicker struct {
 		Symbol        string  `json:"symbol"`
 		LastTradeRate float64 `json:"lastTradeRate,string"`
 		Bid           float64 `json:"bidRate,string"`
 		Ask           float64 `json:"askRate,string"`
 	}
-
+	// BinanceTicker models binance specific ticker information.
 	BinanceTicker struct {
 		AskPrice           float64 `json:"askPrice,string"`
 		AskQty             float64 `json:"askQty,string"`
@@ -142,7 +144,7 @@ type (
 		Volume             float64 `json:"volume,string"`
 		WeightedAvgPrice   float64 `json:"weightedAvgPrice,string"`
 	}
-
+	// KuCoinTicker models Kucoin's specific ticker information.
 	KuCoinTicker struct {
 		Code int `json:"code,string"`
 		Data struct {

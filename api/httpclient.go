@@ -47,7 +47,7 @@ func NewClient() (c *Client) {
 	}
 }
 
-// Do prepare and process HTTP request to API
+// Do prepare and process HTTP request to backend resources.
 func (c *Client) Do(backend Backend, net string, reqConfig *ReqConfig, response interface{}) (err error) {
 	c.setBackend(backend, net, reqConfig)
 	if c.RequestFilter == nil {
@@ -82,7 +82,7 @@ func (c *Client) Do(backend Backend, net string, reqConfig *ReqConfig, response 
 	}
 
 	// if retByte is option is true. Response from the resource queried
-	// is not in json format, don't unmarshal return reponse byte slice to the caller for further processing.
+	// is not in json format, don't unmarshal return response byte slice to the caller for further processing.
 	if reqConfig.retByte {
 		r := reflect.Indirect(reflect.ValueOf(response))
 		r.Set(reflect.AppendSlice(r.Slice(0, 0), reflect.ValueOf(body)))

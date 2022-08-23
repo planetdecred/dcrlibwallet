@@ -13,7 +13,9 @@ import (
 )
 
 type (
+	// Backend defines the backend type.
 	Backend string
+	// Service provide functions for accessing backend resources.
 	Service struct {
 		client      *Client
 		chainParams *chaincfg.Params
@@ -21,6 +23,10 @@ type (
 )
 
 const (
+	// Bittrex signifies bittrex backend. Should be used when calling
+	// bittrex specific functions from external application/library
+	// e.g Service.GetTicker(API.Bittrex, "btc-usdt")
+	// All backend types below should be used in this fashion.
 	Bittrex                  Backend = "bittrex"
 	Binance                  Backend = "binance"
 	BlockBook                Backend = "blockbook"
@@ -33,6 +39,7 @@ const (
 )
 
 var (
+	// mainnetUrl maps supported backends to their current mainnet url scheme and authority.
 	mainnetUrl = map[Backend]string{
 		Bittrex:   "https://api.bittrex.com/v3",
 		Binance:   "https://api.binance.com",
@@ -40,20 +47,20 @@ var (
 		DcrData:   "https://mainnet.dcrdata.org/",
 		KuCoin:    "https://api.kucoin.com",
 	}
-
+	// testnetUrl maps supported backends to their current testnet url scheme and authority.
 	testnetUrl = map[Backend]string{
 		Binance:   "https://testnet.binance.vision",
 		BlockBook: "https://blockbook.decred.org:19161/",
 		DcrData:   "https://testnet.dcrdata.org/",
 		KuCoin:    "https://openapi-sandbox.kucoin.com",
 	}
-
 	backendUrl = map[string]map[Backend]string{
 		chaincfg.MainNetParams().Name:  mainnetUrl,
 		chaincfg.TestNet3Params().Name: testnetUrl,
 	}
 )
 
+// NewService configures and return a news instance of API service type.
 func NewService(chainParams *chaincfg.Params) *Service {
 	client := NewClient()
 	client.RequestFilter = func(reqConfig *ReqConfig) (req *http.Request, err error) {
@@ -188,6 +195,8 @@ func (s *Service) GetExchanges() (state *ExchangeState, err error) {
 	return exState, s.client.Do(DcrData, chaincfg.MainNetParams().Name, reqConf, exState)
 }
 
+// GetTicketFeeRateSummary returns the current ticket fee rate summary. See dcrdata's MempoolTicketFeeInfo for the specific
+// data returned.
 func (s *Service) GetTicketFeeRateSummary() (ticketInfo *apiTypes.MempoolTicketFeeInfo, err error) {
 	reqConf := &ReqConfig{
 		method: http.MethodGet,
@@ -197,6 +206,8 @@ func (s *Service) GetTicketFeeRateSummary() (ticketInfo *apiTypes.MempoolTicketF
 	return tFeeSum, s.client.Do(DcrData, s.chainParams.Name, reqConf, tFeeSum)
 }
 
+// GetTicketFeeRate returns top 25 ticket fees. Note: in cases where n < 25 and n == number of all ticket fees,
+// It returns n.
 func (s *Service) GetTicketFeeRate() (ticketFeeRate *apiTypes.MempoolTicketFees, err error) {
 	reqConf := &ReqConfig{
 		method: http.MethodGet,
@@ -206,6 +217,8 @@ func (s *Service) GetTicketFeeRate() (ticketFeeRate *apiTypes.MempoolTicketFees,
 	return tFeeRate, s.client.Do(DcrData, s.chainParams.Name, reqConf, tFeeRate)
 }
 
+// GetNHighestTicketFeeRate returns the {nHighest} ticket fees. For cases where total number of ticker is less than
+// {nHighest} it returns the fee rate for the total number of tickets.
 func (s *Service) GetNHighestTicketFeeRate(nHighest int) (ticketFeeRate *apiTypes.MempoolTicketFees, err error) {
 	reqConf := &ReqConfig{
 		method: http.MethodGet,
@@ -215,6 +228,8 @@ func (s *Service) GetNHighestTicketFeeRate(nHighest int) (ticketFeeRate *apiType
 	return nTFeeRate, s.client.Do(DcrData, s.chainParams.Name, reqConf, nTFeeRate)
 }
 
+// GetTicketDetails returns all ticket details see drcdata's MempoolTicketDetails for the spcific information
+// returned.
 func (s *Service) GetTicketDetails() (ticketDetails *apiTypes.MempoolTicketDetails, err error) {
 	reqConf := &ReqConfig{
 		method: http.MethodGet,
@@ -224,6 +239,7 @@ func (s *Service) GetTicketDetails() (ticketDetails *apiTypes.MempoolTicketDetai
 	return tDetails, s.client.Do(DcrData, s.chainParams.Name, reqConf, tDetails)
 }
 
+// GetNHighestTicketDetails returns the {nHighest} ticket details.
 func (s *Service) GetNHighestTicketDetails(nHighest int) (ticketDetails *apiTypes.MempoolTicketDetails, err error) {
 	reqConf := &ReqConfig{
 		method: http.MethodGet,
@@ -360,7 +376,7 @@ func (s *Service) getKucoinTicker(market string) (ticker *Ticker, err error) {
 	// We should filter those instances using the sequence number.
 	// When sequence is 0, no ticker data was returned.
 	if kTicker.Data.Sequence == 0 {
-		return nil, errors.New("An error occured. Most likely unsupported Kucoin market.")
+		return nil, errors.New("An error occurred. Most likely unsupported Kucoin market.")
 	}
 
 	ticker = &Ticker{
