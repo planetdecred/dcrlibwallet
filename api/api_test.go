@@ -104,7 +104,7 @@ var (
 		},
 	}
 
-	agendas = []apiTypes.AgendasInfo{
+	agendas = &[]apiTypes.AgendasInfo{
 		{
 			Name:        "reverttreasurypolicy",
 			Description: "Change maximum treasury expenditure policy as defined in DCP0007",
@@ -301,8 +301,8 @@ func TestGetBestBlock(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			defer tc.server.Close()
-			service.backendUrl["mainnet"][DcrData] = tc.server.URL + "/"
-			service.backendUrl["testnet3"][DcrData] = tc.server.URL + "/"
+			backendUrl["mainnet"][DcrData] = tc.server.URL + "/"
+			backendUrl["testnet3"][DcrData] = tc.server.URL + "/"
 			resp := service.GetBestBlock()
 			if !reflect.DeepEqual(resp, tc.expectedResponse) {
 				t.Errorf("(%v), expected (%v), got (%v)", tc.name, tc.expectedResponse, resp)
@@ -337,8 +337,8 @@ func TestGetBestBlockTimeStamp(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			defer tc.server.Close()
-			service.backendUrl["mainnet"][DcrData] = tc.server.URL + "/"
-			service.backendUrl["testnet3"][DcrData] = tc.server.URL + "/"
+			backendUrl["mainnet"][DcrData] = tc.server.URL + "/"
+			backendUrl["testnet3"][DcrData] = tc.server.URL + "/"
 			resp := service.GetBestBlockTimeStamp()
 			if !reflect.DeepEqual(resp, tc.expectedResponse) {
 				t.Errorf("(%v), expected (%v), got (%v)", tc.name, tc.expectedResponse, resp)
@@ -376,8 +376,8 @@ func TestGetCurrentAgendaStatus(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			defer tc.server.Close()
-			service.backendUrl["mainnet"][DcrData] = tc.server.URL + "/"
-			service.backendUrl["testnet3"][DcrData] = tc.server.URL + "/"
+			backendUrl["mainnet"][DcrData] = tc.server.URL + "/"
+			backendUrl["testnet3"][DcrData] = tc.server.URL + "/"
 			resp, err := service.GetCurrentAgendaStatus()
 			if !reflect.DeepEqual(resp, tc.expectedResponse) {
 				t.Errorf("(%v), expected (%v), got (%v)", tc.name, tc.expectedResponse, resp)
@@ -394,7 +394,7 @@ func TestGetAgendas(t *testing.T) {
 	tests := []struct {
 		name             string
 		server           *httptest.Server
-		expectedResponse []apiTypes.AgendasInfo
+		expectedResponse *[]apiTypes.AgendasInfo
 		expectedErr      error
 	}{
 		{
@@ -413,8 +413,8 @@ func TestGetAgendas(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			defer tc.server.Close()
-			service.backendUrl["mainnet"][DcrData] = tc.server.URL + "/"
-			service.backendUrl["testnet3"][DcrData] = tc.server.URL + "/"
+			backendUrl["mainnet"][DcrData] = tc.server.URL + "/"
+			backendUrl["testnet3"][DcrData] = tc.server.URL + "/"
 			resp, err := service.GetAgendas()
 			if !reflect.DeepEqual(resp, tc.expectedResponse) {
 				t.Errorf("(%v), expected (%v), got (%v)", tc.name, tc.expectedResponse, resp)
@@ -450,8 +450,8 @@ func TestGetTreasuryBalance(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			defer tc.server.Close()
-			service.backendUrl["mainnet"][DcrData] = tc.server.URL + "/"
-			service.backendUrl["testnet3"][DcrData] = tc.server.URL + "/"
+			backendUrl["mainnet"][DcrData] = tc.server.URL + "/"
+			backendUrl["testnet3"][DcrData] = tc.server.URL + "/"
 			resp, err := service.GetTreasuryBalance()
 			if !reflect.DeepEqual(resp, tc.expectedResponse) {
 				t.Errorf("(%v), expected (%v), got (%v)", tc.name, tc.expectedResponse, resp)
@@ -490,8 +490,8 @@ func TestGetExchangeRate(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			defer tc.server.Close()
-			service.backendUrl["mainnet"][DcrData] = tc.server.URL + "/"
-			service.backendUrl["testnet3"][DcrData] = tc.server.URL + "/"
+			backendUrl["mainnet"][DcrData] = tc.server.URL + "/"
+			backendUrl["testnet3"][DcrData] = tc.server.URL + "/"
 			resp, err := service.GetExchangeRate()
 			if !reflect.DeepEqual(resp, tc.expectedResponse) {
 				t.Errorf("(%v), expected (%v), got (%v)", tc.name, tc.expectedResponse, resp)
@@ -525,8 +525,8 @@ func TestGetTicketFeeRateSummary(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			defer tc.server.Close()
-			service.backendUrl["mainnet"][DcrData] = tc.server.URL + "/"
-			service.backendUrl["testnet3"][DcrData] = tc.server.URL + "/"
+			backendUrl["mainnet"][DcrData] = tc.server.URL + "/"
+			backendUrl["testnet3"][DcrData] = tc.server.URL + "/"
 			resp, err := service.GetTicketFeeRateSummary()
 			if !reflect.DeepEqual(resp, tc.expectedResponse) {
 				t.Errorf("(%v), expected (%v), got (%v)", tc.name, tc.expectedResponse, resp)
@@ -560,8 +560,8 @@ func TestGetTicketFeeRate(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			defer tc.server.Close()
-			service.backendUrl["mainnet"][DcrData] = tc.server.URL + "/"
-			service.backendUrl["testnet3"][DcrData] = tc.server.URL + "/"
+			backendUrl["mainnet"][DcrData] = tc.server.URL + "/"
+			backendUrl["testnet3"][DcrData] = tc.server.URL + "/"
 			resp, err := service.GetTicketFeeRate()
 			if !reflect.DeepEqual(resp, tc.expectedResponse) {
 				t.Errorf("(%v), expected (%v), got (%v)", tc.name, tc.expectedResponse, resp)
@@ -605,8 +605,8 @@ func TestGetAddress(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			defer tc.server.Close()
-			service.backendUrl["mainnet"][DcrData] = tc.server.URL + "/"
-			service.backendUrl["testnet3"][DcrData] = tc.server.URL + "/"
+			backendUrl["mainnet"][DcrData] = tc.server.URL + "/"
+			backendUrl["testnet3"][DcrData] = tc.server.URL + "/"
 			resp, err := service.GetAddress("DsTxPUVFxXeNgu5fzozr4mTR4tqqMaKcvpY")
 			if !reflect.DeepEqual(resp, tc.expectedResponse) {
 				t.Errorf("(%v), expected (%v), got (%v)", tc.name, tc.expectedResponse, resp)
