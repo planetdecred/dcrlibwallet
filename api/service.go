@@ -355,6 +355,14 @@ func (s *Service) getKucoinTicker(market string) (ticker *Ticker, err error) {
 	if err != nil {
 		return
 	}
+
+	// Kucoin doesn't send back error code if it doesn't support the supplied market.
+	// We should filter those instances using the sequence number.
+	// When sequence is 0, no ticker data was returned.
+	if kTicker.Data.Sequence == 0 {
+		return nil, errors.New("An error occured. Most likely unsupported Kucoin market.")
+	}
+
 	ticker = &Ticker{
 		Exchange:       string(KuCoin),
 		Symbol:         strings.ToUpper(market),

@@ -78,7 +78,7 @@ func (c *Client) Do(backend Backend, net string, reqConfig *ReqConfig, response 
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Error: status: %v resp: %s", resp.Status, response)
+		return fmt.Errorf("Error: status: %v resp: %s", resp.Status, body)
 	}
 
 	// if retByte is option is true. Response from the resource queried
