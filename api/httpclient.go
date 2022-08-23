@@ -1,11 +1,13 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
+	"reflect"
 	"strings"
 	"time"
 )
@@ -19,22 +21,19 @@ type (
 	// Client is the base for http/https calls
 	Client struct {
 		httpClient    *http.Client
-		Debug         bool
-		BaseUrl       string
-		RequestFilter func(info RequestInfo) (req *http.Request, err error)
+		RequestFilter func(reqConfig *ReqConfig) (req *http.Request, err error)
 	}
 
-	// RequestInfo models the http request data.
-	RequestInfo struct {
-		client  *Client
-		request *http.Request
-		Payload []byte
-		Method  string
-		Url     string
+	// ReqConfig models the configuration options for requests.
+	ReqConfig struct {
+		payload []byte
+		method  string
+		url     string
+		retByte bool // if set to true, client.Do will delegate response processing to caller.
 	}
 )
 
-// NewClient return a new HTTP client
+// NewClient configures and return a new client
 func NewClient() (c *Client) {
 	t := http.DefaultTransport.(*http.Transport).Clone()
 	client := &http.Client{
@@ -49,50 +48,53 @@ func NewClient() (c *Client) {
 }
 
 // Do prepare and process HTTP request to API
-func (c *Client) Do(method, resource string, payload []byte) (response []byte, err error) {
-	var rawurl = fmt.Sprintf("%s%s", c.BaseUrl, resource)
-	if strings.HasPrefix(resource, "http") {
-		rawurl = resource
+func (c *Client) Do(backend Backend, net string, reqConfig *ReqConfig, response interface{}) (err error) {
+	c.setBackend(backend, net, reqConfig)
+	if c.RequestFilter == nil {
+		return errors.New("Request Filter was not set")
 	}
 
 	var req *http.Request
-	reqInfo := RequestInfo{
-		client:  c,
-		Method:  method,
-		Payload: payload,
-		Url:     rawurl,
-	}
-
-	if c.RequestFilter == nil {
-		return response, errors.New("Request Filter was not set")
-	}
-
-	req, err = c.RequestFilter(reqInfo)
+	req, err = c.RequestFilter(reqConfig)
 	if err != nil {
-		return response, err
+		return err
 	}
 
 	if req == nil {
-		return response, errors.New("error: nil request")
+		return errors.New("error: nil request")
 	}
 
 	c.dumpRequest(req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return response, err
+		return err
 	}
 	c.dumpResponse(resp)
 
 	defer resp.Body.Close()
-	response, err = ioutil.ReadAll(resp.Body)
+	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return response, err
+		return err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return response, fmt.Errorf("Error: status: %v resp: %s", resp.Status, response)
+		return fmt.Errorf("Error: status: %v resp: %s", resp.Status, response)
 	}
-	return response, err
+
+	// if retByte is option is true. Response from the resource queried
+	// is not in json format, don't unmarshal return reponse byte slice to the caller for further processing.
+	if reqConfig.retByte {
+		r := reflect.Indirect(reflect.ValueOf(response))
+		r.Set(reflect.AppendSlice(r.Slice(0, 0), reflect.ValueOf(body)))
+		return nil
+	}
+
+	err = json.Unmarshal(body, response)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (c *Client) dumpRequest(r *http.Request) {
@@ -118,5 +120,18 @@ func (c *Client) dumpResponse(r *http.Response) {
 		log.Debug("dumpResponse err: %v", err)
 	} else {
 		log.Debug("dumpResponse ok: %v", string(dump))
+	}
+}
+
+// Setbackend sets the appropriate URL scheme and authority for the backend resource.
+func (c *Client) setBackend(backend Backend, net string, reqConfig *ReqConfig) {
+	// Check if URL scheme and authority is already set.
+	if strings.HasPrefix(reqConfig.url, "http") {
+		return
+	}
+
+	// Prepend URL sheme and authority to the URL.
+	if authority, ok := backendUrl[net][backend]; ok {
+		reqConfig.url = fmt.Sprintf("%s%s", authority, reqConfig.url)
 	}
 }

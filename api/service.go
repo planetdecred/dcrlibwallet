@@ -2,39 +2,34 @@ package api
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/decred/dcrd/chaincfg/v3"
 	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v3"
 	apiTypes "github.com/decred/dcrdata/v7/api/types"
 )
 
-type Backend string
-type Service struct {
-	client      *Client
-	chainParams *chaincfg.Params
-	backendUrl  map[string]map[Backend]string
-	urlMu       sync.Mutex
-}
-
-const (
-	Bittrex   Backend = "bittrex"
-	Binance   Backend = "binance"
-	BlockBook Backend = "blockbook"
-	DcrData   Backend = "dcrdata"
-	KuCoin    Backend = "kucoin"
+type (
+	Backend string
+	Service struct {
+		client      *Client
+		chainParams *chaincfg.Params
+	}
 )
 
 const (
-	testnetAddressIndetifier = "T"
-	mainnetAddressIdentifier = "D"
-	mainnetXpubIdentifier    = "d"
-	testnetXpubIdentifier    = "t"
+	Bittrex                  Backend = "bittrex"
+	Binance                  Backend = "binance"
+	BlockBook                Backend = "blockbook"
+	DcrData                  Backend = "dcrdata"
+	KuCoin                   Backend = "kucoin"
+	testnetAddressIndetifier         = "T"
+	mainnetAddressIdentifier         = "D"
+	mainnetXpubIdentifier            = "d"
+	testnetXpubIdentifier            = "t"
 )
 
 var (
@@ -52,17 +47,22 @@ var (
 		DcrData:   "https://testnet.dcrdata.org/",
 		KuCoin:    "https://openapi-sandbox.kucoin.com",
 	}
+
+	backendUrl = map[string]map[Backend]string{
+		chaincfg.MainNetParams().Name:  mainnetUrl,
+		chaincfg.TestNet3Params().Name: testnetUrl,
+	}
 )
 
 func NewService(chainParams *chaincfg.Params) *Service {
 	client := NewClient()
-	client.RequestFilter = func(info RequestInfo) (req *http.Request, err error) {
-		req, err = http.NewRequest(info.Method, info.Url, bytes.NewBuffer(info.Payload))
+	client.RequestFilter = func(reqConfig *ReqConfig) (req *http.Request, err error) {
+		req, err = http.NewRequest(reqConfig.method, reqConfig.url, bytes.NewBuffer(reqConfig.payload))
 		if err != nil {
 			log.Error(err)
 			return
 		}
-		if info.Method == "POST" || info.Method == "PUT" {
+		if reqConfig.method == http.MethodPost || reqConfig.method == http.MethodPut {
 			req.Header.Add("Content-Type", "application/json;charset=utf-8")
 		}
 		req.Header.Add("Accept", "application/json")
@@ -73,23 +73,25 @@ func NewService(chainParams *chaincfg.Params) *Service {
 	return &Service{
 		client:      client,
 		chainParams: chainParams,
-		backendUrl: map[string]map[Backend]string{
-			chaincfg.MainNetParams().Name:  mainnetUrl,
-			chaincfg.TestNet3Params().Name: testnetUrl,
-		},
 	}
 }
 
 // GetBestBlock returns the best block height as int32.
 func (s *Service) GetBestBlock() int32 {
-	s.setBackend(DcrData)
-	r, err := s.client.Do(http.MethodGet, "api/block/best/height", nil)
+	reqConf := &ReqConfig{
+		method:  http.MethodGet,
+		url:     "api/block/best/height",
+		retByte: true,
+	}
+
+	var resp []byte
+	err := s.client.Do(DcrData, s.chainParams.Name, reqConf, &resp)
 	if err != nil {
 		log.Error(err)
 		return -1
 	}
 
-	h, err := strconv.ParseInt(string(r), 10, 32)
+	h, err := strconv.ParseInt(string(resp), 10, 32)
 	if err != nil {
 		log.Error(err)
 		return -1
@@ -100,202 +102,140 @@ func (s *Service) GetBestBlock() int32 {
 
 // GetBestBlockTimeStamp returns best block time, as unix timestamp.
 func (s *Service) GetBestBlockTimeStamp() int64 {
-	s.setBackend(DcrData)
-	r, err := s.client.Do(http.MethodGet, "api/block/best?txtotals=false", nil)
+	reqConf := &ReqConfig{
+		method: http.MethodGet,
+		url:    "api/block/best?txtotals=false",
+	}
+
+	resp := &BlockDataBasic{}
+	err := s.client.Do(DcrData, s.chainParams.Name, reqConf, resp)
 	if err != nil {
 		log.Error(err)
 		return -1
 	}
-	var blockDataBasic *BlockDataBasic
-	err = json.Unmarshal(r, &blockDataBasic)
-	if err != nil {
-		log.Error(err)
-		return -1
-	}
-	return blockDataBasic.Time.UNIX()
+	return resp.Time.UNIX()
 }
 
 // GetCurrentAgendaStatus returns the current agenda and its status.
 func (s *Service) GetCurrentAgendaStatus() (agenda *chainjson.GetVoteInfoResult, err error) {
-	s.setBackend(DcrData)
-	r, err := s.client.Do(http.MethodGet, "api/stake/vote/info", nil)
-	if err != nil {
-		return
+	reqConf := &ReqConfig{
+		method: http.MethodGet,
+		url:    "api/stake/vote/info",
 	}
-	err = json.Unmarshal(r, &agenda)
-	if err != nil {
-		return
-	}
-	return
+	aStatus := &chainjson.GetVoteInfoResult{}
+	return aStatus, s.client.Do(DcrData, s.chainParams.Name, reqConf, aStatus)
 }
 
 // GetAgendas returns all agendas high level details
-func (s *Service) GetAgendas() (agendas []apiTypes.AgendasInfo, err error) {
-	s.setBackend(DcrData)
-	r, err := s.client.Do(http.MethodGet, "api/agendas", nil)
-	if err != nil {
-		return
+func (s *Service) GetAgendas() (agendas *[]apiTypes.AgendasInfo, err error) {
+	reqConf := &ReqConfig{
+		method: http.MethodGet,
+		url:    "api/agendas",
 	}
-	err = json.Unmarshal(r, &agendas)
-	if err != nil {
-		return
-	}
-	return
+	aList := &[]apiTypes.AgendasInfo{}
+	return aList, s.client.Do(DcrData, s.chainParams.Name, reqConf, aList)
 }
 
 // GetAgendaDetails returns the details for agenda with agendaId
 func (s *Service) GetAgendaDetails(agendaId string) (agendaDetails *AgendaAPIResponse, err error) {
-	s.setBackend(DcrData)
-	r, err := s.client.Do(http.MethodGet, "api/agenda/"+agendaId, nil)
-	if err != nil {
-		return
+	reqConf := &ReqConfig{
+		method: http.MethodGet,
+		url:    "api/agenda/" + agendaId,
 	}
-	err = json.Unmarshal(r, &agendaDetails)
-	if err != nil {
-		return
-	}
-	return
+	aDetails := &AgendaAPIResponse{}
+	return aDetails, s.client.Do(DcrData, s.chainParams.Name, reqConf, aDetails)
 }
 
 // GetTreasuryBalance returns the current treasury balance as int64.
 func (s *Service) GetTreasuryBalance() (bal int64, err error) {
-	s.setBackend(DcrData)
-	r, err := s.client.Do(http.MethodGet, "api/treasury/balance", nil)
+	treasury, err := s.GetTreasuryDetails()
 	if err != nil {
-		return
+		return bal, err
 	}
-
-	treasury := &TreasuryDetails{}
-	err = json.Unmarshal(r, treasury)
-	if err != nil {
-		return
-	}
-	bal = treasury.Balance
-	return
+	return treasury.Balance, err
 }
 
 // GetTreasuryDetails the current tresury balance, spent amount, added amount, and tx count for the
 // treasury.
 func (s *Service) GetTreasuryDetails() (treasuryDetails *TreasuryDetails, err error) {
-	s.setBackend(DcrData)
-	r, err := s.client.Do(http.MethodGet, "api/treasury/balance", nil)
-	if err != nil {
-		return
+	reqConf := &ReqConfig{
+		method: http.MethodGet,
+		url:    "api/treasury/balance",
 	}
-
-	err = json.Unmarshal(r, &treasuryDetails)
-	if err != nil {
-		return
-	}
-	return
+	tDetails := &TreasuryDetails{}
+	return tDetails, s.client.Do(DcrData, s.chainParams.Name, reqConf, tDetails)
 }
 
 // GetExchangeRate fetches exchange rate data summary
 func (s *Service) GetExchangeRate() (rates *ExchangeRates, err error) {
-	s.setBackendMainnet(DcrData)
+	reqConf := &ReqConfig{
+		method: http.MethodGet,
+		url:    "api/exchangerate",
+	}
+	exRates := &ExchangeRates{}
 	// Use mainnet base url for exchange rate endpoint
-	r, err := s.client.Do(http.MethodGet, "api/exchangerate", nil)
-	if err != nil {
-		return
-	}
-
-	err = json.Unmarshal(r, &rates)
-	if err != nil {
-		return
-	}
-	return
+	return exRates, s.client.Do(DcrData, chaincfg.MainNetParams().Name, reqConf, exRates)
 }
 
 // GetExchanges fetches the current known state of all exchanges
 func (s *Service) GetExchanges() (state *ExchangeState, err error) {
+	reqConf := &ReqConfig{
+		method: http.MethodGet,
+		url:    "api/exchanges",
+	}
+	exState := &ExchangeState{}
 	// Use mainnet base url for exchanges endpoint
-	s.setBackendMainnet(DcrData)
-	r, err := s.client.Do(http.MethodGet, "api/exchanges", nil)
-	if err != nil {
-		return
-	}
-
-	err = json.Unmarshal(r, &state)
-	if err != nil {
-		return
-	}
-	return
+	return exState, s.client.Do(DcrData, chaincfg.MainNetParams().Name, reqConf, exState)
 }
 
 func (s *Service) GetTicketFeeRateSummary() (ticketInfo *apiTypes.MempoolTicketFeeInfo, err error) {
-	s.setBackend(DcrData)
-	r, err := s.client.Do(http.MethodGet, "api/mempool/sstx", nil)
-	if err != nil {
-		return
+	reqConf := &ReqConfig{
+		method: http.MethodGet,
+		url:    "api/mempool/sstx",
 	}
-
-	err = json.Unmarshal(r, &ticketInfo)
-	if err != nil {
-		return
-	}
-	return
+	tFeeSum := &apiTypes.MempoolTicketFeeInfo{}
+	return tFeeSum, s.client.Do(DcrData, s.chainParams.Name, reqConf, tFeeSum)
 }
 
 func (s *Service) GetTicketFeeRate() (ticketFeeRate *apiTypes.MempoolTicketFees, err error) {
-	s.setBackend(DcrData)
-	r, err := s.client.Do(http.MethodGet, "api/mempool/sstx/fees", nil)
-	if err != nil {
-		return
+	reqConf := &ReqConfig{
+		method: http.MethodGet,
+		url:    "api/mempool/sstx/fees",
 	}
-
-	err = json.Unmarshal(r, &ticketFeeRate)
-	if err != nil {
-		return
-	}
-	return
+	tFeeRate := &apiTypes.MempoolTicketFees{}
+	return tFeeRate, s.client.Do(DcrData, s.chainParams.Name, reqConf, tFeeRate)
 }
 
 func (s *Service) GetNHighestTicketFeeRate(nHighest int) (ticketFeeRate *apiTypes.MempoolTicketFees, err error) {
-	s.setBackend(DcrData)
-	r, err := s.client.Do(http.MethodGet, "api/mempool/sstx/fees/"+strconv.Itoa(nHighest), nil)
-	if err != nil {
-		return
+	reqConf := &ReqConfig{
+		method: http.MethodGet,
+		url:    "api/mempool/sstx/fees/" + strconv.Itoa(nHighest),
 	}
-
-	err = json.Unmarshal(r, &ticketFeeRate)
-	if err != nil {
-		return
-	}
-	return
+	nTFeeRate := &apiTypes.MempoolTicketFees{}
+	return nTFeeRate, s.client.Do(DcrData, s.chainParams.Name, reqConf, nTFeeRate)
 }
 
 func (s *Service) GetTicketDetails() (ticketDetails *apiTypes.MempoolTicketDetails, err error) {
-	s.setBackend(DcrData)
-	r, err := s.client.Do(http.MethodGet, "api/mempool/sstx/details", nil)
-	if err != nil {
-		return
+	reqConf := &ReqConfig{
+		method: http.MethodGet,
+		url:    "api/mempool/sstx/details",
 	}
-
-	err = json.Unmarshal(r, &ticketDetails)
-	if err != nil {
-		return
-	}
-	return
+	tDetails := &apiTypes.MempoolTicketDetails{}
+	return tDetails, s.client.Do(DcrData, s.chainParams.Name, reqConf, tDetails)
 }
 
 func (s *Service) GetNHighestTicketDetails(nHighest int) (ticketDetails *apiTypes.MempoolTicketDetails, err error) {
-	s.setBackend(DcrData)
-	r, err := s.client.Do(http.MethodGet, "api/mempool/sstx/details/"+strconv.Itoa(nHighest), nil)
-	if err != nil {
-		return
+	reqConf := &ReqConfig{
+		method: http.MethodGet,
+		url:    "api/mempool/sstx/details/" + strconv.Itoa(nHighest),
 	}
-
-	err = json.Unmarshal(r, &ticketDetails)
-	if err != nil {
-		return
-	}
-	return
+	nTDetails := &apiTypes.MempoolTicketDetails{}
+	return nTDetails, s.client.Do(DcrData, s.chainParams.Name, reqConf, nTDetails)
 }
 
 // GetAddress returns the balances and transactions of an address.
 // The returned transactions are sorted by block height, newest blocks first.
 func (s *Service) GetAddress(address string) (addressState *AddressState, err error) {
-	s.setBackend(BlockBook)
 	if address == "" {
 		err = errors.New("address can't be empty")
 		return
@@ -311,21 +251,16 @@ func (s *Service) GetAddress(address string) (addressState *AddressState, err er
 		return nil, errors.New("Net is mainnet and xpub is not in mainnet format")
 	}
 
-	r, err := s.client.Do(http.MethodGet, "api/v2/address/"+address, nil)
-	if err != nil {
-		return
+	reqConf := &ReqConfig{
+		method: http.MethodGet,
+		url:    "api/v2/address/" + address,
 	}
-
-	err = json.Unmarshal(r, &addressState)
-	if err != nil {
-		return
-	}
-	return
+	addrState := &AddressState{}
+	return addrState, s.client.Do(BlockBook, s.chainParams.Name, reqConf, addrState)
 }
 
 // GetXpub Returns balances and transactions of an xpub.
 func (s *Service) GetXpub(xPub string) (xPubBalAndTxs *XpubBalAndTxs, err error) {
-	s.setBackend(BlockBook)
 	if xPub == "" {
 		return nil, errors.New("empty xpub string")
 	}
@@ -340,16 +275,12 @@ func (s *Service) GetXpub(xPub string) (xPubBalAndTxs *XpubBalAndTxs, err error)
 		return nil, errors.New("Net is mainnet and xpub is not in mainnet format")
 	}
 
-	r, err := s.client.Do(http.MethodGet, "api/v2/xpub/"+xPub, nil)
-	if err != nil {
-		return
+	reqConf := &ReqConfig{
+		method: http.MethodGet,
+		url:    "api/v2/xpub/" + xPub,
 	}
-
-	err = json.Unmarshal(r, &xPubBalAndTxs)
-	if err != nil {
-		return
-	}
-	return
+	xPubTxs := &XpubBalAndTxs{}
+	return xPubTxs, s.client.Do(BlockBook, s.chainParams.Name, reqConf, xPubTxs)
 }
 
 // GetTicker returns market ticker data for the supported exchanges.
@@ -373,18 +304,15 @@ func (s *Service) GetTicker(exchange Backend, market string) (ticker *Ticker, er
 }
 
 func (s *Service) getBinanceTicker(market string) (ticker *Ticker, err error) {
-	s.setBackendMainnet(Binance)
-	r, err := s.client.Do(http.MethodGet, "/api/v3/ticker/24hr?symbol="+strings.ToUpper(market), nil)
-	if err != nil {
-		return ticker, err
+	reqConf := &ReqConfig{
+		method: http.MethodGet,
+		url:    "/api/v3/ticker/24hr?symbol=" + strings.ToUpper(market),
 	}
-
-	var tempTicker BinanceTicker
-	err = json.Unmarshal(r, &tempTicker)
+	tempTicker := &BinanceTicker{}
+	err = s.client.Do(Binance, chaincfg.MainNetParams().Name, reqConf, tempTicker)
 	if err != nil {
-		return ticker, err
+		return
 	}
-
 	ticker = &Ticker{
 		Exchange:       string(Binance),
 		Symbol:         tempTicker.Symbol,
@@ -397,16 +325,14 @@ func (s *Service) getBinanceTicker(market string) (ticker *Ticker, err error) {
 }
 
 func (s *Service) getBittrexTicker(market string) (ticker *Ticker, err error) {
-	s.setBackendMainnet(Bittrex)
-	r, err := s.client.Do(http.MethodGet, "/markets/"+strings.ToUpper(market)+"/ticker", nil)
-	if err != nil {
-		return ticker, err
+	reqConf := &ReqConfig{
+		method: http.MethodGet,
+		url:    "/markets/" + strings.ToUpper(market) + "/ticker",
 	}
-
-	var bTicker BittrexTicker
-	err = json.Unmarshal(r, &bTicker)
+	bTicker := &BittrexTicker{}
+	err = s.client.Do(Bittrex, chaincfg.MainNetParams().Name, reqConf, bTicker)
 	if err != nil {
-		return ticker, err
+		return
 	}
 	ticker = &Ticker{
 		Exchange:       string(Bittrex),
@@ -420,16 +346,14 @@ func (s *Service) getBittrexTicker(market string) (ticker *Ticker, err error) {
 }
 
 func (s *Service) getKucoinTicker(market string) (ticker *Ticker, err error) {
-	s.setBackendMainnet(KuCoin)
-	r, err := s.client.Do(http.MethodGet, "/api/v1/market/orderbook/level1?symbol="+strings.ToUpper(market), nil)
-	if err != nil {
-		return ticker, err
+	reqConf := &ReqConfig{
+		method: http.MethodGet,
+		url:    "/api/v1/market/orderbook/level1?symbol=" + strings.ToUpper(market),
 	}
-
-	var kTicker KuCoinTicker
-	err = json.Unmarshal(r, &kTicker)
+	kTicker := &KuCoinTicker{}
+	err = s.client.Do(KuCoin, chaincfg.MainNetParams().Name, reqConf, kTicker)
 	if err != nil {
-		return ticker, err
+		return
 	}
 	ticker = &Ticker{
 		Exchange:       string(KuCoin),
@@ -440,22 +364,4 @@ func (s *Service) getKucoinTicker(market string) (ticker *Ticker, err error) {
 	}
 
 	return
-}
-
-func (s *Service) setBackend(backend Backend) {
-	s.urlMu.Lock()
-	defer s.urlMu.Unlock()
-
-	if url, ok := s.backendUrl[s.chainParams.Name][backend]; ok {
-		s.client.BaseUrl = url
-	}
-}
-
-func (s *Service) setBackendMainnet(backend Backend) {
-	s.urlMu.Lock()
-	defer s.urlMu.Unlock()
-
-	if url, ok := s.backendUrl[chaincfg.MainNetParams().Name][backend]; ok {
-		s.client.BaseUrl = url
-	}
 }
