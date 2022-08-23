@@ -392,7 +392,7 @@ func (s *Syncer) Run(ctx context.Context) error {
 
 	// Seed peers over DNS when not disabled by persistent peers.
 	if len(s.persistentPeers) == 0 {
-		s.lp.SeedPeers(ctx, wire.SFNodeNetwork|wire.SFNodeCF)
+		s.lp.SeedPeers(ctx, wire.SFNodeNetwork)
 	}
 
 	// Start background handlers to read received messages from remote peers
@@ -1341,6 +1341,9 @@ func (s *Syncer) getHeaders(ctx context.Context, rp *p2p.RemotePeer) error {
 				}
 
 				nodes[i] = wallet.NewBlockNode(header, &hash, filter)
+				if wallet.BadCheckpoint(cnet, &hash, int32(header.Height)) {
+					nodes[i].BadCheckpoint()
+				}
 				return nil
 			})
 		}
