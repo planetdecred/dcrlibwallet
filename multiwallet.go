@@ -107,12 +107,6 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 		txAndBlockNotificationListeners:  make(map[string]TxAndBlockNotificationListener),
 		accountMixerNotificationListener: make(map[string]AccountMixerNotificationListener),
 	}
-
-	mw.Politeia, err = newPoliteia(mw, politeiaHost)
-	if err != nil {
-		return nil, err
-	}
-
 	// API service.
 	mw.ApiService = api.NewService(chainParams)
 
