@@ -16,7 +16,7 @@ import (
 	"github.com/asdine/storm"
 	"github.com/asdine/storm/q"
 	"github.com/decred/dcrd/chaincfg/v3"
-	"github.com/planetdecred/dcrlibwallet/api"
+	"github.com/planetdecred/dcrlibwallet/ext"
 	"github.com/planetdecred/dcrlibwallet/internal/politeia"
 	"github.com/planetdecred/dcrlibwallet/utils"
 	"github.com/planetdecred/dcrlibwallet/walletdata"
@@ -49,7 +49,7 @@ type MultiWallet struct {
 	vspMu sync.RWMutex
 	vsps  []*VSP
 
-	ApiService *api.Service
+	ExternalService *ext.Service
 }
 
 func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWallet, error) {
@@ -107,8 +107,10 @@ func NewMultiWallet(rootDir, dbDriver, netType, politeiaHost string) (*MultiWall
 		txAndBlockNotificationListeners:  make(map[string]TxAndBlockNotificationListener),
 		accountMixerNotificationListener: make(map[string]AccountMixerNotificationListener),
 	}
-	// API service.
-	mw.ApiService = api.NewService(chainParams)
+
+	// initialize the ExternalService. ExternalService provides multiwallet with
+	// the functionalities to retrieve data from 3rd party services. e.g Binance, Bittrex.
+	mw.ExternalService = ext.NewService(chainParams)
 
 	// read saved wallets info from db and initialize wallets
 	query := mw.db.Select(q.True()).OrderBy("ID")

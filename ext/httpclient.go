@@ -1,4 +1,4 @@
-package api
+package ext
 
 import (
 	"encoding/json"
@@ -48,7 +48,7 @@ func NewClient() (c *Client) {
 }
 
 // Do prepare and process HTTP request to backend resources.
-func (c *Client) Do(backend Backend, net string, reqConfig *ReqConfig, response interface{}) (err error) {
+func (c *Client) Do(backend, net string, reqConfig *ReqConfig, response interface{}) (err error) {
 	c.setBackend(backend, net, reqConfig)
 	if c.RequestFilter == nil {
 		return errors.New("Request Filter was not set")
@@ -124,7 +124,7 @@ func (c *Client) dumpResponse(r *http.Response) {
 }
 
 // Setbackend sets the appropriate URL scheme and authority for the backend resource.
-func (c *Client) setBackend(backend Backend, net string, reqConfig *ReqConfig) {
+func (c *Client) setBackend(backend string, net string, reqConfig *ReqConfig) {
 	// Check if URL scheme and authority is already set.
 	if strings.HasPrefix(reqConfig.url, "http") {
 		return

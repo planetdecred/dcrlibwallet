@@ -17,7 +17,7 @@ import (
 	"github.com/decred/dcrd/connmgr/v3"
 	"github.com/decred/slog"
 	"github.com/jrick/logrotate/rotator"
-	"github.com/planetdecred/dcrlibwallet/api"
+	"github.com/planetdecred/dcrlibwallet/ext"
 	"github.com/planetdecred/dcrlibwallet/internal/loader"
 	"github.com/planetdecred/dcrlibwallet/internal/politeia"
 	"github.com/planetdecred/dcrlibwallet/internal/vsp"
@@ -63,7 +63,7 @@ var (
 	amgrLog      = backendLog.Logger("AMGR")
 	vspcLog      = backendLog.Logger("VSPC")
 	politeiaLog  = backendLog.Logger("POLT")
-	apiLog       = backendLog.Logger("EXT")
+	extLog       = backendLog.Logger("EXT")
 )
 
 // Initialize package-global logger variables.
@@ -78,7 +78,7 @@ func init() {
 	addrmgr.UseLogger(amgrLog)
 	vsp.UseLogger(vspcLog)
 	politeia.UseLogger(politeiaLog)
-	api.UseLogger(apiLog)
+	ext.UseLogger(extLog)
 }
 
 // subsystemLoggers maps each subsystem identifier to its associated logger.
@@ -94,7 +94,7 @@ var subsystemLoggers = map[string]slog.Logger{
 	"AMGR": amgrLog,
 	"VSPC": vspcLog,
 	"POLT": politeiaLog,
-	"EXT":  apiLog,
+	"EXT":  extLog,
 }
 
 // initLogRotator initializes the logging rotater to write logs to logFile and

@@ -1,4 +1,4 @@
-package api
+package ext
 
 import (
 	"bytes"
@@ -13,9 +13,8 @@ import (
 )
 
 type (
-	// Backend defines the backend type.
-	Backend string
-	// Service provide functions for accessing backend resources.
+	// Service provide functionality for retrieving data from
+	// 3rd party services or external resources.
 	Service struct {
 		client      *Client
 		chainParams *chaincfg.Params
@@ -23,24 +22,24 @@ type (
 )
 
 const (
-	// Bittrex signifies bittrex backend. Should be used when calling
-	// bittrex specific functions from external application/library
-	// e.g Service.GetTicker(API.Bittrex, "btc-usdt")
-	// All backend types below should be used in this fashion.
-	Bittrex                  Backend = "bittrex"
-	Binance                  Backend = "binance"
-	BlockBook                Backend = "blockbook"
-	DcrData                  Backend = "dcrdata"
-	KuCoin                   Backend = "kucoin"
-	testnetAddressIndetifier         = "T"
-	mainnetAddressIdentifier         = "D"
-	mainnetXpubIdentifier            = "d"
-	testnetXpubIdentifier            = "t"
+	// Bittrex is a string constant that identifies the bittrex backend service provider throught this package.
+	// It Should be used when calling bittrex specific functions from external application/library
+	// e.g Service.GetTicker(api.Bittrex, "btc-usdt")
+	// All backend service providers constant defined below should be used in similar fashion.
+	Bittrex                  = "bittrex"
+	Binance                  = "binance"
+	BlockBook                = "blockbook"
+	DcrData                  = "dcrdata"
+	KuCoin                   = "kucoin"
+	testnetAddressIndetifier = "T"
+	mainnetAddressIdentifier = "D"
+	mainnetXpubIdentifier    = "d"
+	testnetXpubIdentifier    = "t"
 )
 
 var (
 	// mainnetUrl maps supported backends to their current mainnet url scheme and authority.
-	mainnetUrl = map[Backend]string{
+	mainnetUrl = map[string]string{
 		Bittrex:   "https://api.bittrex.com/v3",
 		Binance:   "https://api.binance.com",
 		BlockBook: "https://blockbook.decred.org:9161/",
@@ -48,19 +47,19 @@ var (
 		KuCoin:    "https://api.kucoin.com",
 	}
 	// testnetUrl maps supported backends to their current testnet url scheme and authority.
-	testnetUrl = map[Backend]string{
+	testnetUrl = map[string]string{
 		Binance:   "https://testnet.binance.vision",
 		BlockBook: "https://blockbook.decred.org:19161/",
 		DcrData:   "https://testnet.dcrdata.org/",
 		KuCoin:    "https://openapi-sandbox.kucoin.com",
 	}
-	backendUrl = map[string]map[Backend]string{
+	backendUrl = map[string]map[string]string{
 		chaincfg.MainNetParams().Name:  mainnetUrl,
 		chaincfg.TestNet3Params().Name: testnetUrl,
 	}
 )
 
-// NewService configures and return a news instance of API service type.
+// NewService configures and return a news instance of the service type.
 func NewService(chainParams *chaincfg.Params) *Service {
 	client := NewClient()
 	client.RequestFilter = func(reqConfig *ReqConfig) (req *http.Request, err error) {
@@ -180,7 +179,8 @@ func (s *Service) GetExchangeRate() (rates *ExchangeRates, err error) {
 		url:    "api/exchangerate",
 	}
 	rates = &ExchangeRates{}
-	// Use mainnet base url for exchange rate endpoint
+	// Use mainnet base url for exchange rate endpoint, there is no Dcrdata support for
+	// testnet ExchangeRate.
 	return rates, s.client.Do(DcrData, chaincfg.MainNetParams().Name, reqConf, rates)
 }
 
@@ -191,7 +191,8 @@ func (s *Service) GetExchanges() (state *ExchangeState, err error) {
 		url:    "api/exchanges",
 	}
 	state = &ExchangeState{}
-	// Use mainnet base url for exchanges endpoint
+	// Use mainnet base url for exchanges endpoint, no Dcrdata support for Exchanges
+	// on testnet.
 	return state, s.client.Do(DcrData, chaincfg.MainNetParams().Name, reqConf, state)
 }
 
@@ -300,8 +301,9 @@ func (s *Service) GetXpub(xPub string) (xPubBalAndTxs *XpubBalAndTxs, err error)
 }
 
 // GetTicker returns market ticker data for the supported exchanges.
-// Current supported exchanges: bittrex, binance and kucoin.
-func (s *Service) GetTicker(exchange Backend, market string) (ticker *Ticker, err error) {
+// Current supported exchanges: bittrex, binance and kucoin. This endpoint will query mainnet
+// resource irrespective.
+func (s *Service) GetTicker(exchange string, market string) (ticker *Ticker, err error) {
 	switch exchange {
 	case Binance:
 		symbArr := strings.Split(market, "-")
