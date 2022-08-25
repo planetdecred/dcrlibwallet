@@ -22,7 +22,7 @@ type (
 )
 
 const (
-	// Bittrex is a string constant that identifies the bittrex backend service provider throught this package.
+	// Bittrex is a string constant that identifies the bittrex backend service provider within this package.
 	// It Should be used when calling bittrex specific functions from external application/library
 	// e.g Service.GetTicker(api.Bittrex, "btc-usdt")
 	// All backend service providers constant defined below should be used in similar fashion.
