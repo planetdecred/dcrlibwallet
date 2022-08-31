@@ -218,7 +218,7 @@ func (mw *MultiWallet) SpvSync() error {
 	mw.initActiveSyncData()
 
 	wallets := make(map[int]*w.Wallet)
-	for id, wallet := range mw.wallets {
+	for id, wallet := range mw.walletsReadCopy() {
 		wallets[id] = wallet.Internal()
 		wallet.waitingForHeaders = true
 		wallet.syncing = true
@@ -288,7 +288,7 @@ func (mw *MultiWallet) CancelSync() {
 		log.Info("Canceling sync. May take a while for sync to fully cancel.")
 
 		// Stop running cspp mixers
-		for _, wallet := range mw.wallets {
+		for _, wallet := range mw.walletsReadCopy() {
 			if wallet.IsAccountMixerActive() {
 				log.Infof("[%d] Stopping cspp mixer", wallet.ID)
 				err := mw.StopAccountMixer(wallet.ID)
@@ -420,7 +420,7 @@ func (mw *MultiWallet) PeerInfo() (string, error) {
 func (mw *MultiWallet) GetBestBlock() *BlockInfo {
 	var bestBlock int32 = -1
 	var blockInfo *BlockInfo
-	for _, wallet := range mw.wallets {
+	for _, wallet := range mw.walletsReadCopy() {
 		if !wallet.WalletOpened() {
 			continue
 		}
@@ -438,7 +438,7 @@ func (mw *MultiWallet) GetBestBlock() *BlockInfo {
 func (mw *MultiWallet) GetLowestBlock() *BlockInfo {
 	var lowestBlock int32 = -1
 	var blockInfo *BlockInfo
-	for _, wallet := range mw.wallets {
+	for _, wallet := range mw.walletsReadCopy() {
 		if !wallet.WalletOpened() {
 			continue
 		}
@@ -483,7 +483,7 @@ func (wallet *Wallet) GetBestBlockTimeStamp() int64 {
 
 func (mw *MultiWallet) GetLowestBlockTimestamp() int64 {
 	var timestamp int64 = -1
-	for _, wallet := range mw.wallets {
+	for _, wallet := range mw.walletsReadCopy() {
 		bestBlockTimestamp := wallet.GetBestBlockTimeStamp()
 		if bestBlockTimestamp < timestamp || timestamp == -1 {
 			timestamp = bestBlockTimestamp

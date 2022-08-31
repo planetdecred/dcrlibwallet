@@ -32,7 +32,7 @@ func (wallet *Wallet) TotalStakingRewards() (int64, error) {
 
 func (mw *MultiWallet) TotalStakingRewards() (int64, error) {
 	var totalRewards int64
-	for _, wal := range mw.wallets {
+	for _, wal := range mw.walletsReadCopy() {
 		walletTotalRewards, err := wal.TotalStakingRewards()
 		if err != nil {
 			return 0, err
@@ -94,7 +94,7 @@ func (wallet *Wallet) StakingOverview() (stOverview *StakingOverview, err error)
 func (mw *MultiWallet) StakingOverview() (stOverview *StakingOverview, err error) {
 	stOverview = &StakingOverview{}
 
-	for _, wallet := range mw.wallets {
+	for _, wallet := range mw.walletsReadCopy() {
 		st, err := wallet.StakingOverview()
 		if err != nil {
 			return nil, err
@@ -134,7 +134,7 @@ func (wallet *Wallet) TicketPrice() (*TicketPriceResponse, error) {
 
 func (mw *MultiWallet) TicketPrice() (*TicketPriceResponse, error) {
 	bestBlock := mw.GetBestBlock()
-	for _, wal := range mw.wallets {
+	for _, wal := range mw.walletsReadCopy() {
 		resp, err := wal.TicketPrice()
 		if err != nil {
 			return nil, err
